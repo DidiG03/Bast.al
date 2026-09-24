@@ -1,0 +1,67 @@
+import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { DashboardSidebar } from "../../components/dashboard-sidebar";
+import { NotificationCenter } from "../../components/notification-center";
+import { UserMenu } from "../../components/user-menu";
+import { apiFetch, type MeResponse } from "../../lib/api";
+
+export default async function DashboardLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  const { getToken, userId } = await auth();
+  if (!userId) redirect("/sign-in");
+
+  const token = await getToken();
+  if (!token) redirect("/sign-in");
+
+  let me: MeResponse;
+  try {
+    me = await apiFetch<MeResponse>("/users/me", token);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const apiDown =
+      /fetch failed|ECONNREFUSED|Failed to fetch|network/i.test(message) ||
+      message.includes("Request failed");
+
+    return (
+      <main className="stack">
+        <div className="nav">
+          <span className="brand">Bast.al</span>
+          <UserMenu />
+        </div>
+        <div className="card stack">
+          <h1 style={{ margin: 0 }}>
+            {apiDown ? "API unavailable" : "Account not provisioned"}
+          </h1>
+          <p className="muted">
+            {apiDown
+              ? "Could not reach the Nest API on port 4000. Restart npm run dev and refresh."
+              : "Your Clerk session is valid, but there is no local user row yet. A Super Admin must create your account (or complete the one-time bootstrap for the first Super Admin)."}
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!me.mfaSatisfied) {
+    redirect("/security/2fa");
+  }
+
+  const canManageUsers = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
+  const canViewReports = me.role === "SUPER_ADMIN";
+  const canViewFinancial = me.role === "SUPER_ADMIN" || me.role === "OWNER";
+  const initialCollapsed = cookies().get("bastal-sidebar")?.value === "collapsed";
+
+  return (
+    <div className="dashboard-shell">
+      <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} username={me.username} initialCollapsed={initialCollapsed} />
+      <main className="dashboard-content">
+        <div className="dashboard-topbar">
+          <NotificationCenter />
+        </div>
+        {children}
+      </main>
+    </div>
+  );
+}

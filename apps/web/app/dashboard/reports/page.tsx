@@ -1,9 +1,14 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { apiFetch, type MeResponse, type UserReport } from "../../../lib/api";
+import { ReportsTabs } from "./reports-tabs";
+import { AuditLog } from "./audit-log";
 
 function dateLabel(value: string) {
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 export default async function ReportsPage() {
@@ -25,29 +30,39 @@ export default async function ReportsPage() {
     ["Suspended", report.totals.suspended],
   ] as const;
 
-  return (
-    <div className="stack reports-page">
-      <div className="page-title-row">
-        <div>
-          <h1 style={{ margin: 0 }}>Reports</h1>
-          <p className="muted report-subtitle">A complete overview of owners, managers, players, and account activity.</p>
-        </div>
-        <span className="muted report-updated">Updated {dateLabel(report.generatedAt)}</span>
-      </div>
-
+  const overviewContent = (
+    <div className="stack">
       <div className="report-grid">
-        {cards.map(([label, value]) => <div className="card report-stat" key={label}><span className="muted">{label}</span><strong>{value}</strong></div>)}
-        <div className="card report-stat"><span className="muted">Manager balances</span><strong>${report.totals.managerBalances.toFixed(2)}</strong></div>
+        {cards.map(([label, value]) => (
+          <div className="card report-stat" key={label}>
+            <span className="muted">{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+        <div className="card report-stat">
+          <span className="muted">Manager balances</span>
+          <strong>${report.totals.managerBalances.toFixed(2)}</strong>
+        </div>
       </div>
 
       <div className="reports-columns">
         <section className="card stack">
-          <div className="tree-header"><h2>Manager accounts</h2><span className="muted">{report.managers.length} managers</span></div>
-          {report.managers.length === 0 ? <p className="muted">No manager accounts yet.</p> : (
+          <div className="tree-header">
+            <h2>Manager accounts</h2>
+            <span className="muted">{report.managers.length} managers</span>
+          </div>
+          {report.managers.length === 0 ? (
+            <p className="muted">No manager accounts yet.</p>
+          ) : (
             <div className="report-list">
               {report.managers.map((manager) => (
                 <div className="report-list-row" key={manager.id}>
-                  <div><strong>{manager.username}</strong><span className="muted">{manager.players} players · {manager.status}</span></div>
+                  <div>
+                    <strong>{manager.username}</strong>
+                    <span className="muted">
+                      {manager.players} players · {manager.status}
+                    </span>
+                  </div>
                   <strong>${manager.balance.toFixed(2)}</strong>
                 </div>
               ))}
@@ -56,19 +71,53 @@ export default async function ReportsPage() {
         </section>
 
         <section className="card stack">
-          <div className="tree-header"><h2>Recent activity</h2><span className="muted">Latest 25</span></div>
-          {report.recentAudit.length === 0 ? <p className="muted">No activity recorded yet.</p> : (
+          <div className="tree-header">
+            <h2>Recent activity</h2>
+            <span className="muted">Latest 25</span>
+          </div>
+          {report.recentAudit.length === 0 ? (
+            <p className="muted">No activity recorded yet.</p>
+          ) : (
             <div className="report-list">
               {report.recentAudit.map((entry) => (
-                <div className="report-list-row report-activity-row" key={entry.id}>
-                  <div><strong>{entry.action.replaceAll(".", " ")}</strong><span className="muted">{entry.actor?.username ?? "System"}{entry.target ? ` → ${entry.target.username}` : ""}</span></div>
-                  <time className="muted" dateTime={entry.createdAt}>{dateLabel(entry.createdAt)}</time>
+                <div
+                  className="report-list-row report-activity-row"
+                  key={entry.id}
+                >
+                  <div>
+                    <strong>{entry.action.replaceAll(".", " ")}</strong>
+                    <span className="muted">
+                      {entry.actor?.username ?? "System"}
+                      {entry.target ? ` → ${entry.target.username}` : ""}
+                    </span>
+                  </div>
+                  <time className="muted" dateTime={entry.createdAt}>
+                    {dateLabel(entry.createdAt)}
+                  </time>
                 </div>
               ))}
             </div>
           )}
         </section>
       </div>
+    </div>
+  );
+
+  return (
+    <div className="stack reports-page">
+      <div className="page-title-row">
+        <div>
+          <h1 style={{ margin: 0 }}>Reports</h1>
+          <p className="muted report-subtitle">
+            A complete overview of accounts and administrative audit logs.
+          </p>
+        </div>
+        <span className="muted report-updated">
+          Updated {dateLabel(report.generatedAt)}
+        </span>
+      </div>
+
+      <ReportsTabs overview={overviewContent} auditLog={<AuditLog />} />
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
-import { apiFetch, type TransactionDetails } from "../../../../../lib/api";
+import { apiFetch, transactionLabel, type TransactionDetails } from "../../../../../lib/api";
 
 export default function TransactionDetailsPage({ params }: { params: { id: string } }) {
   const { getToken } = useAuth();
@@ -24,7 +24,7 @@ export default function TransactionDetailsPage({ params }: { params: { id: strin
     <div className="stack">
       <div className="page-title-row"><div><h1 style={{ margin: 0 }}>Transaction receipt</h1><p className="muted">Full audit-ready transaction details.</p></div><Link href="/dashboard/finance">Back to Finance</Link></div>
       <section className="card stack receipt-card">
-        <div className="receipt-title"><strong>{entry.type === "DELEGATION" ? "Delegation" : "Adjustment"}</strong><span className={`status-pill ${entry.status === "APPROVED" ? "is-active" : ""}`}>{entry.status ?? "APPROVED"}</span></div>
+        <div className="receipt-title"><strong>{transactionLabel(entry.type)}</strong><span className={`status-pill ${entry.status === "APPROVED" ? "is-active" : ""}`}>{entry.status ?? "APPROVED"}</span></div>
         <div className="receipt-amount">${Math.abs(entry.amount).toFixed(2)}</div>
         <dl className="receipt-details">
           <div><dt>Transaction ID</dt><dd>{entry.id}</dd></div>

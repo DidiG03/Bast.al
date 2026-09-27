@@ -12,7 +12,7 @@ import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/pe
 import { FieldEncryptionService } from "../crypto/field-encryption.service";
 import { PrismaService } from "../prisma.service";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { AdjustBalanceDto, DelegateCreditDto } from "./dto/balance-transaction.dto";
+import { AdjustBalanceDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { HierarchyService } from "./hierarchy.service";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -39,6 +39,17 @@ function privateEmailFor(username: string): string {
 /** Roles that hold direct Players/Managers and so need a delegation capacity. */
 function holdsDirectReports(role: Role): boolean {
   return role === Role.OWNER || role === Role.MANAGER;
+}
+
+/**
+ * Delegations above this amount need a second person's sign-off before any
+ * balance moves. Super Admin is exempt: it is the top of the chain, so there
+ * is nobody above it to approve.
+ */
+const APPROVAL_THRESHOLD = 10000;
+
+function dateRange(from?: string, to?: string) {
+  return from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {};
 }
 
 @Injectable()
@@ -157,17 +168,30 @@ export class UsersService {
     });
   }
 
+  /** Ids an Owner (or Manager) may see in reports and audit logs: themselves and their whole downline. */
+  private async scopeIds(actor: Actor): Promise<string[] | null> {
+    if (actor.role === Role.SUPER_ADMIN) return null;
+    return [actor.id, ...(await this.hierarchy.getDescendantIds(actor.id))];
+  }
+
+  /**
+   * Super Admin: the whole platform, broken down by Owner.
+   * Owner: their own business only, broken down by Manager.
+   */
   async report(actor: Actor) {
-    if (actor.role !== Role.SUPER_ADMIN) {
-      throw new ForbiddenException("Reports are restricted to Super Admins");
+    if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) {
+      throw new ForbiddenException("Reports are restricted to Super Admins and Owners");
     }
+    const scope = await this.scopeIds(actor);
 
     const [users, recentAudit] = await Promise.all([
       this.prisma.user.findMany({
+        where: scope ? { id: { in: scope } } : {},
         orderBy: { createdAt: "asc" },
         select: publicUserSelect,
       }),
       this.prisma.auditLog.findMany({
+        where: scope ? { OR: [{ actorId: { in: scope } }, { targetId: { in: scope } }] } : {},
         orderBy: { createdAt: "desc" },
         take: 25,
         select: {
@@ -190,7 +214,9 @@ export class UsersService {
       ACTIVE: users.filter((user) => user.status === UserStatus.ACTIVE).length,
       SUSPENDED: users.filter((user) => user.status === UserStatus.SUSPENDED).length,
     };
-    const owners = users.filter((user) => user.role === Role.OWNER);
+    const accountRole = actor.role === Role.SUPER_ADMIN ? Role.OWNER : Role.MANAGER;
+    const accounts = users.filter((user) => user.role === accountRole);
+    const downline = users.filter((user) => user.id !== actor.id);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -201,17 +227,18 @@ export class UsersService {
         players: roleBreakdown.PLAYER,
         active: statusBreakdown.ACTIVE,
         suspended: statusBreakdown.SUSPENDED,
-        totalBalance: users.reduce((total, user) => total + Number(user.balance), 0),
+        totalBalance: downline.reduce((total, user) => total + Number(user.balance), 0),
       },
       roleBreakdown,
       statusBreakdown,
-      owners: owners.map((owner) => ({
-        id: owner.id,
-        username: owner.username,
-        status: owner.status,
-        balance: Number(owner.balance),
-        commissionRate: Number(owner.commissionRate),
-        directReports: users.filter((user) => user.parentId === owner.id).length,
+      accountRole,
+      accounts: accounts.map((account) => ({
+        id: account.id,
+        username: account.username,
+        status: account.status,
+        balance: Number(account.balance),
+        commissionRate: Number(account.commissionRate),
+        directReports: users.filter((user) => user.parentId === account.id).length,
       })),
       recentAudit,
     };
@@ -259,7 +286,12 @@ export class UsersService {
   }
 
   async auditLog(actor: Actor, query: AuditQueryDto) {
-    if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Audit logs are restricted to Super Admins");
+    if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) {
+      throw new ForbiddenException("Audit logs are restricted to Super Admins and Owners");
+    }
+    // Owners only ever see entries where they or someone in their downline is
+    // the actor or the target.
+    const scope = await this.scopeIds(actor);
     const limit = Math.min(query.limit ?? 50, 100);
     const page = query.page ?? 1;
     const searchUsers = async (value?: string, role?: Role) => value?.trim()
@@ -276,7 +308,7 @@ export class UsersService {
       searchUsers(query.target, query.target ? query.role : undefined),
       query.role ? this.prisma.user.findMany({ where: { role: query.role }, select: { id: true } }) : [],
     ]);
-    const where = {
+    const filters = {
       ...(query.actor ? { actorId: { in: actorUsers.map((user) => user.id) } } : {}),
       ...(query.target ? { targetId: { in: targetUsers.map((user) => user.id) } } : {}),
       ...(query.role && !query.actor && !query.target ? {
@@ -291,6 +323,9 @@ export class UsersService {
         ...(query.to ? { lte: new Date(query.to) } : {}),
       } } : {}),
     };
+    const where = scope
+      ? { AND: [filters, { OR: [{ actorId: { in: scope } }, { targetId: { in: scope } }] }] }
+      : filters;
     const [items, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit,
@@ -334,6 +369,14 @@ export class UsersService {
         throw new BadRequestException("Players cannot be assigned to a suspended Manager");
       }
       parentId = dto.parentId;
+    }
+
+    if (dto.role === Role.PLAYER) {
+      const parent = await this.prisma.user.findUniqueOrThrow({ where: { id: parentId }, select: { managerCapacity: true } });
+      const assigned = await this.prisma.user.count({ where: { parentId, role: Role.PLAYER } });
+      if (assigned >= parent.managerCapacity) {
+        throw new BadRequestException(`This account has reached its player capacity (${parent.managerCapacity})`);
+      }
     }
 
     const username = dto.username.toLowerCase();
@@ -490,7 +533,7 @@ export class UsersService {
     }
 
     const isPrint = actor.role === Role.SUPER_ADMIN;
-    const requiresApproval = dto.amount > 10000;
+    const requiresApproval = !isPrint && dto.amount > APPROVAL_THRESHOLD;
 
     if (requiresApproval) {
       const pending = await this.prisma.balanceTransaction.create({
@@ -506,6 +549,18 @@ export class UsersService {
         select: { id: true, status: true, amount: true, type: true, reason: true, createdAt: true },
       });
       await this.audit.log({ actorId: actor.id, action: "user.delegation_pending", targetId: id, ipAddress, metadata: { transactionId: pending.id, amount: dto.amount } });
+      // The initiator's own parent is the natural approver (Owner for a
+      // Manager's transfer, Super Admin for an Owner's).
+      if (actor.parentId) {
+        await this.notifications.create({
+          userId: actor.parentId,
+          type: NotificationType.APPROVAL_REQUESTED,
+          title: "Approval needed",
+          message: `${actor.username} wants to delegate $${dto.amount.toFixed(2)} to ${target.username}.`,
+          deepLink: "/dashboard/finance",
+          metadata: { transactionId: pending.id, amount: dto.amount },
+        });
+      }
       return { ...pending, amount: Number(pending.amount), requiresApproval: true };
     }
 
@@ -627,8 +682,10 @@ export class UsersService {
     const transaction = await this.prisma.balanceTransaction.findUnique({ where: { id: transactionId } });
     if (!transaction) throw new NotFoundException("Transaction not found");
     if (transaction.status !== BalanceTransactionStatus.PENDING) throw new BadRequestException("Transaction is no longer pending");
-    if (transaction.actorId === actor.id) throw new ForbiddenException("A second authorized person must approve this transaction");
-    if (!(await this.hierarchy.canActOn(actor, transaction.toUserId))) throw new ForbiddenException("Transaction is outside your hierarchy subtree");
+    if (!(await this.canApprove(actor, transaction))) {
+      await this.audit.log({ actorId: actor.id, action: "authz.failure", targetId: transaction.toUserId, ipAddress, metadata: { reason: "cannot_approve", transactionId } });
+      throw new ForbiddenException("Only someone above the person who started this transfer can approve it");
+    }
 
     if (!approve) {
       // Guarded by status=PENDING so two concurrent approve/reject calls on the
@@ -685,6 +742,99 @@ export class UsersService {
     return { ...result, amount: Number(result.amount) };
   }
 
+  /**
+   * Four-eyes rule for large delegations: the approver must be a different
+   * person from whoever started the transfer, must not be on either side of
+   * it (so nobody approves money into their own account), and must sit above
+   * the initiator in the hierarchy (or be Super Admin).
+   */
+  private async canApprove(actor: Actor, transaction: { actorId: string | null; fromUserId: string | null; toUserId: string }): Promise<boolean> {
+    if (!transaction.actorId || transaction.actorId === actor.id) return false;
+    if (transaction.toUserId === actor.id || transaction.fromUserId === actor.id) return false;
+    if (actor.role === Role.SUPER_ADMIN) return true;
+    return this.hierarchy.isInSubtree(actor.id, transaction.actorId);
+  }
+
+  /** Pending delegations this actor is allowed to approve or reject. */
+  async pendingApprovals(actor: Actor) {
+    const scope = await this.scopeIds(actor);
+    const pending = await this.prisma.balanceTransaction.findMany({
+      where: {
+        status: BalanceTransactionStatus.PENDING,
+        actorId: scope ? { in: scope.filter((id) => id !== actor.id) } : { not: actor.id },
+        toUserId: { not: actor.id },
+        OR: [{ fromUserId: null }, { fromUserId: { not: actor.id } }],
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        type: true,
+        amount: true,
+        reason: true,
+        status: true,
+        createdAt: true,
+        fromUser: { select: { id: true, username: true } },
+        toUser: { select: { id: true, username: true, role: true } },
+        actor: { select: { id: true, username: true, role: true } },
+      },
+    });
+    return pending.map((entry) => ({ ...entry, amount: Number(entry.amount) }));
+  }
+
+  /**
+   * Pull credit back from a direct child into the caller's own balance — the
+   * reverse of delegateCredit (Owner←Manager, Owner←Player, Manager←Player).
+   * Works on suspended accounts too, since winding one down is the main use.
+   * Super Admin←Owner retires the credit, since Super Admin holds no balance.
+   */
+  async reclaimCredit(actor: Actor, id: string, dto: ReclaimCreditDto, ipAddress?: string) {
+    const target = await this.prisma.user.findUnique({ where: { id } });
+    if (!target) throw new NotFoundException("User not found");
+    if (!canDelegateTo(actor, target)) {
+      throw new ForbiddenException("You may only reclaim credit from a direct report");
+    }
+    const isRetire = actor.role === Role.SUPER_ADMIN;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const childRows = await tx.$queryRaw<{ id: string }[]>`
+        UPDATE users
+        SET balance = balance - ${dto.amount}::numeric
+        WHERE id = ${id} AND balance - ${dto.amount}::numeric >= 0
+        RETURNING id
+      `;
+      if (childRows.length === 0) {
+        throw new BadRequestException("This account does not hold that much credit");
+      }
+      // No balance-limit check on the parent: the credit came from them in
+      // the first place, and a limit should never trap funds in a child.
+      if (!isRetire) {
+        await tx.$executeRaw`UPDATE users SET balance = balance + ${dto.amount}::numeric WHERE id = ${actor.id}`;
+      }
+      await tx.balanceTransaction.create({
+        data: {
+          fromUserId: id,
+          toUserId: actor.id,
+          actorId: actor.id,
+          type: BalanceTransactionType.RECLAIM,
+          amount: dto.amount,
+          reason: dto.reason,
+        },
+      });
+      return tx.user.findUniqueOrThrow({ where: { id }, select: publicUserSelect });
+    });
+
+    await this.audit.log({ actorId: actor.id, action: "user.reclaim_credit", targetId: id, ipAddress, metadata: { amount: dto.amount, reason: dto.reason } });
+    await this.notifications.create({
+      userId: id,
+      type: NotificationType.FUNDS_RECLAIMED,
+      title: "Credit reclaimed",
+      message: `${actor.username} reclaimed $${dto.amount.toFixed(2)} from your balance.`,
+      deepLink: "/dashboard",
+      metadata: { amount: dto.amount, actorId: actor.id },
+    });
+    return updated;
+  }
+
   async transactionDetails(actor: Actor, id: string) {
     const entry = await this.prisma.balanceTransaction.findUnique({
       where: { id },
@@ -708,42 +858,64 @@ export class UsersService {
     if (!(await this.hierarchy.canActOn(actor, id))) throw new ForbiddenException("Target is outside your hierarchy subtree");
     const entries = await this.prisma.balanceTransaction.findMany({
       where: {
-        toUserId: id,
+        OR: [{ toUserId: id }, { fromUserId: id }],
         status: BalanceTransactionStatus.APPROVED,
-        ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+        ...dateRange(from, to),
       },
       orderBy: { createdAt: "asc" },
-      select: { id: true, type: true, amount: true, reason: true, createdAt: true, fromUser: { select: { username: true } } },
+      select: { id: true, type: true, amount: true, reason: true, createdAt: true, toUserId: true, fromUser: { select: { username: true } }, toUser: { select: { username: true } } },
     });
     return {
       account: target,
       from: from ?? null,
       to: to ?? null,
-      entries: entries.map((entry) => ({ ...entry, amount: Number(entry.amount), actor: entry.fromUser ? { username: entry.fromUser.username } : { username: "Platform" } })),
+      entries: entries.map(({ toUserId, fromUser, toUser, ...entry }) => {
+        const incoming = toUserId === id;
+        return {
+          ...entry,
+          // Signed from this account's point of view, like the ledger.
+          amount: incoming ? Number(entry.amount) : -Number(entry.amount),
+          actor: { username: incoming ? fromUser?.username ?? "Platform" : toUser.username },
+        };
+      }),
     };
   }
 
   /**
-   * Delegation totals: how much this user has given to each of their direct
-   * children in the period. Net revenue / commission reporting is deferred
-   * until settled bets exist to compute it from.
+   * Delegation totals: how much this user has given to, and reclaimed from,
+   * each of their direct children in the period. Net revenue / commission
+   * reporting is deferred until settled bets exist to compute it from.
    */
   async financialReport(actor: Actor, from?: string, to?: string) {
-    if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) throw new ForbiddenException("Financial reports are restricted");
+    if (actor.role === Role.PLAYER) throw new ForbiddenException("Financial reports are restricted");
     const entries = await this.prisma.balanceTransaction.findMany({
       where: {
         actorId: actor.id,
-        type: BalanceTransactionType.DELEGATION,
+        type: { in: [BalanceTransactionType.DELEGATION, BalanceTransactionType.RECLAIM] },
         status: BalanceTransactionStatus.APPROVED,
-        ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+        ...dateRange(from, to),
       },
-      select: { toUserId: true, amount: true, toUser: { select: { username: true, role: true } } },
+      select: {
+        type: true,
+        amount: true,
+        toUserId: true,
+        fromUserId: true,
+        toUser: { select: { username: true, role: true } },
+        fromUser: { select: { username: true, role: true } },
+      },
     });
-    const byRecipient = new Map<string, { userId: string; username: string; role: Role; totalDelegated: number }>();
+    type Row = { userId: string; username: string; role: Role; totalDelegated: number; totalReclaimed: number; net: number };
+    const byRecipient = new Map<string, Row>();
     for (const entry of entries) {
-      const row = byRecipient.get(entry.toUserId) ?? { userId: entry.toUserId, username: entry.toUser.username, role: entry.toUser.role, totalDelegated: 0 };
-      row.totalDelegated += Number(entry.amount);
-      byRecipient.set(entry.toUserId, row);
+      const isReclaim = entry.type === BalanceTransactionType.RECLAIM;
+      const childId = isReclaim ? entry.fromUserId : entry.toUserId;
+      const child = isReclaim ? entry.fromUser : entry.toUser;
+      if (!childId || !child) continue;
+      const row = byRecipient.get(childId) ?? { userId: childId, username: child.username, role: child.role, totalDelegated: 0, totalReclaimed: 0, net: 0 };
+      if (isReclaim) row.totalReclaimed += Number(entry.amount);
+      else row.totalDelegated += Number(entry.amount);
+      row.net = row.totalDelegated - row.totalReclaimed;
+      byRecipient.set(childId, row);
     }
     return { from: from ?? null, to: to ?? null, recipients: [...byRecipient.values()] };
   }
@@ -847,11 +1019,11 @@ export class UsersService {
       select: { id: true, username: true, role: true, status: true, managerCapacity: true },
     });
     if (!manager) throw new NotFoundException("Manager not found");
-    if (manager.role !== Role.MANAGER) {
-      throw new BadRequestException("Players can only be assigned to Managers");
+    if (!holdsDirectReports(manager.role)) {
+      throw new BadRequestException("Players can only be assigned to a Manager or an Owner");
     }
     if (manager.status !== UserStatus.ACTIVE) {
-      throw new BadRequestException("Players cannot be assigned to a suspended Manager");
+      throw new BadRequestException("Players cannot be assigned to a suspended account");
     }
     const playerDescendants = await this.hierarchy.getDescendantIds(id);
     if (playerDescendants.includes(managerId)) {
@@ -869,7 +1041,7 @@ export class UsersService {
     }
     const assignedCount = await this.prisma.user.count({ where: { parentId: managerId, role: Role.PLAYER } });
     if (assignedCount >= manager.managerCapacity) {
-      throw new BadRequestException("Destination Manager has reached its player capacity");
+      throw new BadRequestException("Destination has reached its player capacity");
     }
 
     const previousManager = player.parentId
@@ -993,7 +1165,7 @@ export class UsersService {
       throw new ConflictException(`Manager must be reassigned before deletion; ${childCount} direct child account(s) still depend on this Manager`);
     }
     if (Number(target.balance) > 0) {
-      throw new ConflictException("Account still holds a balance; delegate it elsewhere before deleting");
+      throw new ConflictException("Account still holds a balance; reclaim it before deleting");
     }
 
     try {
@@ -1008,7 +1180,9 @@ export class UsersService {
         `Failed to delete user: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    await this.audit.log({ actorId: actor.id, action: "user.delete", targetId: id, ipAddress });
+    // The row is gone, so the target can't be referenced by foreign key any
+    // more; keep who it was in metadata instead.
+    await this.audit.log({ actorId: actor.id, action: "user.delete", ipAddress, metadata: { deletedUserId: id, username: target.username, role: target.role } });
     return { id };
   }
 
@@ -1019,10 +1193,10 @@ export class UsersService {
     const directChildren = await this.prisma.user.findMany({ where: { parentId: managerId, role: Role.PLAYER }, select: { id: true, username: true } });
     const playerDescendants = await this.hierarchy.getDescendantIds(id);
     const authorized = await this.hierarchy.canActOn(actor, id) && await this.hierarchy.canActOn(actor, managerId);
-    const valid = authorized && player.role === Role.PLAYER && manager.role === Role.MANAGER && manager.status === UserStatus.ACTIVE && player.parentId !== managerId && !playerDescendants.includes(managerId) && directChildren.length < manager.managerCapacity;
+    const valid = authorized && player.role === Role.PLAYER && holdsDirectReports(manager.role) && manager.status === UserStatus.ACTIVE && player.parentId !== managerId && !playerDescendants.includes(managerId) && directChildren.length < manager.managerCapacity;
     return {
       valid,
-      reason: !authorized ? "Outside your hierarchy" : player.role !== Role.PLAYER ? "Only Players can be reassigned" : manager.role !== Role.MANAGER ? "Destination is not a Manager" : manager.status !== UserStatus.ACTIVE ? "Destination Manager is suspended" : player.parentId === managerId ? "Player is already assigned here" : playerDescendants.includes(managerId) ? "Circular hierarchy detected" : directChildren.length >= manager.managerCapacity ? "Manager capacity reached" : null,
+      reason: !authorized ? "Outside your hierarchy" : player.role !== Role.PLAYER ? "Only Players can be reassigned" : !holdsDirectReports(manager.role) ? "Destination is not a Manager or Owner" : manager.status !== UserStatus.ACTIVE ? "Destination is suspended" : player.parentId === managerId ? "Player is already assigned here" : playerDescendants.includes(managerId) ? "Circular hierarchy detected" : directChildren.length >= manager.managerCapacity ? "Destination capacity reached" : null,
       player: { id: player.id, username: player.username, currentManagerId: player.parentId },
       destination: { id: manager.id, username: manager.username, capacity: manager.managerCapacity, assigned: directChildren.length, remaining: Math.max(0, manager.managerCapacity - directChildren.length) },
       impact: { movedAccounts: 1, currentManagerId: player.parentId },

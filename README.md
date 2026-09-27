@@ -80,6 +80,20 @@ Our Postgres `users` table is the source of truth:
 | Manager | Player |
 | Player | — |
 
+### What each role can do
+
+| | Super Admin | Owner | Manager |
+| --- | --- | --- | --- |
+| Sees | Everyone | Themselves and their whole downline | Themselves and their Players |
+| Credit | Prints credit into Owners; retires it on reclaim; signed adjustments on anyone | Delegates to / reclaims from direct Managers and Players | Delegates to / reclaims from their Players |
+| Approvals (delegations over $10,000) | Approves anyone's; own delegations need none | Approves their downline's, never transfers into or out of their own account | — |
+| Accounts | Suspend, reactivate, edit, delete anyone | Same, within their downline | Same, Players only |
+| Moving Players | Anywhere | Between their own Managers, or directly under themselves | — |
+| Limits | Balance limit, player capacity, commission for anyone | Same, for their direct reports | — |
+| Reports | Platform report, full audit log, finance | Team report, team-scoped audit log, finance | Finance (own delegations) |
+
+Suspending an account locks out everyone beneath it until it is reactivated. Player capacity is enforced both when a Player is created and when one is moved. An account can only be deleted once it has no children and its balance has been reclaimed.
+
 Create flow (`POST /api/users`): Nest creates the Clerk user via Backend API **and** inserts the local row with `parent_id = actor.id`. Creators set **username** + initial password (share out-of-band). Email is never accepted from or returned to the UI — only username is shown.
 
 ### Webhooks

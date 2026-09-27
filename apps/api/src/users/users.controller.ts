@@ -22,7 +22,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { clientIp } from "../security/client-ip";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { AdjustBalanceDto, BalanceLimitDto, DelegateCreditDto } from "./dto/balance-transaction.dto";
+import { AdjustBalanceDto, BalanceLimitDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { ReassignUserDto } from "./dto/reassign-user.dto";
 import { AuditQueryDto } from "./dto/audit-query.dto";
@@ -129,7 +129,7 @@ export class UsersController {
   @Get("report")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
   report(@CurrentActor() actor: Actor) {
     return this.users.report(actor);
   }
@@ -153,7 +153,7 @@ export class UsersController {
   @Get("audit")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
   audit(@CurrentActor() actor: Actor, @Query() query: AuditQueryDto) {
     return this.users.auditLog(actor, query);
   }
@@ -192,6 +192,19 @@ export class UsersController {
     return this.users.delegateCredit(actor, id, dto, clientIp(req));
   }
 
+  @Post(":id/reclaim")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  reclaimCredit(
+    @CurrentActor() actor: Actor,
+    @Param("id") id: string,
+    @Body() dto: ReclaimCreditDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.users.reclaimCredit(actor, id, dto, clientIp(req));
+  }
+
   @Post(":id/adjust-balance")
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
@@ -221,6 +234,14 @@ export class UsersController {
     return this.users.setManagerCapacity(actor, id, dto.capacity, clientIp(req));
   }
 
+  @Get("balance/pending")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  pendingApprovals(@CurrentActor() actor: Actor) {
+    return this.users.pendingApprovals(actor);
+  }
+
   @Get("balance/transactions/:transactionId")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
@@ -248,7 +269,7 @@ export class UsersController {
   @Get("financial-report")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
   financialReport(@CurrentActor() actor: Actor, @Query("from") from?: string, @Query("to") to?: string) {
     return this.users.financialReport(actor, from, to);
   }

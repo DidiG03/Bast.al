@@ -54,7 +54,7 @@ export type CreateUserRequest = {
 
 export type BalanceEntry = {
   id: string;
-  type: "DELEGATION" | "ADJUSTMENT";
+  type: "DELEGATION" | "RECLAIM" | "ADJUSTMENT";
   status?: "PENDING" | "APPROVED" | "REJECTED";
   approvedAt?: string | null;
   /** Signed from the viewed account's perspective: received = positive, given away = negative. */
@@ -87,7 +87,7 @@ export type SecurityOverview = {
 
 export type NotificationItem = {
   id: string;
-  type: "FUNDS_RECEIVED" | "ACCOUNT_SUSPENDED" | "ACCOUNT_UPDATED" | "ACCOUNT_REASSIGNED" | "SUSPICIOUS_LOGIN";
+  type: "FUNDS_RECEIVED" | "FUNDS_RECLAIMED" | "APPROVAL_REQUESTED" | "COMMISSION_RATE_UPDATED" | "ACCOUNT_SUSPENDED" | "ACCOUNT_UPDATED" | "ACCOUNT_REASSIGNED" | "SUSPICIOUS_LOGIN";
   category: "FINANCE" | "ACCOUNT" | "SECURITY" | "SYSTEM";
   severity: "INFO" | "SUCCESS" | "WARNING" | "CRITICAL";
   title: string;
@@ -126,7 +126,9 @@ export type UserReport = {
 
   roleBreakdown: { OWNER: number; MANAGER: number; PLAYER: number };
   statusBreakdown: { ACTIVE: number; SUSPENDED: number };
-  owners: Array<{ id: string; username: string; status: UserRow["status"]; balance: number; commissionRate: number; directReports: number }>;
+  /** OWNER for a Super Admin's report, MANAGER for an Owner's. */
+  accountRole: "OWNER" | "MANAGER";
+  accounts: Array<{ id: string; username: string; status: UserRow["status"]; balance: number; commissionRate: number; directReports: number }>;
   recentAudit: Array<{
     id: string;
     action: string;
@@ -158,8 +160,24 @@ export type AuditResponse = {
 export type FinancialReport = {
   from: string | null;
   to: string | null;
-  recipients: Array<{ userId: string; username: string; role: MeResponse["role"]; totalDelegated: number }>;
+  recipients: Array<{ userId: string; username: string; role: MeResponse["role"]; totalDelegated: number; totalReclaimed: number; net: number }>;
 };
+
+export type PendingApproval = {
+  id: string;
+  type: BalanceEntry["type"];
+  amount: number;
+  reason: string;
+  status: "PENDING";
+  createdAt: string;
+  fromUser: { id: string; username: string } | null;
+  toUser: { id: string; username: string; role: UserRole };
+  actor: { id: string; username: string; role: UserRole } | null;
+};
+
+export function transactionLabel(type: BalanceEntry["type"]): string {
+  return type === "DELEGATION" ? "Delegation" : type === "RECLAIM" ? "Reclaim" : "Adjustment";
+}
 
 export type CommissionRateResponse = { rate: number };
 

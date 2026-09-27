@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsDateString, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min, ValidateIf } from "class-validator";
 
 export class CommissionPeriodDto {
   @IsOptional()
@@ -25,4 +25,21 @@ export class CommissionHistoryDto {
   @Min(1)
   @Max(26)
   weeks?: number;
+}
+
+/** Send null to remove a limit; leave a field out to keep it. */
+export class BettingLimitsDto {
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Max(1000000)
+  maxStake?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Max(1000000)
+  dailyLossLimit?: number | null;
 }

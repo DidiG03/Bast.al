@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BettingLimitsCard } from "../../../../components/betting-limits-card";
 import { PlayerActivityView } from "../../../../components/player-activity-view";
 import { useRealtime } from "../../../../components/realtime-provider";
 import { apiFetch, type PlayerActivity } from "../../../../lib/api";
@@ -50,6 +51,7 @@ export default function PlayerActivityPage() {
         <Link href="/dashboard/users" className="back-link">Back to Users</Link>
       </div>
       {error ? <p className="error-text">{error}</p> : null}
+      {data ? <BettingLimitsCard playerId={id} /> : null}
       {data ? <PlayerActivityView data={data} /> : null}
     </div>
   );

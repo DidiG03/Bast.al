@@ -226,6 +226,26 @@ export type PlayerActivity = {
   recent: Array<BetSummary & { payout: number; status: "WON" | "LOST" | "VOID"; settledAt: string | null }>;
 };
 
+/** A Player's betting limits. null means no limit. */
+export type Limits = { maxStake: number | null; dailyLossLimit: number | null };
+
+export type BettingLimits = {
+  /** The ceiling the Owner (or Super Admin) sets. */
+  owner: Limits;
+  /** What the Player's Manager tightened it to, if anything. */
+  manager: Limits;
+  /** What applies: the stricter of the two. */
+  effective: Limits;
+  lossToday: number;
+  editable: "owner" | "manager" | null;
+  hasManager: boolean;
+};
+
+export type TeamSettings = { lowBalanceThreshold: number | null; managerApprovalLimit: number | null; defaultApprovalLimit: number };
+
+export type BulkAction = "suspend" | "unsuspend" | "delegate" | "reassign";
+export type BulkResult = { results: Array<{ id: string; ok: boolean; error?: string; pending?: boolean }> };
+
 /** The platform-wide delegation size above which a second person must approve. */
 export const DEFAULT_APPROVAL_LIMIT = 10000;
 

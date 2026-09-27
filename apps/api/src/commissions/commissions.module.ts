@@ -4,12 +4,14 @@ import { SecurityModule } from "../security/security.module";
 import { UsersModule } from "../users/users.module";
 import { CommissionsController } from "./commissions.controller";
 import { CommissionsService } from "./commissions.service";
+import { BettingLimitsService } from "./betting-limits.service";
 import { PlayerActivityService } from "./player-activity.service";
 import { PlayersController } from "./players.controller";
 
 @Module({
   imports: [AuthModule, SecurityModule, UsersModule],
   controllers: [CommissionsController, PlayersController],
-  providers: [CommissionsService, PlayerActivityService],
+  providers: [CommissionsService, PlayerActivityService, BettingLimitsService],
+  exports: [BettingLimitsService],
 })
 export class CommissionsModule {}

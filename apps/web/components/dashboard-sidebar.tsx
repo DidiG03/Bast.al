@@ -71,6 +71,13 @@ const icons = {
       <path d="M6 6V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
     </Icon>
   ),
+  commissions: (
+    <Icon>
+      <circle cx="7" cy="7" r="2.5" />
+      <circle cx="17" cy="17" r="2.5" />
+      <path d="M19 5 5 19" />
+    </Icon>
+  ),
   audit: (
     <Icon>
       <path d="M6 3h9l3 3v15H6z" />
@@ -158,15 +165,18 @@ export function DashboardSidebar({
       ? [{ href: "/dashboard/reports", label: "Reports", icon: icons.reports }]
       : []),
     ...(canViewFinancial
-      ? [{ href: "/dashboard/finance", label: "Finance", icon: icons.finance }]
+      ? [
+          { href: "/dashboard/finance", label: "Finance", icon: icons.finance },
+          { href: "/dashboard/commissions", label: "Commissions", icon: icons.commissions },
+        ]
       : []),
     { href: "/dashboard/security", label: "Security", icon: icons.security },
   ];
-  // The bottom bar fits five tabs; Tickets moves to the drawer when a role has more.
-  const mobileLinks =
-    links.length > 5
-      ? links.filter((link) => link.href !== "/dashboard/tickets")
-      : links;
+  // The bottom bar fits five tabs; Tickets, then Security, move to the drawer when a role has more.
+  let mobileLinks = links;
+  for (const href of ["/dashboard/tickets", "/dashboard/security"]) {
+    if (mobileLinks.length > 5) mobileLinks = mobileLinks.filter((link) => link.href !== href);
+  }
   const isActive = (href: string) =>
     href === "/dashboard"
       ? pathname === href

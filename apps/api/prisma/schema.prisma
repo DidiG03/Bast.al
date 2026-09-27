@@ -101,6 +101,7 @@ model User {
   notifications                Notification[]
   notificationPreference      NotificationPreference?
   loginHistory                 LoginHistory[]
+  bets                         Bet[]
 
   @@index([parentId])
   @@index([role])
@@ -225,6 +226,33 @@ model Event {
   updatedAt DateTime    @updatedAt
 
   @@index([status, startsAt])
+}
+
+/// A Player's bet. Commission reporting reads only settled bets (WON/LOST):
+/// the house's net revenue from a bet is stake - payout, so a lost bet
+/// earns the full stake and a won bet costs the winnings. VOID bets are
+/// refunded and count for nothing.
+model Bet {
+  id        String    @id @default(cuid())
+  playerId  String    @map("player_id")
+  player    User      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  stake     Decimal   @db.Decimal(12, 2)
+  /// What the Player was paid back, stake included. 0 for a lost bet.
+  payout    Decimal   @default(0) @db.Decimal(12, 2)
+  status    BetStatus @default(OPEN)
+  placedAt  DateTime  @default(now()) @map("placed_at")
+  settledAt DateTime? @map("settled_at")
+
+  @@index([playerId, settledAt])
+  @@index([status, settledAt])
+  @@map("bets")
+}
+
+enum BetStatus {
+  OPEN
+  WON
+  LOST
+  VOID
 }
 
 enum EventStatus {

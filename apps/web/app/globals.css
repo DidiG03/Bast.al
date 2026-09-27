@@ -2230,3 +2230,124 @@ td {
     padding: 0;
   }
 }
+
+/* Commissions */
+.report-stat.commission-stat {
+  justify-content: flex-start;
+  gap: 0.35rem;
+}
+
+.commission-highlight-good {
+  border-color: var(--accent);
+}
+
+.commission-highlight-good strong {
+  color: var(--accent-strong);
+}
+
+.commission-highlight-bad {
+  border-color: var(--danger);
+}
+
+.commission-highlight-bad strong {
+  color: var(--danger);
+}
+
+.commission-stat-hint {
+  font-size: 0.78rem;
+}
+
+.commission-range {
+  margin-bottom: 0;
+  overflow-x: auto;
+}
+
+.commission-range {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  gap: 0.25rem;
+}
+
+.commission-range .tab-button {
+  padding: 0.5rem 0.7rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .commission-range {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .commission-range .tab-button {
+    padding: 0.5rem 0.2rem;
+    font-size: 0.85rem;
+  }
+}
+
+.commission-period-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.commission-row-button {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.commission-row-button:last-child {
+  border-bottom: 0;
+}
+
+.commission-row-button:hover strong:first-child,
+.commission-details summary:hover strong:first-child {
+  color: var(--accent);
+}
+
+.report-list-row > div.commission-amount-block {
+  flex: 0 0 auto;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.commission-amount {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.commission-details {
+  border-bottom: 1px solid var(--border);
+}
+
+.commission-details:last-child {
+  border-bottom: 0;
+}
+
+.commission-details summary {
+  list-style: none;
+  cursor: pointer;
+  border-bottom: 0;
+}
+
+.commission-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.commission-details[open] .commission-amount-block .muted {
+  visibility: hidden;
+}
+
+.commission-players {
+  margin: 0 0 0.8rem;
+  padding: 0 0.9rem;
+  border-left: 2px solid var(--border);
+}

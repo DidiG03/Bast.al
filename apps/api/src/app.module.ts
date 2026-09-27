@@ -12,6 +12,7 @@ import { SecurityModule } from "./security/security.module";
 import { UsersModule } from "./users/users.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
+import { CommissionsModule } from "./commissions/commissions.module";
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     UsersModule,
     NotificationsModule,
     WebhooksModule,
+    CommissionsModule,
   ],
   controllers: [HealthController, RootController, EventsController],
   providers: [QueueService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

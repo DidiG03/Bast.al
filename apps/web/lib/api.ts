@@ -6,14 +6,19 @@ function apiBase(): string {
   return `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api`;
 }
 
+export type UserRole = "SUPER_ADMIN" | "OWNER" | "MANAGER" | "PLAYER";
+
 export type MeResponse = {
   id: string;
   username: string;
-  role: "SUPER_ADMIN" | "OWNER" | "MANAGER" | "PLAYER";
+  role: UserRole;
   parentId: string | null;
+  parent: { id: string; username: string; role: UserRole } | null;
   status: "ACTIVE" | "SUSPENDED";
   balance: number | string;
-  commissionRate: number | string;
+  balanceLimit: number | string;
+  managerCapacity: number;
+  commissionRate: number;
   mfaRequired: boolean;
   mfaEnabled: boolean;
   mfaSatisfied: boolean;
@@ -28,7 +33,7 @@ export type UserRow = {
   balance: number | string;
   balanceLimit: number | string;
   managerCapacity: number;
-  commissionRate: number | string;
+  commissionRate: number;
   createdAt: string;
 };
 

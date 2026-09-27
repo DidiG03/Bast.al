@@ -63,13 +63,22 @@ export class UsersService {
       }
 
     }
+    const parent = actor.parentId
+      ? await this.prisma.user.findUnique({
+          where: { id: actor.parentId },
+          select: { id: true, username: true, role: true },
+        })
+      : null;
     return {
       id: actor.id,
       username: actor.username,
       role: actor.role,
       parentId: actor.parentId,
+      parent,
       status: actor.status,
       balance: Number(actor.balance),
+      balanceLimit: Number(actor.balanceLimit),
+      managerCapacity: actor.managerCapacity,
       commissionRate: Number(actor.commissionRate),
       mfaRequired,
       mfaEnabled,
@@ -232,6 +241,14 @@ export class UsersService {
     }
     const updated = await this.prisma.user.update({ where: { id }, data: { commissionRate: rate }, select: publicUserSelect });
     await this.audit.log({ actorId: actor.id, action: "user.commission_rate_update", targetId: id, ipAddress, metadata: { rate } });
+    await this.notifications.create({
+      userId: id,
+      type: NotificationType.COMMISSION_RATE_UPDATED,
+      title: "Commission rate updated",
+      message: `Your commission rate was set to ${rate}%.`,
+      deepLink: "/dashboard",
+      metadata: { actorId: actor.id, rate },
+    });
     return updated;
   }
 

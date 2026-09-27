@@ -1,6 +1,20 @@
 import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { apiFetch, type MeResponse } from "../../lib/api";
+import { apiFetch, type MeResponse, type UserRow } from "../../lib/api";
+
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card report-stat">
+      <span className="muted">{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function money(value: number) {
+  return `$${value.toFixed(2)}`;
+}
 
 export default async function DashboardPage() {
   const { getToken } = await auth();
@@ -14,18 +28,116 @@ export default async function DashboardPage() {
       <h1 style={{ margin: 0 }}>Dashboard</h1>
       <div className="card stack">
         <p style={{ margin: 0 }}>
-          Signed in as <strong>{me.username}</strong>
+          Signed in as <strong>{me.username}</strong> · <span className="muted">{me.role}</span>
         </p>
-        {me.role !== "SUPER_ADMIN" ? (
-          <p style={{ margin: 0 }}>
-            Account balance: <strong>${Number(me.balance).toFixed(2)}</strong>
-          </p>
-        ) : null}
-        {(me.role === "OWNER" || me.role === "MANAGER") ? (
-          <p style={{ margin: 0 }}>
-            Commission rate: <strong>{Number(me.commissionRate)}%</strong>
-          </p>
-        ) : null}
+      </div>
+      {me.role === "SUPER_ADMIN" ? <SuperAdminOverview token={token} /> : null}
+      {me.role === "OWNER" ? <OwnerOverview token={token} me={me} /> : null}
+      {me.role === "MANAGER" ? <ManagerOverview me={me} /> : null}
+      {me.role === "PLAYER" ? <PlayerOverview me={me} /> : null}
+    </div>
+  );
+}
+
+async function SuperAdminOverview({ token }: { token: string }) {
+  const users = await apiFetch<UserRow[]>("/users", token);
+  const owners = users.filter((user) => user.role === "OWNER").length;
+  const managers = users.filter((user) => user.role === "MANAGER").length;
+  const players = users.filter((user) => user.role === "PLAYER").length;
+  const totalBalance = users.reduce((total, user) => total + Number(user.balance), 0);
+
+  return (
+    <div className="stack">
+      <div className="page-title-row">
+        <h2 style={{ margin: 0 }}>Platform overview</h2>
+        <Link href="/dashboard/reports">View reports →</Link>
+      </div>
+      <div className="report-grid">
+        <StatTile label="Owners" value={String(owners)} />
+        <StatTile label="Managers" value={String(managers)} />
+        <StatTile label="Players" value={String(players)} />
+        <StatTile label="Balance in circulation" value={money(totalBalance)} />
+      </div>
+      <p className="muted" style={{ margin: 0 }}>
+        Set each Owner&apos;s commission rate from the <Link href="/dashboard/users">Users</Link> page.
+      </p>
+    </div>
+  );
+}
+
+async function OwnerOverview({ token, me }: { token: string; me: MeResponse }) {
+  const users = await apiFetch<UserRow[]>("/users", token);
+  const managers = users.filter((user) => user.role === "MANAGER").length;
+  const players = users.filter((user) => user.role === "PLAYER").length;
+  const teamBalance = users
+    .filter((user) => user.id !== me.id)
+    .reduce((total, user) => total + Number(user.balance), 0);
+
+  return (
+    <div className="stack">
+      <div className="page-title-row">
+        <h2 style={{ margin: 0 }}>Business overview</h2>
+        <Link href="/dashboard/users">Manage team →</Link>
+      </div>
+      <div className="report-grid">
+        <StatTile label="Managers" value={String(managers)} />
+        <StatTile label="Players" value={String(players)} />
+        <StatTile label="Your balance" value={money(Number(me.balance))} />
+        <StatTile label="Delegated to your team" value={money(teamBalance)} />
+      </div>
+      <div className="card stack">
+        <span className="muted">Commission rate Super Admin set for you</span>
+        <strong style={{ fontSize: "1.8rem" }}>{Number(me.commissionRate)}%</strong>
+        <p className="muted" style={{ margin: 0 }}>
+          Managers don&apos;t risk capital — set their commission rate from the{" "}
+          <Link href="/dashboard/users">Users</Link> page as their pay for administering Players.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ManagerOverview({ me }: { me: MeResponse }) {
+  return (
+    <div className="stack">
+      <div className="page-title-row">
+        <h2 style={{ margin: 0 }}>Your account</h2>
+        <Link href="/dashboard/users">View your Players →</Link>
+      </div>
+      <div className="report-grid">
+        <StatTile label="Balance" value={money(Number(me.balance))} />
+        <StatTile label="Balance limit" value={money(Number(me.balanceLimit))} />
+        <StatTile label="Commission rate" value={`${Number(me.commissionRate)}%`} />
+      </div>
+      <p className="muted" style={{ margin: 0 }}>
+        Your balance is delegated by your Owner — you administer Players, not your own capital.
+        Commission is your pay, set by your Owner.
+      </p>
+    </div>
+  );
+}
+
+function PlayerOverview({ me }: { me: MeResponse }) {
+  return (
+    <div className="stack">
+      <div className="card stack">
+        <h2 style={{ margin: 0 }}>Your account</h2>
+        <p style={{ margin: 0 }}>
+          Balance: <strong>{money(Number(me.balance))}</strong> · Status: <strong>{me.status}</strong>
+        </p>
+        <p style={{ margin: 0 }}>
+          {me.parent ? (
+            <>
+              Administered by <strong>{me.parent.username}</strong>{" "}
+              <span className="muted">({me.parent.role})</span>
+            </>
+          ) : (
+            <span className="muted">Not yet assigned to a Manager or Owner.</span>
+          )}
+        </p>
+        <p className="muted" style={{ margin: 0 }}>
+          Wagering is coming soon — your account isn&apos;t able to place bets yet.
+        </p>
       </div>
     </div>
   );

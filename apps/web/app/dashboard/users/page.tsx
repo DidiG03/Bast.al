@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiFetch, type BalanceEntry, type BalanceStatement, type MeResponse, type ReassignmentPreview, type UserRow } from "../../../lib/api";
 import { LoadingSpinner } from "../../../components/loading-spinner";
+import { CommissionRateControl } from "../../../components/commission-field";
 
 const ROLE_OPTIONS: Record<MeResponse["role"], Array<"OWNER" | "MANAGER" | "PLAYER">> = {
   SUPER_ADMIN: ["OWNER"],
@@ -43,6 +44,7 @@ export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
+  const [commissionUser, setCommissionUser] = useState<UserRow | null>(null);
 
   const creatable = useMemo(() => (me ? ROLE_OPTIONS[me.role] : []), [me]);
   const assignableManagers = useMemo(
@@ -428,6 +430,12 @@ export default function UsersPage() {
                       Balance
                     </button>
                   ) : null}
+                  {user.role === "OWNER" && me?.role === "SUPER_ADMIN" ? (
+                    <button type="button" role="menuitem" onClick={() => { setActionMenuId(null); setCommissionUser(user); }}>
+                      <svg className="action-menu-icon dollar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M15.5 7.25c-.55-.85-1.7-1.5-3.5-1.5-2.2 0-3.5 1.1-3.5 2.6 0 4.15 7 1.65 7 5.8 0 1.5-1.3 2.6-3.5 2.6-1.8 0-2.95-.65-3.5-1.5" /></svg>
+                      Commission
+                    </button>
+                  ) : null}
                   <button type="button" role="menuitem" onClick={() => { setActionMenuId(null); beginEdit(user); }}>
                     <svg className="action-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L19.8 7.7a2.1 2.1 0 0 0-3-3L4 16.5Z" /><path d="m14.8 6.2 3 3" /></svg>
                     Edit
@@ -558,6 +566,15 @@ export default function UsersPage() {
               <input type="number" min="1" step="1" max="100000" value={managerCapacity} onChange={(event) => setManagerCapacity(event.target.value)} aria-label="Manager player capacity" />
               <button type="submit" className="secondary" disabled={busy}>Set player capacity</button>
             </form>
+            {me.role === "OWNER" && balanceUser.role === "MANAGER" ? (
+              <CommissionRateControl
+                userId={balanceUser.id}
+                currentRate={Number(balanceUser.commissionRate)}
+                label="Manager commission"
+                description="What you pay this Manager, without them risking capital."
+                onSaved={(rate) => { setBalanceUser({ ...balanceUser, commissionRate: rate }); load().catch(() => undefined); }}
+              />
+            ) : null}
             <div className="ledger-header"><h3>Transaction history</h3><button type="button" className="secondary" onClick={exportLedger} disabled={balanceLedger.length === 0}>Export CSV</button></div>
             <div className="statement-controls">
               <label>From<input type="date" value={statementFrom} onChange={(event) => setStatementFrom(event.target.value)} /></label>
@@ -590,6 +607,20 @@ export default function UsersPage() {
                 <div className="modal-actions"><button type="submit" className="secondary" disabled={busy}>{busy ? <LoadingSpinner label="Saving adjustment" size="small" /> : "Apply adjustment"}</button></div>
               </form>
             ) : null}
+          </section>
+        </div>
+      ) : null}
+      {commissionUser ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setCommissionUser(null)}>
+          <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="commission-title">
+            <div className="modal-header"><h2 id="commission-title">Owner commission</h2><button type="button" className="modal-close secondary" onClick={() => setCommissionUser(null)} aria-label="Close">×</button></div>
+            <CommissionRateControl
+              userId={commissionUser.id}
+              currentRate={Number(commissionUser.commissionRate)}
+              label={`Commission from ${commissionUser.username}`}
+              description="The cut you take from this Owner's business."
+              onSaved={(rate) => { setCommissionUser({ ...commissionUser, commissionRate: rate }); load().catch(() => undefined); }}
+            />
           </section>
         </div>
       ) : null}

@@ -6,13 +6,19 @@ function apiBase(): string {
   return `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api`;
 }
 
+export type UserRole = "SUPER_ADMIN" | "OWNER" | "MANAGER" | "PLAYER";
+
 export type MeResponse = {
   id: string;
   username: string;
-  role: "SUPER_ADMIN" | "OWNER" | "MANAGER" | "PLAYER";
+  role: UserRole;
   parentId: string | null;
+  parent: { id: string; username: string; role: UserRole } | null;
   status: "ACTIVE" | "SUSPENDED";
   balance: number | string;
+  balanceLimit: number | string;
+  managerCapacity: number;
+  commissionRate: number;
   mfaRequired: boolean;
   mfaEnabled: boolean;
   mfaSatisfied: boolean;
@@ -27,6 +33,7 @@ export type UserRow = {
   balance: number | string;
   balanceLimit: number | string;
   managerCapacity: number;
+  commissionRate: number;
   createdAt: string;
 };
 
@@ -148,6 +155,22 @@ export type FinancialReport = {
   from: string | null;
   to: string | null;
   managers: Array<{ managerId: string; username: string; credits: number; debits: number; net: number }>;
+};
+
+export type CommissionReportRow = {
+  userId: string;
+  username: string;
+  role: "OWNER" | "MANAGER";
+  rate: number;
+  basisVolume: number;
+  estimatedCommission: number;
+};
+
+export type CommissionReport = {
+  from: string | null;
+  to: string | null;
+  self: { rate: number; basisVolume: number; estimatedCommission: number } | null;
+  rows: CommissionReportRow[];
 };
 
 export async function apiFetch<T>(

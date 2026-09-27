@@ -28,6 +28,7 @@ const publicUserSelect = {
   balance: true,
   balanceLimit: true,
   managerCapacity: true,
+  commissionRate: true,
   createdAt: true,
 } as const;
 
@@ -57,13 +58,23 @@ export class UsersService {
       }
 
     }
+    const parent = actor.parentId
+      ? await this.prisma.user.findUnique({
+          where: { id: actor.parentId },
+          select: { id: true, username: true, role: true },
+        })
+      : null;
     return {
       id: actor.id,
       username: actor.username,
       role: actor.role,
       parentId: actor.parentId,
+      parent,
       status: actor.status,
       balance: Number(actor.balance),
+      balanceLimit: Number(actor.balanceLimit),
+      managerCapacity: actor.managerCapacity,
+      commissionRate: Number(actor.commissionRate),
       mfaRequired,
       mfaEnabled,
       mfaSatisfied: !mfaRequired || mfaEnabled,
@@ -200,17 +211,89 @@ export class UsersService {
     };
   }
 
-  async commission(actor: Actor) {
-    if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Commission settings are restricted to Super Admins");
-    const setting = await this.prisma.commissionSetting.upsert({ where: { id: "default" }, create: {}, update: {} });
-    return { percentage: Number(setting.percentage), updatedAt: setting.updatedAt };
+  async setCommissionRate(actor: Actor, id: string, rate: number, ipAddress?: string) {
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
+    if (!target) throw new NotFoundException("User not found");
+
+    if (actor.role === Role.SUPER_ADMIN) {
+      if (target.role !== Role.OWNER) {
+        throw new BadRequestException("Super Admins can only set a commission rate for Owners");
+      }
+    } else if (actor.role === Role.OWNER) {
+      if (target.role !== Role.MANAGER) {
+        throw new BadRequestException("Owners can only set a commission rate for their Managers");
+      }
+      if (!(await this.hierarchy.canActOn(actor, id))) {
+        throw new ForbiddenException("Target is outside your hierarchy subtree");
+      }
+    } else {
+      throw new ForbiddenException("Only Super Admins or Owners can set commission rates");
+    }
+
+    const updated = await this.prisma.user.update({ where: { id }, data: { commissionRate: rate }, select: publicUserSelect });
+    await this.audit.log({ actorId: actor.id, action: "user.commission_rate_update", targetId: id, ipAddress, metadata: { rate } });
+    await this.notifications.create({
+      userId: id,
+      type: NotificationType.COMMISSION_RATE_UPDATED,
+      title: "Commission rate updated",
+      message: `Your commission rate was set to ${rate}%.`,
+      deepLink: "/dashboard",
+      metadata: { actorId: actor.id, rate },
+    });
+    return updated;
   }
 
-  async updateCommission(actor: Actor, percentage: number, ipAddress?: string) {
-    if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Commission settings are restricted to Super Admins");
-    const setting = await this.prisma.commissionSetting.upsert({ where: { id: "default" }, create: { percentage }, update: { percentage } });
-    await this.audit.log({ actorId: actor.id, action: "commission.settings_update", ipAddress, metadata: { percentage } });
-    return { percentage: Number(setting.percentage), updatedAt: setting.updatedAt };
+  /**
+   * Interim commission estimate: basis is a Manager's own approved DEBIT+REVERSAL ledger
+   * volume (money paid out against their balance) until real wagering/settlement exists.
+   */
+  async commissionReport(actor: Actor, from?: string, to?: string) {
+    if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) {
+      throw new ForbiddenException("Commission reports are restricted");
+    }
+    const dateFilter = from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {};
+    const basisWhere = { status: BalanceTransactionStatus.APPROVED, type: { in: [BalanceTransactionType.DEBIT, BalanceTransactionType.REVERSAL] }, ...dateFilter };
+
+    async function basisVolumeFor(prisma: PrismaService, managerIds: string[]): Promise<number> {
+      if (managerIds.length === 0) return 0;
+      const entries = await prisma.balanceTransaction.findMany({
+        where: { managerId: { in: managerIds }, ...basisWhere },
+        select: { amount: true },
+      });
+      return entries.reduce((total, entry) => total + Number(entry.amount), 0);
+    }
+
+    if (actor.role === Role.SUPER_ADMIN) {
+      const owners = await this.prisma.user.findMany({ where: { role: Role.OWNER }, select: { id: true, username: true, commissionRate: true } });
+      const rows = await Promise.all(
+        owners.map(async (owner) => {
+          const managerIds = await this.hierarchy.getDescendantIds(owner.id);
+          const managers = await this.prisma.user.findMany({ where: { id: { in: managerIds }, role: Role.MANAGER }, select: { id: true } });
+          const basisVolume = await basisVolumeFor(this.prisma, managers.map((manager) => manager.id));
+          const rate = Number(owner.commissionRate);
+          return { userId: owner.id, username: owner.username, role: Role.OWNER, rate, basisVolume, estimatedCommission: (basisVolume * rate) / 100 };
+        }),
+      );
+      return { from: from ?? null, to: to ?? null, self: null, rows };
+    }
+
+    const managerIds = (await this.hierarchy.getDescendantIds(actor.id));
+    const managers = await this.prisma.user.findMany({ where: { id: { in: managerIds }, role: Role.MANAGER }, select: { id: true, username: true, commissionRate: true } });
+    const rows = await Promise.all(
+      managers.map(async (manager) => {
+        const basisVolume = await basisVolumeFor(this.prisma, [manager.id]);
+        const rate = Number(manager.commissionRate);
+        return { userId: manager.id, username: manager.username, role: Role.MANAGER, rate, basisVolume, estimatedCommission: (basisVolume * rate) / 100 };
+      }),
+    );
+    const selfBasisVolume = await basisVolumeFor(this.prisma, managers.map((manager) => manager.id));
+    const selfRate = Number(actor.commissionRate);
+    return {
+      from: from ?? null,
+      to: to ?? null,
+      self: { rate: selfRate, basisVolume: selfBasisVolume, estimatedCommission: (selfBasisVolume * selfRate) / 100 },
+      rows,
+    };
   }
 
   async auditLog(actor: Actor, query: AuditQueryDto) {

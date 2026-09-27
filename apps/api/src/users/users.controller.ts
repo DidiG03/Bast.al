@@ -26,7 +26,7 @@ import { UpdateUserDto } from "./dto/update-user.dto";
 import { ReassignUserDto } from "./dto/reassign-user.dto";
 import { AuditQueryDto } from "./dto/audit-query.dto";
 import { ManagerCapacityDto } from "./dto/manager-capacity.dto";
-import { CommissionDto } from "./dto/commission.dto";
+import { CommissionRateDto } from "./dto/commission.dto";
 import { UsersService } from "./users.service";
 
 class BootstrapSuperAdminDto {
@@ -133,20 +133,12 @@ export class UsersController {
     return this.users.report(actor);
   }
 
-  @Get("commission")
+  @Get("commission-report")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN)
-  commission(@CurrentActor() actor: Actor) {
-    return this.users.commission(actor);
-  }
-
-  @Post("commission")
-  @ApiBearerAuth()
-  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN)
-  updateCommission(@CurrentActor() actor: Actor, @Body() dto: CommissionDto, @Req() req: AuthenticatedRequest) {
-    return this.users.updateCommission(actor, dto.percentage, this.ip(req));
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  commissionReport(@CurrentActor() actor: Actor, @Query("from") from?: string, @Query("to") to?: string) {
+    return this.users.commissionReport(actor, from, to);
   }
 
   @Get("audit")
@@ -205,6 +197,14 @@ export class UsersController {
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   managerCapacity(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: ManagerCapacityDto, @Req() req: AuthenticatedRequest) {
     return this.users.setManagerCapacity(actor, id, dto.capacity, this.ip(req));
+  }
+
+  @Post(":id/commission-rate")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  commissionRate(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: CommissionRateDto, @Req() req: AuthenticatedRequest) {
+    return this.users.setCommissionRate(actor, id, dto.rate, this.ip(req));
   }
 
   @Get("balance/transactions/:transactionId")

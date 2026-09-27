@@ -32,6 +32,7 @@ enum NotificationType {
   ACCOUNT_UPDATED
   ACCOUNT_REASSIGNED
   SUSPICIOUS_LOGIN
+  COMMISSION_RATE_UPDATED
 }
 
 enum NotificationCategory {
@@ -70,6 +71,8 @@ model User {
   balance   Decimal    @default(0) @db.Decimal(12, 2)
   balanceLimit Decimal  @default(1000000) @map("balance_limit") @db.Decimal(12, 2)
   managerCapacity Int    @default(100) @map("manager_capacity")
+  /// On an OWNER row: rate set by Super Admin. On a MANAGER row: rate set by their Owner.
+  commissionRate Decimal @default(0) @map("commission_rate") @db.Decimal(5, 2)
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
@@ -113,14 +116,6 @@ model SecuritySetting {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("security_settings")
-}
-
-model CommissionSetting {
-  id        String   @id @default("default")
-  percentage Decimal @default(0) @db.Decimal(5, 2)
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("commission_settings")
 }
 
 model Notification {

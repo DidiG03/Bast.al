@@ -8,6 +8,7 @@
     "lint": "npm run lint --workspaces",
     "db:push": "dotenv -e .env -- npm run prisma:push --workspace apps/api",
     "db:generate": "dotenv -e .env -- npm run prisma:generate --workspace apps/api",
+    "db:seed-demo": "dotenv -e .env -- node apps/api/prisma/seed-demo.mjs",
     "format": "prettier --write ."
   },
   "devDependencies": {

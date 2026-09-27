@@ -181,6 +181,40 @@ export function transactionLabel(type: BalanceEntry["type"]): string {
 
 export type CommissionRateResponse = { rate: number };
 
+/** Settled-bet totals. `net` is the team's profit: what Players staked minus what they were paid. */
+export type CommissionTotals = { bets: number; staked: number; paidOut: number; net: number };
+
+export type PlayerResult = CommissionTotals & { id: string; username: string; status: UserRow["status"] };
+
+type CommissionPeriod = { from: string; to: string };
+
+export type OwnerSplit = CommissionTotals & {
+  /** What the Owner pays Super Admin: their rate on the whole team's profit. */
+  superAdminCut: number;
+  /** What the Owner pays their Managers in total. */
+  managerCommission: number;
+  ownerKeeps: number;
+};
+
+export type SuperAdminCommissions = CommissionPeriod & {
+  totals: OwnerSplit;
+  owners: Array<OwnerSplit & { id: string; username: string; status: UserRow["status"]; commissionRate: number; managers: number; players: number }>;
+};
+
+export type TeamCommissions = CommissionPeriod & {
+  owner: { id: string; username: string; commissionRate: number };
+  totals: OwnerSplit;
+  managers: Array<CommissionTotals & { id: string; username: string; status: UserRow["status"]; commissionRate: number; commission: number; players: PlayerResult[] }>;
+  directPlayers: PlayerResult[];
+};
+
+export type ManagerCommissions = CommissionPeriod & {
+  manager: { id: string; username: string; commissionRate: number };
+  paidBy: string | null;
+  totals: CommissionTotals & { commission: number };
+  players: PlayerResult[];
+};
+
 export async function apiFetch<T>(
   path: string,
   token: string,

@@ -8,3 +8,9 @@ export function formatMoney(value: number | string): string {
   const amount = Number(value);
   return `$${moneyFormat.format(Number.isFinite(amount) ? amount : 0)}`;
 }
+
+/** "-$12.00" rather than "$-12.00" for amounts that can go negative. */
+export function formatSignedMoney(value: number | string): string {
+  const amount = Number(value);
+  return amount < 0 ? `-${formatMoney(-amount)}` : formatMoney(amount);
+}

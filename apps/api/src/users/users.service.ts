@@ -16,6 +16,7 @@ import { AdjustBalanceDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/bal
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { HierarchyService } from "./hierarchy.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { RealtimeService } from "../realtime/realtime.service";
 import { AuditQueryDto } from "./dto/audit-query.dto";
 
 /** Fields safe to return to clients — never includes email/password/ciphertext. */
@@ -61,6 +62,7 @@ export class UsersService {
     private readonly audit: AuditService,
     private readonly crypto: FieldEncryptionService,
     private readonly notifications: NotificationsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async me(actor: Actor, mfaEnforcementEnabled: boolean) {
@@ -611,6 +613,7 @@ export class UsersService {
       ipAddress,
       metadata: { amount: dto.amount, reason: dto.reason },
     });
+    await this.realtime.publishBalances([id, isPrint ? null : actor.id]);
     await this.notifications.create({
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
@@ -655,6 +658,7 @@ export class UsersService {
     });
 
     await this.audit.log({ actorId: actor.id, action: "user.balance_adjustment", targetId: id, ipAddress, metadata: { amount: dto.amount, reason: dto.reason } });
+    await this.realtime.publishBalances([id]);
     await this.notifications.create({
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
@@ -675,6 +679,7 @@ export class UsersService {
     }
     const updated = await this.prisma.user.update({ where: { id }, data: { balanceLimit: limit }, select: publicUserSelect });
     await this.audit.log({ actorId: actor.id, action: "user.balance_limit_update", targetId: id, ipAddress, metadata: { limit } });
+    await this.realtime.publishBalances([id]);
     return updated;
   }
 
@@ -738,6 +743,7 @@ export class UsersService {
       return tx.balanceTransaction.findUniqueOrThrow({ where: { id: transactionId }, select: { id: true, status: true, amount: true } });
     });
     await this.audit.log({ actorId: actor.id, action: "user.balance_approved", targetId: transaction.toUserId, ipAddress, metadata: { transactionId } });
+    await this.realtime.publishBalances([transaction.toUserId, transaction.fromUserId]);
     await this.notifications.create({ userId: transaction.toUserId, type: NotificationType.FUNDS_RECEIVED, title: "Transaction approved", message: `A $${Number(transaction.amount).toFixed(2)} transaction was approved.`, deepLink: `/dashboard/finance/transaction/${transactionId}`, metadata: { transactionId } });
     return { ...result, amount: Number(result.amount) };
   }
@@ -824,6 +830,7 @@ export class UsersService {
     });
 
     await this.audit.log({ actorId: actor.id, action: "user.reclaim_credit", targetId: id, ipAddress, metadata: { amount: dto.amount, reason: dto.reason } });
+    await this.realtime.publishBalances([id, isRetire ? null : actor.id]);
     await this.notifications.create({
       userId: id,
       type: NotificationType.FUNDS_RECLAIMED,

@@ -84,7 +84,7 @@ async function proxy(request: NextRequest, parts: string[]) {
   // regardless of activity, which kills long-lived streams with a 500 every
   // five minutes. Node's core http/https client has no such limit, so the
   // stream path bypasses fetch entirely.
-  if (path === "notifications/stream") {
+  if (path === "realtime/stream") {
     return proxyStream(url, headers);
   }
 

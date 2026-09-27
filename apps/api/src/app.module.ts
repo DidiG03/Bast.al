@@ -13,6 +13,7 @@ import { UsersModule } from "./users/users.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
 import { CommissionsModule } from "./commissions/commissions.module";
+import { RealtimeModule } from "./realtime/realtime.module";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { CommissionsModule } from "./commissions/commissions.module";
     CryptoModule,
     SecurityModule,
     AuthModule,
+    RealtimeModule,
     UsersModule,
     NotificationsModule,
     WebhooksModule,

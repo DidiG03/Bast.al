@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Sse, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthGuard } from "../auth/auth.guard";
 import { CurrentActor } from "../auth/current-actor.decorator";
@@ -16,11 +16,6 @@ export class NotificationsController {
   @Get()
   list(@CurrentActor() actor: Actor, @Query("includeArchived") includeArchived?: string) {
     return this.notifications.list(actor, includeArchived === "true");
-  }
-
-  @Sse("stream")
-  stream(@CurrentActor() actor: Actor) {
-    return this.notifications.stream(actor);
   }
 
   @Post(":id/read")

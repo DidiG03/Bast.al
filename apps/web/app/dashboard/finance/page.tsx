@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { formatMoney } from "../../../lib/format";
+import { useRealtime } from "../../../components/realtime-provider";
 import { apiFetch, transactionLabel, type FinancialReport, type MeResponse, type PendingApproval } from "../../../lib/api";
 
 export default function FinancePage() {
@@ -37,6 +38,11 @@ export default function FinancePage() {
   // Load the initial report once; filters are submitted explicitly.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load().catch(() => undefined); }, []);
+
+  // New approval requests arrive as notifications; approvals move balances.
+  useRealtime((event) => {
+    if (event.type === "balance.changed" || event.type === "notification.created" || event.type === "resync") load().catch(() => undefined);
+  });
 
   async function decide(id: string, approve: boolean) {
     setBusy(true);

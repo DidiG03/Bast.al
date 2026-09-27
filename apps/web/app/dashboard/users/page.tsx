@@ -2,6 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRealtime } from "../../../components/realtime-provider";
 import { apiFetch, transactionLabel, type BalanceEntry, type BalanceStatement, type MeResponse, type ReassignmentPreview, type UserRow } from "../../../lib/api";
 import { LoadingSpinner } from "../../../components/loading-spinner";
 import { formatMoney } from "../../../lib/format";
@@ -60,7 +61,7 @@ export default function UsersPage() {
     [users],
   );
 
-  async function load() {
+  async function load({ keepForm = false } = {}) {
     const token = await getToken();
     if (!token) return;
     const [profile, list] = await Promise.all([
@@ -70,13 +71,18 @@ export default function UsersPage() {
     setMe(profile);
     setUsers(list);
     const options = ROLE_OPTIONS[profile.role];
-    if (options[0]) setRole(options[0]);
+    if (options[0] && !keepForm) setRole(options[0]);
   }
 
   useEffect(() => {
     load().catch((err: Error) => setError(err.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useRealtime((event) => {
+    // A live refresh must not reset a half-filled create form.
+    if (event.type === "balance.changed" || event.type === "resync") load({ keepForm: true }).catch(() => undefined);
+  });
 
   useEffect(() => {
     if (!actionMenuId) return;

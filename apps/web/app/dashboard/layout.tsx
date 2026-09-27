@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardSidebar } from "../../components/dashboard-sidebar";
 import { NotificationCenter } from "../../components/notification-center";
+import { RealtimeProvider, RealtimeRefresh } from "../../components/realtime-provider";
 import { UserMenu } from "../../components/user-menu";
 import { apiFetch, type MeResponse } from "../../lib/api";
 
@@ -55,18 +56,21 @@ export default async function DashboardLayout({
   const initialCollapsed = cookies().get("bastal-sidebar")?.value === "collapsed";
 
   return (
-    <div className="dashboard-shell">
-      <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} username={me.username} initialCollapsed={initialCollapsed} />
-      <main className="dashboard-content">
-        <header className="dashboard-topbar">
-          <Link href="/dashboard" className="topbar-brand">
-            <span className="sidebar-logo" aria-hidden="true">B</span>
-            <span>Bast.al</span>
-          </Link>
-          <NotificationCenter />
-        </header>
-        {children}
-      </main>
-    </div>
+    <RealtimeProvider>
+      <RealtimeRefresh />
+      <div className="dashboard-shell">
+        <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} username={me.username} initialCollapsed={initialCollapsed} />
+        <main className="dashboard-content">
+          <header className="dashboard-topbar">
+            <Link href="/dashboard" className="topbar-brand">
+              <span className="sidebar-logo" aria-hidden="true">B</span>
+              <span>Bast.al</span>
+            </Link>
+            <NotificationCenter />
+          </header>
+          {children}
+        </main>
+      </div>
+    </RealtimeProvider>
   );
 }

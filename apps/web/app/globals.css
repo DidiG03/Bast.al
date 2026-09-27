@@ -518,6 +518,52 @@ main {
   background: var(--accent);
 }
 
+/* A live notification pops up briefly; tapping it opens the full list. */
+.notification-toast {
+  position: fixed;
+  right: 1.25rem;
+  bottom: calc(env(safe-area-inset-bottom) + 1.25rem);
+  z-index: 60;
+  display: grid;
+  gap: 0.2rem;
+  width: min(22rem, calc(100vw - 1rem));
+  padding: 0.8rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-elevated);
+  color: var(--text);
+  text-align: left;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 25%);
+  animation: notification-toast-in 180ms ease-out;
+}
+
+.notification-toast span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.notification-toast.notification-severity-warning,
+.notification-toast.notification-severity-critical {
+  border-left-color: var(--danger);
+}
+
+@keyframes notification-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+@media (max-width: 760px) {
+  /* The bottom of a phone screen belongs to the tab bar. */
+  .notification-toast {
+    top: calc(3.5rem + env(safe-area-inset-top) + 0.4rem);
+    right: 0.5rem;
+    bottom: auto;
+    left: 0.5rem;
+    width: auto;
+  }
+}
+
 .notification-empty,
 .notification-error {
   margin: 0;

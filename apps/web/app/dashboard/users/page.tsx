@@ -7,6 +7,9 @@ import { apiFetch, transactionLabel, type BalanceEntry, type BalanceStatement, t
 import { LoadingSpinner } from "../../../components/loading-spinner";
 import { formatMoney } from "../../../lib/format";
 import { CommissionRateControl } from "../../../components/commission-field";
+import { ApprovalLimitControl } from "../../../components/approval-limit-field";
+import { QuickTopUp } from "../../../components/quick-top-up";
+import { useRouter } from "next/navigation";
 
 const ROLE_OPTIONS: Record<MeResponse["role"], Array<"OWNER" | "MANAGER" | "PLAYER">> = {
   SUPER_ADMIN: ["OWNER"],
@@ -17,6 +20,7 @@ const ROLE_OPTIONS: Record<MeResponse["role"], Array<"OWNER" | "MANAGER" | "PLAY
 
 export default function UsersPage() {
   const { getToken } = useAuth();
+  const router = useRouter();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [username, setUsername] = useState("");
@@ -49,6 +53,8 @@ export default function UsersPage() {
   const [commissionUser, setCommissionUser] = useState<UserRow | null>(null);
   const [reclaimAmount, setReclaimAmount] = useState("");
   const [reclaimReason, setReclaimReason] = useState("");
+  const [topUpUser, setTopUpUser] = useState<UserRow | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const creatable = useMemo(() => (me ? ROLE_OPTIONS[me.role] : []), [me]);
   const assignableManagers = useMemo(
@@ -90,6 +96,12 @@ export default function UsersPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [actionMenuId]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
   useEffect(() => {
     if (!error) return;
@@ -465,6 +477,11 @@ export default function UsersPage() {
   }
   const roots = visibleUsers.filter((user) => user.parentId === null || !userIds.has(user.parentId));
 
+  // Quick top-up: the Player's own parent, while the Player can actually receive credit.
+  function canTopUp(user: UserRow): boolean {
+    return user.role === "PLAYER" && user.parentId === me?.id && user.status === "ACTIVE" && !lockedByAncestor(user);
+  }
+
   function renderTreeNode(user: UserRow): ReactNode {
     const children = (childrenByParent.get(user.id) ?? []).filter((child) => visibleUserIds.has(child.id));
     return (
@@ -482,7 +499,12 @@ export default function UsersPage() {
             </span>
           </div>
           {user.id !== me?.id ? (
-            <div className="user-actions">
+            <div className={`user-actions${canTopUp(user) ? " has-top-up" : ""}`}>
+              {canTopUp(user) ? (
+                <button type="button" className="secondary top-up-button" disabled={busy} onClick={() => setTopUpUser(user)} aria-label={`Top up ${user.username}`}>
+                  Top up
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="action-menu-trigger secondary"
@@ -514,6 +536,12 @@ export default function UsersPage() {
                     <button type="button" role="menuitem" onClick={() => { setActionMenuId(null); setCommissionUser(user); }}>
                       <svg className="action-menu-icon dollar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M15.5 7.25c-.55-.85-1.7-1.5-3.5-1.5-2.2 0-3.5 1.1-3.5 2.6 0 4.15 7 1.65 7 5.8 0 1.5-1.3 2.6-3.5 2.6-1.8 0-2.95-.65-3.5-1.5" /></svg>
                       Commission
+                    </button>
+                  ) : null}
+                  {user.role === "PLAYER" ? (
+                    <button type="button" role="menuitem" onClick={() => { setActionMenuId(null); router.push(`/dashboard/players/${user.id}`); }}>
+                      <svg className="action-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 4 8-8" /><path d="M15 8h5v5" /></svg>
+                      Activity
                     </button>
                   ) : null}
                   <button type="button" role="menuitem" onClick={() => { setActionMenuId(null); beginEdit(user); }}>
@@ -653,6 +681,14 @@ export default function UsersPage() {
                 </form>
               ) : null}
             </div>
+            {balanceUser.role === "MANAGER" && (me.role === "SUPER_ADMIN" || (me.role === "OWNER" && balanceUser.parentId === me.id)) ? (
+              <ApprovalLimitControl
+                key={balanceUser.id}
+                userId={balanceUser.id}
+                currentLimit={balanceUser.approvalLimit === null ? null : Number(balanceUser.approvalLimit)}
+                onSaved={(limit) => { setBalanceUser({ ...balanceUser, approvalLimit: limit }); load().catch(() => undefined); }}
+              />
+            ) : null}
             {me.role === "OWNER" && balanceUser.role === "MANAGER" ? (
               <CommissionRateControl
                 userId={balanceUser.id}
@@ -743,6 +779,21 @@ export default function UsersPage() {
             <p>Are you sure you want to {confirmation.action} <strong>{confirmation.user.username}</strong>{confirmation.action === "delete" ? `? This cannot be undone. ${users.filter((user) => user.parentId === confirmation.user.id).length} direct child account(s) will block deletion until reassigned, and any remaining balance must be reclaimed first.` : confirmation.user.role === "PLAYER" ? "?" : "? Everyone under this account will be locked out until it is reactivated."}</p>
             <div className="modal-actions"><button type="button" className="secondary" onClick={() => setConfirmation(null)} disabled={busy}>Cancel</button><button type="button" className={confirmation.action === "delete" ? "danger-button" : ""} onClick={() => confirmation.action === "delete" ? onDelete(confirmation.user) : onSuspend(confirmation.user.id)} disabled={busy}>{busy ? <LoadingSpinner label="Applying action" size="small" /> : confirmation.action === "delete" ? "Delete user" : "Suspend user"}</button></div>
           </section>
+        </div>
+      ) : null}
+      {topUpUser && me ? (
+        <QuickTopUp
+          player={topUpUser}
+          available={Number(me.balance)}
+          approvalLimit={me.approvalLimit}
+          onClose={() => setTopUpUser(null)}
+          onDone={(message) => { setTopUpUser(null); setNotice(message); load({ keepForm: true }).catch(() => undefined); }}
+        />
+      ) : null}
+      {notice ? (
+        <div className="error-toast success-toast" role="status">
+          <span>{notice}</span>
+          <button type="button" className="toast-close" onClick={() => setNotice(null)} aria-label="Dismiss">×</button>
         </div>
       ) : null}
       {error ? <ErrorToast message={error} onDismiss={() => setError(null)} /> : null}

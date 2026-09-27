@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { apiFetch, type MeResponse, type UserReport } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
@@ -19,15 +20,16 @@ export default async function ReportsPage() {
   if (!token) redirect("/sign-in");
 
   const me = await apiFetch<MeResponse>("/users/me", token);
-  if (me.role !== "SUPER_ADMIN" && me.role !== "OWNER") redirect("/dashboard");
+  if (me.role === "PLAYER") redirect("/dashboard");
   const report = await apiFetch<UserReport>("/users/report", token);
   const isOwner = me.role === "OWNER";
-  const accountNoun = report.accountRole === "OWNER" ? "owner" : "manager";
+  const isManager = me.role === "MANAGER";
+  const accountNoun = report.accountRole === "OWNER" ? "owner" : report.accountRole === "MANAGER" ? "manager" : "player";
 
   const cards = [
     ["Total users", report.totals.users],
-    ...(isOwner ? [] : [["Owners", report.totals.owners] as const]),
-    ["Managers", report.totals.managers],
+    ...(isOwner || isManager ? [] : [["Owners", report.totals.owners] as const]),
+    ...(isManager ? [] : [["Managers", report.totals.managers] as const]),
     ["Players", report.totals.players],
     ["Active", report.totals.active],
     ["Suspended", report.totals.suspended],
@@ -43,7 +45,7 @@ export default async function ReportsPage() {
           </div>
         ))}
         <div className="card report-stat">
-          <span className="muted">{isOwner ? "Balance held by your team" : "Total balance in circulation"}</span>
+          <span className="muted">{isManager ? "Balance held by your players" : isOwner ? "Balance held by your team" : "Total balance in circulation"}</span>
           <strong>{formatMoney(report.totals.totalBalance)}</strong>
         </div>
       </div>
@@ -51,7 +53,7 @@ export default async function ReportsPage() {
       <div className="reports-columns">
         <section className="card stack">
           <div className="tree-header">
-            <h2>{isOwner ? "Manager accounts" : "Owner accounts"}</h2>
+            <h2>{isManager ? "Player accounts" : isOwner ? "Manager accounts" : "Owner accounts"}</h2>
             <span className="muted">{report.accounts.length} {accountNoun}s</span>
           </div>
           {report.accounts.length === 0 ? (
@@ -61,9 +63,9 @@ export default async function ReportsPage() {
               {report.accounts.map((owner) => (
                 <div className="report-list-row" key={owner.id}>
                   <div>
-                    <strong>{owner.username}</strong>
+                    {isManager ? <Link href={`/dashboard/players/${owner.id}`}><strong>{owner.username}</strong></Link> : <strong>{owner.username}</strong>}
                     <span className="muted">
-                      {owner.directReports} direct reports · {owner.status} · {owner.commissionRate}% commission
+                      {isManager ? `${owner.status} · View activity` : `${owner.directReports} direct reports · ${owner.status} · ${owner.commissionRate}% commission`}
                     </span>
                   </div>
                   <strong>{formatMoney(owner.balance)}</strong>
@@ -112,7 +114,9 @@ export default async function ReportsPage() {
         <div>
           <h1 style={{ margin: 0 }}>Reports</h1>
           <p className="muted report-subtitle">
-            {isOwner
+            {isManager
+              ? "An overview of your players and their audit log."
+              : isOwner
               ? "An overview of your team and its audit log."
               : "A complete overview of accounts and administrative audit logs."}
           </p>

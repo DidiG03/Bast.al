@@ -3,6 +3,7 @@
 //   npm run db:seed-demo              settled bets for every Player that has none
 //   npm run db:seed-demo -- --users   also create a demo team (2 Owners, 4 Managers,
 //                                     18 Players) under the first Super Admin
+//   npm run db:seed-demo -- --fresh   delete the demo Players' bets first
 //
 // Demo accounts get clerk ids starting with "demo_", so nobody can sign in as
 // them. Refuses to run with NODE_ENV=production.
@@ -24,6 +25,18 @@ function random() {
 }
 const between = (min, max) => min + random() * (max - min);
 const money = (value) => Math.round(value * 100) / 100;
+const pick = (list) => list[Math.floor(random() * list.length)];
+
+const TEAMS = ["Tirana", "Partizani", "Vllaznia", "Skënderbeu", "Kukësi", "Teuta", "Egnatia", "Laçi", "Dinamo City", "Bylis"];
+const MARKETS = ["to win", "draw", "over 2.5 goals", "both teams to score"];
+function selection() {
+  const home = pick(TEAMS);
+  let away = pick(TEAMS);
+  while (away === home) away = pick(TEAMS);
+  const market = pick(MARKETS);
+  const subject = market === "to win" ? `${pick([home, away])} to win` : market === "draw" ? "Draw" : market[0].toUpperCase() + market.slice(1);
+  return { description: `${home} v ${away} · ${subject}`, odds: money(between(1.4, 3.6)) };
+}
 
 async function demoUser(username, role, parentId, extra = {}) {
   return prisma.user.upsert({
@@ -61,6 +74,10 @@ async function createTeam() {
 }
 
 async function createBets() {
+  if (process.argv.includes("--fresh")) {
+    const { count } = await prisma.bet.deleteMany({ where: { player: { clerkId: { startsWith: "demo_" } } } });
+    console.log(`Deleted ${count} demo bets.`);
+  }
   const players = await prisma.user.findMany({ where: { role: "PLAYER", bets: { none: {} } }, select: { id: true } });
   const now = Date.now();
   const bets = [];
@@ -73,19 +90,27 @@ async function createBets() {
         const settledAt = new Date(now - (week * 7 + between(0, 7)) * 86_400_000);
         const stake = money(between(5, 200));
         const won = random() < winChance;
+        const { description, odds } = selection();
         bets.push({
           playerId: player.id,
           stake,
-          payout: won ? money(stake * between(1.4, 3.2)) : 0,
+          description,
+          odds,
+          payout: won ? money(stake * odds) : 0,
           status: won ? "WON" : "LOST",
           placedAt: new Date(settledAt.getTime() - between(1, 48) * 3_600_000),
           settledAt,
         });
       }
     }
+    // A few bets still waiting on their result.
+    for (let i = 0; i < Math.floor(between(0, 4)); i++) {
+      bets.push({ playerId: player.id, stake: money(between(5, 150)), ...selection(), status: "OPEN", placedAt: new Date(now - between(1, 36) * 3_600_000) });
+    }
   }
   if (bets.length) await prisma.bet.createMany({ data: bets });
-  console.log(`Created ${bets.length} settled bets for ${players.length} Players over the last ${WEEKS} weeks.`);
+  const open = bets.filter((bet) => bet.status === "OPEN").length;
+  console.log(`Created ${bets.length - open} settled and ${open} open bets for ${players.length} Players over the last ${WEEKS} weeks.`);
 }
 
 try {

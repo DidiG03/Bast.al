@@ -7,7 +7,7 @@ import { MfaGuard } from "../auth/mfa.guard";
 import type { Actor } from "../auth/permissions";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
-import { CommissionPeriodDto, TeamCommissionQueryDto } from "./commissions.dto";
+import { CommissionHistoryDto, CommissionPeriodDto, TeamCommissionQueryDto } from "./commissions.dto";
 import { CommissionsService } from "./commissions.service";
 
 @ApiTags("commissions")
@@ -37,5 +37,13 @@ export class CommissionsController {
   @Roles(Role.MANAGER)
   mine(@CurrentActor() actor: Actor, @Query() query: CommissionPeriodDto) {
     return this.commissions.mine(actor, query.from, query.to);
+  }
+
+  @Get("mine/history")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.MANAGER)
+  history(@CurrentActor() actor: Actor, @Query() query: CommissionHistoryDto) {
+    return this.commissions.history(actor, query.weeks ?? 8);
   }
 }

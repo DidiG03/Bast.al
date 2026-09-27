@@ -2,9 +2,10 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useState } from "react";
-import { ManagerView, SuperAdminView, TeamView } from "../../../components/commission-views";
+import { ManagerHistory, ManagerView, SuperAdminView, TeamView } from "../../../components/commission-views";
 import {
   apiFetch,
+  type CommissionHistory,
   type ManagerCommissions,
   type MeResponse,
   type SuperAdminCommissions,
@@ -70,6 +71,7 @@ export default function CommissionsPage() {
   const [owners, setOwners] = useState<SuperAdminCommissions | null>(null);
   const [team, setTeam] = useState<TeamCommissions | null>(null);
   const [mine, setMine] = useState<ManagerCommissions | null>(null);
+  const [history, setHistory] = useState<CommissionHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,7 +87,12 @@ export default function CommissionsPage() {
       setMe(profile);
       const params = new URLSearchParams({ from: dates.from.toISOString(), to: dates.to.toISOString() });
       if (profile.role === "MANAGER") {
-        setMine(await apiFetch<ManagerCommissions>(`/commissions/mine?${params}`, token));
+        const [period, weeks] = await Promise.all([
+          apiFetch<ManagerCommissions>(`/commissions/mine?${params}`, token),
+          apiFetch<CommissionHistory>("/commissions/mine/history?weeks=8", token),
+        ]);
+        setMine(period);
+        setHistory(weeks);
       } else if (profile.role === "OWNER") {
         setTeam(await apiFetch<TeamCommissions>(`/commissions/team?${params}`, token));
       } else if (profile.role === "SUPER_ADMIN") {
@@ -199,6 +206,7 @@ export default function CommissionsPage() {
       {error ? <p className="error-text">{error}</p> : null}
 
       {me?.role === "MANAGER" && mine ? <ManagerView data={mine} /> : null}
+      {me?.role === "MANAGER" && history ? <ManagerHistory data={history} /> : null}
       {showingTeam && team && me ? <TeamView data={team} viewer={me.role === "OWNER" ? "OWNER" : "SUPER_ADMIN"} /> : null}
       {me?.role === "SUPER_ADMIN" && !ownerId && owners ? <SuperAdminView data={owners} onOpen={setOwnerId} /> : null}
     </div>

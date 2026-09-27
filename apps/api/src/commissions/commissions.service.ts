@@ -41,7 +41,7 @@ function add(into: Totals, from: Totals): Totals {
 }
 
 /** Monday 00:00 UTC of the current week — commissions settle weekly. */
-function startOfWeek(now: Date): Date {
+export function startOfWeek(now: Date): Date {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const daysSinceMonday = (start.getUTCDay() + 6) % 7;
   start.setUTCDate(start.getUTCDate() - daysSinceMonday);
@@ -155,6 +155,54 @@ export class CommissionsService {
       totals: { ...totals, commission: cut(totals.net, manager.commissionRate) },
       players,
     };
+  }
+
+  /**
+   * Manager: earnings week by week (Monday to Sunday, UTC), newest first,
+   * so they can see how this week compares with the ones before.
+   */
+  async history(actor: Actor, weeks: number) {
+    if (actor.role !== Role.MANAGER) throw new ForbiddenException("Only Managers have a personal commission statement");
+    const accounts = await this.accounts(actor.id);
+    const manager = accounts.find((account) => account.id === actor.id)!;
+    const playerIds = accounts.filter((account) => account.role === Role.PLAYER).map((account) => account.id);
+
+    const now = new Date();
+    const starts = Array.from({ length: weeks }, (_, index) => {
+      const start = startOfWeek(now);
+      start.setUTCDate(start.getUTCDate() - 7 * index);
+      return start;
+    });
+    const oldest = starts[starts.length - 1];
+    const bets = playerIds.length
+      ? await this.prisma.bet.findMany({
+          where: {
+            playerId: { in: playerIds },
+            status: { in: [BetStatus.WON, BetStatus.LOST] },
+            settledAt: { gte: oldest, lt: now },
+          },
+          select: { stake: true, payout: true, settledAt: true },
+        })
+      : [];
+
+    const rows = starts.map((start, index) => ({
+      from: start.toISOString(),
+      // The current week runs to now; earlier weeks end where the next one starts.
+      to: index === 0 ? now.toISOString() : starts[index - 1].toISOString(),
+      ...emptyTotals(),
+      commission: 0,
+    }));
+    for (const bet of bets) {
+      const settled = bet.settledAt!.getTime();
+      const row = rows.find((candidate) => settled >= new Date(candidate.from).getTime() && settled < new Date(candidate.to).getTime());
+      if (!row) continue;
+      const staked = Number(bet.stake);
+      const paidOut = Number(bet.payout);
+      add(row, { bets: 1, staked, paidOut, net: staked - paidOut });
+    }
+    for (const row of rows) row.commission = cut(row.net, manager.commissionRate);
+
+    return { commissionRate: manager.commissionRate, weeks: rows };
   }
 
   private teamOf(owner: Account, children: Map<string, Account[]>, results: Map<string, PlayerResult>) {

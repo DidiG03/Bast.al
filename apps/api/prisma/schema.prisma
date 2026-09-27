@@ -89,6 +89,10 @@ model User {
   /// a MANAGER, the cut they earn from their own downline Players' net
   /// revenue. Unused for SUPER_ADMIN/PLAYER.
   commissionRate Decimal @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  /// MANAGER only: this Manager's own delegations up to this amount go through
+  /// without their Owner's approval. Null means the platform default ($10,000).
+  /// Set by the Manager's Owner (or Super Admin).
+  approvalLimit Decimal? @map("approval_limit") @db.Decimal(12, 2)
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
@@ -240,6 +244,9 @@ model Bet {
   /// What the Player was paid back, stake included. 0 for a lost bet.
   payout    Decimal   @default(0) @db.Decimal(12, 2)
   status    BetStatus @default(OPEN)
+  /// What was bet on, e.g. "Tirana v Partizani · Tirana to win".
+  description String?  @db.VarChar(200)
+  odds      Decimal?  @db.Decimal(8, 2)
   placedAt  DateTime  @default(now()) @map("placed_at")
   settledAt DateTime? @map("settled_at")
 

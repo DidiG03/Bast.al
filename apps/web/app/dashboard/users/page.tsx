@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiFetch, transactionLabel, type BalanceEntry, type BalanceStatement, type MeResponse, type ReassignmentPreview, type UserRow } from "../../../lib/api";
 import { LoadingSpinner } from "../../../components/loading-spinner";
+import { formatMoney } from "../../../lib/format";
 import { CommissionRateControl } from "../../../components/commission-field";
 
 const ROLE_OPTIONS: Record<MeResponse["role"], Array<"OWNER" | "MANAGER" | "PLAYER">> = {
@@ -76,6 +77,13 @@ export default function UsersPage() {
     load().catch((err: Error) => setError(err.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!actionMenuId) return;
+    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && setActionMenuId(null);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [actionMenuId]);
 
   useEffect(() => {
     if (!error) return;
@@ -457,11 +465,15 @@ export default function UsersPage() {
       <div className="tree-node" key={user.id}>
         <div className="tree-row">
           <div className="tree-identity">
-            <span className={`status-dot ${user.status === "ACTIVE" ? "is-active" : "is-suspended"}`} />
-            <strong>{user.username}</strong>
-            <span className="tree-role">{user.role}</span>
-            <span className="tree-status">{user.status === "ACTIVE" && lockedByAncestor(user) ? "LOCKED (PARENT SUSPENDED)" : user.status}</span>
-            {user.role !== "SUPER_ADMIN" ? <span className="tree-balance">${Number(user.balance).toFixed(2)}</span> : null}
+            <span className="tree-name">
+              <span className={`status-dot ${user.status === "ACTIVE" ? "is-active" : "is-suspended"}`} />
+              <strong>{user.username}</strong>
+            </span>
+            <span className="tree-meta">
+              <span className="tree-role">{user.role}</span>
+              <span className="tree-status">{user.status === "ACTIVE" && lockedByAncestor(user) ? "LOCKED (PARENT SUSPENDED)" : user.status}</span>
+              {user.role !== "SUPER_ADMIN" ? <span className="tree-balance">{formatMoney(user.balance)}</span> : null}
+            </span>
           </div>
           {user.id !== me?.id ? (
             <div className="user-actions">
@@ -481,7 +493,11 @@ export default function UsersPage() {
                 </svg>
               </button>
               {actionMenuId === user.id ? (
-                <div className="action-menu" role="menu">
+                <button type="button" className="action-menu-backdrop" aria-label="Close" tabIndex={-1} onClick={() => setActionMenuId(null)} />
+              ) : null}
+              {actionMenuId === user.id ? (
+                <div className="action-menu" role="menu" aria-label={`Actions for ${user.username}`}>
+                  <strong className="action-menu-title" aria-hidden="true">{user.username}</strong>
                   {user.parentId === me?.id || me?.role === "SUPER_ADMIN" ? (
                     <button type="button" role="menuitem" onClick={() => openBalance(user)}>
                       <svg className="action-menu-icon dollar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M15.5 7.25c-.55-.85-1.7-1.5-3.5-1.5-2.2 0-3.5 1.1-3.5 2.6 0 4.15 7 1.65 7 5.8 0 1.5-1.3 2.6-3.5 2.6-1.8 0-2.95-.65-3.5-1.5" /></svg>
@@ -616,19 +632,21 @@ export default function UsersPage() {
       ) : null}
       {balanceUser ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setBalanceUser(null)}>
-          <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="charge-balance-title">
+          <section className="modal modal-wide card" role="dialog" aria-modal="true" aria-labelledby="charge-balance-title">
             <div className="modal-header"><h2 id="charge-balance-title">Balance</h2><button type="button" className="modal-close secondary" onClick={() => setBalanceUser(null)} aria-label="Close">×</button></div>
-            <p className="muted">Current balance: <strong>${Number(balanceUser.balance).toFixed(2)}</strong> · Limit: <strong>${Number(balanceUser.balanceLimit).toFixed(2)}</strong></p>
-            <form className="inline-edit-form" onSubmit={onSetBalanceLimit}>
-              <input type="number" min="0.01" step="0.01" max="100000000" value={balanceLimit} onChange={(event) => setBalanceLimit(event.target.value)} aria-label="Manager balance limit" />
-              <button type="submit" className="secondary" disabled={busy}>Set limit</button>
-            </form>
-            {(balanceUser.role === "OWNER" || balanceUser.role === "MANAGER") && me.role !== "MANAGER" ? (
-              <form className="inline-edit-form" onSubmit={onSetManagerCapacity}>
-                <input type="number" min="1" step="1" max="100000" value={managerCapacity} onChange={(event) => setManagerCapacity(event.target.value)} aria-label="Player capacity" />
-                <button type="submit" className="secondary" disabled={busy}>Set player capacity</button>
+            <p className="muted">Current balance: <strong>{formatMoney(balanceUser.balance)}</strong> · Limit: <strong>{formatMoney(balanceUser.balanceLimit)}</strong></p>
+            <div className="modal-settings">
+              <form className="inline-edit-form" onSubmit={onSetBalanceLimit}>
+                <label>Manager balance limit<input type="number" min="0.01" step="0.01" max="100000000" value={balanceLimit} onChange={(event) => setBalanceLimit(event.target.value)} inputMode="decimal" /></label>
+                <button type="submit" className="secondary" disabled={busy}>Set limit</button>
               </form>
-            ) : null}
+              {(balanceUser.role === "OWNER" || balanceUser.role === "MANAGER") && me.role !== "MANAGER" ? (
+                <form className="inline-edit-form" onSubmit={onSetManagerCapacity}>
+                  <label>Player capacity<input type="number" min="1" step="1" max="100000" value={managerCapacity} onChange={(event) => setManagerCapacity(event.target.value)} inputMode="numeric" /></label>
+                  <button type="submit" className="secondary" disabled={busy}>Set player capacity</button>
+                </form>
+              ) : null}
+            </div>
             {me.role === "OWNER" && balanceUser.role === "MANAGER" ? (
               <CommissionRateControl
                 userId={balanceUser.id}
@@ -648,13 +666,13 @@ export default function UsersPage() {
               {balanceLedger.length === 0 ? <p className="muted">No transactions yet.</p> : balanceLedger.map((entry) => (
                 <div className="ledger-row" key={entry.id}>
                   <div><strong>{transactionLabel(entry.type)} <span className="muted">({entry.status ?? "APPROVED"})</span></strong><span className="muted">{entry.reason} · {entry.counterparty ?? entry.actor?.username ?? "System"}</span><a href={`/dashboard/finance/transaction/${entry.id}`}>View receipt</a></div>
-                  <div><strong className={entry.amount < 0 ? "ledger-negative" : "ledger-positive"}>{entry.amount < 0 ? "-" : "+"}${Math.abs(entry.amount).toFixed(2)}</strong><time className="muted" dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleDateString()}</time></div>
-                  {entry.status === "PENDING" && me.role !== "MANAGER" ? <div className="row"><button type="button" className="secondary" onClick={() => approveTransaction(entry.id, true)} disabled={busy}>Approve</button><button type="button" className="danger-button" onClick={() => approveTransaction(entry.id, false)} disabled={busy}>Reject</button></div> : null}
+                  <div><strong className={entry.amount < 0 ? "ledger-negative" : "ledger-positive"}>{entry.amount < 0 ? "-" : "+"}{formatMoney(Math.abs(entry.amount))}</strong><time className="muted" dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleDateString()}</time></div>
+                  {entry.status === "PENDING" && me.role !== "MANAGER" ? <div className="row ledger-actions"><button type="button" className="secondary" onClick={() => approveTransaction(entry.id, true)} disabled={busy}>Approve</button><button type="button" className="danger-button" onClick={() => approveTransaction(entry.id, false)} disabled={busy}>Reject</button></div> : null}
                 </div>
               ))}
             </div>
             {balanceUser.parentId === me?.id || me?.role === "SUPER_ADMIN" ? (
-              <form className="stack" onSubmit={onDelegateCredit}>
+              <form className="stack modal-section" onSubmit={onDelegateCredit}>
                 <h3>Delegate credit</h3>
                 <label>Amount<input type="number" min="0.01" max="1000000" step="0.01" required value={balanceAmount} onChange={(event) => setBalanceAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></label>
                 <label>Reason<input type="text" minLength={3} maxLength={240} required value={balanceReason} onChange={(event) => setBalanceReason(event.target.value)} placeholder="Why is this credit being given?" /></label>
@@ -662,7 +680,7 @@ export default function UsersPage() {
               </form>
             ) : null}
             {balanceUser.parentId === me?.id ? (
-              <form className="stack" onSubmit={onReclaimCredit}>
+              <form className="stack modal-section" onSubmit={onReclaimCredit}>
                 <h3>Reclaim credit</h3>
                 <p className="muted" style={{ margin: 0 }}>{me.role === "SUPER_ADMIN" ? "Takes credit back out of circulation." : "Moves credit from this account back into your own balance."} Works on suspended accounts too.</p>
                 <label>Amount<input type="number" min="0.01" max={Number(balanceUser.balance)} step="0.01" required value={reclaimAmount} onChange={(event) => setReclaimAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></label>
@@ -671,7 +689,7 @@ export default function UsersPage() {
               </form>
             ) : null}
             {me?.role === "SUPER_ADMIN" ? (
-              <form className="stack" onSubmit={onAdjustBalance}>
+              <form className="stack modal-section" onSubmit={onAdjustBalance}>
                 <h3>Admin adjustment</h3>
                 <p className="muted" style={{ margin: 0 }}>A direct correction with no counterparty — use for fixing errors, not routine funding.</p>
                 <label>Signed amount<input type="number" min="-1000000" max="1000000" step="0.01" required value={adjustAmount} onChange={(event) => setAdjustAmount(event.target.value)} placeholder="-50.00" inputMode="decimal" /></label>

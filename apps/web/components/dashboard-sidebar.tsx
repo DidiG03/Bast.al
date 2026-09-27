@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, useState, type ReactNode, type TouchEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from "react";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
 
@@ -64,6 +64,13 @@ const icons = {
       <path d="m7 15 4-4 3 2 5-6" />
     </Icon>
   ),
+  finance: (
+    <Icon>
+      <rect x="3" y="6" width="18" height="13" rx="2" />
+      <path d="M3 10h18M16 14.5h2" />
+      <path d="M6 6V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+    </Icon>
+  ),
   audit: (
     <Icon>
       <path d="M6 3h9l3 3v15H6z" />
@@ -104,6 +111,21 @@ export function DashboardSidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
+  // While the drawer is open on a phone, keep the page behind it still and let Escape close it.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && setMobileOpen(false);
+    document.body.classList.add("is-scroll-locked");
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.classList.remove("is-scroll-locked");
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileOpen]);
+
+  // Close the drawer after navigating, including browser back/forward.
+  useEffect(() => setMobileOpen(false), [pathname]);
+
   function toggleCollapsed() {
     const next = !collapsed;
     setCollapsed(next);
@@ -136,18 +158,19 @@ export function DashboardSidebar({
       ? [{ href: "/dashboard/reports", label: "Reports", icon: icons.reports }]
       : []),
     ...(canViewFinancial
-      ? [{ href: "/dashboard/finance", label: "Finance", icon: icons.reports }]
+      ? [{ href: "/dashboard/finance", label: "Finance", icon: icons.finance }]
       : []),
     { href: "/dashboard/security", label: "Security", icon: icons.security },
   ];
-  const mobileLinks = links.filter((link) =>
-    [
-      "/dashboard",
-      "/dashboard/users",
-      "/dashboard/tickets",
-      "/dashboard/security",
-    ].includes(link.href),
-  );
+  // The bottom bar fits five tabs; Tickets moves to the drawer when a role has more.
+  const mobileLinks =
+    links.length > 5
+      ? links.filter((link) => link.href !== "/dashboard/tickets")
+      : links;
+  const isActive = (href: string) =>
+    href === "/dashboard"
+      ? pathname === href
+      : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <>
@@ -162,6 +185,7 @@ export function DashboardSidebar({
         type="button"
         onClick={() => setMobileOpen(true)}
         aria-label="Open navigation"
+        aria-expanded={mobileOpen}
       >
         {icons.menu}
       </button>
@@ -213,7 +237,8 @@ export function DashboardSidebar({
             <Link
               key={link.href}
               href={link.href}
-              className={`sidebar-link${pathname === link.href ? " is-active" : ""}`}
+              className={`sidebar-link${isActive(link.href) ? " is-active" : ""}`}
+              aria-current={isActive(link.href) ? "page" : undefined}
               onClick={() => setMobileOpen(false)}
             >
               {link.icon}
@@ -237,8 +262,8 @@ export function DashboardSidebar({
           <Link
             key={link.href}
             href={link.href}
-            className={`mobile-bottom-nav-link${pathname === link.href ? " is-active" : ""}`}
-            aria-current={pathname === link.href ? "page" : undefined}
+            className={`mobile-bottom-nav-link${isActive(link.href) ? " is-active" : ""}`}
+            aria-current={isActive(link.href) ? "page" : undefined}
           >
             {link.icon}
             <span>{link.label}</span>

@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { apiFetch, type MeResponse, type UserReport } from "../../../lib/api";
+import { formatMoney } from "../../../lib/format";
 import { ReportsTabs } from "./reports-tabs";
 import { AuditLog } from "./audit-log";
 
@@ -43,7 +44,7 @@ export default async function ReportsPage() {
         ))}
         <div className="card report-stat">
           <span className="muted">{isOwner ? "Balance held by your team" : "Total balance in circulation"}</span>
-          <strong>${report.totals.totalBalance.toFixed(2)}</strong>
+          <strong>{formatMoney(report.totals.totalBalance)}</strong>
         </div>
       </div>
 
@@ -65,7 +66,7 @@ export default async function ReportsPage() {
                       {owner.directReports} direct reports · {owner.status} · {owner.commissionRate}% commission
                     </span>
                   </div>
-                  <strong>${owner.balance.toFixed(2)}</strong>
+                  <strong>{formatMoney(owner.balance)}</strong>
                 </div>
               ))}
             </div>

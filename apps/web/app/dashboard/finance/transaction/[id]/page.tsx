@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
+import { formatMoney } from "../../../../../lib/format";
 import { apiFetch, transactionLabel, type TransactionDetails } from "../../../../../lib/api";
 
 export default function TransactionDetailsPage({ params }: { params: { id: string } }) {
@@ -22,10 +23,10 @@ export default function TransactionDetailsPage({ params }: { params: { id: strin
 
   return (
     <div className="stack">
-      <div className="page-title-row"><div><h1 style={{ margin: 0 }}>Transaction receipt</h1><p className="muted">Full audit-ready transaction details.</p></div><Link href="/dashboard/finance">Back to Finance</Link></div>
+      <div className="page-title-row"><div><h1 style={{ margin: 0 }}>Transaction receipt</h1><p className="muted report-subtitle">Full audit-ready transaction details.</p></div><Link href="/dashboard/finance" className="back-link">Back to Finance</Link></div>
       <section className="card stack receipt-card">
         <div className="receipt-title"><strong>{transactionLabel(entry.type)}</strong><span className={`status-pill ${entry.status === "APPROVED" ? "is-active" : ""}`}>{entry.status ?? "APPROVED"}</span></div>
-        <div className="receipt-amount">${Math.abs(entry.amount).toFixed(2)}</div>
+        <div className="receipt-amount">{formatMoney(Math.abs(entry.amount))}</div>
         <dl className="receipt-details">
           <div><dt>Transaction ID</dt><dd>{entry.id}</dd></div>
           <div><dt>From</dt><dd>{entry.fromUser?.username ?? "Platform"}</dd></div>
@@ -35,7 +36,7 @@ export default function TransactionDetailsPage({ params }: { params: { id: strin
           <div><dt>Recorded by</dt><dd>{entry.actor?.username ?? "System"}</dd></div>
           <div><dt>Approved by</dt><dd>{entry.approvedBy?.username ?? (entry.status === "PENDING" ? "Awaiting approval" : "—")}</dd></div>
         </dl>
-        <button type="button" onClick={() => window.print()}>Print receipt</button>
+        <button type="button" className="receipt-print" onClick={() => window.print()}>Print receipt</button>
       </section>
     </div>
   );

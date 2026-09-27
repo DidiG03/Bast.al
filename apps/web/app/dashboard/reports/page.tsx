@@ -18,12 +18,14 @@ export default async function ReportsPage() {
   if (!token) redirect("/sign-in");
 
   const me = await apiFetch<MeResponse>("/users/me", token);
-  if (me.role !== "SUPER_ADMIN") redirect("/dashboard");
+  if (me.role !== "SUPER_ADMIN" && me.role !== "OWNER") redirect("/dashboard");
   const report = await apiFetch<UserReport>("/users/report", token);
+  const isOwner = me.role === "OWNER";
+  const accountNoun = report.accountRole === "OWNER" ? "owner" : "manager";
 
   const cards = [
     ["Total users", report.totals.users],
-    ["Owners", report.totals.owners],
+    ...(isOwner ? [] : [["Owners", report.totals.owners] as const]),
     ["Managers", report.totals.managers],
     ["Players", report.totals.players],
     ["Active", report.totals.active],
@@ -40,7 +42,7 @@ export default async function ReportsPage() {
           </div>
         ))}
         <div className="card report-stat">
-          <span className="muted">Total balance in circulation</span>
+          <span className="muted">{isOwner ? "Balance held by your team" : "Total balance in circulation"}</span>
           <strong>${report.totals.totalBalance.toFixed(2)}</strong>
         </div>
       </div>
@@ -48,14 +50,14 @@ export default async function ReportsPage() {
       <div className="reports-columns">
         <section className="card stack">
           <div className="tree-header">
-            <h2>Owner accounts</h2>
-            <span className="muted">{report.owners.length} owners</span>
+            <h2>{isOwner ? "Manager accounts" : "Owner accounts"}</h2>
+            <span className="muted">{report.accounts.length} {accountNoun}s</span>
           </div>
-          {report.owners.length === 0 ? (
-            <p className="muted">No owner accounts yet.</p>
+          {report.accounts.length === 0 ? (
+            <p className="muted">No {accountNoun} accounts yet.</p>
           ) : (
             <div className="report-list">
-              {report.owners.map((owner) => (
+              {report.accounts.map((owner) => (
                 <div className="report-list-row" key={owner.id}>
                   <div>
                     <strong>{owner.username}</strong>
@@ -109,7 +111,9 @@ export default async function ReportsPage() {
         <div>
           <h1 style={{ margin: 0 }}>Reports</h1>
           <p className="muted report-subtitle">
-            A complete overview of accounts and administrative audit logs.
+            {isOwner
+              ? "An overview of your team and its audit log."
+              : "A complete overview of accounts and administrative audit logs."}
           </p>
         </div>
         <span className="muted report-updated">

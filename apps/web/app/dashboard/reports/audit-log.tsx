@@ -39,7 +39,7 @@ export function AuditLog() {
     try {
       const profile = await apiFetch<MeResponse>("/users/me", token);
       setMe(profile);
-      if (profile.role !== "SUPER_ADMIN") return;
+      if (profile.role !== "SUPER_ADMIN" && profile.role !== "OWNER") return;
       const params = new URLSearchParams({
         page: String(nextPage),
         limit: "50",
@@ -71,8 +71,8 @@ export function AuditLog() {
     load(1).catch(() => undefined);
   }, []);
 
-  if (me && me.role !== "SUPER_ADMIN")
-    return <p className="muted">Audit logs are restricted to Super Admins.</p>;
+  if (me && me.role !== "SUPER_ADMIN" && me.role !== "OWNER")
+    return <p className="muted">Audit logs are restricted to Super Admins and Owners.</p>;
 
   return (
     <div className="stack audit-log-component">

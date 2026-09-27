@@ -49,8 +49,8 @@ export default async function DashboardLayout({
   }
 
   const canManageUsers = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
-  const canViewReports = me.role === "SUPER_ADMIN";
-  const canViewFinancial = me.role === "SUPER_ADMIN" || me.role === "OWNER";
+  const canViewReports = me.role === "SUPER_ADMIN" || me.role === "OWNER";
+  const canViewFinancial = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
   const initialCollapsed = cookies().get("bastal-sidebar")?.value === "collapsed";
 
   return (

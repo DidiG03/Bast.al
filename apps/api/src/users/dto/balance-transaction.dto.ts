@@ -16,6 +16,21 @@ export class DelegateCreditDto {
   reason!: string;
 }
 
+/** Pull credit back from a direct child into the caller's own balance. */
+export class ReclaimCreditDto {
+  @ApiProperty({ example: 100, description: "Amount to move from the target's balance back to the caller's" })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Max(100000000)
+  amount!: number;
+
+  @ApiProperty({ example: "Closing the account" })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(240)
+  reason!: string;
+}
+
 /** Super-Admin-only correction with no counterparty; amount may be negative. */
 export class AdjustBalanceDto {
   @ApiProperty({ example: -50, description: "Signed amount to apply directly to the target's balance" })

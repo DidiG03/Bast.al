@@ -21,9 +21,13 @@ enum UserStatus {
 
 enum BalanceTransactionType {
   /// A real transfer down the hierarchy: fromUser's balance decreases,
-  /// toUser's balance increases by the same amount. One-directional —
-  /// there is no corresponding "reclaim" type.
+  /// toUser's balance increases by the same amount.
   DELEGATION
+  /// The reverse of a delegation: a parent pulls credit back from a direct
+  /// child. fromUser is the child (balance decreases), toUser is the parent
+  /// (balance increases, except Super Admin, who holds no balance — credit
+  /// reclaimed by Super Admin is retired).
+  RECLAIM
   /// Super-Admin-only correction. fromUserId is always null (nothing is
   /// deducted from anyone else); amount may be negative.
   ADJUSTMENT
@@ -31,6 +35,8 @@ enum BalanceTransactionType {
 
 enum NotificationType {
   FUNDS_RECEIVED
+  FUNDS_RECLAIMED
+  APPROVAL_REQUESTED
   ACCOUNT_SUSPENDED
   ACCOUNT_UPDATED
   ACCOUNT_REASSIGNED
@@ -186,6 +192,7 @@ model BalanceTransaction {
 
   @@index([toUserId, createdAt])
   @@index([fromUserId])
+  @@index([status])
   @@map("balance_transactions")
 }
 

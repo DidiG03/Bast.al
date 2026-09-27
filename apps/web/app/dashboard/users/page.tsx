@@ -2,7 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
-import { apiFetch, type BalanceEntry, type BalanceStatement, type MeResponse, type ReassignmentPreview, type UserRow } from "../../../lib/api";
+import { apiFetch, transactionLabel, type BalanceEntry, type BalanceStatement, type MeResponse, type ReassignmentPreview, type UserRow } from "../../../lib/api";
 import { LoadingSpinner } from "../../../components/loading-spinner";
 import { CommissionRateControl } from "../../../components/commission-field";
 
@@ -45,10 +45,17 @@ export default function UsersPage() {
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [commissionUser, setCommissionUser] = useState<UserRow | null>(null);
+  const [reclaimAmount, setReclaimAmount] = useState("");
+  const [reclaimReason, setReclaimReason] = useState("");
 
   const creatable = useMemo(() => (me ? ROLE_OPTIONS[me.role] : []), [me]);
   const assignableManagers = useMemo(
     () => users.filter((user) => user.role === "MANAGER" && user.status === "ACTIVE"),
+    [users],
+  );
+  // Players can sit under a Manager or directly under an Owner.
+  const reassignDestinations = useMemo(
+    () => users.filter((user) => (user.role === "MANAGER" || user.role === "OWNER") && user.status === "ACTIVE"),
     [users],
   );
 
@@ -110,6 +117,21 @@ export default function UsersPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Suspend failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onUnsuspend(id: string) {
+    setError(null);
+    setBusy(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Not signed in");
+      await apiFetch(`/users/${id}/unsuspend`, token, { method: "POST" });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reactivation failed");
     } finally {
       setBusy(false);
     }
@@ -182,6 +204,30 @@ export default function UsersPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delegating credit failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onReclaimCredit(event: FormEvent) {
+    event.preventDefault();
+    if (!balanceUser) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Not signed in");
+      const updated = await apiFetch<UserRow>(`/users/${balanceUser.id}/reclaim`, token, {
+        method: "POST",
+        body: JSON.stringify({ amount: Number(reclaimAmount), reason: reclaimReason }),
+      });
+      setBalanceUser({ ...balanceUser, balance: updated.balance });
+      setReclaimAmount("");
+      setReclaimReason("");
+      setBalanceLedger(await apiFetch<BalanceEntry[]>(`/users/${balanceUser.id}/balance/ledger`, token));
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reclaiming credit failed");
     } finally {
       setBusy(false);
     }
@@ -311,6 +357,8 @@ export default function UsersPage() {
       setBalanceReason("");
       setAdjustAmount("");
       setAdjustReason("");
+      setReclaimAmount("");
+      setReclaimReason("");
       setBalanceLimit(String(Number(user.balanceLimit)));
       setManagerCapacity(String(user.managerCapacity));
       try {
@@ -391,6 +439,16 @@ export default function UsersPage() {
     }
   });
   const visibleUsers = users.filter((user) => visibleUserIds.has(user.id));
+  const usersById = new Map(users.map((user) => [user.id, user]));
+  // Suspension cascades: anyone under a suspended account is locked out too.
+  function lockedByAncestor(user: UserRow): boolean {
+    let parent = user.parentId ? usersById.get(user.parentId) : undefined;
+    while (parent) {
+      if (parent.status === "SUSPENDED") return true;
+      parent = parent.parentId ? usersById.get(parent.parentId) : undefined;
+    }
+    return false;
+  }
   const roots = visibleUsers.filter((user) => user.parentId === null || !userIds.has(user.parentId));
 
   function renderTreeNode(user: UserRow): ReactNode {
@@ -402,7 +460,7 @@ export default function UsersPage() {
             <span className={`status-dot ${user.status === "ACTIVE" ? "is-active" : "is-suspended"}`} />
             <strong>{user.username}</strong>
             <span className="tree-role">{user.role}</span>
-            <span className="tree-status">{user.status}</span>
+            <span className="tree-status">{user.status === "ACTIVE" && lockedByAncestor(user) ? "LOCKED (PARENT SUSPENDED)" : user.status}</span>
             {user.role !== "SUPER_ADMIN" ? <span className="tree-balance">${Number(user.balance).toFixed(2)}</span> : null}
           </div>
           {user.id !== me?.id ? (
@@ -449,7 +507,10 @@ export default function UsersPage() {
                   {user.status === "ACTIVE" ? <button type="button" role="menuitem" onClick={() => { setActionMenuId(null); setConfirmation({ action: "suspend", user }); }}>
                     <svg className="action-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1" /><rect x="14" y="4" width="5" height="16" rx="1" /></svg>
                     Suspend
-                  </button> : null}
+                  </button> : <button type="button" role="menuitem" onClick={() => { setActionMenuId(null); onUnsuspend(user.id).catch(() => undefined); }}>
+                    <svg className="action-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 4 12 8-12 8V4Z" /></svg>
+                    Reactivate
+                  </button>}
                   <button type="button" role="menuitem" className="danger-menu-item" onClick={() => { setActionMenuId(null); setConfirmation({ action: "delete", user }); }}>
                     <svg className="action-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
                     Delete
@@ -562,10 +623,12 @@ export default function UsersPage() {
               <input type="number" min="0.01" step="0.01" max="100000000" value={balanceLimit} onChange={(event) => setBalanceLimit(event.target.value)} aria-label="Manager balance limit" />
               <button type="submit" className="secondary" disabled={busy}>Set limit</button>
             </form>
-            <form className="inline-edit-form" onSubmit={onSetManagerCapacity}>
-              <input type="number" min="1" step="1" max="100000" value={managerCapacity} onChange={(event) => setManagerCapacity(event.target.value)} aria-label="Manager player capacity" />
-              <button type="submit" className="secondary" disabled={busy}>Set player capacity</button>
-            </form>
+            {(balanceUser.role === "OWNER" || balanceUser.role === "MANAGER") && me.role !== "MANAGER" ? (
+              <form className="inline-edit-form" onSubmit={onSetManagerCapacity}>
+                <input type="number" min="1" step="1" max="100000" value={managerCapacity} onChange={(event) => setManagerCapacity(event.target.value)} aria-label="Player capacity" />
+                <button type="submit" className="secondary" disabled={busy}>Set player capacity</button>
+              </form>
+            ) : null}
             {me.role === "OWNER" && balanceUser.role === "MANAGER" ? (
               <CommissionRateControl
                 userId={balanceUser.id}
@@ -584,7 +647,7 @@ export default function UsersPage() {
             <div className="ledger-list">
               {balanceLedger.length === 0 ? <p className="muted">No transactions yet.</p> : balanceLedger.map((entry) => (
                 <div className="ledger-row" key={entry.id}>
-                  <div><strong>{entry.type === "DELEGATION" ? "Delegation" : "Adjustment"} <span className="muted">({entry.status ?? "APPROVED"})</span></strong><span className="muted">{entry.reason} · {entry.counterparty ?? entry.actor?.username ?? "System"}</span><a href={`/dashboard/finance/transaction/${entry.id}`}>View receipt</a></div>
+                  <div><strong>{transactionLabel(entry.type)} <span className="muted">({entry.status ?? "APPROVED"})</span></strong><span className="muted">{entry.reason} · {entry.counterparty ?? entry.actor?.username ?? "System"}</span><a href={`/dashboard/finance/transaction/${entry.id}`}>View receipt</a></div>
                   <div><strong className={entry.amount < 0 ? "ledger-negative" : "ledger-positive"}>{entry.amount < 0 ? "-" : "+"}${Math.abs(entry.amount).toFixed(2)}</strong><time className="muted" dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleDateString()}</time></div>
                   {entry.status === "PENDING" && me.role !== "MANAGER" ? <div className="row"><button type="button" className="secondary" onClick={() => approveTransaction(entry.id, true)} disabled={busy}>Approve</button><button type="button" className="danger-button" onClick={() => approveTransaction(entry.id, false)} disabled={busy}>Reject</button></div> : null}
                 </div>
@@ -596,6 +659,15 @@ export default function UsersPage() {
                 <label>Amount<input type="number" min="0.01" max="1000000" step="0.01" required value={balanceAmount} onChange={(event) => setBalanceAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></label>
                 <label>Reason<input type="text" minLength={3} maxLength={240} required value={balanceReason} onChange={(event) => setBalanceReason(event.target.value)} placeholder="Why is this credit being given?" /></label>
                 <div className="modal-actions"><button type="button" className="secondary" onClick={() => setBalanceUser(null)} disabled={busy}>Cancel</button><button type="submit" disabled={busy}>{busy ? <LoadingSpinner label="Saving transaction" size="small" /> : "Delegate credit"}</button></div>
+              </form>
+            ) : null}
+            {balanceUser.parentId === me?.id ? (
+              <form className="stack" onSubmit={onReclaimCredit}>
+                <h3>Reclaim credit</h3>
+                <p className="muted" style={{ margin: 0 }}>{me.role === "SUPER_ADMIN" ? "Takes credit back out of circulation." : "Moves credit from this account back into your own balance."} Works on suspended accounts too.</p>
+                <label>Amount<input type="number" min="0.01" max={Number(balanceUser.balance)} step="0.01" required value={reclaimAmount} onChange={(event) => setReclaimAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></label>
+                <label>Reason<input type="text" minLength={3} maxLength={240} required value={reclaimReason} onChange={(event) => setReclaimReason(event.target.value)} placeholder="Why is this credit being reclaimed?" /></label>
+                <div className="modal-actions"><button type="button" className="secondary" onClick={() => setReclaimAmount(String(Number(balanceUser.balance)))} disabled={busy || Number(balanceUser.balance) <= 0}>Reclaim all</button><button type="submit" disabled={busy || Number(balanceUser.balance) <= 0}>{busy ? <LoadingSpinner label="Reclaiming credit" size="small" /> : "Reclaim credit"}</button></div>
               </form>
             ) : null}
             {me?.role === "SUPER_ADMIN" ? (
@@ -628,11 +700,11 @@ export default function UsersPage() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setReassignUser(null)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="reassign-title">
             <div className="modal-header"><h2 id="reassign-title">Reassign player?</h2><button type="button" className="modal-close secondary" onClick={() => setReassignUser(null)} aria-label="Close">×</button></div>
-            <p>Move <strong>{reassignUser.username}</strong> to a different manager? This action will be recorded and notify the affected accounts.</p>
+            <p>Move <strong>{reassignUser.username}</strong> to a different Manager or Owner? This action will be recorded and notify the affected accounts.</p>
             <form className="stack" onSubmit={onReassign}>
-              <label>New manager              <select required value={reassignManagerId} onChange={(event) => loadReassignmentPreview(event.target.value, reassignUser)}>
-                <option value="">Select a manager</option>
-                {assignableManagers.filter((manager) => manager.id !== reassignUser.parentId).map((manager) => <option key={manager.id} value={manager.id}>{manager.username} · {users.filter((child) => child.parentId === manager.id && child.role === "PLAYER").length}/{manager.managerCapacity}</option>)}
+              <label>New parent<select required value={reassignManagerId} onChange={(event) => loadReassignmentPreview(event.target.value, reassignUser)}>
+                <option value="">Select a Manager or Owner</option>
+                {reassignDestinations.filter((manager) => manager.id !== reassignUser.parentId).map((manager) => <option key={manager.id} value={manager.id}>{manager.username}{manager.id === me.id ? " (you)" : ""} · {manager.role} · {users.filter((child) => child.parentId === manager.id && child.role === "PLAYER").length}/{manager.managerCapacity}</option>)}
               </select></label>
               {reassignmentPreview ? <div className={`impact-preview${reassignmentPreview.valid ? "" : " is-invalid"}`}><strong>{reassignmentPreview.valid ? "Ready to reassign" : "Cannot reassign"}</strong><span>{reassignmentPreview.valid ? `Move ${reassignmentPreview.player.username} to ${reassignmentPreview.destination.username}? ${reassignmentPreview.destination.remaining} capacity remaining.` : reassignmentPreview.reason}</span><span>Impact: {reassignmentPreview.impact.movedAccounts} player account affected.</span></div> : null}
               <div className="modal-actions"><button type="button" className="secondary" onClick={() => setReassignUser(null)} disabled={busy}>Cancel</button><button type="submit" disabled={busy || !reassignmentPreview?.valid}>{busy ? <LoadingSpinner label="Reassigning player" size="small" /> : "Confirm reassignment"}</button></div>
@@ -644,7 +716,7 @@ export default function UsersPage() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setConfirmation(null)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
             <div className="modal-header"><h2 id="confirm-title">{confirmation.action === "delete" ? "Delete user?" : "Suspend user?"}</h2><button type="button" className="modal-close secondary" onClick={() => setConfirmation(null)} aria-label="Close">×</button></div>
-            <p>Are you sure you want to {confirmation.action} <strong>{confirmation.user.username}</strong>{confirmation.action === "delete" ? `? This cannot be undone. ${users.filter((user) => user.parentId === confirmation.user.id).length} direct child account(s) will block deletion until reassigned.` : "?"}</p>
+            <p>Are you sure you want to {confirmation.action} <strong>{confirmation.user.username}</strong>{confirmation.action === "delete" ? `? This cannot be undone. ${users.filter((user) => user.parentId === confirmation.user.id).length} direct child account(s) will block deletion until reassigned, and any remaining balance must be reclaimed first.` : confirmation.user.role === "PLAYER" ? "?" : "? Everyone under this account will be locked out until it is reactivated."}</p>
             <div className="modal-actions"><button type="button" className="secondary" onClick={() => setConfirmation(null)} disabled={busy}>Cancel</button><button type="button" className={confirmation.action === "delete" ? "danger-button" : ""} onClick={() => confirmation.action === "delete" ? onDelete(confirmation.user) : onSuspend(confirmation.user.id)} disabled={busy}>{busy ? <LoadingSpinner label="Applying action" size="small" /> : confirmation.action === "delete" ? "Delete user" : "Suspend user"}</button></div>
           </section>
         </div>

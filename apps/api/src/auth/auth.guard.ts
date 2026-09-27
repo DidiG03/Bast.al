@@ -63,6 +63,14 @@ export class AuthGuard implements CanActivate {
       throw new ForbiddenException("Account is suspended");
     }
 
+    // Suspension cascades down the hierarchy: when an Owner or Manager is
+    // suspended, everyone under them is locked out too, without having to
+    // flip each downline row (so reactivating the parent restores them all).
+    if (user.parentId && (await this.hasSuspendedAncestor(user.id))) {
+      await this.fail(ip, user.id, "ancestor_suspended");
+      throw new ForbiddenException("Account is suspended because an account above it is suspended");
+    }
+
     await this.threats.clearFailures(ip);
     if (sessionId) {
       const userAgent = request.headers["user-agent"] ?? null;
@@ -76,6 +84,23 @@ export class AuthGuard implements CanActivate {
     request.clerkUserId = clerkUserId;
     request.actor = user;
     return true;
+  }
+
+  private async hasSuspendedAncestor(userId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<{ blocked: boolean }[]>`
+      WITH RECURSIVE ancestors AS (
+        SELECT parent_id FROM users WHERE id = ${userId}
+        UNION ALL
+        SELECT u.parent_id FROM users u
+        INNER JOIN ancestors a ON u.id = a.parent_id
+      )
+      SELECT EXISTS(
+        SELECT 1 FROM users u
+        INNER JOIN ancestors a ON u.id = a.parent_id
+        WHERE u.status = 'SUSPENDED'
+      ) AS blocked
+    `;
+    return Boolean(rows[0]?.blocked);
   }
 
   private async fail(

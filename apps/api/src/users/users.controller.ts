@@ -19,9 +19,10 @@ import { MfaGuard } from "../auth/mfa.guard";
 import type { Actor } from "../auth/permissions";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { clientIp } from "../security/client-ip";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { BalanceLimitDto, BalanceTransactionDto } from "./dto/balance-transaction.dto";
+import { AdjustBalanceDto, BalanceLimitDto, DelegateCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { ReassignUserDto } from "./dto/reassign-user.dto";
 import { AuditQueryDto } from "./dto/audit-query.dto";
@@ -68,7 +69,7 @@ export class UsersController {
       username: dto.username,
       bootstrapSecret: dto.bootstrapSecret,
       expectedSecret: this.config.get<string>("BOOTSTRAP_SECRET") ?? "",
-      ipAddress: this.ip(req),
+      ipAddress: clientIp(req),
     });
   }
 
@@ -133,12 +134,20 @@ export class UsersController {
     return this.users.report(actor);
   }
 
-  @Get("commission-report")
+  @Get(":id/commission-rate")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
-  commissionReport(@CurrentActor() actor: Actor, @Query("from") from?: string, @Query("to") to?: string) {
-    return this.users.commissionReport(actor, from, to);
+  commissionRate(@CurrentActor() actor: Actor, @Param("id") id: string) {
+    return this.users.commissionRate(actor, id);
+  }
+
+  @Post(":id/commission-rate")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  setCommissionRate(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: CommissionRateDto, @Req() req: AuthenticatedRequest) {
+    return this.users.setCommissionRate(actor, id, dto.rate, clientIp(req));
   }
 
   @Get("audit")
@@ -159,36 +168,49 @@ export class UsersController {
     @Body() dto: CreateUserDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.users.createUser(actor, dto, this.ip(req));
+    return this.users.createUser(actor, dto, clientIp(req));
   }
 
   @Get(":id/balance/ledger")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
   balanceLedger(@CurrentActor() actor: Actor, @Param("id") id: string) {
     return this.users.balanceLedger(actor, id);
   }
 
-  @Post(":id/balance")
+  @Post(":id/delegate")
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER)
-  chargeBalance(
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  delegateCredit(
     @CurrentActor() actor: Actor,
     @Param("id") id: string,
-    @Body() dto: BalanceTransactionDto,
+    @Body() dto: DelegateCreditDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.users.chargeBalance(actor, id, dto, this.ip(req));
+    return this.users.delegateCredit(actor, id, dto, clientIp(req));
+  }
+
+  @Post(":id/adjust-balance")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  adjustBalance(
+    @CurrentActor() actor: Actor,
+    @Param("id") id: string,
+    @Body() dto: AdjustBalanceDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.users.adjustBalance(actor, id, dto, clientIp(req));
   }
 
   @Post(":id/balance-limit")
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
   balanceLimit(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: BalanceLimitDto, @Req() req: AuthenticatedRequest) {
-    return this.users.setBalanceLimit(actor, id, dto.limit, this.ip(req));
+    return this.users.setBalanceLimit(actor, id, dto.limit, clientIp(req));
   }
 
   @Post(":id/manager-capacity")
@@ -196,21 +218,13 @@ export class UsersController {
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   managerCapacity(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: ManagerCapacityDto, @Req() req: AuthenticatedRequest) {
-    return this.users.setManagerCapacity(actor, id, dto.capacity, this.ip(req));
-  }
-
-  @Post(":id/commission-rate")
-  @ApiBearerAuth()
-  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER)
-  commissionRate(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: CommissionRateDto, @Req() req: AuthenticatedRequest) {
-    return this.users.setCommissionRate(actor, id, dto.rate, this.ip(req));
+    return this.users.setManagerCapacity(actor, id, dto.capacity, clientIp(req));
   }
 
   @Get("balance/transactions/:transactionId")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
   transaction(@CurrentActor() actor: Actor, @Param("transactionId") transactionId: string) {
     return this.users.transactionDetails(actor, transactionId);
   }
@@ -220,13 +234,13 @@ export class UsersController {
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   approve(@CurrentActor() actor: Actor, @Param("transactionId") transactionId: string, @Body("approve") approve: boolean, @Req() req: AuthenticatedRequest) {
-    return this.users.approveBalance(actor, transactionId, approve, this.ip(req));
+    return this.users.approveBalance(actor, transactionId, approve, clientIp(req));
   }
 
   @Get(":id/balance/statement")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
   statement(@CurrentActor() actor: Actor, @Param("id") id: string, @Query("from") from?: string, @Query("to") to?: string) {
     return this.users.balanceStatement(actor, id, from, to);
   }
@@ -249,7 +263,20 @@ export class UsersController {
     @Param("id") id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.users.suspend(actor, id, this.ip(req));
+    return this.users.suspend(actor, id, clientIp(req));
+  }
+
+  @Post(":id/unsuspend")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  unsuspend(
+    @CurrentActor() actor: Actor,
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.users.unsuspend(actor, id, clientIp(req));
   }
 
   @Post(":id/reassign")
@@ -262,7 +289,7 @@ export class UsersController {
     @Body() dto: ReassignUserDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.users.reassignPlayer(actor, id, dto.managerId, this.ip(req));
+    return this.users.reassignPlayer(actor, id, dto.managerId, clientIp(req));
   }
 
   @Get(":id/reassignment-preview")
@@ -283,7 +310,7 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.users.updateUser(actor, id, dto, this.ip(req));
+    return this.users.updateUser(actor, id, dto, clientIp(req));
   }
 
   @Post(":id/delete")
@@ -291,21 +318,13 @@ export class UsersController {
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
   delete(@CurrentActor() actor: Actor, @Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return this.users.deleteUser(actor, id, this.ip(req));
+    return this.users.deleteUser(actor, id, clientIp(req));
   }
 
   @Get(":id")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard)
   getOne(@CurrentActor() actor: Actor, @Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return this.users.getById(actor, id, this.ip(req));
-  }
-
-  private ip(req: AuthenticatedRequest): string | undefined {
-    const forwarded = req.headers["x-forwarded-for"];
-    if (typeof forwarded === "string" && forwarded.length > 0) {
-      return forwarded.split(",")[0]?.trim();
-    }
-    return req.ip;
+    return this.users.getById(actor, id, clientIp(req));
   }
 }

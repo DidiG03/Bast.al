@@ -7,6 +7,7 @@ import {
 import { Reflector } from "@nestjs/core";
 import { Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
+import { clientIp } from "../security/client-ip";
 import { AuthenticatedRequest } from "./auth.guard";
 import { ROLES_KEY } from "./roles.decorator";
 
@@ -30,7 +31,7 @@ export class RolesGuard implements CanActivate {
       await this.audit.log({
         actorId: actor?.id,
         action: "authz.failure",
-        ipAddress: this.clientIp(request),
+        ipAddress: clientIp(request),
         metadata: {
           reason: "role_denied",
           required,
@@ -40,13 +41,5 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException("Insufficient role");
     }
     return true;
-  }
-
-  private clientIp(request: AuthenticatedRequest): string | undefined {
-    const forwarded = request.headers["x-forwarded-for"];
-    if (typeof forwarded === "string" && forwarded.length > 0) {
-      return forwarded.split(",")[0]?.trim();
-    }
-    return request.ip;
   }
 }

@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { apiFetch, type CommissionReport, type MeResponse, type UserReport } from "../../../lib/api";
+import { apiFetch, type MeResponse, type UserReport } from "../../../lib/api";
 import { ReportsTabs } from "./reports-tabs";
 import { AuditLog } from "./audit-log";
 
@@ -19,10 +19,7 @@ export default async function ReportsPage() {
 
   const me = await apiFetch<MeResponse>("/users/me", token);
   if (me.role !== "SUPER_ADMIN") redirect("/dashboard");
-  const [report, commission] = await Promise.all([
-    apiFetch<UserReport>("/users/report", token),
-    apiFetch<CommissionReport>("/users/commission-report", token),
-  ]);
+  const report = await apiFetch<UserReport>("/users/report", token);
 
   const cards = [
     ["Total users", report.totals.users],
@@ -43,30 +40,30 @@ export default async function ReportsPage() {
           </div>
         ))}
         <div className="card report-stat">
-          <span className="muted">Manager balances</span>
-          <strong>${report.totals.managerBalances.toFixed(2)}</strong>
+          <span className="muted">Total balance in circulation</span>
+          <strong>${report.totals.totalBalance.toFixed(2)}</strong>
         </div>
       </div>
 
       <div className="reports-columns">
         <section className="card stack">
           <div className="tree-header">
-            <h2>Manager accounts</h2>
-            <span className="muted">{report.managers.length} managers</span>
+            <h2>Owner accounts</h2>
+            <span className="muted">{report.owners.length} owners</span>
           </div>
-          {report.managers.length === 0 ? (
-            <p className="muted">No manager accounts yet.</p>
+          {report.owners.length === 0 ? (
+            <p className="muted">No owner accounts yet.</p>
           ) : (
             <div className="report-list">
-              {report.managers.map((manager) => (
-                <div className="report-list-row" key={manager.id}>
+              {report.owners.map((owner) => (
+                <div className="report-list-row" key={owner.id}>
                   <div>
-                    <strong>{manager.username}</strong>
+                    <strong>{owner.username}</strong>
                     <span className="muted">
-                      {manager.players} players · {manager.status}
+                      {owner.directReports} direct reports · {owner.status} · {owner.commissionRate}% commission
                     </span>
                   </div>
-                  <strong>${manager.balance.toFixed(2)}</strong>
+                  <strong>${owner.balance.toFixed(2)}</strong>
                 </div>
               ))}
             </div>
@@ -106,30 +103,6 @@ export default async function ReportsPage() {
     </div>
   );
 
-  const commissionContent = (
-    <div className="card stack">
-      <div className="tree-header">
-        <h2>Commission from Owners</h2>
-        <span className="muted">Estimated, based on Manager ledger activity</span>
-      </div>
-      {commission.rows.length === 0 ? (
-        <p className="muted">No Owners with commission activity yet.</p>
-      ) : (
-        <div className="report-list">
-          {commission.rows.map((row) => (
-            <div className="report-list-row" key={row.userId}>
-              <div>
-                <strong>{row.username}</strong>
-                <span className="muted">{row.rate}% · ${row.basisVolume.toFixed(2)} basis</span>
-              </div>
-              <strong>${row.estimatedCommission.toFixed(2)}</strong>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className="stack reports-page">
       <div className="page-title-row">
@@ -144,7 +117,7 @@ export default async function ReportsPage() {
         </span>
       </div>
 
-      <ReportsTabs overview={overviewContent} auditLog={<AuditLog />} commission={commissionContent} />
+      <ReportsTabs overview={overviewContent} auditLog={<AuditLog />} />
     </div>
   );
 }

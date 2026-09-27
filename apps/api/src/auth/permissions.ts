@@ -21,6 +21,20 @@ export function canCreateRole(actorRole: Role, targetRole: Role): boolean {
   return CREATABLE_ROLES[actorRole].includes(targetRole);
 }
 
+/**
+ * Delegation (giving credit down the hierarchy) is only ever allowed between
+ * a user and their direct child — never further down the subtree. An Owner
+ * delegates to the Managers/Players they created directly; a Manager
+ * delegates only to their own Players. Reuses the creation matrix since
+ * "who I may delegate to" and "who I may create" are the same relationship.
+ */
+export function canDelegateTo(
+  giver: Pick<User, "id" | "role">,
+  receiver: Pick<User, "parentId" | "role">,
+): boolean {
+  return receiver.parentId === giver.id && canCreateRole(giver.role, receiver.role);
+}
+
 export function roleRequiresMfa(role: Role): boolean {
   return role === Role.SUPER_ADMIN || role === Role.OWNER;
 }

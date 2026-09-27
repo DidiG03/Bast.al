@@ -24,11 +24,12 @@ export default function TransactionDetailsPage({ params }: { params: { id: strin
     <div className="stack">
       <div className="page-title-row"><div><h1 style={{ margin: 0 }}>Transaction receipt</h1><p className="muted">Full audit-ready transaction details.</p></div><Link href="/dashboard/finance">Back to Finance</Link></div>
       <section className="card stack receipt-card">
-        <div className="receipt-title"><strong>{entry.type}</strong><span className={`status-pill ${entry.status === "APPROVED" ? "is-active" : ""}`}>{entry.status ?? "APPROVED"}</span></div>
-        <div className="receipt-amount">${entry.amount.toFixed(2)}</div>
+        <div className="receipt-title"><strong>{entry.type === "DELEGATION" ? "Delegation" : "Adjustment"}</strong><span className={`status-pill ${entry.status === "APPROVED" ? "is-active" : ""}`}>{entry.status ?? "APPROVED"}</span></div>
+        <div className="receipt-amount">${Math.abs(entry.amount).toFixed(2)}</div>
         <dl className="receipt-details">
           <div><dt>Transaction ID</dt><dd>{entry.id}</dd></div>
-          <div><dt>Manager</dt><dd>{entry.manager.username}</dd></div>
+          <div><dt>From</dt><dd>{entry.fromUser?.username ?? "Platform"}</dd></div>
+          <div><dt>To</dt><dd>{entry.toUser.username}</dd></div>
           <div><dt>Reason</dt><dd>{entry.reason}</dd></div>
           <div><dt>Created</dt><dd>{new Date(entry.createdAt).toLocaleString()}</dd></div>
           <div><dt>Recorded by</dt><dd>{entry.actor?.username ?? "System"}</dd></div>

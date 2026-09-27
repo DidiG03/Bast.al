@@ -8,6 +8,7 @@ import {
 import { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma.service";
+import { clientIp } from "../security/client-ip";
 import { ThreatIntelService } from "../security/threat-intel.service";
 import { ClerkService } from "./clerk.service";
 import { Actor, isActive } from "./permissions";
@@ -29,7 +30,7 @@ export class AuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractBearerToken(request);
-    const ip = this.clientIp(request) ?? "unknown";
+    const ip = clientIp(request) ?? "unknown";
 
     if (await this.threats.isBlocked(ip)) {
       throw new ForbiddenException("Temporarily blocked due to suspicious activity");
@@ -110,14 +111,6 @@ export class AuthGuard implements CanActivate {
     const header = request.headers.authorization;
     if (!header?.startsWith("Bearer ")) return null;
     return header.slice("Bearer ".length).trim() || null;
-  }
-
-  private clientIp(request: Request): string | undefined {
-    const forwarded = request.headers["x-forwarded-for"];
-    if (typeof forwarded === "string" && forwarded.length > 0) {
-      return forwarded.split(",")[0]?.trim();
-    }
-    return request.ip;
   }
 
   private location(request: Request): string | null {

@@ -33,8 +33,9 @@ export default function UsersPage() {
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [balanceUser, setBalanceUser] = useState<UserRow | null>(null);
   const [balanceAmount, setBalanceAmount] = useState("");
-  const [balanceType, setBalanceType] = useState<BalanceEntry["type"]>("CREDIT");
   const [balanceReason, setBalanceReason] = useState("");
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
   const [balanceLimit, setBalanceLimit] = useState("");
   const [managerCapacity, setManagerCapacity] = useState("");
   const [statementFrom, setStatementFrom] = useState("");
@@ -163,7 +164,7 @@ export default function UsersPage() {
     }
   }
 
-  async function onChargeBalance(event: FormEvent) {
+  async function onDelegateCredit(event: FormEvent) {
     event.preventDefault();
     if (!balanceUser) return;
     setError(null);
@@ -171,17 +172,38 @@ export default function UsersPage() {
     try {
       const token = await getToken();
       if (!token) throw new Error("Not signed in");
-      await apiFetch(`/users/${balanceUser.id}/balance`, token, {
+      await apiFetch(`/users/${balanceUser.id}/delegate`, token, {
         method: "POST",
-        body: JSON.stringify({ amount: Number(balanceAmount), type: balanceType, reason: balanceReason }),
+        body: JSON.stringify({ amount: Number(balanceAmount), reason: balanceReason }),
       });
       setBalanceUser(null);
       setBalanceAmount("");
       setBalanceReason("");
-      setBalanceType("CREDIT");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Balance charge failed");
+      setError(err instanceof Error ? err.message : "Delegating credit failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onAdjustBalance(event: FormEvent) {
+    event.preventDefault();
+    if (!balanceUser) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Not signed in");
+      await apiFetch(`/users/${balanceUser.id}/adjust-balance`, token, {
+        method: "POST",
+        body: JSON.stringify({ amount: Number(adjustAmount), reason: adjustReason }),
+      });
+      setAdjustAmount("");
+      setAdjustReason("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Adjustment failed");
     } finally {
       setBusy(false);
     }
@@ -287,7 +309,8 @@ export default function UsersPage() {
       setBalanceUser(user);
       setBalanceAmount("");
       setBalanceReason("");
-      setBalanceType("CREDIT");
+      setAdjustAmount("");
+      setAdjustReason("");
       setBalanceLimit(String(Number(user.balanceLimit)));
       setManagerCapacity(String(user.managerCapacity));
       try {
@@ -308,7 +331,7 @@ export default function UsersPage() {
           entry.type,
           entry.amount.toFixed(2),
           entry.reason,
-          entry.actor?.username ?? "System",
+          entry.counterparty ?? entry.actor?.username ?? "System",
         ]),
       ];
       const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\n");
@@ -380,7 +403,7 @@ export default function UsersPage() {
             <strong>{user.username}</strong>
             <span className="tree-role">{user.role}</span>
             <span className="tree-status">{user.status}</span>
-            {user.role === "MANAGER" ? <span className="tree-balance">${Number(user.balance).toFixed(2)}</span> : null}
+            {user.role !== "SUPER_ADMIN" ? <span className="tree-balance">${Number(user.balance).toFixed(2)}</span> : null}
           </div>
           {user.id !== me?.id ? (
             <div className="user-actions">
@@ -401,7 +424,7 @@ export default function UsersPage() {
               </button>
               {actionMenuId === user.id ? (
                 <div className="action-menu" role="menu">
-                  {user.role === "MANAGER" && (me?.role === "OWNER" || me?.role === "SUPER_ADMIN") ? (
+                  {user.parentId === me?.id || me?.role === "SUPER_ADMIN" ? (
                     <button type="button" role="menuitem" onClick={() => openBalance(user)}>
                       <svg className="action-menu-icon dollar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M15.5 7.25c-.55-.85-1.7-1.5-3.5-1.5-2.2 0-3.5 1.1-3.5 2.6 0 4.15 7 1.65 7 5.8 0 1.5-1.3 2.6-3.5 2.6-1.8 0-2.95-.65-3.5-1.5" /></svg>
                       Balance
@@ -543,7 +566,7 @@ export default function UsersPage() {
               <input type="number" min="1" step="1" max="100000" value={managerCapacity} onChange={(event) => setManagerCapacity(event.target.value)} aria-label="Manager player capacity" />
               <button type="submit" className="secondary" disabled={busy}>Set player capacity</button>
             </form>
-            {me.role === "OWNER" ? (
+            {me.role === "OWNER" && balanceUser.role === "MANAGER" ? (
               <CommissionRateControl
                 userId={balanceUser.id}
                 currentRate={Number(balanceUser.commissionRate)}
@@ -561,19 +584,29 @@ export default function UsersPage() {
             <div className="ledger-list">
               {balanceLedger.length === 0 ? <p className="muted">No transactions yet.</p> : balanceLedger.map((entry) => (
                 <div className="ledger-row" key={entry.id}>
-                  <div><strong>{entry.type} <span className="muted">({entry.status ?? "APPROVED"})</span></strong><span className="muted">{entry.reason} · {entry.actor?.username ?? "System"}</span><a href={`/dashboard/finance/transaction/${entry.id}`}>View receipt</a></div>
-                  <div><strong className={entry.type === "DEBIT" || entry.type === "REVERSAL" ? "ledger-negative" : "ledger-positive"}>{entry.type === "DEBIT" || entry.type === "REVERSAL" ? "-" : "+"}${entry.amount.toFixed(2)}</strong><time className="muted" dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleDateString()}</time></div>
+                  <div><strong>{entry.type === "DELEGATION" ? "Delegation" : "Adjustment"} <span className="muted">({entry.status ?? "APPROVED"})</span></strong><span className="muted">{entry.reason} · {entry.counterparty ?? entry.actor?.username ?? "System"}</span><a href={`/dashboard/finance/transaction/${entry.id}`}>View receipt</a></div>
+                  <div><strong className={entry.amount < 0 ? "ledger-negative" : "ledger-positive"}>{entry.amount < 0 ? "-" : "+"}${Math.abs(entry.amount).toFixed(2)}</strong><time className="muted" dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleDateString()}</time></div>
                   {entry.status === "PENDING" && me.role !== "MANAGER" ? <div className="row"><button type="button" className="secondary" onClick={() => approveTransaction(entry.id, true)} disabled={busy}>Approve</button><button type="button" className="danger-button" onClick={() => approveTransaction(entry.id, false)} disabled={busy}>Reject</button></div> : null}
                 </div>
               ))}
             </div>
-            <form className="stack" onSubmit={onChargeBalance}>
-              <h3>Add transaction</h3>
-              <label>Type<select value={balanceType} onChange={(event) => setBalanceType(event.target.value as BalanceEntry["type"])}><option value="CREDIT">Credit</option><option value="DEBIT">Debit</option><option value="ADJUSTMENT">Adjustment</option><option value="REVERSAL">Reversal</option></select></label>
-              <label>Amount<input type="number" min="0.01" max="1000000" step="0.01" required value={balanceAmount} onChange={(event) => setBalanceAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></label>
-              <label>Reason<input type="text" minLength={3} maxLength={240} required value={balanceReason} onChange={(event) => setBalanceReason(event.target.value)} placeholder="Why is this transaction being recorded?" /></label>
-              <div className="modal-actions"><button type="button" className="secondary" onClick={() => setBalanceUser(null)} disabled={busy}>Cancel</button><button type="submit" disabled={busy}>{busy ? <LoadingSpinner label="Saving transaction" size="small" /> : "Save transaction"}</button></div>
-            </form>
+            {balanceUser.parentId === me?.id || me?.role === "SUPER_ADMIN" ? (
+              <form className="stack" onSubmit={onDelegateCredit}>
+                <h3>Delegate credit</h3>
+                <label>Amount<input type="number" min="0.01" max="1000000" step="0.01" required value={balanceAmount} onChange={(event) => setBalanceAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></label>
+                <label>Reason<input type="text" minLength={3} maxLength={240} required value={balanceReason} onChange={(event) => setBalanceReason(event.target.value)} placeholder="Why is this credit being given?" /></label>
+                <div className="modal-actions"><button type="button" className="secondary" onClick={() => setBalanceUser(null)} disabled={busy}>Cancel</button><button type="submit" disabled={busy}>{busy ? <LoadingSpinner label="Saving transaction" size="small" /> : "Delegate credit"}</button></div>
+              </form>
+            ) : null}
+            {me?.role === "SUPER_ADMIN" ? (
+              <form className="stack" onSubmit={onAdjustBalance}>
+                <h3>Admin adjustment</h3>
+                <p className="muted" style={{ margin: 0 }}>A direct correction with no counterparty — use for fixing errors, not routine funding.</p>
+                <label>Signed amount<input type="number" min="-1000000" max="1000000" step="0.01" required value={adjustAmount} onChange={(event) => setAdjustAmount(event.target.value)} placeholder="-50.00" inputMode="decimal" /></label>
+                <label>Reason<input type="text" minLength={3} maxLength={240} required value={adjustReason} onChange={(event) => setAdjustReason(event.target.value)} placeholder="Why is this adjustment being made?" /></label>
+                <div className="modal-actions"><button type="submit" className="secondary" disabled={busy}>{busy ? <LoadingSpinner label="Saving adjustment" size="small" /> : "Apply adjustment"}</button></div>
+              </form>
+            ) : null}
           </section>
         </div>
       ) : null}

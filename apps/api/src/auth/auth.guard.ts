@@ -8,6 +8,7 @@ import {
 import { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma.service";
+import { RealtimeService } from "../realtime/realtime.service";
 import { clientIp } from "../security/client-ip";
 import { ThreatIntelService } from "../security/threat-intel.service";
 import { ClerkService } from "./clerk.service";
@@ -25,6 +26,7 @@ export class AuthGuard implements CanActivate {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly threats: ThreatIntelService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -117,7 +119,7 @@ export class AuthGuard implements CanActivate {
       metadata: { reason, banned: result.banned, failures: result.failures, ...metadata },
     });
     if (actorId) {
-      await this.prisma.notification.create({
+      const notification = await this.prisma.notification.create({
         data: {
           userId: actorId,
           type: "SUSPICIOUS_LOGIN",
@@ -126,6 +128,7 @@ export class AuthGuard implements CanActivate {
           metadata: { ipAddress: ip, reason, failures: result.failures },
         },
       });
+      await this.realtime.publish(actorId, { type: "notification.created", notification });
     }
     if (result.banned) {
       await this.threats.ban(ip, reason);

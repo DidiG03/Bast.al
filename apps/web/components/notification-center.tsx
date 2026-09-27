@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useRealtime } from "./realtime-provider";
 import { apiFetch, type NotificationItem, type NotificationPreferences, type NotificationResponse } from "../lib/api";
 
 function BellIcon() {
@@ -18,6 +19,7 @@ export function NotificationCenter() {
   const [error, setError] = useState<string | null>(null);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
+  const [toast, setToast] = useState<NotificationItem | null>(null);
 
   async function load() {
     const token = await getToken();
@@ -29,31 +31,26 @@ export function NotificationCenter() {
 
   useEffect(() => {
     load().catch(() => setError("Notifications unavailable"));
-    let cancelled = false;
-    let controller: AbortController | undefined;
-    async function connect() {
-      const token = await getToken();
-      if (!token || cancelled) return;
-      controller = new AbortController();
-      const response = await fetch("/api/backend/notifications/stream", { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
-      if (!response.ok || !response.body) throw new Error("stream unavailable");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (!cancelled) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        buffer += decoder.decode(chunk.value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-        if (events.some((event) => event.includes("data:"))) load().catch(() => undefined);
-      }
-    }
-    connect().catch(() => undefined);
-    return () => { cancelled = true; controller?.abort(); };
     // getToken is stable for the Clerk session and this intentionally runs once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useRealtime((event) => {
+    if (event.type === "notification.created") {
+      const incoming = event.notification;
+      setItems((current) => current.some((item) => item.id === incoming.id) ? current : [incoming, ...current].slice(0, 50));
+      if (!incoming.readAt) setUnreadCount((count) => count + 1);
+      setToast(incoming);
+    } else if (event.type === "notifications.changed" || event.type === "resync") {
+      load().catch(() => undefined);
+    }
+  });
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   useEffect(() => {
     if (!open) return;
@@ -132,6 +129,12 @@ export function NotificationCenter() {
         {unreadCount > 0 ? <span className="notification-badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
         <span className="notification-trigger-label">Notifications</span>
       </button>
+      {toast && !open ? (
+        <button type="button" className={`notification-toast card notification-severity-${toast.severity.toLowerCase()}`} role="status" onClick={() => { setToast(null); setOpen(true); }}>
+          <strong>{toast.title}</strong>
+          <span>{toast.message}</span>
+        </button>
+      ) : null}
       {open ? <button type="button" className="notification-backdrop" aria-label="Close notifications" tabIndex={-1} onClick={() => setOpen(false)} /> : null}
       {open ? (
         <section className="notification-panel card" aria-label="Notification center">

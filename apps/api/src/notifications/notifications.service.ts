@@ -1,16 +1,19 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { NotificationCategory, NotificationSeverity, NotificationType } from "@prisma/client";
-import { Observable, Subject } from "rxjs";
 import { Actor } from "../auth/permissions";
 import { FieldEncryptionService } from "../crypto/field-encryption.service";
 import { PrismaService } from "../prisma.service";
+import { RealtimeService } from "../realtime/realtime.service";
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly streams = new Map<string, Subject<unknown>>();
 
-  constructor(private readonly prisma: PrismaService, private readonly crypto: FieldEncryptionService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crypto: FieldEncryptionService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
   async list(actor: Actor, includeArchived = false) {
     const [items, unreadCount] = await Promise.all([
@@ -28,7 +31,9 @@ export class NotificationsService {
   async markRead(actor: Actor, id: string) {
     const notification = await this.prisma.notification.findFirst({ where: { id, userId: actor.id } });
     if (!notification) throw new NotFoundException("Notification not found");
-    return this.prisma.notification.update({ where: { id }, data: { readAt: new Date() }, select: { id: true, readAt: true } });
+    const updated = await this.prisma.notification.update({ where: { id }, data: { readAt: new Date() }, select: { id: true, readAt: true } });
+    await this.changed(actor);
+    return updated;
   }
 
   async markAllRead(actor: Actor) {
@@ -36,6 +41,7 @@ export class NotificationsService {
       where: { userId: actor.id, readAt: null },
       data: { readAt: new Date() },
     });
+    await this.changed(actor);
     return { ok: true };
   }
 
@@ -47,6 +53,7 @@ export class NotificationsService {
     const notification = await this.prisma.notification.findFirst({ where: { id, userId: actor.id } });
     if (!notification) throw new NotFoundException("Notification not found");
     await this.prisma.notification.delete({ where: { id } });
+    await this.changed(actor);
     return { ok: true };
   }
 
@@ -60,15 +67,6 @@ export class NotificationsService {
 
   async updatePreferences(actor: Actor, input: Partial<Record<"inAppEnabled" | "emailEnabled" | "financeEnabled" | "accountEnabled" | "securityEnabled" | "systemEnabled", boolean>>) {
     return this.prisma.notificationPreference.upsert({ where: { userId: actor.id }, create: { userId: actor.id, ...input }, update: input });
-  }
-
-  stream(actor: Actor): Observable<unknown> {
-    let stream = this.streams.get(actor.id);
-    if (!stream) {
-      stream = new Subject<unknown>();
-      this.streams.set(actor.id, stream);
-    }
-    return stream.asObservable();
   }
 
   /**
@@ -108,7 +106,7 @@ export class NotificationsService {
           metadata,
         },
       });
-      this.streams.get(input.userId)?.next(created);
+      await this.realtime.publish(input.userId, { type: "notification.created", notification: created });
       if (preferences?.emailEnabled && this.preferenceEnabled(preferences, category)) await this.sendEmail(input.userId, created.title, created.message);
       return created;
     } catch (error) {
@@ -120,7 +118,14 @@ export class NotificationsService {
   private async updateOwned(actor: Actor, id: string, data: { readAt?: Date; archivedAt?: Date }) {
     const notification = await this.prisma.notification.findFirst({ where: { id, userId: actor.id } });
     if (!notification) throw new NotFoundException("Notification not found");
-    return this.prisma.notification.update({ where: { id }, data, select: { id: true, readAt: true, archivedAt: true } });
+    const updated = await this.prisma.notification.update({ where: { id }, data, select: { id: true, readAt: true, archivedAt: true } });
+    await this.changed(actor);
+    return updated;
+  }
+
+  /** Lets the account's other tabs and devices refresh their list and unread badge. */
+  private changed(actor: Actor) {
+    return this.realtime.publish(actor.id, { type: "notifications.changed" });
   }
 
   private categoryFor(type: NotificationType): NotificationCategory {

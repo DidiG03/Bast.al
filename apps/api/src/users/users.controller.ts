@@ -22,7 +22,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { clientIp } from "../security/client-ip";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { AdjustBalanceDto, BalanceLimitDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
+import { AdjustBalanceDto, ApprovalLimitDto, BalanceLimitDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { ReassignUserDto } from "./dto/reassign-user.dto";
 import { AuditQueryDto } from "./dto/audit-query.dto";
@@ -129,7 +129,7 @@ export class UsersController {
   @Get("report")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
   report(@CurrentActor() actor: Actor) {
     return this.users.report(actor);
   }
@@ -153,7 +153,7 @@ export class UsersController {
   @Get("audit")
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
   audit(@CurrentActor() actor: Actor, @Query() query: AuditQueryDto) {
     return this.users.auditLog(actor, query);
   }
@@ -232,6 +232,14 @@ export class UsersController {
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   managerCapacity(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: ManagerCapacityDto, @Req() req: AuthenticatedRequest) {
     return this.users.setManagerCapacity(actor, id, dto.capacity, clientIp(req));
+  }
+
+  @Post(":id/approval-limit")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  approvalLimit(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: ApprovalLimitDto, @Req() req: AuthenticatedRequest) {
+    return this.users.setApprovalLimit(actor, id, dto.limit, clientIp(req));
   }
 
   @Get("balance/pending")

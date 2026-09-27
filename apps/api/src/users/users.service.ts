@@ -30,6 +30,7 @@ const publicUserSelect = {
   balanceLimit: true,
   managerCapacity: true,
   commissionRate: true,
+  approvalLimit: true,
   createdAt: true,
 } as const;
 
@@ -48,6 +49,12 @@ function holdsDirectReports(role: Role): boolean {
  * is nobody above it to approve.
  */
 const APPROVAL_THRESHOLD = 10000;
+
+/** Largest delegation this actor can make without anyone's sign-off. */
+function approvalThreshold(actor: Pick<Actor, "role" | "approvalLimit">): number {
+  if (actor.role === Role.MANAGER && actor.approvalLimit !== null) return Number(actor.approvalLimit);
+  return APPROVAL_THRESHOLD;
+}
 
 function dateRange(from?: string, to?: string) {
   return from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {};
@@ -93,6 +100,7 @@ export class UsersService {
       balanceLimit: Number(actor.balanceLimit),
       managerCapacity: actor.managerCapacity,
       commissionRate: Number(actor.commissionRate),
+      approvalLimit: approvalThreshold(actor),
       mfaRequired,
       mfaEnabled,
       mfaSatisfied: !mfaRequired || mfaEnabled,
@@ -179,10 +187,11 @@ export class UsersService {
   /**
    * Super Admin: the whole platform, broken down by Owner.
    * Owner: their own business only, broken down by Manager.
+   * Manager: their own Players only.
    */
   async report(actor: Actor) {
-    if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) {
-      throw new ForbiddenException("Reports are restricted to Super Admins and Owners");
+    if (actor.role === Role.PLAYER) {
+      throw new ForbiddenException("Reports are restricted to Super Admins, Owners and Managers");
     }
     const scope = await this.scopeIds(actor);
 
@@ -216,7 +225,9 @@ export class UsersService {
       ACTIVE: users.filter((user) => user.status === UserStatus.ACTIVE).length,
       SUSPENDED: users.filter((user) => user.status === UserStatus.SUSPENDED).length,
     };
-    const accountRole = actor.role === Role.SUPER_ADMIN ? Role.OWNER : Role.MANAGER;
+    // The accounts each role manages directly: Owners for Super Admin,
+    // Managers for an Owner, Players for a Manager.
+    const accountRole = actor.role === Role.SUPER_ADMIN ? Role.OWNER : actor.role === Role.OWNER ? Role.MANAGER : Role.PLAYER;
     const accounts = users.filter((user) => user.role === accountRole);
     const downline = users.filter((user) => user.id !== actor.id);
 
@@ -288,10 +299,10 @@ export class UsersService {
   }
 
   async auditLog(actor: Actor, query: AuditQueryDto) {
-    if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) {
-      throw new ForbiddenException("Audit logs are restricted to Super Admins and Owners");
+    if (actor.role === Role.PLAYER) {
+      throw new ForbiddenException("Audit logs are restricted to Super Admins, Owners and Managers");
     }
-    // Owners only ever see entries where they or someone in their downline is
+    // Owners and Managers only ever see entries where they or someone in their downline is
     // the actor or the target.
     const scope = await this.scopeIds(actor);
     const limit = Math.min(query.limit ?? 50, 100);
@@ -535,7 +546,7 @@ export class UsersService {
     }
 
     const isPrint = actor.role === Role.SUPER_ADMIN;
-    const requiresApproval = !isPrint && dto.amount > APPROVAL_THRESHOLD;
+    const requiresApproval = !isPrint && dto.amount > approvalThreshold(actor);
 
     if (requiresApproval) {
       const pending = await this.prisma.balanceTransaction.create({
@@ -1222,6 +1233,31 @@ export class UsersService {
     if (capacity < assigned) throw new BadRequestException(`Capacity cannot be below current player count (${assigned})`);
     const updated = await this.prisma.user.update({ where: { id }, data: { managerCapacity: capacity }, select: publicUserSelect });
     await this.audit.log({ actorId: actor.id, action: "user.manager_capacity_update", targetId: id, ipAddress, metadata: { capacity } });
+    return updated;
+  }
+
+  /**
+   * An Owner lets a trusted Manager delegate larger amounts without waiting
+   * for approval (or tightens it). Only the Manager's own Owner or Super Admin.
+   */
+  async setApprovalLimit(actor: Actor, id: string, limit: number | null, ipAddress?: string) {
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { role: true, parentId: true } });
+    if (!target) throw new NotFoundException("User not found");
+    if (target.role !== Role.MANAGER) throw new BadRequestException("Only Managers have a personal approval limit");
+    if (actor.role !== Role.SUPER_ADMIN && target.parentId !== actor.id) {
+      throw new ForbiddenException("Only this Manager's Owner or Super Admin can set their approval limit");
+    }
+    const updated = await this.prisma.user.update({ where: { id }, data: { approvalLimit: limit }, select: publicUserSelect });
+    await this.audit.log({ actorId: actor.id, action: "user.approval_limit_update", targetId: id, ipAddress, metadata: { limit } });
+    const effective = limit ?? APPROVAL_THRESHOLD;
+    await this.notifications.create({
+      userId: id,
+      type: NotificationType.ACCOUNT_UPDATED,
+      title: "Approval limit updated",
+      message: `Transfers up to $${effective.toFixed(2)} now go through without approval.`,
+      deepLink: "/dashboard/users",
+      metadata: { actorId: actor.id, limit },
+    });
     return updated;
   }
 

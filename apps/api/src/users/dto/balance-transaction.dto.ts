@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsNumber, IsString, IsPositive, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsNumber, IsString, IsPositive, Max, MaxLength, Min, MinLength, ValidateIf } from "class-validator";
 
 /** Delegate credit to a direct child (Owner→Manager, Owner→Player, Manager→Player). */
 export class DelegateCreditDto {
@@ -51,4 +51,14 @@ export class BalanceLimitDto {
   @IsPositive()
   @Max(100000000)
   limit!: number;
+}
+
+/** A Manager's personal approval limit; null goes back to the platform default. */
+export class ApprovalLimitDto {
+  @ApiProperty({ example: 25000, nullable: true, description: "Delegations up to this amount skip approval. null = platform default" })
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1000000)
+  limit!: number | null;
 }

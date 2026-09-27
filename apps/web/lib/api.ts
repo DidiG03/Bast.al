@@ -19,6 +19,8 @@ export type MeResponse = {
   balanceLimit: number | string;
   managerCapacity: number;
   commissionRate: number;
+  /** Largest delegation this account can make without approval. */
+  approvalLimit: number;
   mfaRequired: boolean;
   mfaEnabled: boolean;
   mfaSatisfied: boolean;
@@ -34,6 +36,8 @@ export type UserRow = {
   balanceLimit: number | string;
   managerCapacity: number;
   commissionRate: number;
+  /** MANAGER only: personal approval limit; null means the platform default. */
+  approvalLimit: number | string | null;
   createdAt: string;
 };
 
@@ -126,8 +130,8 @@ export type UserReport = {
 
   roleBreakdown: { OWNER: number; MANAGER: number; PLAYER: number };
   statusBreakdown: { ACTIVE: number; SUSPENDED: number };
-  /** OWNER for a Super Admin's report, MANAGER for an Owner's. */
-  accountRole: "OWNER" | "MANAGER";
+  /** OWNER for a Super Admin's report, MANAGER for an Owner's, PLAYER for a Manager's. */
+  accountRole: "OWNER" | "MANAGER" | "PLAYER";
   accounts: Array<{ id: string; username: string; status: UserRow["status"]; balance: number; commissionRate: number; directReports: number }>;
   recentAudit: Array<{
     id: string;
@@ -207,6 +211,23 @@ export type TeamCommissions = CommissionPeriod & {
   managers: Array<CommissionTotals & { id: string; username: string; status: UserRow["status"]; commissionRate: number; commission: number; players: PlayerResult[] }>;
   directPlayers: PlayerResult[];
 };
+
+export type CommissionHistory = {
+  commissionRate: number;
+  weeks: Array<CommissionTotals & { from: string; to: string; commission: number }>;
+};
+
+type BetSummary = { id: string; description: string | null; odds: number | null; stake: number; placedAt: string };
+
+export type PlayerActivity = {
+  player: { id: string; username: string; status: UserRow["status"]; balance: number; parent: { username: string; role: UserRole } | null };
+  summary: { thisWeek: CommissionTotals; last30Days: CommissionTotals; allTime: CommissionTotals };
+  open: { count: number; staked: number; bets: BetSummary[] };
+  recent: Array<BetSummary & { payout: number; status: "WON" | "LOST" | "VOID"; settledAt: string | null }>;
+};
+
+/** The platform-wide delegation size above which a second person must approve. */
+export const DEFAULT_APPROVAL_LIMIT = 10000;
 
 export type ManagerCommissions = CommissionPeriod & {
   manager: { id: string; username: string; commissionRate: number };

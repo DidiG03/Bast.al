@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { formatMoney, formatSignedMoney } from "../lib/format";
-import type { ManagerCommissions, PlayerResult, SuperAdminCommissions, TeamCommissions } from "../lib/api";
+import type { CommissionHistory, CommissionTotals, ManagerCommissions, PlayerResult, SuperAdminCommissions, TeamCommissions } from "../lib/api";
 
-function playerOutcome(player: PlayerResult): string {
+/** A Player's result in their own words: what they lost (the team's profit) or won. */
+export function playerOutcome(player: CommissionTotals): string {
   if (player.bets === 0) return "No settled bets";
   if (player.net > 0) return `Lost ${formatMoney(player.net)}`;
   if (player.net < 0) return `Won ${formatMoney(-player.net)}`;
@@ -14,11 +16,11 @@ function ofResult(rate: number, net: number): string {
   return net < 0 ? `${rate}% of a ${formatMoney(-net)} loss` : `${rate}% of ${formatMoney(net)} profit`;
 }
 
-function plural(count: number, word: string): string {
+export function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
 
-function Stat({ label, value, hint, highlight }: { label: string; value: string; hint?: string; highlight?: "good" | "bad" }) {
+export function Stat({ label, value, hint, highlight }: { label: string; value: string; hint?: string; highlight?: "good" | "bad" }) {
   return (
     <div className={`card report-stat commission-stat${highlight ? ` commission-highlight-${highlight}` : ""}`}>
       <span className="muted">{label}</span>
@@ -35,7 +37,7 @@ function PlayerList({ players }: { players: PlayerResult[] }) {
       {players.map((player) => (
         <div className="report-list-row" key={player.id}>
           <div>
-            <strong>{player.username}</strong>
+            <Link href={`/dashboard/players/${player.id}`} className="commission-player-link">{player.username}</Link>
             <span className="muted">
               {plural(player.bets, "bet")} · {formatMoney(player.staked)} staked
               {player.status === "SUSPENDED" ? " · Suspended" : ""}
@@ -174,5 +176,42 @@ export function ManagerView({ data }: { data: ManagerCommissions }) {
         <PlayerList players={data.players} />
       </section>
     </>
+  );
+}
+
+function weekLabel(from: string, to: string): string {
+  const format = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", timeZone: "UTC" });
+  const last = new Date(new Date(to).getTime() - 1);
+  return `${format.format(new Date(from))} to ${format.format(last)}`;
+}
+
+/** A Manager's earnings week by week, newest first. */
+export function ManagerHistory({ data }: { data: CommissionHistory }) {
+  const best = Math.max(...data.weeks.map((week) => Math.abs(week.commission)), 1);
+  return (
+    <section className="card stack">
+      <div className="tree-header">
+        <h2 style={{ margin: 0 }}>Week by week</h2>
+        <span className="muted">Last {data.weeks.length} weeks</span>
+      </div>
+      <div className="report-list">
+        {data.weeks.map((week, index) => (
+          <div className="report-list-row commission-week" key={week.from}>
+            <div>
+              <strong>{index === 0 ? "This week" : weekLabel(week.from, week.to)}</strong>
+              <span className="muted">
+                {week.bets === 0 ? "No settled bets" : `${plural(week.bets, "bet")} · players ${playerOutcome(week).toLowerCase()}`}
+              </span>
+              <span className="commission-week-bar" aria-hidden="true">
+                <span className={week.commission < 0 ? "is-negative" : undefined} style={{ width: `${(Math.abs(week.commission) / best) * 100}%` }} />
+              </span>
+            </div>
+            <strong className={week.commission < 0 ? "ledger-negative" : undefined}>
+              {week.commission < 0 ? `Owe ${formatMoney(-week.commission)}` : formatMoney(week.commission)}
+            </strong>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

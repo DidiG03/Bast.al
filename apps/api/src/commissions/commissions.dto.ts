@@ -1,4 +1,5 @@
-import { IsDateString, IsOptional, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import { IsDateString, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
 
 export class CommissionPeriodDto {
   @IsOptional()
@@ -15,4 +16,13 @@ export class TeamCommissionQueryDto extends CommissionPeriodDto {
   @IsOptional()
   @IsString()
   ownerId?: string;
+}
+
+export class CommissionHistoryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(26)
+  weeks?: number;
 }

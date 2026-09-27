@@ -2397,3 +2397,98 @@ td {
   padding: 0 0.9rem;
   border-left: 2px solid var(--border);
 }
+
+.commission-player-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.commission-player-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.report-list-row.commission-week > div {
+  flex: 1 1 auto;
+}
+
+.commission-week-bar {
+  display: block;
+  height: 4px;
+  max-width: 16rem;
+  margin-top: 0.3rem;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.commission-week-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.commission-week-bar > span.is-negative {
+  background: var(--danger);
+}
+
+.bet-result-won {
+  color: var(--danger);
+}
+
+.bet-result-lost {
+  color: var(--accent-strong);
+}
+
+.top-up-sheet {
+  max-width: 26rem;
+}
+
+.top-up-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.top-up-presets button {
+  min-height: 3rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-up-custom {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 0.5rem;
+}
+
+.top-up-note {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.top-up-button {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.user-actions.has-top-up {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.success-toast {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-left-color: var(--accent);
+}
+
+.approval-reset {
+  justify-self: start;
+  align-self: flex-start;
+}

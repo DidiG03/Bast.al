@@ -5,10 +5,11 @@ import { useState, type ReactNode } from "react";
 type ReportsTabsProps = {
   overview: ReactNode;
   auditLog: ReactNode;
+  commission: ReactNode;
 };
 
-export function ReportsTabs({ overview, auditLog }: ReportsTabsProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "audit">("overview");
+export function ReportsTabs({ overview, auditLog, commission }: ReportsTabsProps) {
+  const [activeTab, setActiveTab] = useState<"overview" | "audit" | "commission">("overview");
 
   return (
     <div className="stack">
@@ -29,10 +30,18 @@ export function ReportsTabs({ overview, auditLog }: ReportsTabsProps) {
         >
           Audit Log
         </button>
+        <button
+          type="button"
+          className={`tab-button ${activeTab === "commission" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("commission")}
+          aria-current={activeTab === "commission" ? "page" : undefined}
+        >
+          Commission
+        </button>
       </nav>
 
       <div className="tab-content">
-        {activeTab === "overview" ? overview : auditLog}
+        {activeTab === "overview" ? overview : activeTab === "audit" ? auditLog : commission}
       </div>
     </div>
   );

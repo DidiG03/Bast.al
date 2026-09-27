@@ -98,7 +98,7 @@ export class NotificationsService {
   }
 
   private categoryFor(type: NotificationType): NotificationCategory {
-    if (type === NotificationType.FUNDS_RECEIVED) return NotificationCategory.FINANCE;
+    if (type === NotificationType.FUNDS_RECEIVED || type === NotificationType.COMMISSION_RATE_UPDATED) return NotificationCategory.FINANCE;
     if (type === NotificationType.SUSPICIOUS_LOGIN) return NotificationCategory.SECURITY;
     if (type === NotificationType.ACCOUNT_SUSPENDED || type === NotificationType.ACCOUNT_UPDATED || type === NotificationType.ACCOUNT_REASSIGNED) return NotificationCategory.ACCOUNT;
     return NotificationCategory.SYSTEM;

@@ -56,7 +56,7 @@ export default function SecurityPage() {
         </div>
       </div>
       <section className="card stack">
-        <div className="tree-header"><h2>Active devices</h2><div className="row"><span className="muted">{data.sessions.length} sessions</span><button type="button" className="secondary" onClick={revokeOthers}>Sign out other devices</button></div></div>
+        <div className="tree-header"><h2>Active devices</h2><div className="row tree-header-actions"><span className="muted">{data.sessions.length} sessions</span><button type="button" className="secondary" onClick={revokeOthers}>Sign out other devices</button></div></div>
         {data.sessions.length === 0 ? <p className="muted">No active sessions found.</p> : data.sessions.map((session) => (
           <div className="security-row" key={session.id}>
             <div><strong>{session.status}</strong><span className="muted">Last active {new Date(session.lastActiveAt).toLocaleString()}</span></div>

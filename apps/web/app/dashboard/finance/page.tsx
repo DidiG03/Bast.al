@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
+import { formatMoney } from "../../../lib/format";
 import { apiFetch, transactionLabel, type FinancialReport, type MeResponse, type PendingApproval } from "../../../lib/api";
 
 export default function FinancePage() {
@@ -60,22 +61,22 @@ export default function FinancePage() {
   }
 
   return <div className="stack">
-    <div className="page-title-row"><div><h1 style={{ margin: 0 }}>Financial reporting</h1><p className="muted">Credit delegated to and reclaimed from your direct reports by date range. Net-revenue and commission reporting arrive once betting is live.</p></div></div>
+    <div className="page-title-row"><div><h1 style={{ margin: 0 }}>Financial reporting</h1><p className="muted report-subtitle">Credit delegated to and reclaimed from your direct reports by date range. Net-revenue and commission reporting arrive once betting is live.</p></div></div>
     {canApprove ? <section className="card stack">
       <div className="tree-header"><h2 style={{ margin: 0 }}>Waiting for your approval</h2><span className="muted">{pending.length} pending</span></div>
       {pending.length === 0 ? <p className="muted" style={{ margin: 0 }}>Nothing to approve. Delegations over $10,000 from your team land here.</p> : <div className="report-list">
-        {pending.map((entry) => <div className="report-list-row" key={entry.id}>
-          <div><strong>{transactionLabel(entry.type)} of ${entry.amount.toFixed(2)}</strong><span className="muted">{entry.actor?.username ?? "Unknown"} → {entry.toUser.username} · {entry.reason}</span><Link href={`/dashboard/finance/transaction/${entry.id}`}>View details</Link></div>
-          <div className="row"><button type="button" className="secondary" onClick={() => decide(entry.id, true)} disabled={busy}>Approve</button><button type="button" className="danger-button" onClick={() => decide(entry.id, false)} disabled={busy}>Reject</button></div>
+        {pending.map((entry) => <div className="report-list-row approval-row" key={entry.id}>
+          <div><strong>{transactionLabel(entry.type)} of {formatMoney(entry.amount)}</strong><span className="muted">{entry.actor?.username ?? "Unknown"} → {entry.toUser.username} · {entry.reason}</span><Link href={`/dashboard/finance/transaction/${entry.id}`}>View details</Link></div>
+          <div className="row approval-actions"><button type="button" className="secondary" onClick={() => decide(entry.id, true)} disabled={busy}>Approve</button><button type="button" className="danger-button" onClick={() => decide(entry.id, false)} disabled={busy}>Reject</button></div>
         </div>)}
       </div>}
     </section> : null}
-    <form className="card row" onSubmit={(event) => { event.preventDefault(); load().catch(() => undefined); }}>
+    <form className="card filter-bar" onSubmit={(event) => { event.preventDefault(); load().catch(() => undefined); }}>
       <label>From<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
       <label>To<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-      <button type="submit">Apply</button><button type="button" className="secondary" onClick={exportCsv}>Export CSV</button>
+      <div className="filter-bar-actions"><button type="submit">Apply</button><button type="button" className="secondary" onClick={exportCsv}>Export CSV</button></div>
     </form>
     {error ? <p className="error-text">{error}</p> : null}
-    <section className="card report-list">{report?.recipients.length ? report.recipients.map((row) => <div className="report-list-row" key={row.userId}><div><strong>{row.username}</strong><span className="muted">{row.role} · ${row.totalDelegated.toFixed(2)} delegated · ${row.totalReclaimed.toFixed(2)} reclaimed</span></div><strong>${row.net.toFixed(2)}</strong></div>) : <p className="muted">No delegations in this period.</p>}</section>
+    <section className="card report-list">{report?.recipients.length ? report.recipients.map((row) => <div className="report-list-row" key={row.userId}><div><strong>{row.username}</strong><span className="muted">{row.role} · {formatMoney(row.totalDelegated)} delegated · {formatMoney(row.totalReclaimed)} reclaimed</span></div><strong>{formatMoney(row.net)}</strong></div>) : <p className="muted">No delegations in this period.</p>}</section>
   </div>;
 }

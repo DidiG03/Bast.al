@@ -22,9 +22,12 @@ export default async function TwoFactorPage() {
   }
 
   return (
-    <main className="stack" style={{ alignItems: "center", paddingTop: "2rem" }}>
-      <div className="brand">Bast.al</div>
-      <div className="card stack" style={{ maxWidth: 720, width: "100%" }}>
+    <main className="auth-page">
+      <div className="auth-brand">
+        <span className="sidebar-logo" aria-hidden="true">B</span>
+        <span className="brand">Bast.al</span>
+      </div>
+      <div className="card stack auth-card auth-card-wide">
         <h1 style={{ margin: 0 }}>Two-factor authentication required</h1>
         <p className="muted" style={{ margin: 0 }}>
           Role <strong>{me.role}</strong> must enable TOTP before accessing the dashboard. Use the

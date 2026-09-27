@@ -3,12 +3,17 @@ import { ThemeToggle } from "../../../components/theme-toggle";
 
 export default function SignInPage() {
   return (
-    <main className="stack" style={{ alignItems: "center", paddingTop: "4rem" }}>
-      <div className="brand">Bast.al</div>
-      <p className="muted" style={{ marginTop: 0 }}>
+    <main className="auth-page">
+      <div className="auth-toolbar">
+        <ThemeToggle />
+      </div>
+      <div className="auth-brand">
+        <span className="sidebar-logo" aria-hidden="true">B</span>
+        <span className="brand">Bast.al</span>
+      </div>
+      <p className="muted auth-intro">
         Sign in with your provisioned account. Public registration is disabled.
       </p>
-      <ThemeToggle />
       <SignInForm />
     </main>
   );

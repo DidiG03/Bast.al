@@ -55,6 +55,13 @@ export function NotificationCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   async function openPreferences() {
     const token = await getToken();
     if (!token) return;
@@ -111,7 +118,11 @@ export function NotificationCenter() {
   }
 
   function deepLink(item: NotificationItem) {
-    if (item.metadata && typeof item.metadata === "object" && "deepLink" in item.metadata && typeof item.metadata.deepLink === "string") router.push(item.metadata.deepLink);
+    if (item.metadata && typeof item.metadata === "object" && "deepLink" in item.metadata && typeof item.metadata.deepLink === "string") {
+      router.push(item.metadata.deepLink);
+      return true;
+    }
+    return false;
   }
 
   return (
@@ -121,18 +132,19 @@ export function NotificationCenter() {
         {unreadCount > 0 ? <span className="notification-badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
         <span className="notification-trigger-label">Notifications</span>
       </button>
+      {open ? <button type="button" className="notification-backdrop" aria-label="Close notifications" tabIndex={-1} onClick={() => setOpen(false)} /> : null}
       {open ? (
         <section className="notification-panel card" aria-label="Notification center">
           <div className="notification-panel-header">
             <strong>Notifications</strong>
-            <span><button type="button" className="text-button" onClick={openPreferences}>Preferences</button><button type="button" className="text-button" onClick={markAllRead} disabled={unreadCount === 0}>Mark all read</button></span>
+            <span className="notification-panel-actions"><button type="button" className="text-button" onClick={openPreferences}>Preferences</button><button type="button" className="text-button" onClick={markAllRead} disabled={unreadCount === 0}>Mark all read</button></span>
           </div>
           {error ? <p className="notification-error">{error}</p> : null}
           <div className="notification-list">
             {items.length === 0 ? <p className="muted notification-empty">You’re all caught up.</p> : items.map((item) => (
               <div key={item.id} className={`notification-item${item.readAt ? "" : " is-unread"} notification-severity-${item.severity.toLowerCase()}`}>
                 <span className="notification-item-dot" />
-                <button type="button" className="notification-item-content" onClick={() => { deepLink(item); if (!item.readAt) markRead(item.id); }}><span><strong>{item.title}</strong><span>{item.message}</span><small>{item.category} · {item.severity}</small><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></span></button>
+                <button type="button" className="notification-item-content" onClick={() => { if (!item.readAt) markRead(item.id); if (deepLink(item)) setOpen(false); }}><span><strong>{item.title}</strong><span>{item.message}</span><small>{item.category} · {item.severity}</small><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></span></button>
                 <span className="notification-item-actions"><button type="button" onClick={() => archive(item.id)}>Archive</button><button type="button" onClick={() => remove(item.id)}>Delete</button></span>
               </div>
             ))}

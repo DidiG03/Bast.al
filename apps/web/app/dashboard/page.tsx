@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { apiFetch, type MeResponse, type UserRow } from "../../lib/api";
+import { formatMoney } from "../../lib/format";
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
@@ -10,10 +11,6 @@ function StatTile({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
-}
-
-function money(value: number) {
-  return `$${value.toFixed(2)}`;
 }
 
 export default async function DashboardPage() {
@@ -56,7 +53,7 @@ async function SuperAdminOverview({ token }: { token: string }) {
         <StatTile label="Owners" value={String(owners)} />
         <StatTile label="Managers" value={String(managers)} />
         <StatTile label="Players" value={String(players)} />
-        <StatTile label="Balance in circulation" value={money(totalBalance)} />
+        <StatTile label="Balance in circulation" value={formatMoney(totalBalance)} />
       </div>
       <p className="muted" style={{ margin: 0 }}>
         Set each Owner&apos;s commission rate from the <Link href="/dashboard/users">Users</Link> page.
@@ -82,8 +79,8 @@ async function OwnerOverview({ token, me }: { token: string; me: MeResponse }) {
       <div className="report-grid">
         <StatTile label="Managers" value={String(managers)} />
         <StatTile label="Players" value={String(players)} />
-        <StatTile label="Your balance" value={money(Number(me.balance))} />
-        <StatTile label="Delegated to your team" value={money(teamBalance)} />
+        <StatTile label="Your balance" value={formatMoney(Number(me.balance))} />
+        <StatTile label="Delegated to your team" value={formatMoney(teamBalance)} />
       </div>
       <div className="card stack">
         <span className="muted">Commission rate Super Admin set for you</span>
@@ -105,8 +102,8 @@ function ManagerOverview({ me }: { me: MeResponse }) {
         <Link href="/dashboard/users">View your Players →</Link>
       </div>
       <div className="report-grid">
-        <StatTile label="Balance" value={money(Number(me.balance))} />
-        <StatTile label="Balance limit" value={money(Number(me.balanceLimit))} />
+        <StatTile label="Balance" value={formatMoney(Number(me.balance))} />
+        <StatTile label="Balance limit" value={formatMoney(Number(me.balanceLimit))} />
         <StatTile label="Commission rate" value={`${Number(me.commissionRate)}%`} />
       </div>
       <p className="muted" style={{ margin: 0 }}>
@@ -123,7 +120,7 @@ function PlayerOverview({ me }: { me: MeResponse }) {
       <div className="card stack">
         <h2 style={{ margin: 0 }}>Your account</h2>
         <p style={{ margin: 0 }}>
-          Balance: <strong>{money(Number(me.balance))}</strong> · Status: <strong>{me.status}</strong>
+          Balance: <strong>{formatMoney(Number(me.balance))}</strong> · Status: <strong>{me.status}</strong>
         </p>
         <p style={{ margin: 0 }}>
           {me.parent ? (

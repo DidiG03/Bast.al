@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardSidebar } from "../../components/dashboard-sidebar";
 import { NotificationCenter } from "../../components/notification-center";
@@ -57,9 +58,13 @@ export default async function DashboardLayout({
     <div className="dashboard-shell">
       <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} username={me.username} initialCollapsed={initialCollapsed} />
       <main className="dashboard-content">
-        <div className="dashboard-topbar">
+        <header className="dashboard-topbar">
+          <Link href="/dashboard" className="topbar-brand">
+            <span className="sidebar-logo" aria-hidden="true">B</span>
+            <span>Bast.al</span>
+          </Link>
           <NotificationCenter />
-        </div>
+        </header>
         {children}
       </main>
     </div>

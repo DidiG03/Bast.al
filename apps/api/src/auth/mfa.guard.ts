@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AuditService } from "../audit/audit.service";
+import { clientIp } from "../security/client-ip";
 import { AuthenticatedRequest } from "./auth.guard";
 import { ClerkService } from "./clerk.service";
 import { roleRequiresMfa } from "./permissions";
@@ -36,19 +37,11 @@ export class MfaGuard implements CanActivate {
       await this.audit.log({
         actorId: actor.id,
         action: "authz.failure",
-        ipAddress: this.clientIp(request),
+        ipAddress: clientIp(request),
         metadata: { reason: "mfa_required" },
       });
       throw new ForbiddenException("Two-factor authentication is required for this role");
     }
     return true;
-  }
-
-  private clientIp(request: AuthenticatedRequest): string | undefined {
-    const forwarded = request.headers["x-forwarded-for"];
-    if (typeof forwarded === "string" && forwarded.length > 0) {
-      return forwarded.split(",")[0]?.trim();
-    }
-    return request.ip;
   }
 }

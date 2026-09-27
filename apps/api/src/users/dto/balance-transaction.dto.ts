@@ -1,19 +1,30 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { BalanceTransactionType } from "@prisma/client";
-import { IsEnum, IsNumber, IsString, IsPositive, Max, MaxLength, MinLength } from "class-validator";
+import { IsNumber, IsString, IsPositive, Max, MaxLength, Min, MinLength } from "class-validator";
 
-export class BalanceTransactionDto {
-  @ApiProperty({ enum: BalanceTransactionType })
-  @IsEnum(BalanceTransactionType)
-  type!: BalanceTransactionType;
-
-  @ApiProperty({ example: 100 })
+/** Delegate credit to a direct child (Owner→Manager, Owner→Player, Manager→Player). */
+export class DelegateCreditDto {
+  @ApiProperty({ example: 100, description: "Amount to move from the caller's own balance to the target's" })
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   @Max(1000000)
   amount!: number;
 
-  @ApiProperty({ example: "Monthly account funding" })
+  @ApiProperty({ example: "Weekly float" })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(240)
+  reason!: string;
+}
+
+/** Super-Admin-only correction with no counterparty; amount may be negative. */
+export class AdjustBalanceDto {
+  @ApiProperty({ example: -50, description: "Signed amount to apply directly to the target's balance" })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(-1000000)
+  @Max(1000000)
+  amount!: number;
+
+  @ApiProperty({ example: "Correcting a data-entry error" })
   @IsString()
   @MinLength(3)
   @MaxLength(240)

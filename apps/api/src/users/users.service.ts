@@ -8,11 +8,11 @@ import {
 import { BalanceTransactionStatus, BalanceTransactionType, NotificationType, Role, UserStatus } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { ClerkService } from "../auth/clerk.service";
-import { Actor, canCreateRole, roleRequiresMfa } from "../auth/permissions";
+import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/permissions";
 import { FieldEncryptionService } from "../crypto/field-encryption.service";
 import { PrismaService } from "../prisma.service";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { BalanceTransactionDto } from "./dto/balance-transaction.dto";
+import { AdjustBalanceDto, DelegateCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { HierarchyService } from "./hierarchy.service";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -28,11 +28,17 @@ const publicUserSelect = {
   balance: true,
   balanceLimit: true,
   managerCapacity: true,
+  commissionRate: true,
   createdAt: true,
 } as const;
 
 function privateEmailFor(username: string): string {
   return `${username.toLowerCase()}@users.bast.internal`;
+}
+
+/** Roles that hold direct Players/Managers and so need a delegation capacity. */
+function holdsDirectReports(role: Role): boolean {
+  return role === Role.OWNER || role === Role.MANAGER;
 }
 
 @Injectable()
@@ -64,6 +70,7 @@ export class UsersService {
       parentId: actor.parentId,
       status: actor.status,
       balance: Number(actor.balance),
+      commissionRate: Number(actor.commissionRate),
       mfaRequired,
       mfaEnabled,
       mfaSatisfied: !mfaRequired || mfaEnabled,
@@ -174,7 +181,7 @@ export class UsersService {
       ACTIVE: users.filter((user) => user.status === UserStatus.ACTIVE).length,
       SUSPENDED: users.filter((user) => user.status === UserStatus.SUSPENDED).length,
     };
-    const managers = users.filter((user) => user.role === Role.MANAGER);
+    const owners = users.filter((user) => user.role === Role.OWNER);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -185,32 +192,53 @@ export class UsersService {
         players: roleBreakdown.PLAYER,
         active: statusBreakdown.ACTIVE,
         suspended: statusBreakdown.SUSPENDED,
-        managerBalances: managers.reduce((total, manager) => total + Number(manager.balance), 0),
+        totalBalance: users.reduce((total, user) => total + Number(user.balance), 0),
       },
       roleBreakdown,
       statusBreakdown,
-      managers: managers.map((manager) => ({
-        id: manager.id,
-        username: manager.username,
-        status: manager.status,
-        balance: Number(manager.balance),
-        players: users.filter((user) => user.parentId === manager.id).length,
+      owners: owners.map((owner) => ({
+        id: owner.id,
+        username: owner.username,
+        status: owner.status,
+        balance: Number(owner.balance),
+        commissionRate: Number(owner.commissionRate),
+        directReports: users.filter((user) => user.parentId === owner.id).length,
       })),
       recentAudit,
     };
   }
 
-  async commission(actor: Actor) {
-    if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Commission settings are restricted to Super Admins");
-    const setting = await this.prisma.commissionSetting.upsert({ where: { id: "default" }, create: {}, update: {} });
-    return { percentage: Number(setting.percentage), updatedAt: setting.updatedAt };
+  /** An Owner's own commission rate (Super Admin's cut) or a Manager's (their Owner's cut to them). */
+  async commissionRate(actor: Actor, id: string) {
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, parentId: true, commissionRate: true } });
+    if (!target) throw new NotFoundException("User not found");
+    if (target.role !== Role.OWNER && target.role !== Role.MANAGER) {
+      throw new BadRequestException("Only Owners and Managers have a commission rate");
+    }
+    if (!(await this.canManageCommissionRate(actor, target))) {
+      throw new ForbiddenException("You cannot view this commission rate");
+    }
+    return { rate: Number(target.commissionRate) };
   }
 
-  async updateCommission(actor: Actor, percentage: number, ipAddress?: string) {
-    if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Commission settings are restricted to Super Admins");
-    const setting = await this.prisma.commissionSetting.upsert({ where: { id: "default" }, create: { percentage }, update: { percentage } });
-    await this.audit.log({ actorId: actor.id, action: "commission.settings_update", ipAddress, metadata: { percentage } });
-    return { percentage: Number(setting.percentage), updatedAt: setting.updatedAt };
+  async setCommissionRate(actor: Actor, id: string, rate: number, ipAddress?: string) {
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, parentId: true } });
+    if (!target) throw new NotFoundException("User not found");
+    if (target.role !== Role.OWNER && target.role !== Role.MANAGER) {
+      throw new BadRequestException("Only Owners and Managers have a commission rate");
+    }
+    if (!(await this.canManageCommissionRate(actor, target))) {
+      throw new ForbiddenException("You cannot set this commission rate");
+    }
+    const updated = await this.prisma.user.update({ where: { id }, data: { commissionRate: rate }, select: publicUserSelect });
+    await this.audit.log({ actorId: actor.id, action: "user.commission_rate_update", targetId: id, ipAddress, metadata: { rate } });
+    return updated;
+  }
+
+  /** Only the target's own direct parent (whoever set them up in the hierarchy) may manage their rate. */
+  private async canManageCommissionRate(actor: Actor, target: { role: Role; parentId: string | null }): Promise<boolean> {
+    if (actor.role === Role.SUPER_ADMIN) return true;
+    return target.parentId === actor.id;
   }
 
   async auditLog(actor: Actor, query: AuditQueryDto) {
@@ -399,91 +427,179 @@ export class UsersService {
     return target;
   }
 
+  /** Every credit this account has received or given — the full history behind its current balance. */
   async balanceLedger(actor: Actor, id: string) {
     const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
     if (!target) throw new NotFoundException("User not found");
-    if (target.role !== Role.MANAGER) throw new BadRequestException("Only Manager accounts have a balance ledger");
+    if (target.role === Role.SUPER_ADMIN) throw new BadRequestException("Super Admin accounts do not hold a balance");
     if (!(await this.hierarchy.canActOn(actor, id))) {
       throw new ForbiddenException("Target is outside your hierarchy subtree");
     }
-    return this.prisma.balanceTransaction.findMany({
-      where: { managerId: id },
+    const entries = await this.prisma.balanceTransaction.findMany({
+      where: { OR: [{ toUserId: id }, { fromUserId: id }] },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
         type: true,
-        amount: true, status: true, approvedAt: true,
+        amount: true,
+        status: true,
+        approvedAt: true,
         reason: true,
         createdAt: true,
+        fromUserId: true,
+        toUserId: true,
+        fromUser: { select: { username: true } },
+        toUser: { select: { username: true } },
         actor: { select: { username: true } },
       },
-    }).then((entries) => entries.map((entry) => ({ ...entry, amount: Number(entry.amount) })));
+    });
+    return entries.map((entry) => ({
+      ...entry,
+      // Signed from this account's point of view: received = positive, given away = negative.
+      amount: entry.toUserId === id ? Number(entry.amount) : -Number(entry.amount),
+      counterparty: entry.toUserId === id ? entry.fromUser?.username ?? "Platform" : entry.toUser.username,
+    }));
   }
 
-  async chargeBalance(actor: Actor, id: string, dto: BalanceTransactionDto, ipAddress?: string) {
+  /** Give credit to a direct child: Owner→Manager, Owner→Player, or Manager→Player. Super Admin→Owner prints (no source deduction). */
+  async delegateCredit(actor: Actor, id: string, dto: DelegateCreditDto, ipAddress?: string) {
     const target = await this.prisma.user.findUnique({ where: { id } });
     if (!target) throw new NotFoundException("User not found");
-    if (target.role !== Role.MANAGER) {
-      throw new BadRequestException("Only Manager accounts can be charged");
+    if (!canDelegateTo(actor, target)) {
+      throw new ForbiddenException("You may only delegate credit to a direct report");
     }
-    if (!(await this.hierarchy.canActOn(actor, id))) {
-      throw new ForbiddenException("Target is outside your hierarchy subtree");
+    if (target.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException("Cannot delegate credit to a suspended account");
     }
 
-    const delta = dto.type === BalanceTransactionType.CREDIT || dto.type === BalanceTransactionType.ADJUSTMENT
-      ? dto.amount
-      : -dto.amount;
-    const requiresApproval = dto.amount > 10000 || dto.type === BalanceTransactionType.ADJUSTMENT || dto.type === BalanceTransactionType.REVERSAL;
+    const isPrint = actor.role === Role.SUPER_ADMIN;
+    const requiresApproval = dto.amount > 10000;
+
     if (requiresApproval) {
       const pending = await this.prisma.balanceTransaction.create({
-        data: { managerId: id, actorId: actor.id, type: dto.type, amount: dto.amount, reason: dto.reason, status: BalanceTransactionStatus.PENDING },
+        data: {
+          fromUserId: isPrint ? null : actor.id,
+          toUserId: id,
+          actorId: actor.id,
+          type: BalanceTransactionType.DELEGATION,
+          amount: dto.amount,
+          reason: dto.reason,
+          status: BalanceTransactionStatus.PENDING,
+        },
         select: { id: true, status: true, amount: true, type: true, reason: true, createdAt: true },
       });
-      await this.audit.log({ actorId: actor.id, action: "user.balance_pending", targetId: id, ipAddress, metadata: { transactionId: pending.id, amount: dto.amount, type: dto.type } });
+      await this.audit.log({ actorId: actor.id, action: "user.delegation_pending", targetId: id, ipAddress, metadata: { transactionId: pending.id, amount: dto.amount } });
       return { ...pending, amount: Number(pending.amount), requiresApproval: true };
     }
+
     const updated = await this.prisma.$transaction(async (tx) => {
-      const current = await tx.user.findUnique({ where: { id }, select: { balance: true } });
-      if (!current) throw new NotFoundException("User not found");
-      if (Number(current.balance) + delta < 0) {
-        throw new BadRequestException("Transaction would make the balance negative");
+      if (!isPrint) {
+        // Real transfer: the giver must currently hold at least this much.
+        // Guarded atomic UPDATE — see delegateCreditGuardedUpdate note below.
+        const giverRows = await tx.$queryRaw<{ id: string }[]>`
+          UPDATE users
+          SET balance = balance - ${dto.amount}::numeric
+          WHERE id = ${actor.id} AND balance - ${dto.amount}::numeric >= 0
+          RETURNING id
+        `;
+        if (giverRows.length === 0) {
+          throw new BadRequestException("You do not have enough balance to delegate this amount");
+        }
       }
-      const manager = await tx.user.findUnique({ where: { id }, select: { balanceLimit: true } });
-      if (manager && Number(current.balance) + delta > Number(manager.balanceLimit)) {
-        throw new BadRequestException("Transaction would exceed the Manager balance limit");
+
+      const receiverRows = await tx.$queryRaw<{ id: string }[]>`
+        UPDATE users
+        SET balance = balance + ${dto.amount}::numeric
+        WHERE id = ${id} AND balance + ${dto.amount}::numeric <= balance_limit
+        RETURNING id
+      `;
+      if (receiverRows.length === 0) {
+        // Throwing here rolls back the giver's decrement above too — the whole
+        // transfer is all-or-nothing.
+        throw new BadRequestException("This would exceed the recipient's balance limit");
       }
+
       await tx.balanceTransaction.create({
-        data: { managerId: id, actorId: actor.id, type: dto.type, amount: dto.amount, reason: dto.reason },
+        data: {
+          fromUserId: isPrint ? null : actor.id,
+          toUserId: id,
+          actorId: actor.id,
+          type: BalanceTransactionType.DELEGATION,
+          amount: dto.amount,
+          reason: dto.reason,
+        },
       });
-      return tx.user.update({
-        where: { id },
-        data: { balance: { increment: delta } },
-        select: publicUserSelect,
-      });
+      return tx.user.findUniqueOrThrow({ where: { id }, select: publicUserSelect });
     });
+
     await this.audit.log({
       actorId: actor.id,
-      action: "user.balance_charge",
+      action: "user.delegate_credit",
       targetId: id,
       ipAddress,
-      metadata: { amount: dto.amount, type: dto.type, reason: dto.reason },
+      metadata: { amount: dto.amount, reason: dto.reason },
     });
     await this.notifications.create({
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
-      title: "Funds added to your balance",
-      message: `${dto.type === BalanceTransactionType.DEBIT || dto.type === BalanceTransactionType.REVERSAL ? "A debit was recorded" : "You received funds"}: $${dto.amount.toFixed(2)}.`,
+      title: "Credit received",
+      message: `You received $${dto.amount.toFixed(2)} from ${actor.username}.`,
       deepLink: "/dashboard/finance",
-      metadata: { amount: dto.amount, transactionType: dto.type, actorId: actor.id },
+      metadata: { amount: dto.amount, actorId: actor.id },
+    });
+    return updated;
+  }
+
+  /** Super-Admin-only correction with no counterparty; amount may be negative. */
+  async adjustBalance(actor: Actor, id: string, dto: AdjustBalanceDto, ipAddress?: string) {
+    if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Only Super Admin may adjust a balance directly");
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { role: true } });
+    if (!target) throw new NotFoundException("User not found");
+    if (target.role === Role.SUPER_ADMIN) throw new BadRequestException("Super Admin accounts do not hold a balance");
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<{ id: string }[]>`
+        UPDATE users
+        SET balance = balance + ${dto.amount}::numeric
+        WHERE id = ${id}
+          AND balance + ${dto.amount}::numeric >= 0
+          AND balance + ${dto.amount}::numeric <= balance_limit
+        RETURNING id
+      `;
+      if (rows.length === 0) {
+        throw new BadRequestException("This adjustment would take the balance out of bounds");
+      }
+      await tx.balanceTransaction.create({
+        data: {
+          fromUserId: null,
+          toUserId: id,
+          actorId: actor.id,
+          type: BalanceTransactionType.ADJUSTMENT,
+          amount: dto.amount,
+          reason: dto.reason,
+        },
+      });
+      return tx.user.findUniqueOrThrow({ where: { id }, select: publicUserSelect });
+    });
+
+    await this.audit.log({ actorId: actor.id, action: "user.balance_adjustment", targetId: id, ipAddress, metadata: { amount: dto.amount, reason: dto.reason } });
+    await this.notifications.create({
+      userId: id,
+      type: NotificationType.FUNDS_RECEIVED,
+      title: "Balance adjusted",
+      message: `An administrative adjustment of $${dto.amount.toFixed(2)} was applied to your balance.`,
+      deepLink: "/dashboard/finance",
+      metadata: { amount: dto.amount, actorId: actor.id },
     });
     return updated;
   }
 
   async setBalanceLimit(actor: Actor, id: string, limit: number, ipAddress?: string) {
-    const target = await this.prisma.user.findUnique({ where: { id }, select: { role: true } });
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { role: true, parentId: true } });
     if (!target) throw new NotFoundException("User not found");
-    if (target.role !== Role.MANAGER || actor.role === Role.MANAGER || !(await this.hierarchy.canActOn(actor, id))) {
-      throw new ForbiddenException("Only authorized Owners or Super Admins can set Manager limits");
+    if (target.role === Role.SUPER_ADMIN) throw new BadRequestException("Super Admin accounts do not hold a balance");
+    if (actor.role !== Role.SUPER_ADMIN && target.parentId !== actor.id) {
+      throw new ForbiddenException("Only this account's direct parent or Super Admin can set its balance limit");
     }
     const updated = await this.prisma.user.update({ where: { id }, data: { balanceLimit: limit }, select: publicUserSelect });
     await this.audit.log({ actorId: actor.id, action: "user.balance_limit_update", targetId: id, ipAddress, metadata: { limit } });
@@ -495,47 +611,124 @@ export class UsersService {
     if (!transaction) throw new NotFoundException("Transaction not found");
     if (transaction.status !== BalanceTransactionStatus.PENDING) throw new BadRequestException("Transaction is no longer pending");
     if (transaction.actorId === actor.id) throw new ForbiddenException("A second authorized person must approve this transaction");
-    if (!(await this.hierarchy.canActOn(actor, transaction.managerId))) throw new ForbiddenException("Transaction is outside your hierarchy subtree");
+    if (!(await this.hierarchy.canActOn(actor, transaction.toUserId))) throw new ForbiddenException("Transaction is outside your hierarchy subtree");
+
     if (!approve) {
-      const rejected = await this.prisma.balanceTransaction.update({ where: { id: transactionId }, data: { status: BalanceTransactionStatus.REJECTED }, select: { id: true, status: true } });
-      await this.audit.log({ actorId: actor.id, action: "user.balance_rejected", targetId: transaction.managerId, ipAddress, metadata: { transactionId } });
+      // Guarded by status=PENDING so two concurrent approve/reject calls on the
+      // same transaction can't both apply: only the first claims the row.
+      const rejected = await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.balanceTransaction.updateMany({
+          where: { id: transactionId, status: BalanceTransactionStatus.PENDING },
+          data: { status: BalanceTransactionStatus.REJECTED },
+        });
+        if (claimed.count === 0) throw new BadRequestException("Transaction is no longer pending");
+        return tx.balanceTransaction.findUniqueOrThrow({ where: { id: transactionId }, select: { id: true, status: true } });
+      });
+      await this.audit.log({ actorId: actor.id, action: "user.balance_rejected", targetId: transaction.toUserId, ipAddress, metadata: { transactionId } });
       return rejected;
     }
-    const delta = transaction.type === BalanceTransactionType.CREDIT || transaction.type === BalanceTransactionType.ADJUSTMENT ? Number(transaction.amount) : -Number(transaction.amount);
+
+    const amount = Number(transaction.amount);
     const result = await this.prisma.$transaction(async (tx) => {
-      const manager = await tx.user.findUnique({ where: { id: transaction.managerId }, select: { balance: true, balanceLimit: true } });
-      if (!manager || Number(manager.balance) + delta < 0) throw new BadRequestException("Approved transaction would create an invalid balance");
-      if (Number(manager.balance) + delta > Number(manager.balanceLimit)) throw new BadRequestException("Approved transaction exceeds the Manager balance limit");
-      await tx.user.update({ where: { id: transaction.managerId }, data: { balance: { increment: delta } } });
-      return tx.balanceTransaction.update({ where: { id: transactionId }, data: { status: BalanceTransactionStatus.APPROVED, approvedById: actor.id, approvedAt: new Date() }, select: { id: true, status: true, amount: true } });
+      // Claim the pending transaction first: if a concurrent request already
+      // approved/rejected it, this affects zero rows and we bail before ever
+      // touching a balance.
+      const claimed = await tx.balanceTransaction.updateMany({
+        where: { id: transactionId, status: BalanceTransactionStatus.PENDING },
+        data: { status: BalanceTransactionStatus.APPROVED, approvedById: actor.id, approvedAt: new Date() },
+      });
+      if (claimed.count === 0) throw new BadRequestException("Transaction is no longer pending");
+
+      if (transaction.fromUserId) {
+        const giverRows = await tx.$queryRaw<{ id: string }[]>`
+          UPDATE users
+          SET balance = balance - ${amount}::numeric
+          WHERE id = ${transaction.fromUserId} AND balance - ${amount}::numeric >= 0
+          RETURNING id
+        `;
+        if (giverRows.length === 0) {
+          throw new BadRequestException("The delegating account no longer has enough balance for this transfer");
+        }
+      }
+
+      const receiverRows = await tx.$queryRaw<{ id: string }[]>`
+        UPDATE users
+        SET balance = balance + ${amount}::numeric
+        WHERE id = ${transaction.toUserId} AND balance + ${amount}::numeric <= balance_limit
+        RETURNING id
+      `;
+      if (receiverRows.length === 0) {
+        throw new BadRequestException("Approved transaction would exceed the recipient's balance limit");
+      }
+
+      return tx.balanceTransaction.findUniqueOrThrow({ where: { id: transactionId }, select: { id: true, status: true, amount: true } });
     });
-    await this.audit.log({ actorId: actor.id, action: "user.balance_approved", targetId: transaction.managerId, ipAddress, metadata: { transactionId } });
-    await this.notifications.create({ userId: transaction.managerId, type: NotificationType.FUNDS_RECEIVED, title: "Transaction approved", message: `A $${Number(transaction.amount).toFixed(2)} transaction was approved.`, deepLink: `/dashboard/finance/transaction/${transactionId}`, metadata: { transactionId } });
+    await this.audit.log({ actorId: actor.id, action: "user.balance_approved", targetId: transaction.toUserId, ipAddress, metadata: { transactionId } });
+    await this.notifications.create({ userId: transaction.toUserId, type: NotificationType.FUNDS_RECEIVED, title: "Transaction approved", message: `A $${Number(transaction.amount).toFixed(2)} transaction was approved.`, deepLink: `/dashboard/finance/transaction/${transactionId}`, metadata: { transactionId } });
     return { ...result, amount: Number(result.amount) };
   }
 
   async transactionDetails(actor: Actor, id: string) {
-    const entry = await this.prisma.balanceTransaction.findUnique({ where: { id }, include: { manager: { select: { id: true, username: true } }, actor: { select: { id: true, username: true } }, approvedBy: { select: { id: true, username: true } } } });
+    const entry = await this.prisma.balanceTransaction.findUnique({
+      where: { id },
+      include: {
+        toUser: { select: { id: true, username: true } },
+        fromUser: { select: { id: true, username: true } },
+        actor: { select: { id: true, username: true } },
+        approvedBy: { select: { id: true, username: true } },
+      },
+    });
     if (!entry) throw new NotFoundException("Transaction not found");
-    if (!(await this.hierarchy.canActOn(actor, entry.managerId))) throw new ForbiddenException("Transaction is outside your hierarchy subtree");
+    const allowed = (await this.hierarchy.canActOn(actor, entry.toUserId))
+      || (entry.fromUserId ? await this.hierarchy.canActOn(actor, entry.fromUserId) : false);
+    if (!allowed) throw new ForbiddenException("Transaction is outside your hierarchy subtree");
     return { ...entry, amount: Number(entry.amount) };
   }
 
   async balanceStatement(actor: Actor, id: string, from?: string, to?: string) {
     const target = await this.prisma.user.findUnique({ where: { id }, select: { role: true, username: true, balance: true } });
-    if (!target || target.role !== Role.MANAGER) throw new NotFoundException("Manager not found");
-    if (!(await this.hierarchy.canActOn(actor, id))) throw new ForbiddenException("Manager is outside your hierarchy subtree");
-    const entries = await this.prisma.balanceTransaction.findMany({ where: { managerId: id, status: BalanceTransactionStatus.APPROVED, ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) }, orderBy: { createdAt: "asc" }, select: { id: true, type: true, amount: true, reason: true, createdAt: true, actor: { select: { username: true } } } });
-    return { manager: target, from: from ?? null, to: to ?? null, entries: entries.map((entry) => ({ ...entry, amount: Number(entry.amount) })) };
+    if (!target || target.role === Role.SUPER_ADMIN) throw new NotFoundException("User not found");
+    if (!(await this.hierarchy.canActOn(actor, id))) throw new ForbiddenException("Target is outside your hierarchy subtree");
+    const entries = await this.prisma.balanceTransaction.findMany({
+      where: {
+        toUserId: id,
+        status: BalanceTransactionStatus.APPROVED,
+        ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, type: true, amount: true, reason: true, createdAt: true, fromUser: { select: { username: true } } },
+    });
+    return {
+      account: target,
+      from: from ?? null,
+      to: to ?? null,
+      entries: entries.map((entry) => ({ ...entry, amount: Number(entry.amount), actor: entry.fromUser ? { username: entry.fromUser.username } : { username: "Platform" } })),
+    };
   }
 
+  /**
+   * Delegation totals: how much this user has given to each of their direct
+   * children in the period. Net revenue / commission reporting is deferred
+   * until settled bets exist to compute it from.
+   */
   async financialReport(actor: Actor, from?: string, to?: string) {
     if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) throw new ForbiddenException("Financial reports are restricted");
-    const managerIds = actor.role === Role.SUPER_ADMIN ? (await this.prisma.user.findMany({ where: { role: Role.MANAGER }, select: { id: true } })).map((u) => u.id) : await this.hierarchy.getDescendantIds(actor.id);
-    const entries = await this.prisma.balanceTransaction.findMany({ where: { managerId: { in: managerIds }, status: BalanceTransactionStatus.APPROVED, ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) }, select: { managerId: true, type: true, amount: true, manager: { select: { username: true, parentId: true } } } });
-    const byManager = new Map<string, { managerId: string; username: string; credits: number; debits: number; net: number }>();
-    for (const entry of entries) { const row = byManager.get(entry.managerId) ?? { managerId: entry.managerId, username: entry.manager.username, credits: 0, debits: 0, net: 0 }; const amount = Number(entry.amount); const positive = entry.type === BalanceTransactionType.CREDIT || entry.type === BalanceTransactionType.ADJUSTMENT; if (positive) row.credits += amount; else row.debits += amount; row.net += positive ? amount : -amount; byManager.set(entry.managerId, row); }
-    return { from: from ?? null, to: to ?? null, managers: [...byManager.values()] };
+    const entries = await this.prisma.balanceTransaction.findMany({
+      where: {
+        actorId: actor.id,
+        type: BalanceTransactionType.DELEGATION,
+        status: BalanceTransactionStatus.APPROVED,
+        ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+      },
+      select: { toUserId: true, amount: true, toUser: { select: { username: true, role: true } } },
+    });
+    const byRecipient = new Map<string, { userId: string; username: string; role: Role; totalDelegated: number }>();
+    for (const entry of entries) {
+      const row = byRecipient.get(entry.toUserId) ?? { userId: entry.toUserId, username: entry.toUser.username, role: entry.toUser.role, totalDelegated: 0 };
+      row.totalDelegated += Number(entry.amount);
+      byRecipient.set(entry.toUserId, row);
+    }
+    return { from: from ?? null, to: to ?? null, recipients: [...byRecipient.values()] };
   }
 
   async suspend(actor: Actor, id: string, ipAddress?: string) {
@@ -582,6 +775,41 @@ export class UsersService {
       metadata: { actorId: actor.id },
     });
 
+    return updated;
+  }
+
+  async unsuspend(actor: Actor, id: string, ipAddress?: string) {
+    const target = await this.prisma.user.findUnique({ where: { id } });
+    if (!target) throw new NotFoundException("User not found");
+
+    if (!(await this.hierarchy.canActOn(actor, id))) {
+      await this.audit.log({
+        actorId: actor.id,
+        action: "authz.failure",
+        targetId: id,
+        ipAddress,
+        metadata: { reason: "outside_subtree", action: "unsuspend" },
+      });
+      throw new ForbiddenException("Target is outside your hierarchy subtree");
+    }
+    if (actor.role === Role.MANAGER && target.role !== Role.PLAYER) {
+      throw new ForbiddenException("Managers may only unsuspend Players");
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { status: UserStatus.ACTIVE },
+      select: publicUserSelect,
+    });
+    await this.audit.log({ actorId: actor.id, action: "user.unsuspend", targetId: id, ipAddress });
+    await this.notifications.create({
+      userId: id,
+      type: NotificationType.ACCOUNT_UPDATED,
+      title: "Account reactivated",
+      message: "Your account was reactivated by an administrator.",
+      deepLink: `/dashboard/users?userId=${id}`,
+      metadata: { actorId: actor.id },
+    });
     return updated;
   }
 
@@ -747,6 +975,9 @@ export class UsersService {
       const childCount = await this.prisma.user.count({ where: { parentId: id } });
       throw new ConflictException(`Manager must be reassigned before deletion; ${childCount} direct child account(s) still depend on this Manager`);
     }
+    if (Number(target.balance) > 0) {
+      throw new ConflictException("Account still holds a balance; delegate it elsewhere before deleting");
+    }
 
     try {
       await this.clerk.deleteUserStrict(target.clerkId);
@@ -782,8 +1013,13 @@ export class UsersService {
   }
 
   async setManagerCapacity(actor: Actor, id: string, capacity: number, ipAddress?: string) {
-    const manager = await this.prisma.user.findUnique({ where: { id }, select: { role: true } });
-    if (!manager || manager.role !== Role.MANAGER || actor.role === Role.MANAGER || !(await this.hierarchy.canActOn(actor, id))) throw new ForbiddenException("Only authorized Owners or Super Admins can set Manager capacity");
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { role: true, parentId: true } });
+    if (!target || !holdsDirectReports(target.role)) {
+      throw new BadRequestException("Only Owners and Managers hold direct Players");
+    }
+    if (actor.role !== Role.SUPER_ADMIN && target.parentId !== actor.id) {
+      throw new ForbiddenException("Only this account's direct parent or Super Admin can set its capacity");
+    }
     const assigned = await this.prisma.user.count({ where: { parentId: id, role: Role.PLAYER } });
     if (capacity < assigned) throw new BadRequestException(`Capacity cannot be below current player count (${assigned})`);
     const updated = await this.prisma.user.update({ where: { id }, data: { managerCapacity: capacity }, select: publicUserSelect });

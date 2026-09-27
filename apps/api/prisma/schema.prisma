@@ -20,10 +20,13 @@ enum UserStatus {
 }
 
 enum BalanceTransactionType {
-  CREDIT
-  DEBIT
+  /// A real transfer down the hierarchy: fromUser's balance decreases,
+  /// toUser's balance increases by the same amount. One-directional —
+  /// there is no corresponding "reclaim" type.
+  DELEGATION
+  /// Super-Admin-only correction. fromUserId is always null (nothing is
+  /// deducted from anyone else); amount may be negative.
   ADJUSTMENT
-  REVERSAL
 }
 
 enum NotificationType {
@@ -67,17 +70,27 @@ model User {
   parent    User?      @relation("UserHierarchy", fields: [parentId], references: [id])
   children  User[]     @relation("UserHierarchy")
   status    UserStatus @default(ACTIVE)
+  /// Delegatable credit this user currently holds. Every role except
+  /// SUPER_ADMIN carries a real balance in the delegation model — Super Admin
+  /// "prints" credit into an Owner's balance with no source deduction.
   balance   Decimal    @default(0) @db.Decimal(12, 2)
   balanceLimit Decimal  @default(1000000) @map("balance_limit") @db.Decimal(12, 2)
+  /// Max number of direct Players this user (Owner or Manager) may hold.
   managerCapacity Int    @default(100) @map("manager_capacity")
+  /// Percentage this user's commission relationship with their parent runs
+  /// at: for an OWNER, the cut Super Admin takes from their net revenue; for
+  /// a MANAGER, the cut they earn from their own downline Players' net
+  /// revenue. Unused for SUPER_ADMIN/PLAYER.
+  commissionRate Decimal @default(0) @map("commission_rate") @db.Decimal(5, 2)
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
   auditLogsAsActor  AuditLog[] @relation("AuditActor")
   auditLogsAsTarget AuditLog[] @relation("AuditTarget")
-  balanceTransactionsAsManager BalanceTransaction[] @relation("BalanceManager")
-  balanceTransactionsAsActor   BalanceTransaction[] @relation("BalanceActor")
-  balanceTransactionsApproved  BalanceTransaction[] @relation("BalanceApprover")
+  delegationsGiven     BalanceTransaction[] @relation("DelegationFrom")
+  delegationsReceived  BalanceTransaction[] @relation("DelegationTo")
+  delegationsActedOn   BalanceTransaction[] @relation("DelegationActor")
+  delegationsApproved  BalanceTransaction[] @relation("DelegationApprover")
   notifications                Notification[]
   notificationPreference      NotificationPreference?
   loginHistory                 LoginHistory[]
@@ -115,14 +128,6 @@ model SecuritySetting {
   @@map("security_settings")
 }
 
-model CommissionSetting {
-  id        String   @id @default("default")
-  percentage Decimal @default(0) @db.Decimal(5, 2)
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("commission_settings")
-}
-
 model Notification {
   id        String           @id @default(cuid())
   userId    String           @map("user_id")
@@ -156,23 +161,30 @@ model NotificationPreference {
   @@map("notification_preferences")
 }
 
+/// A single entry in the delegation ledger. DELEGATION rows always have
+/// fromUserId set (a real transfer, one-directional — the giver's balance
+/// decreases, the receiver's increases). ADJUSTMENT rows have fromUserId
+/// null (a Super-Admin-only correction with no counterparty) and amount may
+/// be negative.
 model BalanceTransaction {
-  id        String                  @id @default(cuid())
-  managerId String                  @map("manager_id")
-  manager   User                   @relation("BalanceManager", fields: [managerId], references: [id], onDelete: Cascade)
-  actorId   String?                 @map("actor_id")
-  actor     User?                  @relation("BalanceActor", fields: [actorId], references: [id], onDelete: SetNull)
-  approvedById String?             @map("approved_by_id")
-  approvedBy User?                 @relation("BalanceApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-  type      BalanceTransactionType
-  amount    Decimal                 @db.Decimal(12, 2)
-  reason    String
-  status    BalanceTransactionStatus @default(APPROVED)
-  approvedAt DateTime?              @map("approved_at")
-  createdAt DateTime                @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  fromUserId   String?  @map("from_user_id")
+  fromUser     User?    @relation("DelegationFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUserId     String   @map("to_user_id")
+  toUser       User     @relation("DelegationTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  actorId      String?  @map("actor_id")
+  actor        User?    @relation("DelegationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  approvedById String?  @map("approved_by_id")
+  approvedBy   User?    @relation("DelegationApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  type         BalanceTransactionType
+  amount       Decimal  @db.Decimal(12, 2)
+  reason       String
+  status       BalanceTransactionStatus @default(APPROVED)
+  approvedAt   DateTime? @map("approved_at")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  @@index([managerId, createdAt])
-  @@index([actorId])
+  @@index([toUserId, createdAt])
+  @@index([fromUserId])
   @@map("balance_transactions")
 }
 

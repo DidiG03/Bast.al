@@ -13,6 +13,7 @@ export type MeResponse = {
   parentId: string | null;
   status: "ACTIVE" | "SUSPENDED";
   balance: number | string;
+  commissionRate: number | string;
   mfaRequired: boolean;
   mfaEnabled: boolean;
   mfaSatisfied: boolean;
@@ -27,6 +28,7 @@ export type UserRow = {
   balance: number | string;
   balanceLimit: number | string;
   managerCapacity: number;
+  commissionRate: number | string;
   createdAt: string;
 };
 
@@ -47,22 +49,26 @@ export type CreateUserRequest = {
 
 export type BalanceEntry = {
   id: string;
-  type: "CREDIT" | "DEBIT" | "ADJUSTMENT" | "REVERSAL";
+  type: "DELEGATION" | "ADJUSTMENT";
   status?: "PENDING" | "APPROVED" | "REJECTED";
   approvedAt?: string | null;
+  /** Signed from the viewed account's perspective: received = positive, given away = negative. */
   amount: number;
   reason: string;
   createdAt: string;
+  /** Who's on the other side of this entry — the counterparty, not necessarily who triggered it. */
+  counterparty?: string;
   actor: { id?: string; username: string } | null;
 };
 
 export type TransactionDetails = BalanceEntry & {
-  manager: { id: string; username: string };
+  toUser: { id: string; username: string };
+  fromUser: { id: string; username: string } | null;
   approvedBy: { id: string; username: string } | null;
 };
 
 export type BalanceStatement = {
-  manager: { username: string; balance: number | string };
+  account: { username: string; balance: number | string };
   from: string | null;
   to: string | null;
   entries: BalanceEntry[];
@@ -110,12 +116,12 @@ export type UserReport = {
     players: number;
     active: number;
     suspended: number;
-    managerBalances: number;
+    totalBalance: number;
   };
 
   roleBreakdown: { OWNER: number; MANAGER: number; PLAYER: number };
   statusBreakdown: { ACTIVE: number; SUSPENDED: number };
-  managers: Array<{ id: string; username: string; status: UserRow["status"]; balance: number; players: number }>;
+  owners: Array<{ id: string; username: string; status: UserRow["status"]; balance: number; commissionRate: number; directReports: number }>;
   recentAudit: Array<{
     id: string;
     action: string;
@@ -147,8 +153,10 @@ export type AuditResponse = {
 export type FinancialReport = {
   from: string | null;
   to: string | null;
-  managers: Array<{ managerId: string; username: string; credits: number; debits: number; net: number }>;
+  recipients: Array<{ userId: string; username: string; role: MeResponse["role"]; totalDelegated: number }>;
 };
+
+export type CommissionRateResponse = { rate: number };
 
 export async function apiFetch<T>(
   path: string,

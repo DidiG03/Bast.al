@@ -4,11 +4,13 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  RawBodyRequest,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
 import { AuditService } from "../audit/audit.service";
+import { clientIp } from "./client-ip";
 import { ThreatIntelService } from "./threat-intel.service";
 
 /**
@@ -44,13 +46,13 @@ export class RequestIntegrityGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<RawBodyRequest<Request>>();
     const method = request.method.toUpperCase();
     if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
       return true;
     }
 
-    const ip = this.clientIp(request) ?? "unknown";
+    const ip = clientIp(request) ?? "unknown";
     if (await this.threats.isBlocked(ip)) {
       throw new ForbiddenException("Temporarily blocked");
     }
@@ -75,12 +77,11 @@ export class RequestIntegrityGuard implements CanActivate {
       throw new UnauthorizedException("Replay detected");
     }
 
-    const body =
-      typeof request.body === "string"
-        ? request.body
-        : request.body
-          ? JSON.stringify(request.body)
-          : "";
+    // Sign over the exact bytes the client sent (captured by the global rawBody
+    // parser), never a re-serialization of the parsed body — otherwise an empty
+    // body (`""`) vs. body-parser's `{}` placeholder, or any key-order/whitespace
+    // difference, breaks the signature even though nothing was tampered with.
+    const body = request.rawBody && request.rawBody.length > 0 ? request.rawBody.toString("utf8") : "";
     const path = request.originalUrl.split("?")[0] ?? request.path;
     const payload = `${method}\n${path}\n${timestamp}\n${nonce}\n${body}`;
     const expected = createHmac("sha256", this.secret).update(payload).digest("hex");
@@ -105,14 +106,6 @@ export class RequestIntegrityGuard implements CanActivate {
     if (result.banned) {
       await this.threats.ban(ip, reason);
     }
-  }
-
-  private clientIp(request: Request): string | undefined {
-    const forwarded = request.headers["x-forwarded-for"];
-    if (typeof forwarded === "string" && forwarded.length > 0) {
-      return forwarded.split(",")[0]?.trim();
-    }
-    return request.ip;
   }
 }
 

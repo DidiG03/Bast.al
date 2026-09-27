@@ -40,30 +40,30 @@ export default async function ReportsPage() {
           </div>
         ))}
         <div className="card report-stat">
-          <span className="muted">Manager balances</span>
-          <strong>${report.totals.managerBalances.toFixed(2)}</strong>
+          <span className="muted">Total balance in circulation</span>
+          <strong>${report.totals.totalBalance.toFixed(2)}</strong>
         </div>
       </div>
 
       <div className="reports-columns">
         <section className="card stack">
           <div className="tree-header">
-            <h2>Manager accounts</h2>
-            <span className="muted">{report.managers.length} managers</span>
+            <h2>Owner accounts</h2>
+            <span className="muted">{report.owners.length} owners</span>
           </div>
-          {report.managers.length === 0 ? (
-            <p className="muted">No manager accounts yet.</p>
+          {report.owners.length === 0 ? (
+            <p className="muted">No owner accounts yet.</p>
           ) : (
             <div className="report-list">
-              {report.managers.map((manager) => (
-                <div className="report-list-row" key={manager.id}>
+              {report.owners.map((owner) => (
+                <div className="report-list-row" key={owner.id}>
                   <div>
-                    <strong>{manager.username}</strong>
+                    <strong>{owner.username}</strong>
                     <span className="muted">
-                      {manager.players} players · {manager.status}
+                      {owner.directReports} direct reports · {owner.status} · {owner.commissionRate}% commission
                     </span>
                   </div>
-                  <strong>${manager.balance.toFixed(2)}</strong>
+                  <strong>${owner.balance.toFixed(2)}</strong>
                 </div>
               ))}
             </div>

@@ -15,6 +15,16 @@ async function bootstrap() {
     bodyParser: false,
   });
 
+  // Only trust X-Forwarded-For from a private/loopback peer (our own Next.js BFF
+  // or a local reverse proxy on the same docker network). A public caller
+  // hitting this API directly cannot spoof their IP to dodge lockouts or frame
+  // another peer for a honeypot trip. Widen via TRUSTED_PROXIES only if a real
+  // reverse proxy is deployed with a stable, non-private address.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set("trust proxy", process.env.TRUSTED_PROXIES?.trim() || "loopback, linklocal, uniquelocal");
+
   // Cap payload size to reduce DoS via large bodies (webhooks stay small).
   app.use("/api/webhooks/clerk", json({ limit: "256kb", verify: rawBodySaver }));
   app.use(json({ limit: "64kb", verify: rawBodySaver }));

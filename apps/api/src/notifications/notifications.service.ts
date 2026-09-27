@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { NotificationCategory, NotificationSeverity, NotificationType } from "@prisma/client";
 import { Observable, Subject } from "rxjs";
 import { Actor } from "../auth/permissions";
@@ -7,6 +7,7 @@ import { PrismaService } from "../prisma.service";
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   private readonly streams = new Map<string, Subject<unknown>>();
 
   constructor(private readonly prisma: PrismaService, private readonly crypto: FieldEncryptionService) {}
@@ -70,6 +71,11 @@ export class NotificationsService {
     return stream.asObservable();
   }
 
+  /**
+   * Notifications are a side effect, never the point of the call — a
+   * notification failure must never fail (or roll back) the action that
+   * triggered it, so this never throws.
+   */
   async create(input: {
     userId: string;
     type: NotificationType;
@@ -80,15 +86,35 @@ export class NotificationsService {
     deepLink?: string;
     metadata?: Record<string, string | number | boolean | null>;
   }) {
-    const preferences = await this.prisma.notificationPreference.findUnique({ where: { userId: input.userId } });
-    const category = input.category ?? this.categoryFor(input.type);
-    const enabled = !preferences || preferences.inAppEnabled && this.preferenceEnabled(preferences, category);
-    if (!enabled) return null;
-    const metadata = { ...(input.metadata ?? {}), ...(input.deepLink ? { deepLink: input.deepLink } : {}) };
-    const created = await this.prisma.notification.create({ data: { ...input, category, severity: input.severity ?? this.severityFor(input.type), metadata } });
-    this.streams.get(input.userId)?.next(created);
-    if (preferences?.emailEnabled && this.preferenceEnabled(preferences, category)) await this.sendEmail(input.userId, created.title, created.message);
-    return created;
+    try {
+      const preferences = await this.prisma.notificationPreference.findUnique({ where: { userId: input.userId } });
+      const category = input.category ?? this.categoryFor(input.type);
+      const enabled = !preferences || preferences.inAppEnabled && this.preferenceEnabled(preferences, category);
+      if (!enabled) return null;
+      const metadata = { ...(input.metadata ?? {}), ...(input.deepLink ? { deepLink: input.deepLink } : {}) };
+      // Notification has no deepLink column — it only ever lives inside
+      // metadata — so build the Prisma payload from an explicit field list
+      // rather than spreading `input` (which still carries deepLink/metadata
+      // in their raw, pre-merge form and would fail with an unknown-argument
+      // error).
+      const created = await this.prisma.notification.create({
+        data: {
+          userId: input.userId,
+          type: input.type,
+          title: input.title,
+          message: input.message,
+          category,
+          severity: input.severity ?? this.severityFor(input.type),
+          metadata,
+        },
+      });
+      this.streams.get(input.userId)?.next(created);
+      if (preferences?.emailEnabled && this.preferenceEnabled(preferences, category)) await this.sendEmail(input.userId, created.title, created.message);
+      return created;
+    } catch (error) {
+      this.logger.error(`Failed to create notification (userId=${input.userId}, type=${input.type}): ${String(error)}`);
+      return null;
+    }
   }
 
   private async updateOwned(actor: Actor, id: string, data: { readAt?: Date; archivedAt?: Date }) {

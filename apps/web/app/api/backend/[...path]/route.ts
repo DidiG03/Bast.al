@@ -1,4 +1,6 @@
 import { createHmac, randomBytes } from "crypto";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -63,9 +65,27 @@ async function proxy(request: NextRequest, parts: string[]) {
   };
   if (token) headers.authorization = `Bearer ${token}`;
 
+  // Forward whatever X-Forwarded-For this server itself received (set by a
+  // real reverse proxy/CDN in front of Next, if any) so Nest's rate limiting
+  // and lockouts key on the actual visitor rather than always seeing this BFF's
+  // own address. Nest only trusts this header when it comes from a private/
+  // loopback peer (see main.ts `trust proxy`), so a client can't spoof it by
+  // sending its own X-Forwarded-For straight to this route.
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) headers["x-forwarded-for"] = forwardedFor;
+
   const secret = process.env.REQUEST_INTEGRITY_SECRET;
   if (secret && bodyText !== undefined) {
     Object.assign(headers, sign({ secret, method, path: targetPath, body: bodyText }));
+  }
+
+  // SSE connections are meant to stay open indefinitely, but Node's global
+  // `fetch` (undici) enforces a hard ~300s timeout on reading a response body
+  // regardless of activity, which kills long-lived streams with a 500 every
+  // five minutes. Node's core http/https client has no such limit, so the
+  // stream path bypasses fetch entirely.
+  if (path === "notifications/stream") {
+    return proxyStream(url, headers);
   }
 
   const upstream = await fetch(url, {
@@ -75,17 +95,6 @@ async function proxy(request: NextRequest, parts: string[]) {
     cache: "no-store",
   });
 
-  if (path === "notifications/stream" && upstream.body) {
-    return new Response(upstream.body, {
-      status: upstream.status,
-      headers: {
-        "content-type": upstream.headers.get("content-type") ?? "text/event-stream",
-        "cache-control": "no-cache, no-store",
-        connection: "keep-alive",
-      },
-    });
-  }
-
   const text = await upstream.text();
   return new NextResponse(text, {
     status: upstream.status,
@@ -94,6 +103,36 @@ async function proxy(request: NextRequest, parts: string[]) {
       "x-request-id": upstream.headers.get("x-request-id") ?? headers["x-request-id"],
       "cache-control": "no-store",
     },
+  });
+}
+
+function proxyStream(url: URL, headers: Record<string, string>): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const requestFn = url.protocol === "https:" ? httpsRequest : httpRequest;
+    const upstreamReq = requestFn(url, { method: "GET", headers }, (upstreamRes) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          upstreamRes.on("data", (chunk: Buffer) => controller.enqueue(chunk));
+          upstreamRes.on("end", () => controller.close());
+          upstreamRes.on("error", (err) => controller.error(err));
+        },
+        cancel() {
+          upstreamRes.destroy();
+        },
+      });
+      resolve(
+        new Response(body, {
+          status: upstreamRes.statusCode ?? 200,
+          headers: {
+            "content-type": upstreamRes.headers["content-type"] ?? "text/event-stream",
+            "cache-control": "no-cache, no-store",
+            connection: "keep-alive",
+          },
+        }),
+      );
+    });
+    upstreamReq.on("error", reject);
+    upstreamReq.end();
   });
 }
 

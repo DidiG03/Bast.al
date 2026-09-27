@@ -129,14 +129,14 @@ export class NotificationsService {
   }
 
   private categoryFor(type: NotificationType): NotificationCategory {
-    if (type === NotificationType.FUNDS_RECEIVED || type === NotificationType.FUNDS_RECLAIMED || type === NotificationType.APPROVAL_REQUESTED || type === NotificationType.COMMISSION_RATE_UPDATED) return NotificationCategory.FINANCE;
+    if (type === NotificationType.FUNDS_RECEIVED || type === NotificationType.FUNDS_RECLAIMED || type === NotificationType.APPROVAL_REQUESTED || type === NotificationType.COMMISSION_RATE_UPDATED || type === NotificationType.LOW_BALANCE) return NotificationCategory.FINANCE;
     if (type === NotificationType.SUSPICIOUS_LOGIN) return NotificationCategory.SECURITY;
     if (type === NotificationType.ACCOUNT_SUSPENDED || type === NotificationType.ACCOUNT_UPDATED || type === NotificationType.ACCOUNT_REASSIGNED) return NotificationCategory.ACCOUNT;
     return NotificationCategory.SYSTEM;
   }
 
   private severityFor(type: NotificationType): NotificationSeverity {
-    return type === NotificationType.SUSPICIOUS_LOGIN ? NotificationSeverity.CRITICAL : type === NotificationType.FUNDS_RECEIVED ? NotificationSeverity.SUCCESS : type === NotificationType.APPROVAL_REQUESTED ? NotificationSeverity.WARNING : NotificationSeverity.INFO;
+    return type === NotificationType.SUSPICIOUS_LOGIN ? NotificationSeverity.CRITICAL : type === NotificationType.FUNDS_RECEIVED ? NotificationSeverity.SUCCESS : type === NotificationType.APPROVAL_REQUESTED || type === NotificationType.LOW_BALANCE ? NotificationSeverity.WARNING : NotificationSeverity.INFO;
   }
 
   private preferenceEnabled(preferences: { financeEnabled: boolean; accountEnabled: boolean; securityEnabled: boolean; systemEnabled: boolean }, category: NotificationCategory) {

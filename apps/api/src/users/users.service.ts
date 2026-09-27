@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { BalanceTransactionStatus, BalanceTransactionType, NotificationType, Role, UserStatus } from "@prisma/client";
+import { BalanceTransactionStatus, BalanceTransactionType, NotificationType, Prisma, Role, UserStatus } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { ClerkService } from "../auth/clerk.service";
 import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/permissions";
@@ -50,11 +50,8 @@ function holdsDirectReports(role: Role): boolean {
  */
 const APPROVAL_THRESHOLD = 10000;
 
-/** Largest delegation this actor can make without anyone's sign-off. */
-function approvalThreshold(actor: Pick<Actor, "role" | "approvalLimit">): number {
-  if (actor.role === Role.MANAGER && actor.approvalLimit !== null) return Number(actor.approvalLimit);
-  return APPROVAL_THRESHOLD;
-}
+/** Most accounts a bulk action may touch at once. */
+const BULK_LIMIT = 100;
 
 function dateRange(from?: string, to?: string) {
   return from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {};
@@ -71,6 +68,21 @@ export class UsersService {
     private readonly notifications: NotificationsService,
     private readonly realtime: RealtimeService,
   ) {}
+
+  /**
+   * Largest delegation this actor can make without anyone's sign-off. A
+   * Manager uses their own limit, else their Owner's team-wide default for
+   * Managers, else the platform default. Everyone else uses the default.
+   */
+  private async approvalThreshold(actor: Pick<Actor, "role" | "approvalLimit" | "parentId">): Promise<number> {
+    if (actor.role !== Role.MANAGER) return APPROVAL_THRESHOLD;
+    if (actor.approvalLimit !== null) return Number(actor.approvalLimit);
+    const owner = actor.parentId
+      ? await this.prisma.user.findUnique({ where: { id: actor.parentId }, select: { role: true, managerApprovalLimit: true } })
+      : null;
+    if (owner?.role === Role.OWNER && owner.managerApprovalLimit !== null) return Number(owner.managerApprovalLimit);
+    return APPROVAL_THRESHOLD;
+  }
 
   async me(actor: Actor, mfaEnforcementEnabled: boolean) {
     let mfaEnabled = false;
@@ -100,7 +112,7 @@ export class UsersService {
       balanceLimit: Number(actor.balanceLimit),
       managerCapacity: actor.managerCapacity,
       commissionRate: Number(actor.commissionRate),
-      approvalLimit: approvalThreshold(actor),
+      approvalLimit: await this.approvalThreshold(actor),
       mfaRequired,
       mfaEnabled,
       mfaSatisfied: !mfaRequired || mfaEnabled,
@@ -546,7 +558,7 @@ export class UsersService {
     }
 
     const isPrint = actor.role === Role.SUPER_ADMIN;
-    const requiresApproval = !isPrint && dto.amount > approvalThreshold(actor);
+    const requiresApproval = !isPrint && dto.amount > (await this.approvalThreshold(actor));
 
     if (requiresApproval) {
       const pending = await this.prisma.balanceTransaction.create({
@@ -625,6 +637,7 @@ export class UsersService {
       metadata: { amount: dto.amount, reason: dto.reason },
     });
     await this.realtime.publishBalances([id, isPrint ? null : actor.id]);
+    if (!isPrint) await this.alertLowBalance(actor.id, dto.amount);
     await this.notifications.create({
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
@@ -670,6 +683,7 @@ export class UsersService {
 
     await this.audit.log({ actorId: actor.id, action: "user.balance_adjustment", targetId: id, ipAddress, metadata: { amount: dto.amount, reason: dto.reason } });
     await this.realtime.publishBalances([id]);
+    if (dto.amount < 0) await this.alertLowBalance(id, -dto.amount);
     await this.notifications.create({
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
@@ -755,6 +769,7 @@ export class UsersService {
     });
     await this.audit.log({ actorId: actor.id, action: "user.balance_approved", targetId: transaction.toUserId, ipAddress, metadata: { transactionId } });
     await this.realtime.publishBalances([transaction.toUserId, transaction.fromUserId]);
+    if (transaction.fromUserId) await this.alertLowBalance(transaction.fromUserId, amount);
     await this.notifications.create({ userId: transaction.toUserId, type: NotificationType.FUNDS_RECEIVED, title: "Transaction approved", message: `A $${Number(transaction.amount).toFixed(2)} transaction was approved.`, deepLink: `/dashboard/finance/transaction/${transactionId}`, metadata: { transactionId } });
     return { ...result, amount: Number(result.amount) };
   }
@@ -842,6 +857,7 @@ export class UsersService {
 
     await this.audit.log({ actorId: actor.id, action: "user.reclaim_credit", targetId: id, ipAddress, metadata: { amount: dto.amount, reason: dto.reason } });
     await this.realtime.publishBalances([id, isRetire ? null : actor.id]);
+    await this.alertLowBalance(id, dto.amount);
     await this.notifications.create({
       userId: id,
       type: NotificationType.FUNDS_RECLAIMED,
@@ -1259,6 +1275,101 @@ export class UsersService {
       metadata: { actorId: actor.id, limit },
     });
     return updated;
+  }
+
+  /**
+   * After an account's balance went down by `taken`: if that pushed it below
+   * its Owner's low-balance alert, tell whoever can top it up (its direct
+   * parent) and the Owner. Only fires on the drop across the line, not on
+   * every later movement below it.
+   */
+  async alertLowBalance(userId: string, taken: number) {
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, role: true, balance: true, parentId: true } });
+    if (!account || (account.role !== Role.MANAGER && account.role !== Role.PLAYER)) return;
+
+    let owner: { id: string; lowBalanceThreshold: Prisma.Decimal | null } | null = null;
+    let cursor = account.parentId;
+    for (let depth = 0; cursor && depth < 5 && !owner; depth++) {
+      const next: { id: string; role: Role; parentId: string | null; lowBalanceThreshold: Prisma.Decimal | null } | null = await this.prisma.user.findUnique({ where: { id: cursor }, select: { id: true, role: true, parentId: true, lowBalanceThreshold: true } });
+      if (next?.role === Role.OWNER) owner = next;
+      cursor = next?.parentId ?? null;
+    }
+    if (!owner || owner.lowBalanceThreshold === null) return;
+
+    const threshold = Number(owner.lowBalanceThreshold);
+    const balance = Number(account.balance);
+    if (!(balance < threshold && balance + taken >= threshold)) return;
+
+    const recipients = new Set([account.parentId, owner.id].filter((id): id is string => Boolean(id)));
+    for (const recipient of recipients) {
+      await this.notifications.create({
+        userId: recipient,
+        type: NotificationType.LOW_BALANCE,
+        title: "Low balance",
+        message: `${account.username}'s balance dropped to $${balance.toFixed(2)}, below the $${threshold.toFixed(2)} alert.`,
+        deepLink: "/dashboard/users",
+        metadata: { accountId: account.id, balance, threshold },
+      });
+    }
+  }
+
+  /** An Owner's team-wide settings. */
+  async teamSettings(actor: Actor) {
+    if (actor.role !== Role.OWNER) throw new ForbiddenException("Only Owners have team settings");
+    return {
+      lowBalanceThreshold: actor.lowBalanceThreshold === null ? null : Number(actor.lowBalanceThreshold),
+      managerApprovalLimit: actor.managerApprovalLimit === null ? null : Number(actor.managerApprovalLimit),
+      defaultApprovalLimit: APPROVAL_THRESHOLD,
+    };
+  }
+
+  async updateTeamSettings(actor: Actor, input: { lowBalanceThreshold?: number | null; managerApprovalLimit?: number | null }, ipAddress?: string) {
+    if (actor.role !== Role.OWNER) throw new ForbiddenException("Only Owners have team settings");
+    const data: Prisma.UserUpdateInput = {};
+    if (input.lowBalanceThreshold !== undefined) data.lowBalanceThreshold = input.lowBalanceThreshold;
+    if (input.managerApprovalLimit !== undefined) data.managerApprovalLimit = input.managerApprovalLimit;
+    const updated = await this.prisma.user.update({ where: { id: actor.id }, data });
+    await this.audit.log({ actorId: actor.id, action: "user.team_settings_update", targetId: actor.id, ipAddress, metadata: input });
+    return this.teamSettings(updated);
+  }
+
+  /**
+   * Apply one action to many accounts. Each account goes through the same
+   * checks as doing it one at a time, and one failure doesn't stop the rest:
+   * the result says what happened to each.
+   */
+  async bulk(actor: Actor, input: { action: "suspend" | "unsuspend" | "delegate" | "reassign"; ids: string[]; amount?: number; parentId?: string }, ipAddress?: string) {
+    const ids = [...new Set(input.ids)];
+    if (ids.length === 0) throw new BadRequestException("Choose at least one account");
+    if (ids.length > BULK_LIMIT) throw new BadRequestException(`Choose at most ${BULK_LIMIT} accounts at a time`);
+    if (input.action === "delegate" && !input.amount) throw new BadRequestException("Enter an amount");
+    if (input.action === "reassign" && !input.parentId) throw new BadRequestException("Choose where to move them");
+    if (input.action === "reassign" && actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) {
+      throw new ForbiddenException("Only Owners and Super Admins can reassign Players");
+    }
+
+    const results: Array<{ id: string; ok: boolean; error?: string; pending?: boolean }> = [];
+    for (const id of ids) {
+      try {
+        if (input.action === "suspend") await this.suspend(actor, id, ipAddress);
+        else if (input.action === "unsuspend") await this.unsuspend(actor, id, ipAddress);
+        else if (input.action === "reassign") await this.reassignPlayer(actor, id, input.parentId!, ipAddress);
+        else {
+          // Re-read the actor each time: every transfer lowers their balance.
+          const fresh = await this.prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
+          const result = await this.delegateCredit(fresh, id, { amount: input.amount!, reason: "Bulk top-up" }, ipAddress);
+          if ("requiresApproval" in result && result.requiresApproval) {
+            results.push({ id, ok: true, pending: true });
+            continue;
+          }
+        }
+        results.push({ id, ok: true });
+      } catch (err) {
+        results.push({ id, ok: false, error: err instanceof Error ? err.message : "Failed" });
+      }
+    }
+    await this.audit.log({ actorId: actor.id, action: `user.bulk_${input.action}`, ipAddress, metadata: { count: ids.length, succeeded: results.filter((r) => r.ok).length } });
+    return { results };
   }
 
   async bootstrapSuperAdmin(input: {

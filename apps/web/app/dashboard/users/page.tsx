@@ -3,12 +3,14 @@
 import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRealtime } from "../../../components/realtime-provider";
-import { apiFetch, transactionLabel, type BalanceEntry, type BalanceStatement, type MeResponse, type ReassignmentPreview, type UserRow } from "../../../lib/api";
+import { apiFetch, type BulkAction, type TeamSettings, transactionLabel, type BalanceEntry, type BalanceStatement, type MeResponse, type ReassignmentPreview, type UserRow } from "../../../lib/api";
 import { LoadingSpinner } from "../../../components/loading-spinner";
 import { formatMoney } from "../../../lib/format";
 import { CommissionRateControl } from "../../../components/commission-field";
 import { ApprovalLimitControl } from "../../../components/approval-limit-field";
 import { QuickTopUp } from "../../../components/quick-top-up";
+import { BulkActionModal } from "../../../components/bulk-actions";
+import { TeamSettingsModal } from "../../../components/team-settings";
 import { useRouter } from "next/navigation";
 
 const ROLE_OPTIONS: Record<MeResponse["role"], Array<"OWNER" | "MANAGER" | "PLAYER">> = {
@@ -55,6 +57,12 @@ export default function UsersPage() {
   const [reclaimReason, setReclaimReason] = useState("");
   const [topUpUser, setTopUpUser] = useState<UserRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<BulkAction | null>(null);
+  const [teamSettingsOpen, setTeamSettingsOpen] = useState(false);
+  // An Owner's default approval limit for their Managers, when they set one.
+  const [teamApprovalLimit, setTeamApprovalLimit] = useState<number | null>(null);
 
   const creatable = useMemo(() => (me ? ROLE_OPTIONS[me.role] : []), [me]);
   const assignableManagers = useMemo(
@@ -76,6 +84,10 @@ export default function UsersPage() {
     ]);
     setMe(profile);
     setUsers(list);
+    if (profile.role === "OWNER") {
+      const settings = await apiFetch<TeamSettings>("/users/me/team-settings", token).catch(() => null);
+      setTeamApprovalLimit(settings?.managerApprovalLimit ?? null);
+    }
     const options = ROLE_OPTIONS[profile.role];
     if (options[0] && !keepForm) setRole(options[0]);
   }
@@ -482,11 +494,39 @@ export default function UsersPage() {
     return user.role === "PLAYER" && user.parentId === me?.id && user.status === "ACTIVE" && !lockedByAncestor(user);
   }
 
+  function toggleSelected(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function stopSelecting() {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+
+  const selectedUsers = users.filter((user) => selected.has(user.id));
+  const canMoveSelection = (me.role === "OWNER" || me.role === "SUPER_ADMIN") && selectedUsers.length > 0 && selectedUsers.every((user) => user.role === "PLAYER");
+  const canTopUpSelection = selectedUsers.length > 0 && selectedUsers.every((user) => user.parentId === me.id || me.role === "SUPER_ADMIN");
+  const selectableIds = visibleUsers.filter((user) => user.id !== me.id).map((user) => user.id);
+
   function renderTreeNode(user: UserRow): ReactNode {
     const children = (childrenByParent.get(user.id) ?? []).filter((child) => visibleUserIds.has(child.id));
     return (
       <div className="tree-node" key={user.id}>
-        <div className="tree-row">
+        <div className={`tree-row${selected.has(user.id) ? " is-selected" : ""}`}>
+          {selecting && user.id !== me?.id ? (
+            <input
+              type="checkbox"
+              className="tree-select"
+              checked={selected.has(user.id)}
+              onChange={() => toggleSelected(user.id)}
+              aria-label={`Select ${user.username}`}
+            />
+          ) : null}
           <div className="tree-identity">
             <span className="tree-name">
               <span className={`status-dot ${user.status === "ACTIVE" ? "is-active" : "is-suspended"}`} />
@@ -498,7 +538,7 @@ export default function UsersPage() {
               {user.role !== "SUPER_ADMIN" ? <span className="tree-balance">{formatMoney(user.balance)}</span> : null}
             </span>
           </div>
-          {user.id !== me?.id ? (
+          {user.id !== me?.id && !selecting ? (
             <div className={`user-actions${canTopUp(user) ? " has-top-up" : ""}`}>
               {canTopUp(user) ? (
                 <button type="button" className="secondary top-up-button" disabled={busy} onClick={() => setTopUpUser(user)} aria-label={`Top up ${user.username}`}>
@@ -579,6 +619,13 @@ export default function UsersPage() {
     <div className="stack">
       <div className="page-title-row">
         <h1 style={{ margin: 0 }}>Users</h1>
+        <div className="page-title-actions">
+        {me.role === "OWNER" ? (
+          <button type="button" className="secondary header-icon-button" onClick={() => setTeamSettingsOpen(true)}>
+            <svg className="action-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></svg>
+            Team settings
+          </button>
+        ) : null}
         <button
           type="button"
           className="add-button"
@@ -593,12 +640,23 @@ export default function UsersPage() {
             <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
+        </div>
       </div>
 
       <div className="card tree-card">
         <div className="tree-header">
           <span>Hierarchy</span>
-          <span className="muted">{normalizedSearch ? `${visibleUsers.length} of ${users.length}` : users.length} users</span>
+          <span className="tree-header-actions">
+            <span className="muted">{selecting ? `${selected.size} selected` : `${normalizedSearch ? `${visibleUsers.length} of ${users.length}` : users.length} users`}</span>
+            {selecting ? (
+              <button type="button" className="text-button" onClick={() => setSelected(selected.size === selectableIds.length ? new Set() : new Set(selectableIds))}>
+                {selected.size === selectableIds.length && selectableIds.length > 0 ? "Clear" : "Select all"}
+              </button>
+            ) : null}
+            <button type="button" className="text-button" onClick={() => (selecting ? stopSelecting() : setSelecting(true))}>
+              {selecting ? "Done" : "Select"}
+            </button>
+          </span>
         </div>
         <label className="search-field">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -611,6 +669,15 @@ export default function UsersPage() {
           {roots.length > 0 ? roots.map((root) => renderTreeNode(root)) : <p className="muted empty-search">No users match your search.</p>}
         </div>
       </div>
+      {selecting && selected.size > 0 ? (
+        <div className="bulk-bar" role="toolbar" aria-label="Actions for selected accounts">
+          <span className="bulk-bar-count">{selected.size} selected</span>
+          {selectedUsers.some((user) => user.status === "ACTIVE") ? <button type="button" className="secondary" onClick={() => setBulkAction("suspend")}>Suspend</button> : null}
+          {selectedUsers.some((user) => user.status === "SUSPENDED") ? <button type="button" className="secondary" onClick={() => setBulkAction("unsuspend")}>Reactivate</button> : null}
+          {canTopUpSelection ? <button type="button" className="secondary" onClick={() => setBulkAction("delegate")}>Top up</button> : null}
+          {canMoveSelection ? <button type="button" className="secondary" onClick={() => setBulkAction("reassign")}>Move</button> : null}
+        </div>
+      ) : null}
       {createOpen ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setCreateOpen(false)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
@@ -686,6 +753,7 @@ export default function UsersPage() {
                 key={balanceUser.id}
                 userId={balanceUser.id}
                 currentLimit={balanceUser.approvalLimit === null ? null : Number(balanceUser.approvalLimit)}
+                teamLimit={me.role === "OWNER" ? teamApprovalLimit : null}
                 onSaved={(limit) => { setBalanceUser({ ...balanceUser, approvalLimit: limit }); load().catch(() => undefined); }}
               />
             ) : null}
@@ -788,6 +856,28 @@ export default function UsersPage() {
           approvalLimit={me.approvalLimit}
           onClose={() => setTopUpUser(null)}
           onDone={(message) => { setTopUpUser(null); setNotice(message); load({ keepForm: true }).catch(() => undefined); }}
+        />
+      ) : null}
+      {bulkAction ? (
+        <BulkActionModal
+          action={bulkAction}
+          users={bulkAction === "suspend" ? selectedUsers.filter((user) => user.status === "ACTIVE") : bulkAction === "unsuspend" ? selectedUsers.filter((user) => user.status === "SUSPENDED") : selectedUsers}
+          destinations={reassignDestinations}
+          onClose={() => setBulkAction(null)}
+          onDone={(summary, failedIds) => {
+            setSelected(new Set(failedIds));
+            if (failedIds.length === 0) {
+              setBulkAction(null);
+              setNotice(summary);
+            }
+            load({ keepForm: true }).catch(() => undefined);
+          }}
+        />
+      ) : null}
+      {teamSettingsOpen ? (
+        <TeamSettingsModal
+          onClose={() => setTeamSettingsOpen(false)}
+          onSaved={(message) => { setTeamSettingsOpen(false); setNotice(message); load({ keepForm: true }).catch(() => undefined); }}
         />
       ) : null}
       {notice ? (

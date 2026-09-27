@@ -9,13 +9,16 @@ type Props = {
   userId: string;
   /** The Manager's personal limit, or null when they use the platform default. */
   currentLimit: number | null;
+  /** The Owner's default for all their Managers, if they set one. */
+  teamLimit?: number | null;
   onSaved?: (limit: number | null) => void;
 };
 
 /** Owner (or Super Admin) sets how much a Manager can delegate without asking first. */
-export function ApprovalLimitControl({ userId, currentLimit, onSaved }: Props) {
+export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, onSaved }: Props) {
+  const fallback = teamLimit ?? DEFAULT_APPROVAL_LIMIT;
   const { getToken } = useAuth();
-  const [limit, setLimit] = useState(String(currentLimit ?? DEFAULT_APPROVAL_LIMIT));
+  const [limit, setLimit] = useState(String(currentLimit ?? fallback));
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,8 +31,8 @@ export function ApprovalLimitControl({ userId, currentLimit, onSaved }: Props) {
     setBusy(true);
     try {
       await apiFetch(`/users/${userId}/approval-limit`, token, { method: "POST", body: JSON.stringify({ limit: value }) });
-      setLimit(String(value ?? DEFAULT_APPROVAL_LIMIT));
-      setSaved(value === null ? "Back to the standard limit." : "Approval limit saved.");
+      setLimit(String(value ?? fallback));
+      setSaved(value === null ? (teamLimit === null ? "Back to the standard limit." : "Back to your team limit.") : "Approval limit saved.");
       onSaved?.(value);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the approval limit");
@@ -53,7 +56,7 @@ export function ApprovalLimitControl({ userId, currentLimit, onSaved }: Props) {
       <div>
         <h2>Approval limit</h2>
         <p className="muted">
-          This Manager can send up to this much to a Player without your approval. Anything larger waits for you. The standard limit is {formatMoney(DEFAULT_APPROVAL_LIMIT)}.
+          This Manager can send up to this much to a Player without your approval. Anything larger waits for you. {teamLimit === null ? `The standard limit is ${formatMoney(DEFAULT_APPROVAL_LIMIT)}.` : `Your team limit is ${formatMoney(teamLimit)}.`}
         </p>
       </div>
       <div className="commission-input-row">
@@ -75,7 +78,7 @@ export function ApprovalLimitControl({ userId, currentLimit, onSaved }: Props) {
         <button type="submit" className="secondary" disabled={busy}>{busy ? "Saving…" : "Save limit"}</button>
       </div>
       {currentLimit !== null ? (
-        <button type="button" className="text-button approval-reset" onClick={() => save(null)} disabled={busy}>Use the standard limit</button>
+        <button type="button" className="text-button approval-reset" onClick={() => save(null)} disabled={busy}>{teamLimit === null ? "Use the standard limit" : "Use your team limit"}</button>
       ) : null}
       {saved ? <p className="success-text" role="status">{saved}</p> : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}

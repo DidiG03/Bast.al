@@ -28,6 +28,7 @@ import { ReassignUserDto } from "./dto/reassign-user.dto";
 import { AuditQueryDto } from "./dto/audit-query.dto";
 import { ManagerCapacityDto } from "./dto/manager-capacity.dto";
 import { CommissionRateDto } from "./dto/commission.dto";
+import { BulkActionDto, TeamSettingsDto } from "./dto/team.dto";
 import { UsersService } from "./users.service";
 
 class BootstrapSuperAdminDto {
@@ -232,6 +233,30 @@ export class UsersController {
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   managerCapacity(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: ManagerCapacityDto, @Req() req: AuthenticatedRequest) {
     return this.users.setManagerCapacity(actor, id, dto.capacity, clientIp(req));
+  }
+
+  @Get("me/team-settings")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.OWNER)
+  teamSettings(@CurrentActor() actor: Actor) {
+    return this.users.teamSettings(actor);
+  }
+
+  @Post("me/team-settings")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.OWNER)
+  updateTeamSettings(@CurrentActor() actor: Actor, @Body() dto: TeamSettingsDto, @Req() req: AuthenticatedRequest) {
+    return this.users.updateTeamSettings(actor, dto, clientIp(req));
+  }
+
+  @Post("bulk")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  bulk(@CurrentActor() actor: Actor, @Body() dto: BulkActionDto, @Req() req: AuthenticatedRequest) {
+    return this.users.bulk(actor, dto, clientIp(req));
   }
 
   @Post(":id/approval-limit")

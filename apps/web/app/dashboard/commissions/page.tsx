@@ -2,7 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useState } from "react";
-import { ManagerHistory, ManagerView, SuperAdminView, TeamView } from "../../../components/commission-views";
+import { ManagerHistory, ManagerView, SuperAdminView, TeamView, teamPerformanceRows } from "../../../components/commission-views";
 import {
   apiFetch,
   type CommissionHistory,
@@ -131,14 +131,17 @@ export default function CommissionsPage() {
       ]);
     } else if (showingTeam && team) {
       downloadCsv(`team-commission-${team.owner.username}-${stamp}.csv`, [
-        ["Manager", "Rate %", "Players", "Settled bets", "Team profit", "Owner pays Manager"],
-        ...team.managers.map((m) => [m.username, m.commissionRate, m.players.length, m.bets, m.net, m.commission]),
-        ["Players with no Manager", "", team.directPlayers.length, team.directPlayers.reduce((s, p) => s + p.bets, 0), team.directPlayers.reduce((s, p) => s + p.net, 0), 0],
+        ["Manager", "Rate %", "Players", "Settled bets", "Turnover", "Team profit", "Owner pays Manager"],
+        ...team.managers.map((m) => [m.username, m.commissionRate, m.players.length, m.bets, m.staked, m.net, m.commission]),
+        ["Players with no Manager", "", team.directPlayers.length, team.directPlayers.reduce((s, p) => s + p.bets, 0), team.directPlayers.reduce((s, p) => s + p.staked, 0), team.directPlayers.reduce((s, p) => s + p.net, 0), 0],
         [],
         ["Team profit", team.totals.net],
         [`Super Admin cut (${team.owner.commissionRate}%)`, team.totals.superAdminCut],
         ["Paid to Managers", team.totals.managerCommission],
         ["Owner keeps", team.totals.ownerKeeps],
+        [],
+        ["Player", "Manager", "Bets", "Turnover", "Team profit", "Manager earns"],
+        ...teamPerformanceRows(team).map((p) => [p.username, p.manager ?? "No Manager", p.bets, p.staked, p.net, p.manager ? p.commission : ""]),
       ]);
     } else if (owners) {
       downloadCsv(`owner-commission-${stamp}.csv`, [

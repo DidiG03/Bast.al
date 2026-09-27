@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { formatMoney, formatSignedMoney } from "../lib/format";
 import type { CommissionHistory, CommissionTotals, ManagerCommissions, PlayerResult, SuperAdminCommissions, TeamCommissions } from "../lib/api";
 
@@ -96,7 +97,7 @@ export function TeamView({ data, viewer }: { data: TeamCommissions; viewer: "OWN
   return (
     <>
       <div className="report-grid">
-        <Stat label={isOwner ? "Your team's profit" : `${owner.username}'s team profit`} value={formatSignedMoney(totals.net)} hint={`${plural(totals.bets, "settled bet")}`} />
+        <Stat label={isOwner ? "Your team's profit" : `${owner.username}'s team profit`} value={formatSignedMoney(totals.net)} hint={`${formatMoney(totals.staked)} turnover · ${plural(totals.bets, "bet")}`} />
         <Stat
           label={isOwner ? "You pay Super Admin" : "Your cut"}
           value={formatSignedMoney(totals.superAdminCut)}
@@ -121,7 +122,7 @@ export function TeamView({ data, viewer }: { data: TeamCommissions; viewer: "OWN
                   <div>
                     <strong>{manager.username}</strong>
                     <span className="muted">
-                      {ofResult(manager.commissionRate, manager.net)} · {plural(manager.players.length, "player")}
+                      {ofResult(manager.commissionRate, manager.net)} · {formatMoney(manager.staked)} turnover · {plural(manager.players.length, "player")}
                       {manager.status === "SUSPENDED" ? " · Suspended" : ""}
                     </span>
                   </div>
@@ -149,7 +150,71 @@ export function TeamView({ data, viewer }: { data: TeamCommissions; viewer: "OWN
           <PlayerList players={data.directPlayers} />
         </section>
       ) : null}
+      <TeamPerformance data={data} />
     </>
+  );
+}
+
+type PerformanceRow = PlayerResult & { manager: string | null; commission: number };
+type SortKey = "net" | "staked" | "bets" | "commission";
+
+/** Every Player in the team side by side: turnover, result and what their Manager earns from them. */
+export function teamPerformanceRows(data: TeamCommissions): PerformanceRow[] {
+  return [
+    ...data.managers.flatMap((manager) =>
+      manager.players.map((player) => ({ ...player, manager: manager.username, commission: Math.round(player.net * manager.commissionRate) / 100 })),
+    ),
+    ...data.directPlayers.map((player) => ({ ...player, manager: null, commission: 0 })),
+  ];
+}
+
+function TeamPerformance({ data }: { data: TeamCommissions }) {
+  const [sort, setSort] = useState<SortKey>("net");
+  const rows = teamPerformanceRows(data).sort((a, b) => b[sort] - a[sort] || a.username.localeCompare(b.username));
+  const columns: Array<[SortKey, string]> = [["bets", "Bets"], ["staked", "Turnover"], ["net", "Team profit"], ["commission", "Manager earns"]];
+  return (
+    <section className="card stack">
+      <div className="tree-header">
+        <h2 style={{ margin: 0 }}>Team performance</h2>
+        <span className="muted">{plural(rows.length, "player")}</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="muted" style={{ margin: 0 }}>No players yet.</p>
+      ) : (
+        <div className="performance-table-wrap">
+          <table className="performance-table">
+            <thead>
+              <tr>
+                <th scope="col">Player</th>
+                {columns.map(([key, label]) => (
+                  <th scope="col" key={key} aria-sort={sort === key ? "descending" : undefined}>
+                    <button type="button" className={`text-button${sort === key ? " is-active" : ""}`} onClick={() => setSort(key)}>
+                      {label}{sort === key ? " ↓" : ""}
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <th scope="row">
+                    <span className="performance-player">
+                      <Link href={`/dashboard/players/${row.id}`} className="commission-player-link">{row.username}</Link>
+                      <span className="muted">{row.manager ?? "No Manager"}</span>
+                    </span>
+                  </th>
+                  <td>{row.bets}</td>
+                  <td>{formatMoney(row.staked)}</td>
+                  <td className={row.net < 0 ? "ledger-negative" : undefined}>{formatSignedMoney(row.net)}</td>
+                  <td>{row.manager ? formatSignedMoney(row.commission) : "–"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

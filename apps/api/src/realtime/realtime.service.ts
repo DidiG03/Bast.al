@@ -14,7 +14,9 @@ export type RealtimeEvent =
   | { type: "notification.created"; notification: unknown }
   /** Read/archive/delete happened elsewhere (another tab or device): refetch the list. */
   | { type: "notifications.changed" }
-  | { type: "balance.changed"; balance: number; balanceLimit: number };
+  | { type: "balance.changed"; balance: number; balanceLimit: number }
+  /** A Player's bets were placed, settled or voided: refetch them. */
+  | { type: "bets.changed" };
 
 const CHANNEL = "bastal:realtime";
 

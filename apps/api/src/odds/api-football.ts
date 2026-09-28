@@ -20,6 +20,8 @@ export type RawFixture = {
   league: { id: number; name: string; country: string; season: number };
   teams: { home: { name: string }; away: { name: string } };
   goals: { home: number | null; away: number | null };
+  /** `fulltime` is the score after 90 minutes, before any extra time. */
+  score?: { fulltime?: { home: number | null; away: number | null } };
 };
 
 export type RawOdds = {
@@ -40,6 +42,8 @@ export type FeedFixture = {
   elapsed: number | null;
   homeScore: number | null;
   awayScore: number | null;
+  /** The score bets settle on, once the match has finished. Null until then. */
+  result: { home: number; away: number } | null;
 };
 
 export type FeedMarket = {
@@ -62,6 +66,12 @@ export function eventStatus(short: string): EventStatus {
 }
 
 export function parseFixture(raw: RawFixture): FeedFixture {
+  const status = eventStatus(raw.fixture.status.short);
+  // Bets are on 90 minutes. After extra time `goals` includes it, so prefer
+  // the full-time score; a plain FT match has both the same.
+  const fulltime = raw.score?.fulltime;
+  const home = fulltime?.home ?? (raw.fixture.status.short === "FT" ? raw.goals.home : null);
+  const away = fulltime?.away ?? (raw.fixture.status.short === "FT" ? raw.goals.away : null);
   return {
     externalId: String(raw.fixture.id),
     leagueId: raw.league.id,
@@ -71,10 +81,11 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     homeTeam: raw.teams.home.name,
     awayTeam: raw.teams.away.name,
     startsAt: new Date(raw.fixture.date),
-    status: eventStatus(raw.fixture.status.short),
+    status,
     elapsed: raw.fixture.status.elapsed,
     homeScore: raw.goals.home,
     awayScore: raw.goals.away,
+    result: status === EventStatus.COMPLETED && home !== null && away !== null ? { home, away } : null,
   };
 }
 

@@ -26,6 +26,9 @@ type SlipItem = {
   previousOdds?: number;
   stake: string;
   closed?: boolean;
+  /** A live pick whose market is suspended or whose prices went stale for now. */
+  paused?: boolean;
+  live?: boolean;
 };
 
 const SLIP_STORAGE = "bastal-bet-slip";
@@ -74,7 +77,8 @@ function readSlip(): SlipItem[] {
   try {
     const raw = window.localStorage.getItem(SLIP_STORAGE);
     const parsed = raw ? (JSON.parse(raw) as SlipItem[]) : [];
-    return Array.isArray(parsed) ? parsed.filter((item) => new Date(item.startsAt).getTime() > Date.now()).slice(0, MAX_SLIP) : [];
+    // Live picks stay on the slip for the length of a match; the next odds refresh closes any that ended.
+    return Array.isArray(parsed) ? parsed.filter((item) => new Date(item.startsAt).getTime() > Date.now() - 3 * 3_600_000).slice(0, MAX_SLIP) : [];
   } catch {
     return [];
   }
@@ -118,7 +122,8 @@ function BetPage() {
   const loadEvents = useCallback(async () => {
     const token = await getToken();
     if (!token) return;
-    const next = await apiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token);
+    const [live, upcoming] = await Promise.all([apiFetch<OddsEvent[]>("/odds/events?filter=live", token), apiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token)]);
+    const next = [...live, ...upcoming];
     setEvents(next);
     return next;
   }, [getToken]);
@@ -142,27 +147,35 @@ function BetPage() {
     loadInfo().catch((err) => setError(err instanceof Error ? err.message : "Could not load your account"));
   }, [loadInfo]);
 
+  const hasLive = (events ?? []).some((event) => event.live);
+
   useEffect(() => {
     if (tab !== "matches") return;
     loadEvents().catch((err) => setError(err instanceof Error ? err.message : "Could not load matches"));
-    // Prices move and matches kick off: refresh every minute while browsing.
-    const timer = setInterval(() => void loadEvents().catch(() => undefined), 60_000);
-    return () => clearInterval(timer);
   }, [tab, loadEvents]);
+
+  // Prices move and matches kick off: refresh every minute while browsing, every 10 seconds while a match is live.
+  useEffect(() => {
+    if (tab !== "matches") return;
+    const timer = setInterval(() => void loadEvents().catch(() => undefined), hasLive ? 10_000 : 60_000);
+    return () => clearInterval(timer);
+  }, [tab, loadEvents, hasLive]);
 
   // Keep the slip's prices in step with the latest odds, and close matches that kicked off.
   useEffect(() => {
     if (!events) return;
-    const byId = new Map<string, { event: OddsEvent; selection: OddsSelection }>();
-    for (const event of events) for (const market of event.markets) for (const selection of market.selections) byId.set(selection.id, { event, selection });
+    const byId = new Map<string, { event: OddsEvent; suspended: boolean; selection: OddsSelection }>();
+    for (const event of events) for (const market of event.markets) for (const selection of market.selections) byId.set(selection.id, { event, suspended: Boolean(market.suspended), selection });
     setSlip((items) =>
       items.map((item) => {
         const found = byId.get(item.selectionId);
-        if (!found || !found.event.bettable) return { ...item, closed: true };
+        if (!found || (!found.event.bettable && !found.event.live)) return { ...item, closed: true, paused: false };
+        const paused = !found.event.bettable || found.suspended;
+        const live = found.event.live;
         const price = found.selection.price;
-        if (price === item.odds) return { ...item, closed: false };
+        if (price === item.odds) return { ...item, closed: false, paused, live };
         const previous = item.previousOdds ?? item.odds;
-        return { ...item, closed: false, odds: price, previousOdds: previous === price ? undefined : previous };
+        return { ...item, closed: false, paused, live, odds: price, previousOdds: previous === price ? undefined : previous };
       }),
     );
   }, [events]);
@@ -189,7 +202,7 @@ function BetPage() {
       const lastStake = items[items.length - 1]?.stake ?? "";
       return [
         ...items,
-        { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, name: selection.name, odds: selection.price, stake: lastStake },
+        { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, name: selection.name, odds: selection.price, stake: lastStake, live: event.live },
       ];
     });
   }
@@ -197,11 +210,11 @@ function BetPage() {
   const leagues = useMemo(() => Array.from(new Set((events ?? []).map((e) => e.league))).sort(), [events]);
   const query = search.trim().toLowerCase();
   const shown = (events ?? []).filter(
-    (event) => event.bettable && event.markets.length > 0 && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
+    (event) => (event.bettable || event.live) && event.markets.length > 0 && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
   );
   const groups: Array<[string, OddsEvent[]]> = [];
   for (const event of shown) {
-    const label = dayLabel(event.startsAt);
+    const label = event.live ? "Live now" : dayLabel(event.startsAt);
     const last = groups[groups.length - 1];
     if (last && last[0] === label) last[1].push(event);
     else groups.push([label, [event]]);
@@ -232,7 +245,7 @@ function BetPage() {
       <div className="page-title-row">
         <div>
           <h1 style={{ margin: 0 }}>Bet</h1>
-          <p className="muted report-subtitle">Pick a price to add it to your slip. Bets close at kick-off.</p>
+          <p className="muted report-subtitle">Pick a price to add it to your slip. Live matches take bets while they&apos;re being played.</p>
         </div>
         {info ? (
           <div className="bet-balance">
@@ -289,7 +302,7 @@ function BetPage() {
             ) : (
               groups.map(([label, dayEvents]) => (
                 <section key={label} className="stack odds-day">
-                  <h2 className="odds-day-label">{label}</h2>
+                  <h2 className={`odds-day-label${label === "Live now" ? " bet-live-label" : ""}`}>{label}</h2>
                   {dayEvents.map((event) => (
                     <MatchCard key={event.id} event={event} selected={selected} onPick={toggle} />
                   ))}
@@ -327,25 +340,40 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
   const [showAll, setShowAll] = useState(false);
   const markets = showAll ? event.markets : event.markets.slice(0, 1);
   return (
-    <article className="card odds-event bet-match">
+    <article className={`card odds-event bet-match${event.live ? " is-live" : ""}`}>
       <header className="odds-event-header">
         <span className="muted odds-league">
           {event.league}
           {event.country ? ` · ${event.country}` : ""}
         </span>
-        <span className="status-pill">{timeFormat.format(new Date(event.startsAt))}</span>
+        {event.live ? (
+          <span className="status-pill is-active">{event.elapsed !== null ? `Live ${event.elapsed}'` : "Live"}</span>
+        ) : (
+          <span className="status-pill">{timeFormat.format(new Date(event.startsAt))}</span>
+        )}
       </header>
       <div className="odds-teams">
         <span>{event.homeTeam ?? event.name}</span>
-        <span className="muted">v</span>
+        {event.live && event.homeScore !== null && event.awayScore !== null ? (
+          <strong className="odds-score">
+            {event.homeScore} – {event.awayScore}
+          </strong>
+        ) : (
+          <span className="muted">v</span>
+        )}
         <span>{event.awayTeam ?? ""}</span>
       </div>
+      {event.live && !event.bettable ? <p className="muted bet-paused">Live betting is paused for a moment.</p> : null}
       {markets.map((market) => (
         <div key={market.id} className="odds-market">
-          <span className="odds-market-name">{market.name}</span>
+          <span className="odds-market-name">
+            {market.name}
+            {market.suspended ? <span className="muted"> · Suspended</span> : null}
+          </span>
           <div className="odds-selections">
             {market.selections.map((selection) => {
               const isSelected = selected.has(selection.id);
+              const locked = !event.bettable || Boolean(market.suspended);
               return (
                 <button
                   key={selection.id}
@@ -353,10 +381,11 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
                   className={`odds-selection bet-pick${isSelected ? " is-selected" : ""}`}
                   onClick={() => onPick(event, market.name, selection)}
                   aria-pressed={isSelected}
-                  aria-label={`${selection.name} at ${selection.price.toFixed(2)}, ${market.name}, ${event.name}`}
+                  disabled={locked && !isSelected}
+                  aria-label={`${selection.name} at ${selection.price.toFixed(2)}, ${market.name}, ${event.name}${locked ? ", suspended" : ""}`}
                 >
                   <span className="odds-selection-name">{selection.name}</span>
-                  <strong className="odds-price">{selection.price.toFixed(2)}</strong>
+                  <strong className="odds-price">{locked ? "–" : selection.price.toFixed(2)}</strong>
                 </button>
               );
             })}
@@ -412,6 +441,8 @@ function BetSlip({
   const totalReturn = acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + returns(stakeValue(item.stake), item.odds), 0);
   const missingStake = acca ? accaStakeValue < 1 : items.some((item) => stakeValue(item.stake) < 1);
   const closed = items.filter((item) => item.closed);
+  const paused = items.filter((item) => item.paused && !item.closed);
+  const hasLive = items.some((item) => item.live);
   const overMax = info?.maxStake != null ? (acca ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
   const tooLittle = info ? totalStake > info.balance : false;
   const moved = items.some((item) => item.previousOdds !== undefined);
@@ -419,6 +450,7 @@ function BetSlip({
   let blocker: string | null = null;
   if (info?.blocked) blocker = info.blocked;
   else if (closed.length > 0) blocker = `Remove ${closed.length === 1 ? "the match that has closed" : "the matches that have closed"} to continue.`;
+  else if (paused.length > 0) blocker = `Live betting is paused on ${paused.length === 1 ? paused[0].eventName : "some of your picks"}. Wait a moment or remove ${paused.length === 1 ? "it" : "them"}.`;
   else if (acca && sameMatch) blocker = "An accumulator needs each pick from a different match. Remove one of the picks from the same match.";
   else if (acca && accaOdds > MAX_ACCUMULATOR_ODDS) blocker = `Combined odds can be at most ${MAX_ACCUMULATOR_ODDS}. Remove a pick to continue.`;
   else if (missingStake) blocker = acca ? "Enter a stake of at least $1." : "Enter a stake of at least $1 on each bet.";
@@ -454,7 +486,7 @@ function BetSlip({
       const message = err instanceof Error ? err.message : "Could not place your bets";
       setError(message);
       // A price moved or a match closed: fetch the latest so the slip shows it.
-      if (/odds changed|closed|no longer exists/i.test(message)) onOddsChanged();
+      if (/odds changed|closed|no longer exists|paused|score changed/i.test(message)) onOddsChanged();
     } finally {
       setPlacing(false);
     }
@@ -566,6 +598,8 @@ function BetSlip({
                     <span className={`bet-slip-odds${item.previousOdds !== undefined ? " has-moved" : ""}`}>
                       {item.closed ? (
                         <span className="error-text">Closed</span>
+                      ) : item.paused ? (
+                        <span className="muted">Paused</span>
                       ) : (
                         <>
                           {item.previousOdds !== undefined ? <s className="muted">{item.previousOdds.toFixed(2)}</s> : null}
@@ -647,6 +681,7 @@ function BetSlip({
             ) : null}
           </dl>
 
+          {hasLive && !blocker ? <p className="muted bet-slip-note">Live bets take a few seconds to confirm. If the price or score changes meanwhile, you&apos;ll see the new price first.</p> : null}
           {moved && !error ? <p className="muted bet-slip-note">Some prices moved since you added them. The new price is what you get.</p> : null}
           {blocker ? <p className="muted bet-slip-note">{blocker}</p> : null}
           {error ? (
@@ -656,7 +691,7 @@ function BetSlip({
           ) : null}
 
           <button type="submit" className="bet-place" disabled={Boolean(blocker) || placing}>
-            {placing ? "Placing…" : acca ? `Place accumulator · ${formatMoney(totalStake)}` : `Place ${items.length === 1 ? "bet" : `${items.length} bets`} · ${formatMoney(totalStake)}`}
+            {placing ? (hasLive ? "Confirming live bet…" : "Placing…") : acca ? `Place accumulator · ${formatMoney(totalStake)}` : `Place ${items.length === 1 ? "bet" : `${items.length} bets`} · ${formatMoney(totalStake)}`}
           </button>
           {info?.maxStake != null || info?.dailyLossLimit != null ? (
             <p className="muted bet-slip-note">

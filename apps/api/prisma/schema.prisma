@@ -67,62 +67,62 @@ enum BalanceTransactionStatus {
 }
 
 model User {
-  id        String     @id @default(cuid())
-  clerkId   String     @unique @map("clerk_id")
-  username  String     @unique
+  id                   String     @id @default(cuid())
+  clerkId              String     @unique @map("clerk_id")
+  username             String     @unique
   /// AES-256-GCM ciphertext — never returned by API. Not unique (randomized IV).
-  emailCipher String   @map("email_cipher")
+  emailCipher          String     @map("email_cipher")
   /// HMAC blind index for uniqueness/lookup without storing plaintext email.
-  emailHash   String   @unique @map("email_hash")
-  role      Role
-  parentId  String?    @map("parent_id")
-  parent    User?      @relation("UserHierarchy", fields: [parentId], references: [id])
-  children  User[]     @relation("UserHierarchy")
-  status    UserStatus @default(ACTIVE)
+  emailHash            String     @unique @map("email_hash")
+  role                 Role
+  parentId             String?    @map("parent_id")
+  parent               User?      @relation("UserHierarchy", fields: [parentId], references: [id])
+  children             User[]     @relation("UserHierarchy")
+  status               UserStatus @default(ACTIVE)
   /// Delegatable credit this user currently holds. Every role except
   /// SUPER_ADMIN carries a real balance in the delegation model — Super Admin
   /// "prints" credit into an Owner's balance with no source deduction.
-  balance   Decimal    @default(0) @db.Decimal(12, 2)
-  balanceLimit Decimal  @default(1000000) @map("balance_limit") @db.Decimal(12, 2)
+  balance              Decimal    @default(0) @db.Decimal(12, 2)
+  balanceLimit         Decimal    @default(1000000) @map("balance_limit") @db.Decimal(12, 2)
   /// Max number of direct Players this user (Owner or Manager) may hold.
-  managerCapacity Int    @default(100) @map("manager_capacity")
+  managerCapacity      Int        @default(100) @map("manager_capacity")
   /// Percentage this user's commission relationship with their parent runs
   /// at: for an OWNER, the cut Super Admin takes from their net revenue; for
   /// a MANAGER, the cut they earn from their own downline Players' net
   /// revenue. Unused for SUPER_ADMIN/PLAYER.
-  commissionRate Decimal @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  commissionRate       Decimal    @default(0) @map("commission_rate") @db.Decimal(5, 2)
   /// MANAGER only: this Manager's own delegations up to this amount go through
   /// without their Owner's approval. Null means the platform default ($10,000).
   /// Set by the Manager's Owner (or Super Admin).
-  approvalLimit Decimal? @map("approval_limit") @db.Decimal(12, 2)
+  approvalLimit        Decimal?   @map("approval_limit") @db.Decimal(12, 2)
   /// OWNER only: the approval limit every Manager in this team gets unless
   /// they have their own approvalLimit. Null means the platform default.
-  managerApprovalLimit Decimal? @map("manager_approval_limit") @db.Decimal(12, 2)
+  managerApprovalLimit Decimal?   @map("manager_approval_limit") @db.Decimal(12, 2)
   /// OWNER only: alert when a Manager or Player in this team drops below this
   /// balance. Null turns low-balance alerts off.
-  lowBalanceThreshold Decimal? @map("low_balance_threshold") @db.Decimal(12, 2)
+  lowBalanceThreshold  Decimal?   @map("low_balance_threshold") @db.Decimal(12, 2)
   /// OWNER only: percent added to Super Admin's base margin for this team's
   /// prices. Negative gives the team better odds, but never above the feed.
-  oddsMargin Decimal @default(0) @map("odds_margin") @db.Decimal(5, 2)
+  oddsMargin           Decimal    @default(0) @map("odds_margin") @db.Decimal(5, 2)
   /// OWNER only: the most this team's open bets may pay out if any one
   /// outcome wins (singles on it plus accumulators that include it). Null
   /// means no cap. New bets that would go over it are refused.
-  maxOutcomePayout Decimal? @map("max_outcome_payout") @db.Decimal(12, 2)
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
+  maxOutcomePayout     Decimal?   @map("max_outcome_payout") @db.Decimal(12, 2)
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
 
-  auditLogsAsActor  AuditLog[] @relation("AuditActor")
-  auditLogsAsTarget AuditLog[] @relation("AuditTarget")
-  delegationsGiven     BalanceTransaction[] @relation("DelegationFrom")
-  delegationsReceived  BalanceTransaction[] @relation("DelegationTo")
-  delegationsActedOn   BalanceTransaction[] @relation("DelegationActor")
-  delegationsApproved  BalanceTransaction[] @relation("DelegationApprover")
-  notifications                Notification[]
-  notificationPreference      NotificationPreference?
-  loginHistory                 LoginHistory[]
-  bets                         Bet[]
-  bettingLimit                 BettingLimit?
-  oddsOverrides                OddsOverride[]
+  auditLogsAsActor       AuditLog[]              @relation("AuditActor")
+  auditLogsAsTarget      AuditLog[]              @relation("AuditTarget")
+  delegationsGiven       BalanceTransaction[]    @relation("DelegationFrom")
+  delegationsReceived    BalanceTransaction[]    @relation("DelegationTo")
+  delegationsActedOn     BalanceTransaction[]    @relation("DelegationActor")
+  delegationsApproved    BalanceTransaction[]    @relation("DelegationApprover")
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  loginHistory           LoginHistory[]
+  bets                   Bet[]
+  bettingLimit           BettingLimit?
+  oddsOverrides          OddsOverride[]
 
   @@index([parentId])
   @@index([role])
@@ -131,45 +131,45 @@ model User {
 }
 
 model LoginHistory {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessionId   String   @unique @map("session_id")
-  ipAddress   String?  @map("ip_address")
-  userAgent   String?  @map("user_agent")
-  device      String?
-  browser     String?
-  location    String?
-  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId  String   @unique @map("session_id")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  device     String?
+  browser    String?
+  location   String?
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
   @@map("login_history")
 }
 
 model SecuritySetting {
-  id          String   @id @default("default")
-  failLimit   Int      @default(8) @map("fail_limit")
-  windowMs    Int      @default(900000) @map("window_ms")
-  banMs       Int      @default(3600000) @map("ban_ms")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id        String   @id @default("default")
+  failLimit Int      @default(8) @map("fail_limit")
+  windowMs  Int      @default(900000) @map("window_ms")
+  banMs     Int      @default(3600000) @map("ban_ms")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("security_settings")
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  userId    String           @map("user_id")
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      NotificationType
-  category  NotificationCategory @default(SYSTEM)
-  severity  NotificationSeverity @default(INFO)
-  title     String
-  message   String
-  metadata  Json?
-  readAt    DateTime?        @map("read_at")
-  archivedAt DateTime?       @map("archived_at")
-  createdAt DateTime         @default(now()) @map("created_at")
+  id         String               @id @default(cuid())
+  userId     String               @map("user_id")
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationType
+  category   NotificationCategory @default(SYSTEM)
+  severity   NotificationSeverity @default(INFO)
+  title      String
+  message    String
+  metadata   Json?
+  readAt     DateTime?            @map("read_at")
+  archivedAt DateTime?            @map("archived_at")
+  createdAt  DateTime             @default(now()) @map("created_at")
 
   @@index([userId, readAt, archivedAt, createdAt])
   @@map("notifications")
@@ -196,21 +196,21 @@ model NotificationPreference {
 /// null (a Super-Admin-only correction with no counterparty) and amount may
 /// be negative.
 model BalanceTransaction {
-  id           String   @id @default(cuid())
-  fromUserId   String?  @map("from_user_id")
-  fromUser     User?    @relation("DelegationFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
-  toUserId     String   @map("to_user_id")
-  toUser       User     @relation("DelegationTo", fields: [toUserId], references: [id], onDelete: Cascade)
-  actorId      String?  @map("actor_id")
-  actor        User?    @relation("DelegationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  approvedById String?  @map("approved_by_id")
-  approvedBy   User?    @relation("DelegationApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  id           String                   @id @default(cuid())
+  fromUserId   String?                  @map("from_user_id")
+  fromUser     User?                    @relation("DelegationFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUserId     String                   @map("to_user_id")
+  toUser       User                     @relation("DelegationTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  actorId      String?                  @map("actor_id")
+  actor        User?                    @relation("DelegationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  approvedById String?                  @map("approved_by_id")
+  approvedBy   User?                    @relation("DelegationApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   type         BalanceTransactionType
-  amount       Decimal  @db.Decimal(12, 2)
+  amount       Decimal                  @db.Decimal(12, 2)
   reason       String
   status       BalanceTransactionStatus @default(APPROVED)
-  approvedAt   DateTime? @map("approved_at")
-  createdAt    DateTime @default(now()) @map("created_at")
+  approvedAt   DateTime?                @map("approved_at")
+  createdAt    DateTime                 @default(now()) @map("created_at")
 
   @@index([toUserId, createdAt])
   @@index([fromUserId])
@@ -237,39 +237,43 @@ model AuditLog {
 }
 
 model Event {
-  id         String      @id @default(cuid())
-  name       String
-  league     String
-  status     EventStatus @default(UPCOMING)
-  startsAt   DateTime
-  volume     Decimal     @default(0) @db.Decimal(12, 2)
+  id           String      @id @default(cuid())
+  name         String
+  league       String
+  status       EventStatus @default(UPCOMING)
+  startsAt     DateTime
+  volume       Decimal     @default(0) @db.Decimal(12, 2)
   /// Where the match came from: "api-football", "mock" or "manual".
-  provider   String      @default("manual")
+  provider     String      @default("manual")
   /// The match's id at the provider. Null for manual events.
-  externalId String?     @map("external_id")
-  country    String?
-  homeTeam   String?     @map("home_team")
-  awayTeam   String?     @map("away_team")
-  homeScore  Int?        @map("home_score")
-  awayScore  Int?        @map("away_score")
+  externalId   String?     @map("external_id")
+  country      String?
+  homeTeam     String?     @map("home_team")
+  awayTeam     String?     @map("away_team")
+  homeScore    Int?        @map("home_score")
+  awayScore    Int?        @map("away_score")
   /// Minutes played, while live.
-  elapsed    Int?
+  elapsed      Int?
   /// Super Admin: hidden events aren't shown to anyone else.
-  hidden     Boolean     @default(false)
+  hidden       Boolean     @default(false)
   /// Super Admin: suspended events are shown but can't be bet on.
-  suspended  Boolean     @default(false)
+  suspended    Boolean     @default(false)
   /// Last time the provider sent anything for this event.
-  syncedAt   DateTime?   @map("synced_at")
+  syncedAt     DateTime?   @map("synced_at")
+  /// Last time live odds arrived for this match. Live bets pause when this goes stale.
+  liveOddsAt   DateTime?   @map("live_odds_at")
+  /// The feed has stopped live betting on this match (e.g. a goal or VAR check).
+  liveStopped  Boolean     @default(false) @map("live_stopped")
   /// The score bets are settled on: 90 minutes plus stoppage time, never
   /// extra time or penalties. Set by the feed when the match ends, or by
   /// Super Admin when correcting a result.
-  resultHome Int?        @map("result_home")
-  resultAway Int?        @map("result_away")
+  resultHome   Int?        @map("result_home")
+  resultAway   Int?        @map("result_away")
   /// "feed" or "manual". The feed never overwrites a manual result.
-  resultSource String?   @map("result_source")
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  markets    Market[]
+  resultSource String?     @map("result_source")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  markets      Market[]
 
   @@unique([provider, externalId])
   @@index([status, startsAt])
@@ -277,15 +281,17 @@ model Event {
 
 /// One bet type on an event, e.g. "Match winner" or "Total goals 2.5".
 model Market {
-  id         String      @id @default(cuid())
-  eventId    String      @map("event_id")
-  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id            String      @id @default(cuid())
+  eventId       String      @map("event_id")
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
   /// Stable key such as "match_winner" or "goals_2_5".
-  key        String
-  name       String
-  sortOrder  Int         @default(0) @map("sort_order")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
-  selections Selection[]
+  key           String
+  name          String
+  sortOrder     Int         @default(0) @map("sort_order")
+  /// While the match is live: the feed suspended this market, or stopped pricing it.
+  liveSuspended Boolean     @default(false) @map("live_suspended")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  selections    Selection[]
 
   @@unique([eventId, key])
   @@map("markets")
@@ -301,6 +307,8 @@ model Selection {
   name      String
   /// The price from the feed, before any margin or override.
   feedOdds  Decimal          @map("feed_odds") @db.Decimal(8, 2)
+  /// The in-play price from the feed, while the match is live. Owners' fixed prices don't apply to it.
+  liveOdds  Decimal?         @map("live_odds") @db.Decimal(8, 2)
   /// Set when the market is settled.
   result    SelectionResult?
   sortOrder Int              @default(0) @map("sort_order")
@@ -352,28 +360,28 @@ model PlatformSettings {
 /// earns the full stake and a won bet costs the winnings. VOID bets are
 /// refunded and count for nothing.
 model Bet {
-  id        String    @id @default(cuid())
-  playerId  String    @map("player_id")
-  player    User      @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  stake     Decimal   @db.Decimal(12, 2)
+  id          String     @id @default(cuid())
+  playerId    String     @map("player_id")
+  player      User       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  stake       Decimal    @db.Decimal(12, 2)
   /// What the Player was paid back, stake included. 0 for a lost bet.
-  payout    Decimal   @default(0) @db.Decimal(12, 2)
-  status    BetStatus @default(OPEN)
+  payout      Decimal    @default(0) @db.Decimal(12, 2)
+  status      BetStatus  @default(OPEN)
   /// What was bet on, e.g. "Tirana v Partizani · Tirana to win".
-  description String?  @db.VarChar(200)
+  description String?    @db.VarChar(200)
   /// The price the Player got, locked when the bet was placed.
-  odds      Decimal?  @db.Decimal(8, 2)
+  odds        Decimal?   @db.Decimal(8, 2)
   selectionId String?    @map("selection_id")
   selection   Selection? @relation(fields: [selectionId], references: [id], onDelete: Restrict)
-  placedAt  DateTime  @default(now()) @map("placed_at")
-  settledAt DateTime? @map("settled_at")
+  placedAt    DateTime   @default(now()) @map("placed_at")
+  settledAt   DateTime?  @map("settled_at")
   /// Set when Super Admin voided the bet by hand. Such a bet stays void even
   /// if the match result is corrected later.
-  voidReason String?  @map("void_reason") @db.VarChar(200)
+  voidReason  String?    @map("void_reason") @db.VarChar(200)
   /// SINGLE bets point at one selection. ACCUMULATOR bets have legs, and
   /// `odds` is the combined price locked when the bet was placed.
-  kind      BetKind   @default(SINGLE)
-  legs      BetLeg[]
+  kind        BetKind    @default(SINGLE)
+  legs        BetLeg[]
 
   @@index([playerId, settledAt])
   @@index([status, settledAt])
@@ -440,13 +448,13 @@ enum EventStatus {
 /// One row per client-supplied Idempotency-Key, so a double tap or a retried
 /// request replays the first response instead of moving money twice.
 model IdempotencyKey {
-  id             String   @id @default(uuid())
-  userId         String   @map("user_id")
-  key            String
-  requestHash    String   @map("request_hash")
-  completed      Boolean  @default(false)
-  responseBody   Json?    @map("response_body")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  key          String
+  requestHash  String   @map("request_hash")
+  completed    Boolean  @default(false)
+  responseBody Json?    @map("response_body")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@unique([userId, key])
   @@index([createdAt])

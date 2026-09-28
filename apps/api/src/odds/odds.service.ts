@@ -4,7 +4,7 @@ import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { OddsSyncService } from "./odds-sync.service";
-import { MAX_MARGIN, MAX_ODDS, MIN_ODDS, teamMargin, teamPrice } from "./pricing";
+import { MAX_MARGIN, MAX_ODDS, MIN_ODDS, eventOpen, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
@@ -76,7 +76,9 @@ export class OddsService {
     const overrideBy = new Map(overrides.map((o) => [o.selectionId, Number(o.odds)]));
     const showFeed = actor.role !== Role.PLAYER;
 
-    return events.map((event) => ({
+    return events.map((event) => {
+      const live = event.status === EventStatus.LIVE;
+      return {
       id: event.id,
       name: event.name,
       league: event.league,
@@ -91,27 +93,36 @@ export class OddsService {
       hidden: event.hidden,
       suspended: event.suspended,
       provider: event.provider,
-      /** Only matches that haven't kicked off take bets; live betting comes later. */
-      bettable: event.status === EventStatus.UPCOMING && event.startsAt > now && !event.suspended && !event.hidden,
-      markets: event.markets.map((market) => ({
-        id: market.id,
-        key: market.key,
-        name: market.name,
-        selections: market.selections.map((selection) => {
+      /** Before kick-off, or live with fresh in-play prices. */
+      bettable: eventOpen(event, now),
+      live,
+      markets: event.markets.map((market) => {
+        const selections = market.selections.map((selection) => {
           const feedOdds = Number(selection.feedOdds);
-          const override = overrideBy.get(selection.id) ?? null;
+          const liveOdds = num(selection.liveOdds);
+          const override = live ? null : overrideBy.get(selection.id) ?? null;
+          const quote = selectionQuote({ event, market, selection: { feedOdds, liveOdds, result: selection.result }, baseMargin, ownerMargin, override, now });
           return {
             id: selection.id,
             key: selection.key,
             name: selection.name,
-            price: teamPrice({ feedOdds, baseMargin, ownerMargin, override }),
-            feedOdds: showFeed ? feedOdds : undefined,
+            price: quote.price,
+            feedOdds: showFeed ? (live ? liveOdds ?? feedOdds : feedOdds) : undefined,
             custom: override !== null,
             result: selection.result,
           };
-        }),
-      })),
-    }));
+        });
+        return {
+          id: market.id,
+          key: market.key,
+          name: market.name,
+          /** Live only: the feed has this market off the board right now. */
+          suspended: live && (market.liveSuspended || market.selections.some((s) => s.liveOdds === null)),
+          selections,
+        };
+      }),
+    };
+    });
   }
 
   async setBaseMargin(actor: Actor, margin: number) {
@@ -187,7 +198,7 @@ export class OddsService {
    * The price a Player gets on a selection right now, and whether it can be
    * bet on. Bet placement must lock this price into Bet.odds.
    */
-  async priceForPlayer(playerId: string, selectionId: string): Promise<{ odds: number; bettable: boolean }> {
+  async priceForPlayer(playerId: string, selectionId: string): Promise<{ odds: number; bettable: boolean; live: boolean; score: string }> {
     const player = await this.prisma.user.findUnique({ where: { id: playerId }, select: { id: true, role: true, parentId: true, parent: { select: { id: true, role: true, parentId: true } } } });
     if (!player || player.role !== Role.PLAYER) throw new NotFoundException("Player not found");
     const ownerId = ownerOf(player);
@@ -199,14 +210,15 @@ export class OddsService {
       ownerId ? this.prisma.user.findUnique({ where: { id: ownerId }, select: { oddsMargin: true } }) : null,
       ownerId ? this.prisma.oddsOverride.findUnique({ where: { ownerId_selectionId: { ownerId, selectionId } } }) : null,
     ]);
-    const odds = teamPrice({
-      feedOdds: Number(selection.feedOdds),
+    const quote = selectionQuote({
+      event,
+      market: selection.market,
+      selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result },
       baseMargin: Number(platform.baseOddsMargin),
       ownerMargin: num(owner?.oddsMargin) ?? 0,
       override: num(override?.odds),
     });
-    const bettable = event.status === EventStatus.UPCOMING && event.startsAt > new Date() && !event.suspended && !event.hidden && selection.result === null;
-    return { odds, bettable };
+    return { odds: quote.price, bettable: quote.bettable, live: quote.live, score: `${event.homeScore ?? "-"}:${event.awayScore ?? "-"}` };
   }
 
   private async platform() {

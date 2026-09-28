@@ -342,7 +342,9 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
 
       {event.status === "LIVE" ? (
         <p className="muted odds-note">
-          {event.markets.length > 0 ? "Showing pre-match prices. " : ""}Bets close at kick-off until live betting is added.
+          {event.bettable
+            ? "Live prices from the feed, less the team margin. Your own fixed prices only apply before kick-off."
+            : "Live betting on this match is paused: the feed has stopped or suspended it, or its prices are out of date."}
         </p>
       ) : null}
 
@@ -351,7 +353,10 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
       ) : (
         markets.map((market) => (
           <div key={market.id} className="odds-market">
-            <span className="odds-market-name">{market.name}</span>
+            <span className="odds-market-name">
+              {market.name}
+              {market.suspended ? <span className="muted"> · Suspended</span> : null}
+            </span>
             <div className="odds-selections">
               {market.selections.map((selection) => {
                 const content = (
@@ -364,7 +369,7 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
                   </>
                 );
                 const className = `odds-selection${selection.custom ? " is-custom" : ""}${selection.result === "WON" ? " is-won" : ""}${editing?.id === selection.id ? " is-editing" : ""}`;
-                return canEditPrices && !finished ? (
+                return canEditPrices && !finished && event.status !== "LIVE" ? (
                   <button key={selection.id} type="button" className={className} onClick={() => startEdit(selection)} aria-label={`Change the price for ${selection.name}, now ${odds(selection.price)}`}>
                     {content}
                   </button>

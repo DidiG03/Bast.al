@@ -29,6 +29,31 @@ export type RawOdds = {
   bookmakers: Array<{ id: number; name: string; bets: Array<{ id: number; name: string; values: Array<{ value: string | number; odd: string }> }> }>;
 };
 
+/**
+ * One live match from `/odds/live`. `status.stopped` and `status.blocked` mean
+ * the bookmaker isn't taking bets on the whole match right now; `suspended`
+ * on a value means that price is off the board.
+ */
+export type RawLiveOdds = {
+  fixture: { id: number; status?: { long?: string; elapsed?: number | null } };
+  teams?: { home?: { goals?: number | null }; away?: { goals?: number | null } };
+  status?: { stopped?: boolean; blocked?: boolean; finished?: boolean };
+  update?: string;
+  odds: Array<{ id: number; name: string; values: Array<{ value: string | number; odd: string; handicap?: string | null; main?: boolean | null; suspended?: boolean }> }>;
+};
+
+export type FeedLiveMarket = FeedMarket & {
+  /** The feed suspended this market, or one of its outcomes has no valid price. */
+  suspended: boolean;
+};
+
+export type FeedLiveOdds = {
+  externalId: string;
+  /** The feed isn't taking bets on this match at all right now. */
+  stopped: boolean;
+  markets: FeedLiveMarket[];
+};
+
 export type FeedFixture = {
   externalId: string;
   leagueId: number;
@@ -157,6 +182,88 @@ export function parseMarkets(raw: RawOdds, homeTeam: string, awayTeam: string, b
   return markets.sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+type LiveMarketSpec = {
+  key: string;
+  name: string;
+  /** Only values with this handicap count, e.g. "2.5" for the goals line. */
+  handicap?: string;
+  values: Array<[feedValues: string[], key: string, name: (home: string, away: string) => string]>;
+};
+
+/**
+ * In-play markets use different bet names from pre-match ones, so they're
+ * matched on their own names (compared case-insensitively) onto the same
+ * market and selection keys. Anything else in the feed is ignored.
+ */
+const LIVE_MARKETS: Record<string, LiveMarketSpec> = {
+  "fulltime result": {
+    key: "match_winner",
+    name: "Match winner",
+    values: [
+      [["Home", "1"], "home", (home) => home],
+      [["Draw", "X"], "draw", () => "Draw"],
+      [["Away", "2"], "away", (_home, away) => away],
+    ],
+  },
+  "double chance": {
+    key: "double_chance",
+    name: "Double chance",
+    values: [
+      [["Home/Draw", "1X"], "home_draw", (home) => `${home} or draw`],
+      [["Home/Away", "12"], "home_away", (home, away) => `${home} or ${away}`],
+      [["Draw/Away", "X2"], "draw_away", (_home, away) => `Draw or ${away}`],
+    ],
+  },
+  "over/under line": {
+    key: "goals_2_5",
+    name: "Total goals 2.5",
+    handicap: "2.5",
+    values: [
+      [["Over", "Over 2.5"], "over", () => "Over 2.5"],
+      [["Under", "Under 2.5"], "under", () => "Under 2.5"],
+    ],
+  },
+  "both teams to score": {
+    key: "btts",
+    name: "Both teams score",
+    values: [
+      [["Yes"], "yes", () => "Yes"],
+      [["No"], "no", () => "No"],
+    ],
+  },
+};
+LIVE_MARKETS["match goals"] = LIVE_MARKETS["over/under line"];
+const LIVE_ORDER = ["match_winner", "double_chance", "goals_2_5", "btts"];
+
+/**
+ * The in-play prices for one match. A market with any suspended or missing
+ * outcome comes back suspended, with the prices it does have.
+ */
+export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: string): FeedLiveOdds {
+  const markets = new Map<string, FeedLiveMarket>();
+  for (const bet of raw.odds ?? []) {
+    const spec = LIVE_MARKETS[bet.name.trim().toLowerCase()];
+    if (!spec || markets.has(spec.key)) continue;
+    let suspended = false;
+    const selections = spec.values.map(([feedValues, key, name], sortOrder) => {
+      const value = bet.values.find(
+        (v) => feedValues.includes(String(v.value)) && (spec.handicap === undefined || String(v.handicap ?? "").trim() === spec.handicap || String(v.value).endsWith(spec.handicap)),
+      );
+      const odds = Number(value?.odd);
+      if (!value || value.suspended || !Number.isFinite(odds) || odds <= 1) suspended = true;
+      return { key, name: name(homeTeam, awayTeam), odds: Number.isFinite(odds) && odds > 1 ? odds : 0, sortOrder };
+    });
+    // A goals line the feed isn't offering right now (e.g. only 3.5 is up) is simply absent.
+    if (spec.handicap && selections.every((s) => s.odds === 0)) continue;
+    markets.set(spec.key, { key: spec.key, name: spec.name, sortOrder: LIVE_ORDER.indexOf(spec.key), selections, suspended });
+  }
+  return {
+    externalId: String(raw.fixture.id),
+    stopped: Boolean(raw.status?.stopped || raw.status?.blocked || raw.status?.finished),
+    markets: [...markets.values()].sort((a, b) => a.sortOrder - b.sortOrder),
+  };
+}
+
 export class ApiFootballClient {
   constructor(private readonly fetchJson: FetchJson) {}
 
@@ -175,6 +282,12 @@ export class ApiFootballClient {
     if (ids.length === 0) return [];
     const res = (await this.fetchJson("/fixtures", { ids: ids.slice(0, 20).join("-") })) as ApiResponse<RawFixture>;
     return res.response.map(parseFixture);
+  }
+
+  /** In-play odds for every match the feed is pricing live, in one request. */
+  async liveOdds(): Promise<RawLiveOdds[]> {
+    const res = (await this.fetchJson("/odds/live", {})) as ApiResponse<RawLiveOdds>;
+    return res.response;
   }
 
   /** Pre-match odds for one league on one day, every page. */

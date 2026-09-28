@@ -1,4 +1,4 @@
-import type { ApiResponse, FetchJson, RawFixture, RawOdds } from "./api-football";
+import type { ApiResponse, FetchJson, RawFixture, RawLiveOdds, RawOdds } from "./api-football";
 
 /**
  * A stand-in for API-Football, used when ODDS_FEED_MOCK=true and no API key is
@@ -77,6 +77,47 @@ function odds(match: MockMatch): RawOdds {
   };
 }
 
+const price = (p: number) => String(Math.max(1.01, Math.floor((0.94 / Math.max(0.01, p)) * 100) / 100));
+
+/**
+ * In-play prices that follow the mock score: the side ahead shortens as the
+ * clock runs down. Every market is suspended for the first two minutes after
+ * a goal, like a real bookmaker, and a decided market drops off the board.
+ */
+function liveOdds(match: MockMatch, raw: RawFixture): RawLiveOdds {
+  const elapsed = raw.fixture.status.elapsed ?? 0;
+  const home = raw.goals.home ?? 0;
+  const away = raw.goals.away ?? 0;
+  const t = Math.min(0.95, elapsed / 90);
+  const inv = match.odds.slice(0, 3).map((o) => 1 / o);
+  const sum = inv[0] + inv[1] + inv[2];
+  const start = inv.map((p) => p / sum);
+  const target = home > away ? [0.9, 0.07, 0.03] : home < away ? [0.03, 0.07, 0.9] : [0.28, 0.44, 0.28];
+  const [ph, pd, pa] = start.map((p, i) => (1 - t) * p + t * target[i]);
+  const goals = home + away;
+  const suspended = elapsed >= 30 && elapsed % 30 < 2;
+  const v = (value: string, p: number, handicap: string | null = null) => ({ value, odd: price(p), handicap, main: handicap ? true : null, suspended });
+  const odds: RawLiveOdds["odds"] = [
+    { id: 59, name: "Fulltime Result", values: [v("Home", ph), v("Draw", pd), v("Away", pa)] },
+    { id: 72, name: "Double Chance", values: [v("Home/Draw", ph + pd), v("Home/Away", ph + pa), v("Draw/Away", pd + pa)] },
+  ];
+  if (goals < 3) {
+    const over = (1 - t) * [0.7, 0.45, 0.25][goals];
+    odds.push({ id: 36, name: "Over/Under Line", values: [v("Over", over, "2.5"), v("Under", 1 - over, "2.5")] });
+  }
+  if (home === 0 || away === 0) {
+    const yes = (1 - t) * (home + away > 0 ? 0.55 : 0.45);
+    odds.push({ id: 69, name: "Both Teams To Score", values: [v("Yes", yes), v("No", 1 - yes)] });
+  }
+  return {
+    fixture: { id: match.id, status: { long: raw.fixture.status.short, elapsed } },
+    teams: { home: { goals: home }, away: { goals: away } },
+    status: { stopped: false, blocked: false, finished: false },
+    update: new Date().toISOString(),
+    odds,
+  };
+}
+
 const utcDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 /**
@@ -94,6 +135,10 @@ export function mockFetchJson(clock: () => number = Date.now, anchor: number = c
         return { response: all.filter((f) => ids.includes(String(f.fixture.id))) };
       }
       return { response: all.filter((f) => f.fixture.date.slice(0, 10) === params.date) };
+    }
+    if (path === "/odds/live") {
+      const live = MATCHES.map((m) => [m, fixture(m, now, anchor)] as const).filter(([, f]) => ["1H", "HT", "2H"].includes(f.fixture.status.short));
+      return { response: live.map(([m, f]) => liveOdds(m, f)) };
     }
     if (path === "/odds") {
       const response = MATCHES.filter((m) => m.league[0] === Number(params.league) && utcDate(anchor + m.kickoff * 60_000) === params.date).map(odds);

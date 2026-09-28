@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/commo
 import { EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
-import { ApiFootballClient, FeedFixture, FeedMarket, httpFetchJson, parseMarkets } from "./api-football";
+import { ApiFootballClient, FeedFixture, FeedLiveMarket, FeedMarket, httpFetchJson, parseLiveOdds, parseMarkets } from "./api-football";
 import { mockFetchJson } from "./mock-feed";
 
 /**
@@ -27,7 +27,8 @@ const LOCK_KEY = "bastal:odds-sync";
  * - every ODDS_SYNC_INTERVAL_MS (10 minutes by default): fixtures and
  *   pre-match odds for today and the next ODDS_SYNC_DAYS - 1 days;
  * - every ODDS_LIVE_INTERVAL_MS (30 seconds): scores for matches that are
- *   live or should have kicked off, only while there are any.
+ *   live or should have kicked off, only while there are any, plus in-play
+ *   odds for the live ones (one request for all of them).
  * A Redis lock makes sure only one API instance syncs at a time.
  */
 @Injectable()
@@ -184,7 +185,34 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       await this.recordResult(provider, fixture);
       updated++;
     }
+    await this.syncLiveOdds();
     return updated;
+  }
+
+  /**
+   * In-play prices for the matches that are live now. A market the feed drops
+   * or suspends is suspended here too, and a match missing from the feed stops
+   * getting fresh prices, so its live bets pause once the prices go stale.
+   */
+  private async syncLiveOdds(): Promise<number> {
+    const provider = this.provider();
+    const live = await this.prisma.event.findMany({
+      where: { provider, externalId: { not: null }, status: EventStatus.LIVE },
+      select: { id: true, externalId: true, homeTeam: true, awayTeam: true, name: true },
+    });
+    if (live.length === 0) return 0;
+    const byExternal = new Map(live.map((e) => [e.externalId!, e]));
+    const feed = await this.client!.liveOdds();
+    let priced = 0;
+    for (const raw of feed) {
+      const event = byExternal.get(String(raw.fixture.id));
+      if (!event) continue;
+      const odds = parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? "");
+      await this.upsertLiveMarkets(event.id, odds.markets);
+      await this.prisma.event.update({ where: { id: event.id }, data: { liveOddsAt: new Date(), liveStopped: odds.stopped } });
+      priced++;
+    }
+    return priced;
   }
 
   private provider(): string {
@@ -253,6 +281,30 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         }
       });
     }
+  }
+
+  /** Saves in-play prices; markets the feed didn't send this time are suspended. */
+  private async upsertLiveMarkets(eventId: string, markets: FeedLiveMarket[]) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.market.updateMany({ where: { eventId, key: { notIn: markets.map((m) => m.key) } }, data: { liveSuspended: true } });
+      for (const market of markets) {
+        const row = await tx.market.upsert({
+          where: { eventId_key: { eventId, key: market.key } },
+          create: { eventId, key: market.key, name: market.name, sortOrder: market.sortOrder, liveSuspended: market.suspended },
+          update: { liveSuspended: market.suspended },
+          select: { id: true },
+        });
+        for (const selection of market.selections) {
+          const liveOdds = selection.odds > 1 ? new Prisma.Decimal(selection.odds.toFixed(2)) : null;
+          await tx.selection.upsert({
+            where: { marketId_key: { marketId: row.id, key: selection.key } },
+            // A market first seen live has no pre-match price; the live one stands in.
+            create: { marketId: row.id, key: selection.key, name: selection.name, feedOdds: liveOdds ?? new Prisma.Decimal(1.01), liveOdds, sortOrder: selection.sortOrder },
+            update: { liveOdds },
+          });
+        }
+      }
+    });
   }
 
   private async recordStatus(status: string, succeeded: boolean) {

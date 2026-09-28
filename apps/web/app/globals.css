@@ -1220,6 +1220,52 @@ table {
   background: var(--danger);
 }
 
+.tree-toggle,
+.tree-toggle-spacer {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.tree-toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.tree-toggle:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+
+.tree-toggle svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 120ms ease;
+}
+
+.tree-toggle.is-expanded svg {
+  transform: rotate(90deg);
+}
+
+.tree-count {
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .danger-button {
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--danger) 50%, var(--border));

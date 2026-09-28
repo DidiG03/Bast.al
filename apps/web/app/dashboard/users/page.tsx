@@ -63,6 +63,10 @@ export default function UsersPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkAction | null>(null);
   const [teamSettingsOpen, setTeamSettingsOpen] = useState(false);
+  // Ids the user has explicitly expanded — everything with children starts collapsed,
+  // since a full hierarchy (all Owners' Managers and Players flattened out) is
+  // unreadable once a team grows past a handful of people.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   // An Owner's default approval limit for their Managers, when they set one.
   const [teamApprovalLimit, setTeamApprovalLimit] = useState<number | null>(null);
 
@@ -510,6 +514,18 @@ export default function UsersPage() {
     setSelected(new Set());
   }
 
+  function toggleExpanded(id: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const parentIds = new Set(users.map((user) => user.parentId).filter((id): id is string => id !== null));
+  const allExpanded = parentIds.size > 0 && [...parentIds].every((id) => expandedIds.has(id));
+
   const selectedUsers = users.filter((user) => selected.has(user.id));
   const canMoveSelection = (me.role === "OWNER" || me.role === "SUPER_ADMIN") && selectedUsers.length > 0 && selectedUsers.every((user) => user.role === "PLAYER");
   const canTopUpSelection = selectedUsers.length > 0 && selectedUsers.every((user) => user.parentId === me.id || me.role === "SUPER_ADMIN");
@@ -517,6 +533,9 @@ export default function UsersPage() {
 
   function renderTreeNode(user: UserRow): ReactNode {
     const children = (childrenByParent.get(user.id) ?? []).filter((child) => visibleUserIds.has(child.id));
+    const hasChildren = children.length > 0;
+    // A search in progress forces everything open so matches aren't hidden behind a collapsed parent.
+    const isExpanded = Boolean(normalizedSearch) || expandedIds.has(user.id);
     return (
       <div className="tree-node" key={user.id}>
         <div className={`tree-row${selected.has(user.id) ? " is-selected" : ""}`}>
@@ -529,6 +548,21 @@ export default function UsersPage() {
               aria-label={`Select ${user.username}`}
             />
           ) : null}
+          {hasChildren ? (
+            <button
+              type="button"
+              className={`tree-toggle${isExpanded ? " is-expanded" : ""}`}
+              onClick={() => toggleExpanded(user.id)}
+              aria-label={isExpanded ? `Collapse ${user.username}` : `Expand ${user.username}`}
+              aria-expanded={isExpanded}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
+          ) : (
+            <span className="tree-toggle-spacer" aria-hidden="true" />
+          )}
           <div className="tree-identity">
             <span className="tree-name">
               <span className={`status-dot ${user.status === "ACTIVE" ? "is-active" : "is-suspended"}`} />
@@ -538,6 +572,7 @@ export default function UsersPage() {
               <span className="tree-role">{user.role}</span>
               <span className="tree-status">{user.status === "ACTIVE" && lockedByAncestor(user) ? "LOCKED (PARENT SUSPENDED)" : user.status}</span>
               {user.role !== "SUPER_ADMIN" ? <span className="tree-balance">{formatMoney(user.balance)}</span> : null}
+              {hasChildren && !isExpanded ? <span className="tree-count">{children.length}</span> : null}
             </span>
           </div>
           {user.id !== me?.id && !selecting ? (
@@ -612,7 +647,7 @@ export default function UsersPage() {
             </div>
           ) : null}
         </div>
-        {children.length > 0 ? <div className="tree-children">{children.map((child) => renderTreeNode(child))}</div> : null}
+        {hasChildren && isExpanded ? <div className="tree-children">{children.map((child) => renderTreeNode(child))}</div> : null}
       </div>
     );
   }
@@ -653,6 +688,11 @@ export default function UsersPage() {
             {selecting ? (
               <button type="button" className="text-button" onClick={() => setSelected(selected.size === selectableIds.length ? new Set() : new Set(selectableIds))}>
                 {selected.size === selectableIds.length && selectableIds.length > 0 ? "Clear" : "Select all"}
+              </button>
+            ) : null}
+            {!selecting && parentIds.size > 0 ? (
+              <button type="button" className="text-button" onClick={() => setExpandedIds(allExpanded ? new Set() : new Set(parentIds))}>
+                {allExpanded ? "Collapse all" : "Expand all"}
               </button>
             ) : null}
             <button type="button" className="text-button" onClick={() => (selecting ? stopSelecting() : setSelecting(true))}>

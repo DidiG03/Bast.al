@@ -192,7 +192,7 @@ export function DashboardSidebar({
     ...(canManageUsers
       ? [{ href: "/dashboard/users", label: "Users", icon: icons.users }]
       : []),
-    { href: "/dashboard/tickets", label: "Tickets", icon: icons.tickets },
+    ...(isPlayer ? [] : [{ href: "/dashboard/tickets", label: "Tickets", icon: icons.tickets }]),
     ...(canViewReports
       ? [{ href: "/dashboard/reports", label: "Reports", icon: icons.reports }]
       : []),

@@ -77,6 +77,9 @@ async function proxy(request: NextRequest, parts: string[]) {
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers["x-forwarded-for"] = forwardedFor;
 
+  const userAgent = request.headers.get("user-agent");
+  if (userAgent) headers["user-agent"] = userAgent;
+
   const secret = process.env.REQUEST_INTEGRITY_SECRET;
   if (secret && bodyText !== undefined) {
     Object.assign(headers, sign({ secret, method, path: targetPath, body: bodyText }));

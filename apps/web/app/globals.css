@@ -3521,3 +3521,265 @@ button.odds-selection:hover,
   background: var(--danger);
   color: #fff;
 }
+
+/* ============================================================
+   Player theme — a distinct, playful "sportsbook app" skin for
+   Players only, layered on top of the same components the rest
+   of the dashboard uses (all of which already read CSS custom
+   properties), plus a few Player-specific pieces (hero, balance
+   chip, top-events teaser, team badges).
+   ============================================================ */
+
+.role-player {
+  --bg: #0a0b07;
+  --bg-elevated: #16180e;
+  --text: #f6f8ee;
+  --muted: #9aa189;
+  --accent: #d6ff3f;
+  --accent-strong: #c3f01a;
+  --danger: #ff5c72;
+  --border: #262a18;
+  --focus: #eaffa0;
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+.role-player .card,
+.role-player .odds-event,
+.role-player .bet-card,
+.role-player .player-hero,
+.role-player .player-top-event,
+.role-player .player-quick-link {
+  border-radius: 1.35rem;
+}
+
+.role-player .card {
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 25%);
+}
+
+.role-player .tab-button.is-active {
+  position: relative;
+}
+
+.role-player .bet-chip.is-active,
+.role-player .tab-button.is-active {
+  color: var(--accent);
+}
+
+.role-player .odds-selection,
+.role-player .bet-chip,
+.role-player button:not(.secondary):not(.text-button) {
+  border-radius: 999px;
+}
+
+.role-player input,
+.role-player select {
+  border-radius: 999px;
+  padding-left: 1rem;
+}
+
+/* Team crest placeholders */
+.team-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.odds-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.odds-teams > :last-child.odds-team {
+  justify-content: flex-end;
+}
+
+/* Balance chip in the topbar */
+.role-player .dashboard-topbar {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.player-balance-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  color: var(--text);
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.player-balance-chip-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #08110a;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+/* Home hero */
+.player-hero {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.75rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, var(--bg-elevated)), var(--bg-elevated));
+  border: 1px solid var(--border);
+}
+
+.player-hero-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.player-hero-balance {
+  font-size: 2.6rem;
+  line-height: 1.05;
+}
+
+.player-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.player-hero-cta {
+  justify-self: start;
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.7rem 1.3rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #08110a;
+  font-weight: 800;
+}
+
+.player-status-active {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.player-status-suspended,
+.player-status-locked {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+/* Top events teaser */
+.player-top-events {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.player-top-event {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem;
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.player-top-event-league {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.player-top-event-teams {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+/* My Bets quick links */
+.player-quick-links {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.player-quick-link {
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* Win / lose tickets, punched up beyond the muted admin palette */
+.role-player .bet-card.is-won {
+  border-color: color-mix(in srgb, #22c55e 55%, var(--border));
+  background: color-mix(in srgb, #22c55e 12%, var(--bg-elevated));
+}
+
+.role-player .bet-card.is-lost {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-elevated));
+}
+
+.role-player .bet-status-won {
+  background: #163a22;
+  border-color: #1f5c33;
+  color: #4ade80;
+}
+
+.role-player .bet-status-lost {
+  background: #3a1620;
+  border-color: #5c1f2c;
+  color: #ff8b9a;
+}
+
+.role-player .bet-status-void {
+  background: color-mix(in srgb, var(--muted) 16%, var(--bg-elevated));
+}
+
+@media (min-width: 761px) {
+  .player-top-events {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .player-hero-balance {
+    font-size: 2.1rem;
+  }
+
+  .player-balance-chip {
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* Players never need the drawer sidebar on a phone: the bottom nav already
+   covers their whole (short) nav list, so the hamburger is dead weight. */
+@media (max-width: 760px) {
+  .role-player .sidebar-mobile-trigger,
+  .role-player .sidebar-swipe-zone {
+    display: none;
+  }
+
+  .role-player .dashboard-topbar {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+  }
+}

@@ -7,6 +7,7 @@ import { NotificationCenter } from "../../components/notification-center";
 import { RealtimeProvider, RealtimeRefresh } from "../../components/realtime-provider";
 import { UserMenu } from "../../components/user-menu";
 import { apiFetch, type MeResponse } from "../../lib/api";
+import { formatMoney } from "../../lib/format";
 
 export default async function DashboardLayout({
   children,
@@ -53,19 +54,26 @@ export default async function DashboardLayout({
   const canManageUsers = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
   const canViewReports = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
   const canViewFinancial = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
+  const isPlayer = me.role === "PLAYER";
   const initialCollapsed = cookies().get("bastal-sidebar")?.value === "collapsed";
 
   return (
     <RealtimeProvider>
       <RealtimeRefresh />
-      <div className="dashboard-shell">
-        <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} isPlayer={me.role === "PLAYER"} isSuperAdmin={me.role === "SUPER_ADMIN"} canViewRisk={me.role === "OWNER" || me.role === "SUPER_ADMIN"} username={me.username} initialCollapsed={initialCollapsed} />
+      <div className={`dashboard-shell${isPlayer ? " role-player" : ""}`}>
+        <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} isPlayer={isPlayer} isSuperAdmin={me.role === "SUPER_ADMIN"} canViewRisk={me.role === "OWNER" || me.role === "SUPER_ADMIN"} username={me.username} initialCollapsed={initialCollapsed} />
         <main className="dashboard-content">
           <header className="dashboard-topbar">
             <Link href="/dashboard" className="topbar-brand">
               <span className="sidebar-logo" aria-hidden="true">B</span>
               <span>Bast.al</span>
             </Link>
+            {isPlayer ? (
+              <Link href="/dashboard" className="player-balance-chip" title="Your balance, delegated by your Manager or Owner">
+                <span className="player-balance-chip-icon" aria-hidden="true">$</span>
+                {formatMoney(Number(me.balance))}
+              </Link>
+            ) : null}
             <NotificationCenter />
           </header>
           {children}

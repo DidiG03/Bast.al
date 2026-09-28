@@ -353,7 +353,10 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
         )}
       </header>
       <div className="odds-teams">
-        <span>{event.homeTeam ?? event.name}</span>
+        <span className="odds-team">
+          <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
+          {event.homeTeam ?? event.name}
+        </span>
         {event.live && event.homeScore !== null && event.awayScore !== null ? (
           <strong className="odds-score">
             {event.homeScore} – {event.awayScore}
@@ -361,7 +364,10 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
         ) : (
           <span className="muted">v</span>
         )}
-        <span>{event.awayTeam ?? ""}</span>
+        <span className="odds-team">
+          {event.awayTeam ?? ""}
+          <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
+        </span>
       </div>
       {event.live && !event.bettable ? <p className="muted bet-paused">Live betting is paused for a moment.</p> : null}
       {markets.map((market) => (

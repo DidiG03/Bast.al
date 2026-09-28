@@ -1,8 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { apiFetch, type MeResponse, type UserRow } from "../../lib/api";
+import { apiFetch, type MeResponse, type OddsEvent, type UserRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
+
+const matchTimeFormat = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
@@ -20,6 +22,10 @@ export default async function DashboardPage() {
 
   const me = await apiFetch<MeResponse>("/users/me", token);
 
+  if (me.role === "PLAYER") {
+    return <PlayerHome me={me} token={token} />;
+  }
+
   return (
     <div className="stack">
       <h1 style={{ margin: 0 }}>Dashboard</h1>
@@ -31,7 +37,6 @@ export default async function DashboardPage() {
       {me.role === "SUPER_ADMIN" ? <SuperAdminOverview token={token} /> : null}
       {me.role === "OWNER" ? <OwnerOverview token={token} me={me} /> : null}
       {me.role === "MANAGER" ? <ManagerOverview me={me} /> : null}
-      {me.role === "PLAYER" ? <PlayerOverview me={me} /> : null}
     </div>
   );
 }
@@ -114,30 +119,82 @@ function ManagerOverview({ me }: { me: MeResponse }) {
   );
 }
 
-function PlayerOverview({ me }: { me: MeResponse }) {
+async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
+  const events = me.parent
+    ? await apiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token).catch(() => [])
+    : [];
+  const live = me.parent
+    ? await apiFetch<OddsEvent[]>("/odds/events?filter=live", token).catch(() => [])
+    : [];
+  const topEvents = [...live, ...events].slice(0, 4);
+
   return (
-    <div className="stack">
-      <div className="card stack">
-        <h2 style={{ margin: 0 }}>Your account</h2>
-        <p style={{ margin: 0 }}>
-          Balance: <strong>{formatMoney(Number(me.balance))}</strong> · Status: <strong>{me.status}</strong>
-        </p>
-        <p style={{ margin: 0 }}>
+    <div className="stack player-home">
+      <section className="player-hero">
+        <span className="player-hero-label">Your balance</span>
+        <strong className="player-hero-balance">{formatMoney(Number(me.balance))}</strong>
+        <div className="player-hero-meta">
+          <span className={`status-pill player-status-${me.status.toLowerCase()}`}>{me.status}</span>
           {me.parent ? (
-            <>
-              Administered by <strong>{me.parent.username}</strong>{" "}
-              <span className="muted">({me.parent.role})</span>
-            </>
+            <span className="muted">
+              Backed by <strong>{me.parent.username}</strong> ({me.parent.role})
+            </span>
           ) : (
             <span className="muted">Not yet assigned to a Manager or Owner.</span>
           )}
-        </p>
+        </div>
         {me.parent ? (
-          <Link href="/dashboard/bet" className="button-link" style={{ justifySelf: "start" }}>
-            Browse matches
+          <Link href="/dashboard/bet" className="player-hero-cta">
+            Browse matches →
           </Link>
         ) : null}
-      </div>
+      </section>
+
+      {me.parent ? (
+        <section className="stack">
+          <div className="page-title-row">
+            <h2 style={{ margin: 0 }}>Top events</h2>
+            <Link href="/dashboard/bet">View all →</Link>
+          </div>
+          {topEvents.length === 0 ? (
+            <div className="card">
+              <p className="muted" style={{ margin: 0 }}>No matches open for bets right now. Check back soon.</p>
+            </div>
+          ) : (
+            <div className="player-top-events">
+              {topEvents.map((event) => (
+                <Link key={event.id} href="/dashboard/bet" className="player-top-event">
+                  <span className="player-top-event-league">{event.league}</span>
+                  <div className="player-top-event-teams">
+                    <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
+                    <span>{event.homeTeam ?? event.name}</span>
+                    <span className="muted">vs</span>
+                    <span>{event.awayTeam ?? ""}</span>
+                    <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
+                  </div>
+                  <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
+                    {event.status === "LIVE" ? (event.elapsed === null ? "Live" : `Live ${event.elapsed}'`) : matchTimeFormat.format(new Date(event.startsAt))}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      <section className="stack">
+        <h2 style={{ margin: 0 }}>My Bets</h2>
+        <div className="player-quick-links">
+          <Link href="/dashboard/bet?tab=open" className="card player-quick-link">
+            <strong>Open</strong>
+            <span className="muted">Bets still in play</span>
+          </Link>
+          <Link href="/dashboard/bet?tab=settled" className="card player-quick-link">
+            <strong>Settled</strong>
+            <span className="muted">Wins &amp; losses</span>
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

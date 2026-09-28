@@ -3251,6 +3251,25 @@ button.odds-selection:hover,
   color: var(--danger);
 }
 
+/* Live matches on the Bet page */
+.bet-live-label {
+  color: var(--accent);
+}
+
+.bet-match.is-live {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.bet-paused {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.bet-pick:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Singles / Accumulator switch and accumulator picks */
 .bet-mode {
   display: grid;

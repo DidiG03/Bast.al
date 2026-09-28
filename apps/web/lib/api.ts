@@ -328,8 +328,11 @@ export type OddsEvent = {
   hidden: boolean;
   suspended: boolean;
   provider: string;
+  /** Before kick-off, or live with fresh in-play prices. */
   bettable: boolean;
-  markets: Array<{ id: string; key: string; name: string; selections: OddsSelection[] }>;
+  /** In play. Prices are the feed's live prices less the team margin. */
+  live: boolean;
+  markets: Array<{ id: string; key: string; name: string; /** Live only: off the board right now. */ suspended?: boolean; selections: OddsSelection[] }>;
 };
 
 export type OddsSettings = {

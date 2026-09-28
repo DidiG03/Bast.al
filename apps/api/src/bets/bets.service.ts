@@ -147,11 +147,18 @@ export class BetsService {
     const price = async (pick: { selectionId: string; odds: number }) => {
       const selection = byId.get(pick.selectionId);
       if (!selection) throw new BadRequestException("One of the bets on your slip no longer exists. Remove it and try again.");
-      const { odds, bettable } = await this.odds.priceForPlayer(actor.id, pick.selectionId);
-      if (!bettable) throw new BadRequestException(`Bets are closed on ${selection.market.event.name}. Remove it from your slip.`);
+      const { odds, bettable, live, score } = await this.odds.priceForPlayer(actor.id, pick.selectionId);
+      if (!bettable) {
+        throw new BadRequestException(
+          live ? `Live bets on ${selection.market.event.name} are paused right now. Try again in a moment.` : `Bets are closed on ${selection.market.event.name}. Remove it from your slip.`,
+        );
+      }
       if (Math.abs(odds - pick.odds) > 0.001) changed.push(`${selection.name} is now ${odds.toFixed(2)}`);
       return {
         price: new Prisma.Decimal(odds.toFixed(2)),
+        live,
+        score,
+        selectionId: pick.selectionId,
         eventId: selection.market.event.id,
         label: `${selection.name} (${selection.market.event.name})`,
         description: `${selection.market.event.name} · ${selection.market.name}: ${selection.name}`.slice(0, 200),
@@ -159,13 +166,13 @@ export class BetsService {
     };
 
     type Priced = Awaited<ReturnType<typeof price>>;
-    const pricedSingles: Array<Priced & { selectionId: string; stake: Prisma.Decimal }> = [];
-    for (const bet of singles) pricedSingles.push({ selectionId: bet.selectionId, stake: new Prisma.Decimal(bet.stake.toFixed(2)), ...(await price(bet)) });
+    const pricedSingles: Array<Priced & { stake: Prisma.Decimal }> = [];
+    for (const bet of singles) pricedSingles.push({ stake: new Prisma.Decimal(bet.stake.toFixed(2)), ...(await price(bet)) });
 
-    let pricedAcca: { stake: Prisma.Decimal; odds: Prisma.Decimal; legs: Array<{ selectionId: string } & Priced> } | null = null;
+    let pricedAcca: { stake: Prisma.Decimal; odds: Prisma.Decimal; legs: Priced[] } | null = null;
     if (acca) {
-      const legs = [];
-      for (const leg of acca.legs) legs.push({ selectionId: leg.selectionId, ...(await price(leg)) });
+      const legs: Priced[] = [];
+      for (const leg of acca.legs) legs.push(await price(leg));
       if (new Set(legs.map((leg) => leg.eventId)).size !== legs.length) {
         throw new BadRequestException("An accumulator can only have one pick from each match");
       }
@@ -176,6 +183,7 @@ export class BetsService {
     if (changed.length > 0 && !input.acceptOddsChanges) {
       throw new ConflictException(`The odds changed: ${changed.join(", ")}. Check your slip and place it again.`);
     }
+    await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? [])], actor.id);
 
     const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : [])];
     const total = stakes.reduce((sum, stake) => sum.add(stake), new Prisma.Decimal(0));
@@ -248,6 +256,27 @@ export class BetsService {
     await this.realtime.publish(actor.id, { type: "bets.changed" });
     await this.users.alertLowBalance(actor.id, Number(total));
     return { bets: created.map(betView), total: Number(total) };
+  }
+
+  /**
+   * Live picks wait LIVE_BET_DELAY_MS (5 seconds by default) before they're
+   * accepted, so nobody can bet on a goal they've seen before the feed has.
+   * If the price, the score or the market changed meanwhile, the slip is
+   * refused and the Player sees the new price.
+   */
+  private async confirmLive(picks: Array<{ selectionId: string; live: boolean; score: string; price: Prisma.Decimal; label: string }>, playerId: string) {
+    const live = picks.filter((pick) => pick.live);
+    if (live.length === 0) return;
+    const delay = Number(process.env.LIVE_BET_DELAY_MS ?? 5_000);
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    for (const pick of live) {
+      const now = await this.odds.priceForPlayer(playerId, pick.selectionId);
+      if (!now.bettable) throw new ConflictException(`Live betting on ${pick.label} was paused while your bet was being confirmed. Try again in a moment.`);
+      if (now.score !== pick.score) throw new ConflictException(`The score changed while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
+      if (Math.abs(now.odds - Number(pick.price)) > 0.001) {
+        throw new ConflictException(`The odds changed: ${pick.label} is now ${now.odds.toFixed(2)}. Check your slip and place it again.`);
+      }
+    }
   }
 
   /** The Player's own bets: open ones, or settled ones newest first. */

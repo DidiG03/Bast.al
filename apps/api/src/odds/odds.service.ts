@@ -4,7 +4,7 @@ import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { OddsSyncService } from "./odds-sync.service";
-import { MAX_MARGIN, MAX_ODDS, MIN_ODDS, eventOpen, selectionQuote, teamMargin } from "./pricing";
+import { MAX_MARGIN, MAX_ODDS, MIN_ODDS, applyMargin, eventOpen, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
@@ -44,6 +44,39 @@ export class OddsService {
       feed: actor.role === Role.PLAYER ? null : { mode: this.sync.mode, syncedAt: platform.oddsSyncedAt, status: platform.oddsSyncStatus },
       limits: { minOdds: MIN_ODDS, maxOdds: MAX_ODDS, maxMargin: MAX_MARGIN },
     };
+  }
+
+  /**
+   * Pre-match feed price history for one selection, for the movement chart.
+   * Players never see the raw feed price (same rule as `events`), so their
+   * history is shown through today's team margin instead — an approximation,
+   * since margin history itself isn't tracked, but it keeps the shape of the
+   * chart honest without exposing exactly what a team's margin is.
+   */
+  async priceHistory(actor: Actor, selectionId: string) {
+    const selection = await this.prisma.selection.findUnique({
+      where: { id: selectionId },
+      select: { market: { select: { event: { select: { hidden: true } } } } },
+    });
+    if (!selection) throw new NotFoundException("Selection not found");
+    if (selection.market.event.hidden && actor.role !== Role.SUPER_ADMIN) throw new NotFoundException("Selection not found");
+
+    const points = await this.prisma.oddsSnapshot.findMany({
+      where: { selectionId },
+      orderBy: { recordedAt: "asc" },
+      take: 200,
+      select: { price: true, recordedAt: true },
+    });
+
+    if (actor.role !== Role.PLAYER) {
+      return points.map((point) => ({ price: num(point.price)!, recordedAt: point.recordedAt }));
+    }
+
+    const [platform, ownerId] = await Promise.all([this.platform(), this.teamOwnerFor(actor)]);
+    const baseMargin = Number(platform.baseOddsMargin);
+    const ownerMargin = ownerId ? num((await this.prisma.user.findUnique({ where: { id: ownerId }, select: { oddsMargin: true } }))?.oddsMargin) ?? 0 : 0;
+    const margin = teamMargin(baseMargin, ownerMargin);
+    return points.map((point) => ({ price: applyMargin(num(point.price)!, margin), recordedAt: point.recordedAt }));
   }
 
   /**

@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { apiFetch, type MeResponse, type OddsEvent, type UserRow } from "../../lib/api";
+import { apiFetch, type MeResponse, type NotificationResponse, type OddsEvent, type PendingApproval, type SettlementEvent, type UserRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 
 const matchTimeFormat = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
@@ -12,6 +12,30 @@ function StatTile({ label, value }: { label: string; value: string }) {
       <span className="muted">{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+type AttentionItem = { label: string; count: number; href: string };
+
+/** A "what needs me right now" list, so nothing waiting on you gets missed across separate pages. */
+function NeedsAttention({ items }: { items: AttentionItem[] }) {
+  const active = items.filter((item) => item.count > 0);
+  return (
+    <section className="card stack attention-card">
+      <h2 style={{ margin: 0 }}>Needs your attention</h2>
+      {active.length === 0 ? (
+        <p className="muted" style={{ margin: 0 }}>You&apos;re all caught up — nothing waiting on you right now.</p>
+      ) : (
+        <div className="attention-list">
+          {active.map((item) => (
+            <Link key={item.href} href={item.href} className="attention-row">
+              <span>{item.label}</span>
+              <span className="status-pill odds-pill-warn">{item.count}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -42,14 +66,28 @@ export default async function DashboardPage() {
 }
 
 async function SuperAdminOverview({ token }: { token: string }) {
-  const users = await apiFetch<UserRow[]>("/users", token);
+  const [users, pending, notifications, settlementEvents] = await Promise.all([
+    apiFetch<UserRow[]>("/users", token),
+    apiFetch<PendingApproval[]>("/users/balance/pending", token).catch(() => []),
+    apiFetch<NotificationResponse>("/notifications", token).catch(() => null),
+    apiFetch<SettlementEvent[]>("/bets/admin/events", token).catch(() => []),
+  ]);
   const owners = users.filter((user) => user.role === "OWNER").length;
   const managers = users.filter((user) => user.role === "MANAGER").length;
   const players = users.filter((user) => user.role === "PLAYER").length;
   const totalBalance = users.reduce((total, user) => total + Number(user.balance), 0);
+  const lowBalanceAlerts = notifications?.items.filter((item) => item.type === "LOW_BALANCE" && !item.readAt).length ?? 0;
+  const needsSettlement = settlementEvents.filter((event) => event.needsAttention).length;
 
   return (
     <div className="stack">
+      <NeedsAttention
+        items={[
+          { label: "Delegations waiting on your approval", count: pending.length, href: "/dashboard/finance" },
+          { label: "Matches needing a manual result", count: needsSettlement, href: "/dashboard/settlement" },
+          { label: "Low-balance alerts", count: lowBalanceAlerts, href: "/dashboard/users" },
+        ]}
+      />
       <div className="page-title-row">
         <h2 style={{ margin: 0 }}>Platform overview</h2>
         <Link href="/dashboard/reports">View reports →</Link>
@@ -68,15 +106,26 @@ async function SuperAdminOverview({ token }: { token: string }) {
 }
 
 async function OwnerOverview({ token, me }: { token: string; me: MeResponse }) {
-  const users = await apiFetch<UserRow[]>("/users", token);
+  const [users, pending, notifications] = await Promise.all([
+    apiFetch<UserRow[]>("/users", token),
+    apiFetch<PendingApproval[]>("/users/balance/pending", token).catch(() => []),
+    apiFetch<NotificationResponse>("/notifications", token).catch(() => null),
+  ]);
   const managers = users.filter((user) => user.role === "MANAGER").length;
   const players = users.filter((user) => user.role === "PLAYER").length;
   const teamBalance = users
     .filter((user) => user.id !== me.id)
     .reduce((total, user) => total + Number(user.balance), 0);
+  const lowBalanceAlerts = notifications?.items.filter((item) => item.type === "LOW_BALANCE" && !item.readAt).length ?? 0;
 
   return (
     <div className="stack">
+      <NeedsAttention
+        items={[
+          { label: "Delegations waiting on your approval", count: pending.length, href: "/dashboard/finance" },
+          { label: "Low-balance alerts", count: lowBalanceAlerts, href: "/dashboard/users" },
+        ]}
+      />
       <div className="page-title-row">
         <h2 style={{ margin: 0 }}>Business overview</h2>
         <Link href="/dashboard/users">Manage team →</Link>

@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { LoadingSpinner } from "../../../components/loading-spinner";
+import { MarketPriceHistory } from "../../../components/price-history";
 import { apiFetch, type MeResponse, type OddsEvent, type OddsFilter, type OddsSelection, type OddsSettings, type UserRow } from "../../../lib/api";
 
 const FILTERS: Array<[OddsFilter, string]> = [
@@ -402,6 +403,7 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
                 </div>
               </form>
             ) : null}
+            <MarketPriceHistory selections={market.selections} />
           </div>
         ))
       )}

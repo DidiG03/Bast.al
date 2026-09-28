@@ -30,6 +30,12 @@ export class OddsController {
     return this.odds.events(actor, query.filter, query.ownerId);
   }
 
+  @Get("selections/:id/history")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  priceHistory(@CurrentActor() actor: Actor, @Param("id") id: string) {
+    return this.odds.priceHistory(actor, id);
+  }
+
   @Put("settings/base-margin")
   @Roles(Role.SUPER_ADMIN)
   setBaseMargin(@CurrentActor() actor: Actor, @Body() body: BaseMarginDto) {

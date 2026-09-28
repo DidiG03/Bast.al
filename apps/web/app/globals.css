@@ -1257,6 +1257,111 @@ table {
   transform: rotate(90deg);
 }
 
+.price-history {
+  margin-top: 0.25rem;
+}
+
+.price-history-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.price-history-trigger svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.price-history-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.price-history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.price-history-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.price-history-spark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.price-history-spark svg {
+  width: 5.5rem;
+  height: 1.4rem;
+  overflow: visible;
+}
+
+.price-history-spark polyline {
+  stroke: var(--muted);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.price-history-summary {
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.price-history-summary.is-up {
+  color: var(--accent);
+}
+
+.price-history-summary.is-down {
+  color: var(--danger);
+}
+
+.price-history-range {
+  font-size: 0.72rem;
+}
+
+.attention-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.attention-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.attention-row:last-child {
+  border-bottom: 0;
+}
+
+.attention-row:hover {
+  color: var(--accent);
+}
+
 .tree-count {
   padding: 0.05rem 0.5rem;
   border: 1px solid var(--border);
@@ -2400,8 +2505,17 @@ td {
 }
 
 .commission-row-button:hover strong:first-child,
+.commission-owner-row:hover strong:first-child,
 .commission-details summary:hover strong:first-child {
   color: var(--accent);
+}
+
+.commission-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.3rem;
 }
 
 .report-list-row > div.commission-amount-block {

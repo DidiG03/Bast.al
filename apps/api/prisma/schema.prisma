@@ -316,6 +316,7 @@ model Selection {
   overrides OddsOverride[]
   bets      Bet[]
   legs      BetLeg[]
+  history   OddsSnapshot[]
 
   @@unique([marketId, key])
   @@map("selections")
@@ -325,6 +326,21 @@ enum SelectionResult {
   WON
   LOST
   VOID
+}
+
+/// A pre-match feed price at a point in time, so a Player or Owner can see how a
+/// price has moved rather than only its current value. Written on the regular
+/// (10-minute) sync, not the 30-second live loop, and only when the price actually
+/// changed — so this stays a sparse "change log," not a row every sync.
+model OddsSnapshot {
+  id          String    @id @default(cuid())
+  selectionId String    @map("selection_id")
+  selection   Selection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  price       Decimal   @db.Decimal(8, 2)
+  recordedAt  DateTime  @default(now()) @map("recorded_at")
+
+  @@index([selectionId, recordedAt])
+  @@map("odds_snapshots")
 }
 
 /// An Owner's own price for one selection. Applies to their team only and

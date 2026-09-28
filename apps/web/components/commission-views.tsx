@@ -51,7 +51,19 @@ function PlayerList({ players }: { players: PlayerResult[] }) {
   );
 }
 
-export function SuperAdminView({ data, onOpen }: { data: SuperAdminCommissions; onOpen: (ownerId: string) => void }) {
+export function SuperAdminView({
+  data,
+  onOpen,
+  onCollect,
+  collectingId,
+  collectedIds,
+}: {
+  data: SuperAdminCommissions;
+  onOpen: (ownerId: string) => void;
+  onCollect: (owner: { id: string; username: string; superAdminCut: number }) => void;
+  collectingId: string | null;
+  collectedIds: Set<string>;
+}) {
   return (
     <>
       <div className="report-grid">
@@ -69,21 +81,33 @@ export function SuperAdminView({ data, onOpen }: { data: SuperAdminCommissions; 
           <p className="muted" style={{ margin: 0 }}>No Owners yet.</p>
         ) : (
           <div className="report-list">
-            {data.owners.map((owner) => (
-              <button type="button" className="report-list-row commission-row-button" key={owner.id} onClick={() => onOpen(owner.id)}>
-                <div>
-                  <strong>{owner.username}</strong>
-                  <span className="muted">
-                    {ofResult(owner.commissionRate, owner.net)} · {plural(owner.players, "player")}
-                    {owner.status === "SUSPENDED" ? " · Suspended" : ""}
-                  </span>
+            {data.owners.map((owner) => {
+              const collected = collectedIds.has(owner.id);
+              return (
+                <div className="report-list-row commission-owner-row" key={owner.id}>
+                  <div>
+                    <strong>{owner.username}</strong>
+                    <span className="muted">
+                      {ofResult(owner.commissionRate, owner.net)} · {plural(owner.players, "player")}
+                      {owner.status === "SUSPENDED" ? " · Suspended" : ""}
+                    </span>
+                  </div>
+                  <div className="commission-amount-block">
+                    <strong className={owner.superAdminCut < 0 ? "ledger-negative" : undefined}>{formatSignedMoney(owner.superAdminCut)}</strong>
+                    <div className="commission-row-actions">
+                      {owner.superAdminCut > 0 ? (
+                        <button type="button" className="secondary" disabled={collectingId === owner.id || collected} onClick={() => onCollect(owner)}>
+                          {collected ? "Collected ✓" : collectingId === owner.id ? "Collecting…" : "Mark as collected"}
+                        </button>
+                      ) : null}
+                      <button type="button" className="text-button" onClick={() => onOpen(owner.id)}>
+                        View team
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="commission-amount-block">
-                  <strong className={owner.superAdminCut < 0 ? "ledger-negative" : undefined}>{formatSignedMoney(owner.superAdminCut)}</strong>
-                  <span className="muted">View team</span>
-                </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -91,7 +115,19 @@ export function SuperAdminView({ data, onOpen }: { data: SuperAdminCommissions; 
   );
 }
 
-export function TeamView({ data, viewer }: { data: TeamCommissions; viewer: "OWNER" | "SUPER_ADMIN" }) {
+export function TeamView({
+  data,
+  viewer,
+  onCollect,
+  collectingId,
+  collectedIds,
+}: {
+  data: TeamCommissions;
+  viewer: "OWNER" | "SUPER_ADMIN";
+  onCollect?: (manager: { id: string; username: string; commission: number }) => void;
+  collectingId?: string | null;
+  collectedIds?: Set<string>;
+}) {
   const isOwner = viewer === "OWNER";
   const { totals, owner } = data;
   return (
@@ -130,7 +166,23 @@ export function TeamView({ data, viewer }: { data: TeamCommissions; viewer: "OWN
                     <strong className={manager.commission < 0 ? "ledger-negative" : undefined}>
                       {manager.commission < 0 ? `Owes ${formatMoney(-manager.commission)}` : `Pay ${formatMoney(manager.commission)}`}
                     </strong>
-                    <span className="muted">Show players</span>
+                    <div className="commission-row-actions">
+                      {isOwner && onCollect && manager.commission > 0 && manager.status !== "SUSPENDED" ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={collectingId === manager.id || collectedIds?.has(manager.id)}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onCollect(manager);
+                          }}
+                        >
+                          {collectedIds?.has(manager.id) ? "Paid ✓" : collectingId === manager.id ? "Paying…" : "Mark as paid"}
+                        </button>
+                      ) : null}
+                      <span className="muted">Show players</span>
+                    </div>
                   </div>
                 </summary>
                 <div className="commission-players">

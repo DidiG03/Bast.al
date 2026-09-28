@@ -273,11 +273,22 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         });
         for (const selection of market.selections) {
           const feedOdds = new Prisma.Decimal(selection.odds.toFixed(2));
-          await tx.selection.upsert({
+          // Read the prior price first so we only log a snapshot on an actual
+          // change — this is a sparse "change log" for the movement chart, not
+          // a row every 10 minutes regardless of whether the price moved.
+          const existing = await tx.selection.findUnique({
+            where: { marketId_key: { marketId: row.id, key: selection.key } },
+            select: { id: true, feedOdds: true },
+          });
+          const saved = await tx.selection.upsert({
             where: { marketId_key: { marketId: row.id, key: selection.key } },
             create: { marketId: row.id, key: selection.key, name: selection.name, feedOdds, sortOrder: selection.sortOrder },
             update: { name: selection.name, feedOdds, sortOrder: selection.sortOrder },
+            select: { id: true },
           });
+          if (!existing || !existing.feedOdds.equals(feedOdds)) {
+            await tx.oddsSnapshot.create({ data: { selectionId: saved.id, price: feedOdds } });
+          }
         }
       });
     }

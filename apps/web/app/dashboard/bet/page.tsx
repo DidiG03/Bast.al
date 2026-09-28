@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
 import { LoadingSpinner } from "../../../components/loading-spinner";
+import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
 import { apiFetch, type Bet, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SlipInfo } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
@@ -396,6 +397,7 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
               );
             })}
           </div>
+          <MarketPriceHistory selections={market.selections} />
         </div>
       ))}
       {event.markets.length > 1 ? (

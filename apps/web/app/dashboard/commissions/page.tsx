@@ -11,6 +11,8 @@ import {
   type SuperAdminCommissions,
   type TeamCommissions,
 } from "../../../lib/api";
+import { formatMoney } from "../../../lib/format";
+import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 
 type Range = "this-week" | "last-week" | "this-month" | "custom";
 
@@ -74,6 +76,14 @@ export default function CommissionsPage() {
   const [history, setHistory] = useState<CommissionHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [collectingId, setCollectingId] = useState<string | null>(null);
+  // Session-only: which `id:from:to` combos were just collected, so the button
+  // can't be double-clicked into a double reclaim/payment. This doesn't
+  // survive a reload — the underlying commission report is a live calculation
+  // over the date range, not a stored, per-period record of what's been paid.
+  const [collectedIds, setCollectedIds] = useState<Set<string>>(new Set());
+  const idempotency = useIdempotencyKey();
 
   const load = useCallback(async () => {
     const dates = rangeDates(range, customFrom, customTo);
@@ -152,6 +162,70 @@ export default function CommissionsPage() {
     }
   }
 
+  function periodKey(id: string): string {
+    return current ? `${id}:${current.from}:${current.to}` : id;
+  }
+
+  /** Super Admin collecting their cut from an Owner: a reclaim, same as taking back any credit. */
+  async function collectFromOwner(owner: { id: string; username: string; superAdminCut: number }) {
+    if (!current) return;
+    const amount = Math.round(owner.superAdminCut * 100) / 100;
+    const label = periodLabel(current.from, current.to);
+    if (!window.confirm(`Reclaim ${formatMoney(amount)} from ${owner.username} for your commission (${label})?`)) return;
+    setError(null);
+    setNotice(null);
+    setCollectingId(owner.id);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Not signed in");
+      const path = `/users/${owner.id}/reclaim`;
+      const body = JSON.stringify({ amount, reason: `Commission for ${label}` });
+      await apiFetch(path, token, { method: "POST", body, idempotencyKey: idempotency.keyFor(path, body) });
+      idempotency.done();
+      setCollectedIds((current) => new Set(current).add(periodKey(owner.id)));
+      setNotice(`Collected ${formatMoney(amount)} from ${owner.username}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not collect commission");
+    } finally {
+      setCollectingId(null);
+    }
+  }
+
+  /** An Owner paying a Manager's commission: a delegation, same as funding them normally. */
+  async function payManager(manager: { id: string; username: string; commission: number }) {
+    if (!current) return;
+    const amount = Math.round(manager.commission * 100) / 100;
+    const label = periodLabel(current.from, current.to);
+    if (!window.confirm(`Pay ${formatMoney(amount)} to ${manager.username} for their commission (${label})?`)) return;
+    setError(null);
+    setNotice(null);
+    setCollectingId(manager.id);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Not signed in");
+      const path = `/users/${manager.id}/delegate`;
+      const body = JSON.stringify({ amount, reason: `Commission for ${label}` });
+      const result = await apiFetch<{ requiresApproval?: boolean }>(path, token, { method: "POST", body, idempotencyKey: idempotency.keyFor(path, body) });
+      idempotency.done();
+      setCollectedIds((current) => new Set(current).add(periodKey(manager.id)));
+      setNotice(result.requiresApproval ? `Submitted for approval: ${formatMoney(amount)} to ${manager.username}.` : `Paid ${formatMoney(amount)} to ${manager.username}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not pay commission");
+    } finally {
+      setCollectingId(null);
+    }
+  }
+
+  // The session-only collected set is keyed by `id:from:to`; narrow it to plain
+  // ids for the current period so the view components can do a simple `.has(id)`.
+  const collectedThisPeriod = current
+    ? new Set(
+        Array.from(collectedIds)
+          .filter((key) => key.endsWith(`:${current.from}:${current.to}`))
+          .map((key) => key.slice(0, key.indexOf(":"))),
+      )
+    : new Set<string>();
+
   const subtitle =
     me?.role === "MANAGER"
       ? "What you earn from your players. You get your rate on what they lose, paid by your Owner."
@@ -207,11 +281,22 @@ export default function CommissionsPage() {
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
+      {notice ? <p className="success-text">{notice}</p> : null}
 
       {me?.role === "MANAGER" && mine ? <ManagerView data={mine} /> : null}
       {me?.role === "MANAGER" && history ? <ManagerHistory data={history} /> : null}
-      {showingTeam && team && me ? <TeamView data={team} viewer={me.role === "OWNER" ? "OWNER" : "SUPER_ADMIN"} /> : null}
-      {me?.role === "SUPER_ADMIN" && !ownerId && owners ? <SuperAdminView data={owners} onOpen={setOwnerId} /> : null}
+      {showingTeam && team && me ? (
+        <TeamView
+          data={team}
+          viewer={me.role === "OWNER" ? "OWNER" : "SUPER_ADMIN"}
+          onCollect={me.role === "OWNER" ? payManager : undefined}
+          collectingId={collectingId}
+          collectedIds={collectedThisPeriod}
+        />
+      ) : null}
+      {me?.role === "SUPER_ADMIN" && !ownerId && owners ? (
+        <SuperAdminView data={owners} onOpen={setOwnerId} onCollect={collectFromOwner} collectingId={collectingId} collectedIds={collectedThisPeriod} />
+      ) : null}
     </div>
   );
 }

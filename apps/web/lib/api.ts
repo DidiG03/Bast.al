@@ -313,6 +313,8 @@ export type OddsSelection = {
   result: "WON" | "LOST" | "VOID" | null;
 };
 
+export type PricePoint = { price: number; recordedAt: string };
+
 export type OddsEvent = {
   id: string;
   name: string;

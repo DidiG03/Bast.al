@@ -302,12 +302,25 @@ export class ApiFootballClient {
   }
 }
 
-/** Real HTTP access. API-Football reports problems in `errors` with a 200 status. */
+/**
+ * Real HTTP access. API-Football reports problems in `errors` with a 200
+ * status. Same data, two ways to reach it:
+ * - direct (api-sports.io): host `v3.football.api-sports.io`, paths as-is,
+ *   key sent as `x-apisports-key`.
+ * - RapidAPI: host `api-football-v1.p.rapidapi.com`, paths need a `/v3`
+ *   prefix, key sent as `x-rapidapi-key` (+ `x-rapidapi-host`).
+ * Detected from the host string, so switching providers is just an env var
+ * change (API_FOOTBALL_HOST) — no other config needed.
+ */
 export function httpFetchJson(host: string, apiKey: string): FetchJson {
+  const rapidApi = host.includes("rapidapi.com");
+  const base = rapidApi ? `${host}/v3` : host;
   return async (path, params) => {
     const query = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
-    const res = await fetch(`https://${host}${path}?${query}`, {
-      headers: { "x-apisports-key": apiKey },
+    const res = await fetch(`https://${base}${path}?${query}`, {
+      headers: rapidApi
+        ? { "x-rapidapi-key": apiKey, "x-rapidapi-host": host }
+        : { "x-apisports-key": apiKey },
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) throw new Error(`API-Football answered ${res.status} for ${path}`);

@@ -14,6 +14,7 @@ import { NotificationsModule } from "./notifications/notifications.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
 import { CommissionsModule } from "./commissions/commissions.module";
 import { RealtimeModule } from "./realtime/realtime.module";
+import { OddsModule } from "./odds/odds.module";
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { RealtimeModule } from "./realtime/realtime.module";
     NotificationsModule,
     WebhooksModule,
     CommissionsModule,
+    OddsModule,
   ],
   controllers: [HealthController, RootController, EventsController],
   providers: [QueueService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

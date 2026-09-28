@@ -78,6 +78,13 @@ const icons = {
       <path d="M19 5 5 19" />
     </Icon>
   ),
+  odds: (
+    <Icon>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m12 7 4 3-1.5 4.5h-5L8 10z" />
+      <path d="M12 3v4M21 10.5 16 10M18 19l-3-4.5M6 19l3-4.5M3 10.5 8 10" />
+    </Icon>
+  ),
   audit: (
     <Icon>
       <path d="M6 3h9l3 3v15H6z" />
@@ -168,13 +175,14 @@ export function DashboardSidebar({
       ? [
           { href: "/dashboard/finance", label: "Finance", icon: icons.finance },
           { href: "/dashboard/commissions", label: "Commissions", icon: icons.commissions },
+          { href: "/dashboard/odds", label: "Odds", icon: icons.odds },
         ]
       : []),
     { href: "/dashboard/security", label: "Security", icon: icons.security },
   ];
-  // The bottom bar fits five tabs; Tickets, then Security, move to the drawer when a role has more.
+  // The bottom bar fits five tabs; Tickets, Security, then Reports move to the drawer when a role has more.
   let mobileLinks = links;
-  for (const href of ["/dashboard/tickets", "/dashboard/security"]) {
+  for (const href of ["/dashboard/tickets", "/dashboard/security", "/dashboard/reports"]) {
     if (mobileLinks.length > 5) mobileLinks = mobileLinks.filter((link) => link.href !== href);
   }
   const isActive = (href: string) =>

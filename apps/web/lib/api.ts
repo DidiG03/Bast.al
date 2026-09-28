@@ -297,3 +297,47 @@ export async function apiFetch<T>(
 
   return res.json() as Promise<T>;
 }
+
+export type OddsFilter = "upcoming" | "live" | "finished";
+
+export type OddsSelection = {
+  id: string;
+  key: string;
+  name: string;
+  /** What this team's Players get. */
+  price: number;
+  /** The feed's price before any margin. Not sent to Players. */
+  feedOdds?: number;
+  /** True when the Owner set this price by hand. */
+  custom: boolean;
+  result: "WON" | "LOST" | "VOID" | null;
+};
+
+export type OddsEvent = {
+  id: string;
+  name: string;
+  league: string;
+  country: string | null;
+  homeTeam: string | null;
+  awayTeam: string | null;
+  startsAt: string;
+  status: "UPCOMING" | "LIVE" | "COMPLETED" | "POSTPONED" | "CANCELLED";
+  elapsed: number | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  hidden: boolean;
+  suspended: boolean;
+  provider: string;
+  bettable: boolean;
+  markets: Array<{ id: string; key: string; name: string; selections: OddsSelection[] }>;
+};
+
+export type OddsSettings = {
+  baseMargin: number;
+  team: { ownerId: string; ownerName: string; margin: number; effectiveMargin: number } | null;
+  canEditBase: boolean;
+  canEditTeam: boolean;
+  canManageEvents: boolean;
+  feed: { mode: "api-football" | "mock" | "off"; syncedAt: string | null; status: string | null } | null;
+  limits: { minOdds: number; maxOdds: number; maxMargin: number };
+};

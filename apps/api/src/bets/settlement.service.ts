@@ -7,9 +7,9 @@ import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { betSelect, betView } from "./bets.service";
-import { gradeSelection, payoutFor } from "./grading";
+import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
 
-type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null };
+type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean };
 
 const money = (value: Prisma.Decimal | number) => `$${Number(value).toFixed(2)}`;
 
@@ -56,7 +56,13 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       const events = await this.prisma.event.findMany({
         where: {
           OR: [{ status: EventStatus.COMPLETED, resultHome: { not: null }, resultAway: { not: null } }, { status: EventStatus.CANCELLED }],
-          markets: { some: { selections: { some: { bets: { some: { status: BetStatus.OPEN } } } } } },
+          markets: {
+            some: {
+              selections: {
+                some: { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null, bet: { voidReason: null } } } }] },
+              },
+            },
+          },
         },
         select: { id: true },
         take: 50,
@@ -112,7 +118,44 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       const change = await this.move(bet, status, payoutFor(status, bet.stake, bet.odds), null);
       if (change) changes.push({ ...change, eventName: event.name });
     }
+
+    // Accumulator legs on this match: record each leg's result, then work
+    // out the whole bet again from all its legs.
+    const legs = await this.prisma.betLeg.findMany({
+      where: { selectionId: { in: [...grades.keys()] }, voidReason: null, bet: { voidReason: null } },
+      select: { id: true, selectionId: true, result: true, betId: true },
+    });
+    const touched = new Set<string>();
+    for (const leg of legs) {
+      const grade = grades.get(leg.selectionId);
+      if (!grade) continue;
+      if (grade !== leg.result) await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: grade } });
+      touched.add(leg.betId);
+    }
+    changes.push(...(await this.resettleAccumulators([...touched], regrade)));
+
     await this.announce(changes, regrade ? "corrected" : "settled");
+    return changes;
+  }
+
+  /**
+   * Settles accumulators from their legs. Without `regrade` only open ones
+   * move (a lost one is final until a result is corrected); with it, a
+   * settled one can move again, even back to open.
+   */
+  private async resettleAccumulators(betIds: string[], regrade: boolean): Promise<Change[]> {
+    if (betIds.length === 0) return [];
+    const bets = await this.prisma.bet.findMany({
+      where: { id: { in: betIds }, voidReason: null, ...(regrade ? {} : { status: BetStatus.OPEN }) },
+      select: { id: true, playerId: true, stake: true, payout: true, status: true, description: true, legs: { select: { odds: true, result: true } } },
+    });
+    const changes: Change[] = [];
+    for (const bet of bets) {
+      const outcome = accumulatorOutcome(bet.legs);
+      const payout = outcome.status === BetStatus.OPEN ? new Prisma.Decimal(0) : payoutFor(outcome.status, bet.stake, outcome.odds);
+      const change = await this.move(bet, outcome.status, payout, null);
+      if (change) changes.push({ ...change, eventName: bet.description ?? "Accumulator", accumulator: true });
+    }
     return changes;
   }
 
@@ -165,6 +208,11 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       const change = await this.move(bet, BetStatus.VOID, bet.stake, reason);
       if (change) changes.push({ ...change, eventName: event.name, voidReason: reason });
     }
+    // In an accumulator only this match's pick is voided; the rest still counts.
+    const legs = await this.prisma.betLeg.findMany({ where: { selection: { market: { eventId } }, voidReason: null }, select: { id: true, betId: true } });
+    for (const leg of legs) await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: reason } });
+    const accaChanges = await this.resettleAccumulators([...new Set(legs.map((leg) => leg.betId))], true);
+    changes.push(...accaChanges);
     await this.announce(changes, "voided");
     await this.audit.log({ actorId: actor.id, action: "bet.void_event", metadata: { eventId, event: event.name, reason, bets: changes.length } });
     return { eventId, betsVoided: changes.length };
@@ -179,7 +227,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
              COALESCE(SUM(b.stake), 0) AS staked,
              COALESCE(SUM(b.stake) FILTER (WHERE b.status = 'OPEN'), 0) AS open_staked
       FROM bets b
-      JOIN selections s ON s.id = b.selection_id
+      LEFT JOIN bet_legs l ON l.bet_id = b.id
+      JOIN selections s ON s.id = COALESCE(l.selection_id, b.selection_id)
       JOIN markets m ON m.id = s.market_id
       GROUP BY m.event_id
     `;
@@ -210,7 +259,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       where: {
         ...(filter.status ? { status: filter.status } : {}),
         ...(filter.player ? { player: { username: { contains: filter.player.toLowerCase() } } } : {}),
-        ...(filter.eventId ? { selection: { market: { eventId: filter.eventId } } } : {}),
+        ...(filter.eventId ? { OR: [{ selection: { market: { eventId: filter.eventId } } }, { legs: { some: { selection: { market: { eventId: filter.eventId } } } } }] } : {}),
       },
       orderBy: { placedAt: "desc" },
       take: 100,
@@ -235,7 +284,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     const moved = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.bet.updateMany({
         where: { id: bet.id, status: bet.status, payout: bet.payout },
-        data: { status, payout, settledAt: new Date(), ...(voidReason ? { voidReason } : {}) },
+        data: { status, payout, settledAt: status === BetStatus.OPEN ? null : new Date(), ...(voidReason ? { voidReason } : {}) },
       });
       if (updated.count === 0) return false;
       if (!delta.isZero()) await tx.user.update({ where: { id: bet.playerId }, data: { balance: { increment: delta } } });
@@ -251,8 +300,31 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     await this.realtime.publishBalances(players);
     for (const playerId of players) await this.realtime.publish(playerId, { type: "bets.changed" });
 
+    // Accumulators get a message of their own, from where the whole bet now stands.
+    for (const change of changes.filter((c) => c.accumulator)) {
+      const { playerId, delta, status } = change;
+      const back = delta.isNegative() ? ` ${money(delta.abs())} was taken back from your balance.` : "";
+      const [title, message] =
+        status === BetStatus.WON
+          ? ["Your accumulator won", delta.isPositive() ? `${money(delta)} was added to your balance.` : back.trim() || "Your accumulator won."]
+          : status === BetStatus.LOST
+            ? ["Accumulator settled", `Your accumulator lost.${back}`]
+            : status === BetStatus.VOID
+              ? ["Accumulator refunded", `Every pick in your accumulator was void, so your stake went back to your balance.${back}`]
+              : ["Result corrected", `A result in your accumulator was corrected, so it's open again.${back}`];
+      await this.notifications.create({
+        userId: playerId,
+        type: NotificationType.BET_SETTLED,
+        severity: status === BetStatus.WON ? NotificationSeverity.SUCCESS : NotificationSeverity.INFO,
+        title,
+        message,
+        deepLink: status === BetStatus.OPEN ? "/dashboard/bet?tab=open" : "/dashboard/bet?tab=settled",
+      });
+      if (delta.isNegative()) await this.users.alertLowBalance(playerId, Number(delta.abs()));
+    }
+
     const grouped = new Map<string, Change[]>();
-    for (const change of changes) {
+    for (const change of changes.filter((c) => !c.accumulator)) {
       const key = `${change.playerId}\n${change.eventName}`;
       grouped.set(key, [...(grouped.get(key) ?? []), change]);
     }

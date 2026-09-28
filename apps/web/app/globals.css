@@ -3251,6 +3251,205 @@ button.odds-selection:hover,
   color: var(--danger);
 }
 
+/* Singles / Accumulator switch and accumulator picks */
+.bet-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.bet-mode-option {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  min-height: 2.25rem;
+  font-weight: 600;
+}
+
+.bet-mode-option.is-active {
+  background: var(--accent);
+  color: #031208;
+}
+
+.bet-acca-stake {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.bet-acca-stake .bet-slip-item-bottom {
+  grid-template-columns: auto minmax(0, 10rem);
+  justify-content: space-between;
+}
+
+.bet-legs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.bet-leg {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--border);
+}
+
+.bet-leg.is-won {
+  border-left-color: var(--accent);
+}
+
+.bet-leg.is-lost {
+  border-left-color: var(--danger);
+}
+
+.bet-leg-main {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.bet-leg-main .muted {
+  font-size: 0.8rem;
+}
+
+.bet-leg-side {
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 0.1rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bet-leg-state {
+  font-size: 0.8rem;
+}
+
+/* Owner risk page */
+.risk-totals dd {
+  font-size: 1.15rem;
+}
+
+.risk-cap {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.risk-cap > div {
+  display: grid;
+  gap: 0.2rem;
+  flex: 1 1 16rem;
+}
+
+.risk-cap .risk-cap-input {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.risk-cap-input input {
+  width: 9rem;
+}
+
+.risk-events {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 1100px) {
+  .risk-events {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.risk-event-title {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.risk-event-title .muted {
+  font-size: 0.8rem;
+}
+
+.risk-worst {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.risk-worst.is-over strong,
+.risk-row.is-over .risk-row-payout strong,
+.risk-loss {
+  color: var(--danger);
+}
+
+.risk-win {
+  color: var(--accent);
+}
+
+.risk-market {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.risk-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.risk-row {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.risk-row-top,
+.risk-row-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-row-bottom {
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.risk-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.risk-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.risk-row.is-over .risk-bar span {
+  background: var(--danger);
+}
+
 /* Super Admin settlement page */
 .settle-events {
   display: grid;

@@ -36,3 +36,22 @@ export function payoutFor(status: BetStatus, stake: Prisma.Decimal, odds: Prisma
   if (status === BetStatus.VOID) return stake;
   return new Prisma.Decimal(0);
 }
+
+/** Multiplies leg prices and rounds down to the cent, so the price shown is never more than what's paid. */
+export function combinedOdds(odds: Prisma.Decimal[]): Prisma.Decimal {
+  return odds.reduce((product, price) => product.mul(price), new Prisma.Decimal(1)).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+}
+
+/**
+ * Where an accumulator stands from its legs: lost as soon as any leg loses,
+ * open while any leg is undecided, void if every leg is void, otherwise won
+ * at the combined price of the legs that weren't void.
+ */
+export function accumulatorOutcome(legs: Array<{ odds: Prisma.Decimal; result: SelectionResult | null }>): { status: BetStatus; odds: Prisma.Decimal } {
+  const live = legs.filter((leg) => leg.result !== SelectionResult.VOID);
+  const odds = combinedOdds(live.map((leg) => leg.odds));
+  if (legs.some((leg) => leg.result === SelectionResult.LOST)) return { status: BetStatus.LOST, odds };
+  if (legs.some((leg) => leg.result === null)) return { status: BetStatus.OPEN, odds };
+  if (live.length === 0) return { status: BetStatus.VOID, odds: new Prisma.Decimal(1) };
+  return { status: BetStatus.WON, odds };
+}

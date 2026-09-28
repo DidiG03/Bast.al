@@ -344,8 +344,31 @@ export type OddsSettings = {
 
 export type BetStatus = "OPEN" | "WON" | "LOST" | "VOID";
 
+export type BetEvent = {
+  id: string;
+  name: string;
+  league: string;
+  startsAt: string;
+  status: OddsEvent["status"];
+  homeScore: number | null;
+  awayScore: number | null;
+  result: { home: number; away: number } | null;
+};
+
+export type BetLeg = {
+  name: string;
+  market: string;
+  odds: number;
+  result: "WON" | "LOST" | "VOID" | null;
+  voidReason: string | null;
+  event: BetEvent;
+};
+
 export type Bet = {
   id: string;
+  kind: "SINGLE" | "ACCUMULATOR";
+  /** An accumulator's picks, in slip order. Empty for singles. */
+  legs: BetLeg[];
   description: string | null;
   stake: number;
   odds: number | null;
@@ -357,16 +380,7 @@ export type Bet = {
   settledAt: string | null;
   voidReason: string | null;
   selection: { name: string; market: string } | null;
-  event: {
-    id: string;
-    name: string;
-    league: string;
-    startsAt: string;
-    status: OddsEvent["status"];
-    homeScore: number | null;
-    awayScore: number | null;
-    result: { home: number; away: number } | null;
-  } | null;
+  event: BetEvent | null;
 };
 
 export type MyBets = { balance: number; open: { count: number; staked: number }; bets: Bet[]; hasMore: boolean };
@@ -390,4 +404,42 @@ export type SettlementEvent = {
   suspended: boolean;
   bets: { open: number; total: number; staked: number; openStaked: number };
   needsAttention: boolean;
+};
+
+export type RiskExposure = { bets: number; staked: number; payout: number };
+
+export type RiskSelection = {
+  id: string;
+  name: string;
+  singles: RiskExposure;
+  accumulators: RiskExposure;
+  /** Everything the team pays out if this outcome wins. */
+  payout: number;
+  /** Singles only: the team's result on this market if this outcome wins. */
+  singlesResult: number;
+  overCap: boolean;
+  /** Payout as a share of the cap, 0 to 1, or null with no cap. */
+  share: number | null;
+};
+
+export type RiskEvent = {
+  id: string;
+  name: string;
+  league: string;
+  startsAt: string;
+  status: OddsEvent["status"];
+  homeScore: number | null;
+  awayScore: number | null;
+  bets: { singles: number; accumulators: number };
+  singlesStaked: number;
+  worst: { selection: string; market: string; payout: number };
+  markets: Array<{ id: string; name: string; selections: RiskSelection[] }>;
+};
+
+export type RiskView = {
+  owner: { id: string; username: string };
+  cap: number | null;
+  canEdit: boolean;
+  totals: { openBets: number; staked: number; worstCase: number };
+  events: RiskEvent[];
 };

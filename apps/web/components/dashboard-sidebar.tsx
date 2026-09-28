@@ -13,6 +13,7 @@ type SidebarProps = {
   canViewFinancial: boolean;
   isPlayer: boolean;
   isSuperAdmin: boolean;
+  canViewRisk: boolean;
 };
 
 function Icon({ children }: { children: ReactNode }) {
@@ -99,6 +100,12 @@ const icons = {
       <path d="M4 20h16" />
     </Icon>
   ),
+  risk: (
+    <Icon>
+      <path d="M12 3 2.5 20h19z" />
+      <path d="M12 10v4M12 17h.01" />
+    </Icon>
+  ),
   audit: (
     <Icon>
       <path d="M6 3h9l3 3v15H6z" />
@@ -133,6 +140,7 @@ export function DashboardSidebar({
   canViewFinancial,
   isPlayer,
   isSuperAdmin,
+  canViewRisk,
   username,
   initialCollapsed,
 }: SidebarProps & { canViewReports: boolean }) {
@@ -195,12 +203,13 @@ export function DashboardSidebar({
           { href: "/dashboard/odds", label: "Odds", icon: icons.odds },
         ]
       : []),
+    ...(canViewRisk ? [{ href: "/dashboard/risk", label: "Risk", icon: icons.risk }] : []),
     ...(isSuperAdmin ? [{ href: "/dashboard/settlement", label: "Settlement", icon: icons.settlement }] : []),
     { href: "/dashboard/security", label: "Security", icon: icons.security },
   ];
-  // The bottom bar fits five tabs; Tickets, Security, Reports, then Settlement move to the drawer when a role has more.
+  // The bottom bar fits five tabs; Tickets, Security, Reports, Settlement, then Odds move to the drawer when a role has more.
   let mobileLinks = links;
-  for (const href of ["/dashboard/tickets", "/dashboard/security", "/dashboard/reports", "/dashboard/settlement"]) {
+  for (const href of ["/dashboard/tickets", "/dashboard/security", "/dashboard/reports", "/dashboard/settlement", "/dashboard/odds"]) {
     if (mobileLinks.length > 5) mobileLinks = mobileLinks.filter((link) => link.href !== href);
   }
   const isActive = (href: string) =>

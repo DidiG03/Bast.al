@@ -51,3 +51,26 @@ test("bets settle on the 90-minute score, not extra time", () => {
   assert.deepEqual(parseFixture(raw("AET", { home: 2, away: 1 }, { home: 1, away: 1 })).result, { home: 1, away: 1 });
   assert.equal(parseFixture(raw("2H", { home: 2, away: 1 }, { home: null, away: null })).result, null);
 });
+
+const d = (v) => new Prisma.Decimal(v);
+const legs = (...pairs) => pairs.map(([odds, result]) => ({ odds: d(odds), result }));
+
+test("accumulator odds multiply and round down", async () => {
+  const { combinedOdds } = await import("../dist/bets/grading.js");
+  assert.equal(combinedOdds([d("1.91"), d("2.05"), d("1.50")]).toFixed(2), "5.87");
+});
+
+test("an accumulator loses on any lost leg and waits on open legs", async () => {
+  const { accumulatorOutcome } = await import("../dist/bets/grading.js");
+  assert.equal(accumulatorOutcome(legs(["2.00", "WON"], ["3.00", "LOST"], ["1.50", null])).status, "LOST");
+  assert.equal(accumulatorOutcome(legs(["2.00", "WON"], ["3.00", null])).status, "OPEN");
+  const won = accumulatorOutcome(legs(["2.00", "WON"], ["3.00", "WON"]));
+  assert.deepEqual([won.status, won.odds.toFixed(2)], ["WON", "6.00"]);
+});
+
+test("a void leg drops out and an all-void accumulator is refunded", async () => {
+  const { accumulatorOutcome } = await import("../dist/bets/grading.js");
+  const oneVoid = accumulatorOutcome(legs(["2.00", "WON"], ["3.00", "VOID"], ["1.50", "WON"]));
+  assert.deepEqual([oneVoid.status, oneVoid.odds.toFixed(2)], ["WON", "3.00"]);
+  assert.equal(accumulatorOutcome(legs(["2.00", "VOID"], ["3.00", "VOID"])).status, "VOID");
+});

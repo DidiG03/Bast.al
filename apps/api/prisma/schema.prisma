@@ -104,6 +104,10 @@ model User {
   /// OWNER only: percent added to Super Admin's base margin for this team's
   /// prices. Negative gives the team better odds, but never above the feed.
   oddsMargin Decimal @default(0) @map("odds_margin") @db.Decimal(5, 2)
+  /// OWNER only: the most this team's open bets may pay out if any one
+  /// outcome wins (singles on it plus accumulators that include it). Null
+  /// means no cap. New bets that would go over it are refused.
+  maxOutcomePayout Decimal? @map("max_outcome_payout") @db.Decimal(12, 2)
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
@@ -303,6 +307,7 @@ model Selection {
   updatedAt DateTime         @updatedAt @map("updated_at")
   overrides OddsOverride[]
   bets      Bet[]
+  legs      BetLeg[]
 
   @@unique([marketId, key])
   @@map("selections")
@@ -365,6 +370,10 @@ model Bet {
   /// Set when Super Admin voided the bet by hand. Such a bet stays void even
   /// if the match result is corrected later.
   voidReason String?  @map("void_reason") @db.VarChar(200)
+  /// SINGLE bets point at one selection. ACCUMULATOR bets have legs, and
+  /// `odds` is the combined price locked when the bet was placed.
+  kind      BetKind   @default(SINGLE)
+  legs      BetLeg[]
 
   @@index([playerId, settledAt])
   @@index([status, settledAt])
@@ -385,6 +394,32 @@ model BettingLimit {
   updatedAt             DateTime @updatedAt @map("updated_at")
 
   @@map("betting_limits")
+}
+
+enum BetKind {
+  SINGLE
+  ACCUMULATOR
+}
+
+/// One pick in an accumulator. Every leg must win for the bet to win; a void
+/// leg drops out and the rest pay at their own prices.
+model BetLeg {
+  id          String           @id @default(cuid())
+  betId       String           @map("bet_id")
+  bet         Bet              @relation(fields: [betId], references: [id], onDelete: Cascade)
+  selectionId String           @map("selection_id")
+  selection   Selection        @relation(fields: [selectionId], references: [id], onDelete: Restrict)
+  /// This leg's price, locked when the bet was placed.
+  odds        Decimal          @db.Decimal(8, 2)
+  description String           @db.VarChar(200)
+  result      SelectionResult?
+  /// Set when Super Admin voided this leg's match by hand; it stays void.
+  voidReason  String?          @map("void_reason") @db.VarChar(200)
+  sortOrder   Int              @default(0) @map("sort_order")
+
+  @@index([betId])
+  @@index([selectionId])
+  @@map("bet_legs")
 }
 
 enum BetStatus {

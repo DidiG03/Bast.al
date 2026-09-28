@@ -86,9 +86,10 @@ export class BettingLimitsService {
   /**
    * Throws if this stake would break the Player's limits: more than the
    * max stake, or today's losses plus stakes still open plus this stake over
-   * the daily loss limit. Call it before creating a Bet.
+   * the daily loss limit. Call it before creating a Bet. `alsoStaking` is
+   * what the same bet slip stakes on bets that aren't saved yet.
    */
-  async assertCanPlace(playerId: string, stake: number) {
+  async assertCanPlace(playerId: string, stake: number, alsoStaking = 0) {
     const row = await this.prisma.bettingLimit.findUnique({ where: { playerId } });
     const maxStake = stricter(value(row?.ownerMaxStake), value(row?.managerMaxStake));
     const dailyLossLimit = stricter(value(row?.ownerDailyLossLimit), value(row?.managerDailyLossLimit));
@@ -98,7 +99,7 @@ export class BettingLimitsService {
     if (dailyLossLimit !== null) {
       const today = startOfUtcDay(new Date());
       const open = await this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: today } }, _sum: { stake: true } });
-      const worstCase = (await this.lossToday(playerId)) + Number(open._sum.stake ?? 0) + stake;
+      const worstCase = (await this.lossToday(playerId)) + Number(open._sum.stake ?? 0) + alsoStaking + stake;
       if (worstCase > dailyLossLimit) {
         throw new BadRequestException(`This bet could take the Player past their $${dailyLossLimit.toFixed(2)} daily loss limit`);
       }

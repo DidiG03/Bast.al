@@ -43,6 +43,7 @@ enum NotificationType {
   SUSPICIOUS_LOGIN
   COMMISSION_RATE_UPDATED
   LOW_BALANCE
+  BET_SETTLED
 }
 
 enum NotificationCategory {
@@ -255,6 +256,13 @@ model Event {
   suspended  Boolean     @default(false)
   /// Last time the provider sent anything for this event.
   syncedAt   DateTime?   @map("synced_at")
+  /// The score bets are settled on: 90 minutes plus stoppage time, never
+  /// extra time or penalties. Set by the feed when the match ends, or by
+  /// Super Admin when correcting a result.
+  resultHome Int?        @map("result_home")
+  resultAway Int?        @map("result_away")
+  /// "feed" or "manual". The feed never overwrites a manual result.
+  resultSource String?   @map("result_source")
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   markets    Market[]
@@ -354,6 +362,9 @@ model Bet {
   selection   Selection? @relation(fields: [selectionId], references: [id], onDelete: Restrict)
   placedAt  DateTime  @default(now()) @map("placed_at")
   settledAt DateTime? @map("settled_at")
+  /// Set when Super Admin voided the bet by hand. Such a bet stays void even
+  /// if the match result is corrected later.
+  voidReason String?  @map("void_reason") @db.VarChar(200)
 
   @@index([playerId, settledAt])
   @@index([status, settledAt])

@@ -181,6 +181,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         where: { provider_externalId: { provider, externalId: fixture.externalId } },
         data: { status: fixture.status, elapsed: fixture.elapsed, homeScore: fixture.homeScore, awayScore: fixture.awayScore, syncedAt: new Date() },
       });
+      await this.recordResult(provider, fixture);
       updated++;
     }
     return updated;
@@ -212,7 +213,21 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       update: data,
       select: { id: true },
     });
+    await this.recordResult(provider, fixture);
     return event.id;
+  }
+
+  /**
+   * Saves the score bets settle on once a match has finished. A result Super
+   * Admin corrected by hand is never overwritten. SettlementService pays the
+   * bets out from here.
+   */
+  private async recordResult(provider: string, fixture: FeedFixture) {
+    if (!fixture.result) return;
+    await this.prisma.event.updateMany({
+      where: { provider, externalId: fixture.externalId, OR: [{ resultSource: null }, { resultSource: "feed" }] },
+      data: { resultHome: fixture.result.home, resultAway: fixture.result.away, resultSource: "feed" },
+    });
   }
 
   /**

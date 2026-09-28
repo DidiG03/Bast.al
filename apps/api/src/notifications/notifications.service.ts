@@ -129,7 +129,7 @@ export class NotificationsService {
   }
 
   private categoryFor(type: NotificationType): NotificationCategory {
-    if (type === NotificationType.FUNDS_RECEIVED || type === NotificationType.FUNDS_RECLAIMED || type === NotificationType.APPROVAL_REQUESTED || type === NotificationType.COMMISSION_RATE_UPDATED || type === NotificationType.LOW_BALANCE) return NotificationCategory.FINANCE;
+    if (type === NotificationType.FUNDS_RECEIVED || type === NotificationType.FUNDS_RECLAIMED || type === NotificationType.APPROVAL_REQUESTED || type === NotificationType.COMMISSION_RATE_UPDATED || type === NotificationType.LOW_BALANCE || type === NotificationType.BET_SETTLED) return NotificationCategory.FINANCE;
     if (type === NotificationType.SUSPICIOUS_LOGIN) return NotificationCategory.SECURITY;
     if (type === NotificationType.ACCOUNT_SUSPENDED || type === NotificationType.ACCOUNT_UPDATED || type === NotificationType.ACCOUNT_REASSIGNED) return NotificationCategory.ACCOUNT;
     return NotificationCategory.SYSTEM;

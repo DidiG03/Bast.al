@@ -39,7 +39,7 @@ export default async function DashboardLayout({
           <p className="muted">
             {apiDown
               ? "Could not reach the Nest API on port 4000. Restart npm run dev and refresh."
-              : "Your Clerk session is valid, but there is no local user row yet. A Super Admin must create your account (or complete the one-time bootstrap for the first Super Admin)."}
+              : "Your Clerk session is valid, but there is no local user row yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours."}
           </p>
         </div>
       </main>
@@ -59,7 +59,7 @@ export default async function DashboardLayout({
     <RealtimeProvider>
       <RealtimeRefresh />
       <div className="dashboard-shell">
-        <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} username={me.username} initialCollapsed={initialCollapsed} />
+        <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} isPlayer={me.role === "PLAYER"} isSuperAdmin={me.role === "SUPER_ADMIN"} username={me.username} initialCollapsed={initialCollapsed} />
         <main className="dashboard-content">
           <header className="dashboard-topbar">
             <Link href="/dashboard" className="topbar-brand">

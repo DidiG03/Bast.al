@@ -16,6 +16,7 @@ export type RealtimeEvent =
   | { type: "notification.created"; notification: NotificationItem }
   | { type: "notifications.changed" }
   | { type: "balance.changed"; balance: number; balanceLimit: number }
+  | { type: "bets.changed" }
   | { type: "resync" };
 
 type Listener = (event: RealtimeEvent) => void;

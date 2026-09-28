@@ -3,9 +3,9 @@ import type { ApiResponse, FetchJson, RawFixture, RawOdds } from "./api-football
 /**
  * A stand-in for API-Football, used when ODDS_FEED_MOCK=true and no API key is
  * set. It answers the same paths with the same JSON shape, so the real
- * parsing and sync code run end to end. Kick-off times are relative to now:
- * two matches are live, one has finished and the rest start over the next
- * two days. League and match ids are made up; the sync takes every league
+ * parsing and sync code run end to end. Kick-off times are relative to when the
+ * API started: two matches are live, one has finished and the rest start over
+ * the next two days. League and match ids are made up; the sync takes every league
  * in mock mode.
  */
 
@@ -32,18 +32,20 @@ const MATCHES: MockMatch[] = [
 
 const SEASON = 2026;
 
-function fixture(match: MockMatch, now: number): RawFixture {
-  const start = now + match.kickoff * 60_000;
+function fixture(match: MockMatch, now: number, anchor: number): RawFixture {
+  const start = anchor + match.kickoff * 60_000;
   const minutes = Math.floor((now - start) / 60_000);
   const status = minutes < 0 ? "NS" : minutes >= 110 ? "FT" : minutes >= 45 && minutes < 60 ? "HT" : minutes < 45 ? "1H" : "2H";
   const elapsed = status === "NS" || status === "FT" ? (status === "FT" ? 90 : null) : status === "HT" ? 45 : Math.min(90, minutes < 45 ? minutes + 1 : minutes - 14);
   // A goal every half hour or so, split by the match id, so live scores move.
   const goals = elapsed === null ? null : Math.floor(elapsed / 30);
+  const score = { home: goals === null ? null : Math.ceil(goals / 2) + (match.id % 2), away: goals === null ? null : Math.floor(goals / 2) };
   return {
     fixture: { id: match.id, date: new Date(start).toISOString(), status: { short: status, elapsed } },
     league: { id: match.league[0], name: match.league[1], country: match.league[2], season: SEASON },
     teams: { home: { name: match.home }, away: { name: match.away } },
-    goals: { home: goals === null ? null : Math.ceil(goals / 2) + (match.id % 2), away: goals === null ? null : Math.floor(goals / 2) },
+    goals: score,
+    score: { fulltime: status === "FT" ? score : { home: null, away: null } },
   };
 }
 
@@ -77,10 +79,14 @@ function odds(match: MockMatch): RawOdds {
 
 const utcDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
-export function mockFetchJson(clock: () => number = Date.now): FetchJson {
+/**
+ * Kick-off times are fixed relative to `anchor` (when the API started), so
+ * matches really kick off, finish and get settled while you test.
+ */
+export function mockFetchJson(clock: () => number = Date.now, anchor: number = clock()): FetchJson {
   return async (path, params): Promise<ApiResponse<unknown>> => {
     const now = clock();
-    const all = MATCHES.map((m) => fixture(m, now));
+    const all = MATCHES.map((m) => fixture(m, now, anchor));
     if (path === "/fixtures") {
       if (params.live === "all") return { response: all.filter((f) => !["NS", "FT"].includes(f.fixture.status.short)) };
       if (params.ids) {
@@ -90,7 +96,7 @@ export function mockFetchJson(clock: () => number = Date.now): FetchJson {
       return { response: all.filter((f) => f.fixture.date.slice(0, 10) === params.date) };
     }
     if (path === "/odds") {
-      const response = MATCHES.filter((m) => m.league[0] === Number(params.league) && utcDate(now + m.kickoff * 60_000) === params.date).map(odds);
+      const response = MATCHES.filter((m) => m.league[0] === Number(params.league) && utcDate(anchor + m.kickoff * 60_000) === params.date).map(odds);
       return { paging: { current: 1, total: 1 }, response };
     }
     return { response: [] };

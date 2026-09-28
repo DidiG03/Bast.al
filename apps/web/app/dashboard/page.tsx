@@ -132,9 +132,11 @@ function PlayerOverview({ me }: { me: MeResponse }) {
             <span className="muted">Not yet assigned to a Manager or Owner.</span>
           )}
         </p>
-        <p className="muted" style={{ margin: 0 }}>
-          Wagering is coming soon — your account isn&apos;t able to place bets yet.
-        </p>
+        {me.parent ? (
+          <Link href="/dashboard/bet" className="button-link" style={{ justifySelf: "start" }}>
+            Browse matches
+          </Link>
+        ) : null}
       </div>
     </div>
   );

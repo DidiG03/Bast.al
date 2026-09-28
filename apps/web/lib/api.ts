@@ -91,7 +91,7 @@ export type SecurityOverview = {
 
 export type NotificationItem = {
   id: string;
-  type: "FUNDS_RECEIVED" | "FUNDS_RECLAIMED" | "APPROVAL_REQUESTED" | "COMMISSION_RATE_UPDATED" | "ACCOUNT_SUSPENDED" | "ACCOUNT_UPDATED" | "ACCOUNT_REASSIGNED" | "SUSPICIOUS_LOGIN";
+  type: "FUNDS_RECEIVED" | "FUNDS_RECLAIMED" | "APPROVAL_REQUESTED" | "COMMISSION_RATE_UPDATED" | "ACCOUNT_SUSPENDED" | "ACCOUNT_UPDATED" | "ACCOUNT_REASSIGNED" | "SUSPICIOUS_LOGIN" | "LOW_BALANCE" | "BET_SETTLED";
   category: "FINANCE" | "ACCOUNT" | "SECURITY" | "SYSTEM";
   severity: "INFO" | "SUCCESS" | "WARNING" | "CRITICAL";
   title: string;
@@ -340,4 +340,54 @@ export type OddsSettings = {
   canManageEvents: boolean;
   feed: { mode: "api-football" | "mock" | "off"; syncedAt: string | null; status: string | null } | null;
   limits: { minOdds: number; maxOdds: number; maxMargin: number };
+};
+
+export type BetStatus = "OPEN" | "WON" | "LOST" | "VOID";
+
+export type Bet = {
+  id: string;
+  description: string | null;
+  stake: number;
+  odds: number | null;
+  /** What a win pays back, stake included. */
+  potentialPayout: number | null;
+  payout: number;
+  status: BetStatus;
+  placedAt: string;
+  settledAt: string | null;
+  voidReason: string | null;
+  selection: { name: string; market: string } | null;
+  event: {
+    id: string;
+    name: string;
+    league: string;
+    startsAt: string;
+    status: OddsEvent["status"];
+    homeScore: number | null;
+    awayScore: number | null;
+    result: { home: number; away: number } | null;
+  } | null;
+};
+
+export type MyBets = { balance: number; open: { count: number; staked: number }; bets: Bet[]; hasMore: boolean };
+
+export type SlipInfo = { balance: number; maxStake: number | null; dailyLossLimit: number | null; blocked: string | null };
+
+export type PlaceBetsResponse = { bets: Bet[]; total: number };
+
+export type AdminBet = Bet & { player: { id: string; username: string } };
+
+export type SettlementEvent = {
+  id: string;
+  name: string;
+  league: string;
+  startsAt: string;
+  status: OddsEvent["status"];
+  homeScore: number | null;
+  awayScore: number | null;
+  result: { home: number; away: number } | null;
+  resultSource: "feed" | "manual" | null;
+  suspended: boolean;
+  bets: { open: number; total: number; staked: number; openStaked: number };
+  needsAttention: boolean;
 };

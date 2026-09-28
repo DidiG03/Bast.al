@@ -11,6 +11,8 @@ type SidebarProps = {
   username: string;
   initialCollapsed: boolean;
   canViewFinancial: boolean;
+  isPlayer: boolean;
+  isSuperAdmin: boolean;
 };
 
 function Icon({ children }: { children: ReactNode }) {
@@ -85,6 +87,18 @@ const icons = {
       <path d="M12 3v4M21 10.5 16 10M18 19l-3-4.5M6 19l3-4.5M3 10.5 8 10" />
     </Icon>
   ),
+  bet: (
+    <Icon>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+    </Icon>
+  ),
+  settlement: (
+    <Icon>
+      <path d="m5 12 4 4 10-10" />
+      <path d="M4 20h16" />
+    </Icon>
+  ),
   audit: (
     <Icon>
       <path d="M6 3h9l3 3v15H6z" />
@@ -117,6 +131,8 @@ export function DashboardSidebar({
   canManageUsers,
   canViewReports,
   canViewFinancial,
+  isPlayer,
+  isSuperAdmin,
   username,
   initialCollapsed,
 }: SidebarProps & { canViewReports: boolean }) {
@@ -164,6 +180,7 @@ export function DashboardSidebar({
 
   const links = [
     { href: "/dashboard", label: "Overview", icon: icons.dashboard },
+    ...(isPlayer ? [{ href: "/dashboard/bet", label: "Bet", icon: icons.bet }] : []),
     ...(canManageUsers
       ? [{ href: "/dashboard/users", label: "Users", icon: icons.users }]
       : []),
@@ -178,11 +195,12 @@ export function DashboardSidebar({
           { href: "/dashboard/odds", label: "Odds", icon: icons.odds },
         ]
       : []),
+    ...(isSuperAdmin ? [{ href: "/dashboard/settlement", label: "Settlement", icon: icons.settlement }] : []),
     { href: "/dashboard/security", label: "Security", icon: icons.security },
   ];
-  // The bottom bar fits five tabs; Tickets, Security, then Reports move to the drawer when a role has more.
+  // The bottom bar fits five tabs; Tickets, Security, Reports, then Settlement move to the drawer when a role has more.
   let mobileLinks = links;
-  for (const href of ["/dashboard/tickets", "/dashboard/security", "/dashboard/reports"]) {
+  for (const href of ["/dashboard/tickets", "/dashboard/security", "/dashboard/reports", "/dashboard/settlement"]) {
     if (mobileLinks.length > 5) mobileLinks = mobileLinks.filter((link) => link.href !== href);
   }
   const isActive = (href: string) =>

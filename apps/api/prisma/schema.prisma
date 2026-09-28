@@ -100,6 +100,9 @@ model User {
   /// OWNER only: alert when a Manager or Player in this team drops below this
   /// balance. Null turns low-balance alerts off.
   lowBalanceThreshold Decimal? @map("low_balance_threshold") @db.Decimal(12, 2)
+  /// OWNER only: percent added to Super Admin's base margin for this team's
+  /// prices. Negative gives the team better odds, but never above the feed.
+  oddsMargin Decimal @default(0) @map("odds_margin") @db.Decimal(5, 2)
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
@@ -114,6 +117,7 @@ model User {
   loginHistory                 LoginHistory[]
   bets                         Bet[]
   bettingLimit                 BettingLimit?
+  oddsOverrides                OddsOverride[]
 
   @@index([parentId])
   @@index([role])
@@ -228,16 +232,106 @@ model AuditLog {
 }
 
 model Event {
-  id        String      @id @default(cuid())
-  name      String
-  league    String
-  status    EventStatus @default(UPCOMING)
-  startsAt  DateTime
-  volume    Decimal     @default(0) @db.Decimal(12, 2)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  name       String
+  league     String
+  status     EventStatus @default(UPCOMING)
+  startsAt   DateTime
+  volume     Decimal     @default(0) @db.Decimal(12, 2)
+  /// Where the match came from: "api-football", "mock" or "manual".
+  provider   String      @default("manual")
+  /// The match's id at the provider. Null for manual events.
+  externalId String?     @map("external_id")
+  country    String?
+  homeTeam   String?     @map("home_team")
+  awayTeam   String?     @map("away_team")
+  homeScore  Int?        @map("home_score")
+  awayScore  Int?        @map("away_score")
+  /// Minutes played, while live.
+  elapsed    Int?
+  /// Super Admin: hidden events aren't shown to anyone else.
+  hidden     Boolean     @default(false)
+  /// Super Admin: suspended events are shown but can't be bet on.
+  suspended  Boolean     @default(false)
+  /// Last time the provider sent anything for this event.
+  syncedAt   DateTime?   @map("synced_at")
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  markets    Market[]
 
+  @@unique([provider, externalId])
   @@index([status, startsAt])
+}
+
+/// One bet type on an event, e.g. "Match winner" or "Total goals 2.5".
+model Market {
+  id         String      @id @default(cuid())
+  eventId    String      @map("event_id")
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// Stable key such as "match_winner" or "goals_2_5".
+  key        String
+  name       String
+  sortOrder  Int         @default(0) @map("sort_order")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  selections Selection[]
+
+  @@unique([eventId, key])
+  @@map("markets")
+}
+
+/// One outcome in a market, e.g. "Home" or "Over 2.5".
+model Selection {
+  id        String           @id @default(cuid())
+  marketId  String           @map("market_id")
+  market    Market           @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  /// Stable key such as "home", "draw" or "over".
+  key       String
+  name      String
+  /// The price from the feed, before any margin or override.
+  feedOdds  Decimal          @map("feed_odds") @db.Decimal(8, 2)
+  /// Set when the market is settled.
+  result    SelectionResult?
+  sortOrder Int              @default(0) @map("sort_order")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  overrides OddsOverride[]
+  bets      Bet[]
+
+  @@unique([marketId, key])
+  @@map("selections")
+}
+
+enum SelectionResult {
+  WON
+  LOST
+  VOID
+}
+
+/// An Owner's own price for one selection. Applies to their team only and
+/// replaces the margin-adjusted feed price.
+model OddsOverride {
+  ownerId     String    @map("owner_id")
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  selectionId String    @map("selection_id")
+  selection   Selection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  odds        Decimal   @db.Decimal(8, 2)
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@id([ownerId, selectionId])
+  @@index([selectionId])
+  @@map("odds_overrides")
+}
+
+/// Platform-wide settings. There is one row, with id "default".
+model PlatformSettings {
+  id             String    @id @default("default")
+  /// Super Admin's margin, in percent, taken off every feed price for every team.
+  baseOddsMargin Decimal   @default(0) @map("base_odds_margin") @db.Decimal(5, 2)
+  /// When the odds feed last finished a sync, and what it reported.
+  oddsSyncedAt   DateTime? @map("odds_synced_at")
+  oddsSyncStatus String?   @map("odds_sync_status") @db.VarChar(300)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
 }
 
 /// A Player's bet. Commission reporting reads only settled bets (WON/LOST):
@@ -254,12 +348,16 @@ model Bet {
   status    BetStatus @default(OPEN)
   /// What was bet on, e.g. "Tirana v Partizani · Tirana to win".
   description String?  @db.VarChar(200)
+  /// The price the Player got, locked when the bet was placed.
   odds      Decimal?  @db.Decimal(8, 2)
+  selectionId String?    @map("selection_id")
+  selection   Selection? @relation(fields: [selectionId], references: [id], onDelete: Restrict)
   placedAt  DateTime  @default(now()) @map("placed_at")
   settledAt DateTime? @map("settled_at")
 
   @@index([playerId, settledAt])
   @@index([status, settledAt])
+  @@index([selectionId])
   @@map("bets")
 }
 
@@ -289,6 +387,8 @@ enum EventStatus {
   LIVE
   UPCOMING
   COMPLETED
+  POSTPONED
+  CANCELLED
 }
 
 /// One row per client-supplied Idempotency-Key, so a double tap or a retried

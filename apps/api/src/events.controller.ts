@@ -13,5 +13,5 @@ export class EventsController {
   @Get()
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard)
-  list() { return this.prisma.event.findMany({ orderBy: { startsAt: "asc" }, take: 50 }); }
+  list() { return this.prisma.event.findMany({ where: { hidden: false }, orderBy: { startsAt: "asc" }, take: 50 }); }
 }

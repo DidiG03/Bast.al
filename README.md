@@ -138,6 +138,21 @@ openssl rand -hex 32   # REQUEST_INTEGRITY_SECRET
 
 We use a **recursive CTE** on `parent_id`. Hierarchy is shallow (three levels under Owner), so write path stays simple. A closure table would speed large-tree reads at the cost of maintaining edges on every create/move — revisit if fan-out grows.
 
+## Odds feed
+
+Matches, live scores and pre-match odds come from [API-Football](https://www.api-football.com/) (api-sports.io). The API syncs fixtures and odds every 10 minutes for today and the next two days, and live scores every 30 seconds while matches are on. Every team starts from the feed price less Super Admin's base margin; an Owner can add or give back margin for their team and set their own price on any selection (Odds page). Managers and Players see their Owner's prices.
+
+| Variable | Purpose |
+| --- | --- |
+| `API_FOOTBALL_KEY` | API key from the API-Football dashboard. Without it the feed is off. |
+| `API_FOOTBALL_LEAGUES` | Optional comma-separated league ids. Defaults to the top five European leagues, UEFA club competitions, World Cup, Euros and Nations League. |
+| `API_FOOTBALL_COUNTRIES` | Optional comma-separated countries whose leagues are all synced. Defaults to `Albania`. |
+| `API_FOOTBALL_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `8` (Bet365). |
+| `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS` | Optional tuning: days ahead (3), full sync interval (10 min), live interval (30 s). |
+| `ODDS_FEED_MOCK=true` | Local testing only: serves made-up matches in API-Football's format when no key is set. |
+
+The API needs outbound access to `v3.football.api-sports.io`.
+
 ## Commands
 
 | Command | Purpose |
@@ -146,4 +161,5 @@ We use a **recursive CTE** on `parent_id`. Hierarchy is shallow (three levels un
 | `npm run build` | Build both workspaces |
 | `npm run lint` | Lint both workspaces |
 | `npm run db:push` | Apply the Prisma schema to PostgreSQL |
+| `npm test --workspace apps/api` | Build the API and run its unit tests |
 | `docker compose up --build` | Run the complete local stack |

@@ -71,6 +71,9 @@ async function proxy(request: NextRequest, parts: string[]) {
   // own address. Nest only trusts this header when it comes from a private/
   // loopback peer (see main.ts `trust proxy`), so a client can't spoof it by
   // sending its own X-Forwarded-For straight to this route.
+  const idempotencyKey = request.headers.get("idempotency-key");
+  if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
+
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers["x-forwarded-for"] = forwardedFor;
 

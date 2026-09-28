@@ -12,6 +12,7 @@ import { QuickTopUp } from "../../../components/quick-top-up";
 import { BulkActionModal } from "../../../components/bulk-actions";
 import { TeamSettingsModal } from "../../../components/team-settings";
 import { useRouter } from "next/navigation";
+import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 
 const ROLE_OPTIONS: Record<MeResponse["role"], Array<"OWNER" | "MANAGER" | "PLAYER">> = {
   SUPER_ADMIN: ["OWNER"],
@@ -40,6 +41,7 @@ export default function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [balanceUser, setBalanceUser] = useState<UserRow | null>(null);
+  const moneyKey = useIdempotencyKey();
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceReason, setBalanceReason] = useState("");
   const [adjustAmount, setAdjustAmount] = useState("");
@@ -232,10 +234,10 @@ export default function UsersPage() {
     try {
       const token = await getToken();
       if (!token) throw new Error("Not signed in");
-      await apiFetch(`/users/${balanceUser.id}/delegate`, token, {
-        method: "POST",
-        body: JSON.stringify({ amount: Number(balanceAmount), reason: balanceReason }),
-      });
+      const path = `/users/${balanceUser.id}/delegate`;
+      const body = JSON.stringify({ amount: Number(balanceAmount), reason: balanceReason });
+      await apiFetch(path, token, { method: "POST", body, idempotencyKey: moneyKey.keyFor(path, body) });
+      moneyKey.done();
       setBalanceUser(null);
       setBalanceAmount("");
       setBalanceReason("");
@@ -255,10 +257,10 @@ export default function UsersPage() {
     try {
       const token = await getToken();
       if (!token) throw new Error("Not signed in");
-      const updated = await apiFetch<UserRow>(`/users/${balanceUser.id}/reclaim`, token, {
-        method: "POST",
-        body: JSON.stringify({ amount: Number(reclaimAmount), reason: reclaimReason }),
-      });
+      const path = `/users/${balanceUser.id}/reclaim`;
+      const body = JSON.stringify({ amount: Number(reclaimAmount), reason: reclaimReason });
+      const updated = await apiFetch<UserRow>(path, token, { method: "POST", body, idempotencyKey: moneyKey.keyFor(path, body) });
+      moneyKey.done();
       setBalanceUser({ ...balanceUser, balance: updated.balance });
       setReclaimAmount("");
       setReclaimReason("");
@@ -279,10 +281,10 @@ export default function UsersPage() {
     try {
       const token = await getToken();
       if (!token) throw new Error("Not signed in");
-      await apiFetch(`/users/${balanceUser.id}/adjust-balance`, token, {
-        method: "POST",
-        body: JSON.stringify({ amount: Number(adjustAmount), reason: adjustReason }),
-      });
+      const path = `/users/${balanceUser.id}/adjust-balance`;
+      const body = JSON.stringify({ amount: Number(adjustAmount), reason: adjustReason });
+      await apiFetch(path, token, { method: "POST", body, idempotencyKey: moneyKey.keyFor(path, body) });
+      moneyKey.done();
       setAdjustAmount("");
       setAdjustReason("");
       await load();

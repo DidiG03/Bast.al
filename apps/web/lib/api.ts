@@ -256,18 +256,30 @@ export type ManagerCommissions = CommissionPeriod & {
   players: PlayerResult[];
 };
 
+/**
+ * A one-time ID for an action that moves money. Create one per intended action
+ * and send the same one on every retry of it, so the server runs it once.
+ */
+export function newIdempotencyKey(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export async function apiFetch<T>(
   path: string,
   token: string,
-  init?: RequestInit,
+  init?: RequestInit & { idempotencyKey?: string },
 ): Promise<T> {
   const normalized = path.startsWith("/") ? path.slice(1) : path;
+  const { idempotencyKey, ...rest } = init ?? {};
   const res = await fetch(`${apiBase()}/${normalized}`, {
-    ...init,
+    ...rest,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
-      ...(init?.headers ?? {}),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      ...(rest.headers ?? {}),
     },
     cache: "no-store",
   });

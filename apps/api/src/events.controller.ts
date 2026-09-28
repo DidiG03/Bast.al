@@ -1,10 +1,17 @@
-import { Controller, Get } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { Controller, Get, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { AuthGuard } from "./auth/auth.guard";
+import { MfaGuard } from "./auth/mfa.guard";
 import { PrismaService } from "./prisma.service";
 
 @ApiTags("events")
 @Controller("events")
 export class EventsController {
   constructor(private readonly prisma: PrismaService) {}
-  @Get() list() { return this.prisma.event.findMany({ orderBy: { startsAt: "asc" }, take: 50 }); }
+
+  /** Signed-in accounts only: odds and fixtures aren't public. */
+  @Get()
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard)
+  list() { return this.prisma.event.findMany({ orderBy: { startsAt: "asc" }, take: 50 }); }
 }

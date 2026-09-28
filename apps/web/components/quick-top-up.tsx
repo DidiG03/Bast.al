@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useState } from "react";
 import { apiFetch, type UserRow } from "../lib/api";
 import { formatMoney } from "../lib/format";
+import { useIdempotencyKey } from "../lib/use-idempotency-key";
 import { LoadingSpinner } from "./loading-spinner";
 
 const PRESETS = [10, 20, 50, 100, 200, 500];
@@ -21,6 +22,7 @@ type Props = {
 /** One tap to send a Player a preset amount of credit. */
 export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }: Props) {
   const { getToken } = useAuth();
+  const moneyKey = useIdempotencyKey();
   const [custom, setCustom] = useState("");
   const [sending, setSending] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +34,10 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
     try {
       const token = await getToken();
       if (!token) throw new Error("Not signed in");
-      const result = await apiFetch<{ requiresApproval?: boolean }>(`/users/${player.id}/delegate`, token, {
-        method: "POST",
-        body: JSON.stringify({ amount, reason: "Quick top-up" }),
-      });
+      const path = `/users/${player.id}/delegate`;
+      const body = JSON.stringify({ amount, reason: "Quick top-up" });
+      const result = await apiFetch<{ requiresApproval?: boolean }>(path, token, { method: "POST", body, idempotencyKey: moneyKey.keyFor(path, body) });
+      moneyKey.done();
       onDone(
         result.requiresApproval
           ? `${formatMoney(amount)} to ${player.username} is waiting for approval.`

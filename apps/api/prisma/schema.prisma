@@ -290,3 +290,19 @@ enum EventStatus {
   UPCOMING
   COMPLETED
 }
+
+/// One row per client-supplied Idempotency-Key, so a double tap or a retried
+/// request replays the first response instead of moving money twice.
+model IdempotencyKey {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  key            String
+  requestHash    String   @map("request_hash")
+  completed      Boolean  @default(false)
+  responseBody   Json?    @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, key])
+  @@index([createdAt])
+  @@map("idempotency_keys")
+}

@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useState } from "react";
 import { apiFetch, type BulkAction, type BulkResult, type UserRow } from "../lib/api";
 import { formatMoney } from "../lib/format";
+import { useIdempotencyKey } from "../lib/use-idempotency-key";
 import { LoadingSpinner } from "./loading-spinner";
 
 const TITLES: Record<BulkAction, string> = {
@@ -38,6 +39,7 @@ function summarize(action: BulkAction, users: UserRow[], result: BulkResult, amo
 /** Confirms one action for every selected account, then shows what happened to each. */
 export function BulkActionModal({ action, users, destinations, onClose, onDone }: Props) {
   const { getToken } = useAuth();
+  const moneyKey = useIdempotencyKey();
   const [amount, setAmount] = useState("");
   const [parentId, setParentId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,10 +64,9 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
     try {
       const token = await getToken();
       if (!token) throw new Error("Not signed in");
-      const result = await apiFetch<BulkResult>("/users/bulk", token, {
-        method: "POST",
-        body: JSON.stringify({ action, ids: users.map((user) => user.id), amount: action === "delegate" ? value : undefined, parentId: action === "reassign" ? parentId : undefined }),
-      });
+      const body = JSON.stringify({ action, ids: users.map((user) => user.id), amount: action === "delegate" ? value : undefined, parentId: action === "reassign" ? parentId : undefined });
+      const result = await apiFetch<BulkResult>("/users/bulk", token, { method: "POST", body, idempotencyKey: moneyKey.keyFor("/users/bulk", body) });
+      moneyKey.done();
       const outcome = summarize(action, users, result, value);
       const failedIds = result.results.filter((r) => !r.ok).map((r) => r.id);
       if (outcome.failures.length === 0) {

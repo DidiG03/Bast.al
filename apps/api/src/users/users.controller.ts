@@ -29,6 +29,7 @@ import { AuditQueryDto } from "./dto/audit-query.dto";
 import { ManagerCapacityDto } from "./dto/manager-capacity.dto";
 import { CommissionRateDto } from "./dto/commission.dto";
 import { BulkActionDto, TeamSettingsDto } from "./dto/team.dto";
+import { Idempotent } from "../idempotency/idempotency.interceptor";
 import { UsersService } from "./users.service";
 
 class BootstrapSuperAdminDto {
@@ -183,6 +184,7 @@ export class UsersController {
   @Post(":id/delegate")
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Idempotent()
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
   delegateCredit(
     @CurrentActor() actor: Actor,
@@ -196,6 +198,7 @@ export class UsersController {
   @Post(":id/reclaim")
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Idempotent()
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
   reclaimCredit(
     @CurrentActor() actor: Actor,
@@ -209,6 +212,7 @@ export class UsersController {
   @Post(":id/adjust-balance")
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Idempotent()
   @Roles(Role.SUPER_ADMIN)
   adjustBalance(
     @CurrentActor() actor: Actor,
@@ -254,6 +258,7 @@ export class UsersController {
   @Post("bulk")
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Idempotent()
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
   bulk(@CurrentActor() actor: Actor, @Body() dto: BulkActionDto, @Req() req: AuthenticatedRequest) {
     return this.users.bulk(actor, dto, clientIp(req));

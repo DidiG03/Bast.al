@@ -524,7 +524,7 @@ export default function UsersPage() {
   }
 
   const parentIds = new Set(users.map((user) => user.parentId).filter((id): id is string => id !== null));
-  const allExpanded = parentIds.size > 0 && [...parentIds].every((id) => expandedIds.has(id));
+  const allExpanded = parentIds.size > 0 && Array.from(parentIds).every((id) => expandedIds.has(id));
 
   const selectedUsers = users.filter((user) => selected.has(user.id));
   const canMoveSelection = (me.role === "OWNER" || me.role === "SUPER_ADMIN") && selectedUsers.length > 0 && selectedUsers.every((user) => user.role === "PLAYER");

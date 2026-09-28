@@ -12,35 +12,52 @@ import {
 export type Theme = "light" | "dark";
 
 type ThemeContextValue = {
+  /** What is on screen right now. */
   theme: Theme;
-  setTheme: (theme: Theme) => void;
+  /** The saved choice, or null while the app follows the device setting. */
+  choice: Theme | null;
   toggleTheme: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-function applyTheme(theme: Theme) {
-  document.documentElement.setAttribute("data-theme", theme);
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+function applyTheme(choice: Theme | null) {
+  if (choice) document.documentElement.setAttribute("data-theme", choice);
+  else document.documentElement.removeAttribute("data-theme");
 }
 
-export function ThemeProvider({ children, initialTheme }: { children: ReactNode; initialTheme: Theme }) {
-  const [theme, setThemeState] = useState<Theme>(initialTheme);
-
-  const setTheme = useCallback((next: Theme) => {
-    setThemeState(next);
-    applyTheme(next);
-    document.cookie = `bastal-theme=${next}; path=/; max-age=31536000; samesite=lax`;
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  }, [setTheme, theme]);
+/**
+ * Follows the device's light or dark setting until someone flips the toggle.
+ * Flipping back to what the device already shows clears the saved choice, so
+ * the app goes back to following the device.
+ */
+export function ThemeProvider({ children, initialTheme }: { children: ReactNode; initialTheme: Theme | null }) {
+  const [choice, setChoice] = useState<Theme | null>(initialTheme);
+  const [system, setSystem] = useState<Theme>("dark");
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    const query = window.matchMedia(DARK_QUERY);
+    const sync = () => setSystem(query.matches ? "dark" : "light");
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  const theme = choice ?? system;
+
+  const toggleTheme = useCallback(() => {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    const saved = next === system ? null : next;
+    setChoice(saved);
+    applyTheme(saved);
+    document.cookie = saved
+      ? `bastal-theme=${saved}; path=/; max-age=31536000; samesite=lax`
+      : "bastal-theme=; path=/; max-age=0; samesite=lax";
+  }, [system, theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, choice, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

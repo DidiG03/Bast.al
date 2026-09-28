@@ -2,142 +2,60 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from "react";
-import { ThemeToggle } from "./theme-toggle";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
+import type { UserRole } from "../lib/api";
+import { NamedIcon, type IconName } from "./icons";
 import { UserMenu } from "./user-menu";
 
 type SidebarProps = {
-  canManageUsers: boolean;
+  role: UserRole;
   username: string;
   initialCollapsed: boolean;
-  canViewFinancial: boolean;
-  isPlayer: boolean;
-  isSuperAdmin: boolean;
-  canViewRisk: boolean;
 };
 
-function Icon({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className="sidebar-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {children}
-    </svg>
-  );
+type NavLink = { href: string; label: string; icon: IconName };
+type NavGroup = { label: string; links: NavLink[] };
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  SUPER_ADMIN: "Super Admin",
+  OWNER: "Owner",
+  MANAGER: "Manager",
+  PLAYER: "Player",
+};
+
+/** What each role can open, grouped the way people think about the work. */
+function navGroups(role: UserRole): NavGroup[] {
+  if (role === "PLAYER") {
+    return [
+      { label: "Play", links: [{ href: "/dashboard", label: "Overview", icon: "dashboard" }, { href: "/dashboard/bet", label: "Bet", icon: "bet" }] },
+      { label: "Account", links: [{ href: "/dashboard/security", label: "Security", icon: "security" }] },
+    ];
+  }
+  const betting: NavLink[] = [{ href: "/dashboard/odds", label: "Odds", icon: "odds" }];
+  if (role === "OWNER" || role === "SUPER_ADMIN") betting.push({ href: "/dashboard/risk", label: "Risk", icon: "risk" });
+  if (role === "SUPER_ADMIN") betting.push({ href: "/dashboard/settlement", label: "Settlement", icon: "settlement" });
+  return [
+    {
+      label: "Workspace",
+      links: [
+        { href: "/dashboard", label: "Overview", icon: "dashboard" },
+        { href: "/dashboard/users", label: "Users", icon: "users" },
+        { href: "/dashboard/reports", label: "Reports", icon: "reports" },
+      ],
+    },
+    {
+      label: "Money",
+      links: [
+        { href: "/dashboard/finance", label: "Finance", icon: "finance" },
+        { href: "/dashboard/commissions", label: "Commissions", icon: "commissions" },
+      ],
+    },
+    { label: "Betting", links: betting },
+    { label: "Account", links: [{ href: "/dashboard/security", label: "Security", icon: "security" }] },
+  ];
 }
 
-const icons = {
-  dashboard: (
-    <Icon>
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </Icon>
-  ),
-  users: (
-    <Icon>
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-    </Icon>
-  ),
-  security: (
-    <Icon>
-      <rect x="4" y="11" width="16" height="10" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2" />
-    </Icon>
-  ),
-  reports: (
-    <Icon>
-      <path d="M4 19V5M4 19h17" />
-      <path d="m7 15 4-4 3 2 5-6" />
-    </Icon>
-  ),
-  finance: (
-    <Icon>
-      <rect x="3" y="6" width="18" height="13" rx="2" />
-      <path d="M3 10h18M16 14.5h2" />
-      <path d="M6 6V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
-    </Icon>
-  ),
-  commissions: (
-    <Icon>
-      <circle cx="7" cy="7" r="2.5" />
-      <circle cx="17" cy="17" r="2.5" />
-      <path d="M19 5 5 19" />
-    </Icon>
-  ),
-  odds: (
-    <Icon>
-      <circle cx="12" cy="12" r="9" />
-      <path d="m12 7 4 3-1.5 4.5h-5L8 10z" />
-      <path d="M12 3v4M21 10.5 16 10M18 19l-3-4.5M6 19l3-4.5M3 10.5 8 10" />
-    </Icon>
-  ),
-  bet: (
-    <Icon>
-      <rect x="4" y="3" width="16" height="18" rx="2" />
-      <path d="M8 8h8M8 12h8M8 16h5" />
-    </Icon>
-  ),
-  settlement: (
-    <Icon>
-      <path d="m5 12 4 4 10-10" />
-      <path d="M4 20h16" />
-    </Icon>
-  ),
-  risk: (
-    <Icon>
-      <path d="M12 3 2.5 20h19z" />
-      <path d="M12 10v4M12 17h.01" />
-    </Icon>
-  ),
-  audit: (
-    <Icon>
-      <path d="M6 3h9l3 3v15H6z" />
-      <path d="M9 11h6M9 15h6M9 7h3" />
-    </Icon>
-  ),
-  collapse: (
-    <Icon>
-      <path d="m15 18-6-6 6-6" />
-    </Icon>
-  ),
-  expand: (
-    <Icon>
-      <path d="m9 18 6-6-6-6" />
-    </Icon>
-  ),
-  menu: (
-    <Icon>
-      <path d="M4 6h16M4 12h16M4 18h16" />
-    </Icon>
-  ),
-  close: (
-    <Icon>
-      <path d="m6 6 12 12M18 6 6 18" />
-    </Icon>
-  ),
-};
-
-export function DashboardSidebar({
-  canManageUsers,
-  canViewReports,
-  canViewFinancial,
-  isPlayer,
-  isSuperAdmin,
-  canViewRisk,
-  username,
-  initialCollapsed,
-}: SidebarProps & { canViewReports: boolean }) {
+export function DashboardSidebar({ role, username, initialCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -180,26 +98,8 @@ export function DashboardSidebar({
       setMobileOpen(opening);
   }
 
-  const links = [
-    { href: "/dashboard", label: "Overview", icon: icons.dashboard },
-    ...(isPlayer ? [{ href: "/dashboard/bet", label: "Bet", icon: icons.bet }] : []),
-    ...(canManageUsers
-      ? [{ href: "/dashboard/users", label: "Users", icon: icons.users }]
-      : []),
-    ...(canViewReports
-      ? [{ href: "/dashboard/reports", label: "Reports", icon: icons.reports }]
-      : []),
-    ...(canViewFinancial
-      ? [
-          { href: "/dashboard/finance", label: "Finance", icon: icons.finance },
-          { href: "/dashboard/commissions", label: "Commissions", icon: icons.commissions },
-          { href: "/dashboard/odds", label: "Odds", icon: icons.odds },
-        ]
-      : []),
-    ...(canViewRisk ? [{ href: "/dashboard/risk", label: "Risk", icon: icons.risk }] : []),
-    ...(isSuperAdmin ? [{ href: "/dashboard/settlement", label: "Settlement", icon: icons.settlement }] : []),
-    { href: "/dashboard/security", label: "Security", icon: icons.security },
-  ];
+  const groups = navGroups(role);
+  const links = groups.flatMap((group) => group.links);
   // The bottom bar fits five tabs; Security, Reports, Settlement, then Odds move to the drawer when a role has more.
   let mobileLinks = links;
   for (const href of ["/dashboard/security", "/dashboard/reports", "/dashboard/settlement", "/dashboard/odds"]) {
@@ -225,7 +125,7 @@ export function DashboardSidebar({
         aria-label="Open navigation"
         aria-expanded={mobileOpen}
       >
-        {icons.menu}
+        <NamedIcon name="menu" />
       </button>
       {mobileOpen ? (
         <button
@@ -258,7 +158,7 @@ export function DashboardSidebar({
             aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
             title={collapsed ? "Expand navigation" : "Collapse navigation"}
           >
-            {collapsed ? icons.expand : icons.collapse}
+            <NamedIcon name="panel" />
           </button>
           <button
             className="sidebar-mobile-close secondary"
@@ -266,32 +166,39 @@ export function DashboardSidebar({
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation"
           >
-            {icons.close}
+            <NamedIcon name="close" />
           </button>
         </div>
         <nav className="sidebar-nav" aria-label="Main navigation">
-          <span className="sidebar-section-label">Workspace</span>
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`sidebar-link${isActive(link.href) ? " is-active" : ""}`}
-              aria-current={isActive(link.href) ? "page" : undefined}
-              onClick={() => setMobileOpen(false)}
-            >
-              {link.icon}
-              <span className="sidebar-link-label">{link.label}</span>
-            </Link>
+          {groups.map((group) => (
+            <div key={group.label} className="sidebar-group">
+              <span className="sidebar-section-label">{group.label}</span>
+              {group.links.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`sidebar-link${isActive(link.href) ? " is-active" : ""}`}
+                  aria-current={isActive(link.href) ? "page" : undefined}
+                  title={collapsed ? link.label : undefined}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <NamedIcon name={link.icon} />
+                  <span className="sidebar-link-label">{link.label}</span>
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="sidebar-footer">
           <div className="sidebar-account">
-            <span className="sidebar-avatar">
-              {username.slice(0, 1).toUpperCase()}
+            <span className="sidebar-avatar" aria-hidden="true">
+              {username.slice(0, 2).toUpperCase()}
             </span>
-            <span className="sidebar-account-name">{username}</span>
+            <span className="sidebar-account-text">
+              <span className="sidebar-account-name">{username}</span>
+              <span className="sidebar-account-role">{ROLE_LABELS[role]}</span>
+            </span>
           </div>
-          <ThemeToggle />
           <UserMenu />
         </div>
       </aside>
@@ -303,7 +210,7 @@ export function DashboardSidebar({
             className={`mobile-bottom-nav-link${isActive(link.href) ? " is-active" : ""}`}
             aria-current={isActive(link.href) ? "page" : undefined}
           >
-            {link.icon}
+            <NamedIcon name={link.icon} />
             <span>{link.label}</span>
           </Link>
         ))}

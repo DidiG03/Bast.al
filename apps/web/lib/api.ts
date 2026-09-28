@@ -217,6 +217,9 @@ export type CommissionHistory = {
   weeks: Array<CommissionTotals & { from: string; to: string; commission: number }>;
 };
 
+/** Day-by-day settled-bet totals (UTC), oldest first; today runs to now. */
+export type CommissionDaily = { days: Array<CommissionTotals & { from: string; to: string }> };
+
 type BetSummary = { id: string; description: string | null; odds: number | null; stake: number; placedAt: string };
 
 export type PlayerActivity = {

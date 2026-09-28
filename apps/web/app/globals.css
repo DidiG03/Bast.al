@@ -23,6 +23,21 @@
   --focus: #007d15;
 }
 
+/* No saved choice: follow the device setting. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #f4f7f5;
+    --bg-elevated: #ffffff;
+    --text: #14241b;
+    --muted: #617269;
+    --accent: #00a91a;
+    --accent-strong: #008c16;
+    --danger: #c9364a;
+    --border: #d6e2da;
+    --focus: #007d15;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

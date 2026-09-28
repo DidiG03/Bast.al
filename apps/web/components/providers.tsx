@@ -3,7 +3,7 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider, type Theme } from "./theme-provider";
 
-export function Providers({ children, initialTheme }: { children: React.ReactNode; initialTheme: Theme }) {
+export function Providers({ children, initialTheme }: { children: React.ReactNode; initialTheme: Theme | null }) {
   // Clerk 6 supports this runtime flag, but its installed types omit it.
   return (
     <ThemeProvider initialTheme={initialTheme}>

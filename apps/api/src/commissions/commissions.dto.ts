@@ -27,6 +27,15 @@ export class CommissionHistoryDto {
   weeks?: number;
 }
 
+export class CommissionDailyDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  days?: number;
+}
+
 /** Send null to remove a limit; leave a field out to keep it. */
 export class BettingLimitsDto {
   @IsOptional()

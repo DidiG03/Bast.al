@@ -3,8 +3,10 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardSidebar } from "../../components/dashboard-sidebar";
+import { DashboardTrail } from "../../components/dashboard-trail";
 import { NotificationCenter } from "../../components/notification-center";
 import { RealtimeProvider, RealtimeRefresh } from "../../components/realtime-provider";
+import { ThemeToggle } from "../../components/theme-toggle";
 import { UserMenu } from "../../components/user-menu";
 import { apiFetch, type MeResponse } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
@@ -51,30 +53,31 @@ export default async function DashboardLayout({
     redirect("/security/2fa");
   }
 
-  const canManageUsers = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
-  const canViewReports = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
-  const canViewFinancial = me.role === "SUPER_ADMIN" || me.role === "OWNER" || me.role === "MANAGER";
   const isPlayer = me.role === "PLAYER";
   const initialCollapsed = cookies().get("bastal-sidebar")?.value === "collapsed";
 
   return (
     <RealtimeProvider>
       <RealtimeRefresh />
-      <div className={`dashboard-shell${isPlayer ? " role-player" : ""}`}>
-        <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} isPlayer={isPlayer} isSuperAdmin={me.role === "SUPER_ADMIN"} canViewRisk={me.role === "OWNER" || me.role === "SUPER_ADMIN"} username={me.username} initialCollapsed={initialCollapsed} />
+      <div className={`dashboard-shell${isPlayer ? " role-player" : " role-admin"}`}>
+        <DashboardSidebar role={me.role} username={me.username} initialCollapsed={initialCollapsed} />
         <main className="dashboard-content">
           <header className="dashboard-topbar">
             <Link href="/dashboard" className="topbar-brand">
               <span className="sidebar-logo" aria-hidden="true">B</span>
               <span>Bast.al</span>
             </Link>
+            {isPlayer ? null : <DashboardTrail />}
             {isPlayer ? (
               <Link href="/dashboard" className="player-balance-chip" title="Your balance, delegated by your Manager or Owner">
                 <span className="player-balance-chip-icon" aria-hidden="true">$</span>
                 {formatMoney(Number(me.balance))}
               </Link>
             ) : null}
-            <NotificationCenter />
+            <div className="topbar-actions">
+              {isPlayer ? null : <ThemeToggle />}
+              <NotificationCenter />
+            </div>
           </header>
           {children}
         </main>

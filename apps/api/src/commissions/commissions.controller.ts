@@ -7,7 +7,7 @@ import { MfaGuard } from "../auth/mfa.guard";
 import type { Actor } from "../auth/permissions";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
-import { CommissionHistoryDto, CommissionPeriodDto, TeamCommissionQueryDto } from "./commissions.dto";
+import { CommissionDailyDto, CommissionHistoryDto, CommissionPeriodDto, TeamCommissionQueryDto } from "./commissions.dto";
 import { CommissionsService } from "./commissions.service";
 
 @ApiTags("commissions")
@@ -29,6 +29,14 @@ export class CommissionsController {
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   team(@CurrentActor() actor: Actor, @Query() query: TeamCommissionQueryDto) {
     return this.commissions.team(actor, query.ownerId, query.from, query.to);
+  }
+
+  @Get("daily")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  daily(@CurrentActor() actor: Actor, @Query() query: CommissionDailyDto) {
+    return this.commissions.daily(actor, query.days ?? 7);
   }
 
   @Get("mine")

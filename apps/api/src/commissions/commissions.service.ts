@@ -19,6 +19,7 @@ type Totals = { bets: number; staked: number; paidOut: number; net: number };
 export type PlayerResult = Totals & { id: string; username: string; status: UserStatus };
 
 const MAX_PERIOD_DAYS = 366;
+const DAY_MS = 86_400_000;
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
@@ -203,6 +204,48 @@ export class CommissionsService {
     for (const row of rows) row.commission = cut(row.net, manager.commissionRate);
 
     return { commissionRate: manager.commissionRate, weeks: rows };
+  }
+
+  /**
+   * Settled-bet totals day by day (UTC), oldest first, for the overview chart:
+   * the whole platform for Super Admin, an Owner's team, or a Manager's
+   * Players. Today runs to now.
+   */
+  async daily(actor: Actor, days: number) {
+    if (actor.role === Role.PLAYER) throw new ForbiddenException("Players don't have team totals");
+    const accounts = await this.accounts(actor.role === Role.SUPER_ADMIN ? null : actor.id);
+    const playerIds = accounts.filter((account) => account.role === Role.PLAYER).map((account) => account.id);
+
+    const now = new Date();
+    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const first = today - (days - 1) * DAY_MS;
+    const rows = Array.from({ length: days }, (_, index) => {
+      const from = first + index * DAY_MS;
+      return {
+        from: new Date(from).toISOString(),
+        to: (index === days - 1 ? now : new Date(from + DAY_MS)).toISOString(),
+        ...emptyTotals(),
+      };
+    });
+    const bets = playerIds.length
+      ? await this.prisma.bet.findMany({
+          where: {
+            playerId: { in: playerIds },
+            status: { in: [BetStatus.WON, BetStatus.LOST] },
+            settledAt: { gte: new Date(first), lt: now },
+          },
+          select: { stake: true, payout: true, settledAt: true },
+        })
+      : [];
+    for (const bet of bets) {
+      const row = rows[Math.floor((bet.settledAt!.getTime() - first) / DAY_MS)];
+      if (!row) continue;
+      const staked = Number(bet.stake);
+      const paidOut = Number(bet.payout);
+      add(row, { bets: 1, staked, paidOut, net: staked - paidOut });
+    }
+
+    return { days: rows };
   }
 
   private teamOf(owner: Account, children: Map<string, Account[]>, results: Map<string, PlayerResult>) {

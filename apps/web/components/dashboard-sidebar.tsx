@@ -55,12 +55,6 @@ const icons = {
       <path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2" />
     </Icon>
   ),
-  tickets: (
-    <Icon>
-      <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V7Z" />
-      <path d="M12 7v2M12 15v2" />
-    </Icon>
-  ),
   reports: (
     <Icon>
       <path d="M4 19V5M4 19h17" />
@@ -192,7 +186,6 @@ export function DashboardSidebar({
     ...(canManageUsers
       ? [{ href: "/dashboard/users", label: "Users", icon: icons.users }]
       : []),
-    ...(isPlayer ? [] : [{ href: "/dashboard/tickets", label: "Tickets", icon: icons.tickets }]),
     ...(canViewReports
       ? [{ href: "/dashboard/reports", label: "Reports", icon: icons.reports }]
       : []),
@@ -207,9 +200,9 @@ export function DashboardSidebar({
     ...(isSuperAdmin ? [{ href: "/dashboard/settlement", label: "Settlement", icon: icons.settlement }] : []),
     { href: "/dashboard/security", label: "Security", icon: icons.security },
   ];
-  // The bottom bar fits five tabs; Tickets, Security, Reports, Settlement, then Odds move to the drawer when a role has more.
+  // The bottom bar fits five tabs; Security, Reports, Settlement, then Odds move to the drawer when a role has more.
   let mobileLinks = links;
-  for (const href of ["/dashboard/tickets", "/dashboard/security", "/dashboard/reports", "/dashboard/settlement", "/dashboard/odds"]) {
+  for (const href of ["/dashboard/security", "/dashboard/reports", "/dashboard/settlement", "/dashboard/odds"]) {
     if (mobileLinks.length > 5) mobileLinks = mobileLinks.filter((link) => link.href !== href);
   }
   const isActive = (href: string) =>

@@ -2,6 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { BetLegs } from "../../../components/bet-legs";
 import { LoadingSpinner } from "../../../components/loading-spinner";
 import { apiFetch, type AdminBet, type BetStatus, type SettlementEvent } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
@@ -270,6 +271,7 @@ function AdminBetRow({ bet, run }: { bet: AdminBet; run: Run }) {
         </div>
         <span className={`status-pill bet-status-${bet.status.toLowerCase()}`}>{bet.status === "OPEN" ? "Open" : bet.status === "WON" ? "Won" : bet.status === "LOST" ? "Lost" : "Void"}</span>
       </div>
+      {bet.kind === "ACCUMULATOR" ? <BetLegs legs={bet.legs} /> : null}
       <dl className="bet-card-numbers">
         <div>
           <dt className="muted">Stake</dt>

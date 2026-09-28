@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { BetLegs } from "../../../components/bet-legs";
 import { LoadingSpinner } from "../../../components/loading-spinner";
 import { useRealtime } from "../../../components/realtime-provider";
 import { apiFetch, type Bet, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SlipInfo } from "../../../lib/api";
@@ -11,6 +12,7 @@ import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 
 type Tab = "matches" | "open" | "settled";
+type SlipMode = "singles" | "accumulator";
 
 type SlipItem = {
   selectionId: string;
@@ -29,6 +31,8 @@ type SlipItem = {
 const SLIP_STORAGE = "bastal-bet-slip";
 const QUICK_STAKES = [5, 10, 20, 50];
 const MAX_SLIP = 10;
+/** Matches the API's cap on an accumulator's combined odds. */
+const MAX_ACCUMULATOR_ODDS = 5000;
 
 const timeFormat = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
 const dateTimeFormat = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -46,6 +50,19 @@ function dayLabel(iso: string): string {
 /** Stake x odds, rounded down to the cent like the server does. */
 function returns(stake: number, odds: number): number {
   return Math.floor(stake * odds * 100 + 1e-6) / 100;
+}
+
+/** The product of the prices, rounded down to 2 decimals like the server does. Exact, in cents. */
+function combinedOdds(odds: number[]): number {
+  if (odds.length === 0) return 0;
+  let product = BigInt(1);
+  let scale = BigInt(1);
+  for (const price of odds) {
+    product *= BigInt(Math.round(price * 100));
+    scale *= BigInt(100);
+  }
+  scale /= BigInt(100);
+  return Number(product / scale) / 100;
 }
 
 function stakeValue(stake: string): number {
@@ -92,6 +109,8 @@ function BetPage() {
   const [slip, setSlip] = useState<SlipItem[]>([]);
   const [slipLoaded, setSlipLoaded] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [mode, setMode] = useState<SlipMode>("singles");
+  const [accaStake, setAccaStake] = useState("");
   const [league, setLeague] = useState("");
   const [search, setSearch] = useState("");
   const [betsVersion, setBetsVersion] = useState(0);
@@ -193,6 +212,10 @@ function BetPage() {
     <BetSlip
       items={slip}
       info={info}
+      mode={slip.length >= 2 ? mode : "singles"}
+      onMode={setMode}
+      accaStake={accaStake}
+      onAccaStake={setAccaStake}
       onChange={setSlip}
       onPlaced={() => {
         setBetsVersion((v) => v + 1);
@@ -202,7 +225,7 @@ function BetPage() {
       onClose={() => setSheetOpen(false)}
     />
   );
-  const totalStake = slip.reduce((sum, item) => sum + stakeValue(item.stake), 0);
+  const totalStake = mode === "accumulator" && slip.length >= 2 ? stakeValue(accaStake) : slip.reduce((sum, item) => sum + stakeValue(item.stake), 0);
 
   return (
     <div className="stack bet-page">
@@ -354,6 +377,10 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
 function BetSlip({
   items,
   info,
+  mode,
+  onMode,
+  accaStake,
+  onAccaStake,
   onChange,
   onPlaced,
   onOddsChanged,
@@ -361,6 +388,10 @@ function BetSlip({
 }: {
   items: SlipItem[];
   info: SlipInfo | null;
+  mode: SlipMode;
+  onMode: (mode: SlipMode) => void;
+  accaStake: string;
+  onAccaStake: (stake: string) => void;
   onChange: (update: (items: SlipItem[]) => SlipItem[]) => void;
   onPlaced: () => void;
   onOddsChanged: () => void;
@@ -372,18 +403,25 @@ function BetSlip({
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
 
-  const totalStake = items.reduce((sum, item) => sum + stakeValue(item.stake), 0);
-  const totalReturn = items.reduce((sum, item) => sum + returns(stakeValue(item.stake), item.odds), 0);
-  const missingStake = items.some((item) => stakeValue(item.stake) < 1);
+  const acca = mode === "accumulator";
+  const accaOdds = combinedOdds(items.map((item) => item.odds));
+  const accaStakeValue = stakeValue(accaStake);
+  const sameMatch = new Set(items.map((item) => item.eventId)).size < items.length;
+
+  const totalStake = acca ? accaStakeValue : items.reduce((sum, item) => sum + stakeValue(item.stake), 0);
+  const totalReturn = acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + returns(stakeValue(item.stake), item.odds), 0);
+  const missingStake = acca ? accaStakeValue < 1 : items.some((item) => stakeValue(item.stake) < 1);
   const closed = items.filter((item) => item.closed);
-  const overMax = info?.maxStake != null ? items.some((item) => stakeValue(item.stake) > info.maxStake!) : false;
+  const overMax = info?.maxStake != null ? (acca ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
   const tooLittle = info ? totalStake > info.balance : false;
   const moved = items.some((item) => item.previousOdds !== undefined);
 
   let blocker: string | null = null;
   if (info?.blocked) blocker = info.blocked;
   else if (closed.length > 0) blocker = `Remove ${closed.length === 1 ? "the match that has closed" : "the matches that have closed"} to continue.`;
-  else if (missingStake) blocker = "Enter a stake of at least $1 on each bet.";
+  else if (acca && sameMatch) blocker = "An accumulator needs each pick from a different match. Remove one of the picks from the same match.";
+  else if (acca && accaOdds > MAX_ACCUMULATOR_ODDS) blocker = `Combined odds can be at most ${MAX_ACCUMULATOR_ODDS}. Remove a pick to continue.`;
+  else if (missingStake) blocker = acca ? "Enter a stake of at least $1." : "Enter a stake of at least $1 on each bet.";
   else if (overMax) blocker = `The most you can stake on one bet is ${formatMoney(info!.maxStake!)}.`;
   else if (tooLittle) blocker = "Your balance is too low for this slip. Ask your Manager for a top-up.";
 
@@ -399,12 +437,18 @@ function BetSlip({
     if (!token) return;
     setPlacing(true);
     setError(null);
-    const body = JSON.stringify({ bets: items.map((item) => ({ selectionId: item.selectionId, stake: stakeValue(item.stake), odds: item.odds })) });
+    const body = JSON.stringify(
+      acca
+        ? { accumulator: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), stake: accaStakeValue } }
+        : { bets: items.map((item) => ({ selectionId: item.selectionId, stake: stakeValue(item.stake), odds: item.odds })) },
+    );
     try {
       const result = await apiFetch<PlaceBetsResponse>("/bets", token, { method: "POST", body, idempotencyKey: idempotency.keyFor("/bets", body) });
       idempotency.done();
       setReceipt(result);
       onChange(() => []);
+      onAccaStake("");
+      onMode("singles");
       onPlaced();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not place your bets";
@@ -426,7 +470,7 @@ function BetSlip({
           </button>
         </div>
         <p className="success-text" role="status" style={{ margin: 0 }}>
-          {receipt.bets.length === 1 ? "Your bet is on" : `Your ${receipt.bets.length} bets are on`}. {formatMoney(receipt.total)} was taken from your balance.
+          {receipt.bets.length === 1 ? (receipt.bets[0].kind === "ACCUMULATOR" ? "Your accumulator is on" : "Your bet is on") : `Your ${receipt.bets.length} bets are on`}. {formatMoney(receipt.total)} was taken from your balance.
         </p>
         <ul className="bet-receipt">
           {receipt.bets.map((bet) => (
@@ -470,14 +514,29 @@ function BetSlip({
 
       {items.length === 0 ? (
         <p className="muted" style={{ margin: 0 }}>
-          Tap a price to add a bet. Each bet on the slip is a single.
+          Tap a price to add a bet. Add two or more picks from different matches to combine them into an accumulator.
         </p>
       ) : (
         <>
-          <div className="bet-quick" role="group" aria-label="Same stake on every bet">
-            <span className="muted">Stake each</span>
+          {items.length >= 2 ? (
+            <div className="bet-mode" role="group" aria-label="Bet type">
+              <button type="button" className={`bet-mode-option${!acca ? " is-active" : ""}`} aria-pressed={!acca} onClick={() => onMode("singles")}>
+                Singles
+              </button>
+              <button type="button" className={`bet-mode-option${acca ? " is-active" : ""}`} aria-pressed={acca} onClick={() => onMode("accumulator")}>
+                Accumulator
+              </button>
+            </div>
+          ) : null}
+          <div className="bet-quick" role="group" aria-label={acca ? "Accumulator stake" : "Same stake on every bet"}>
+            <span className="muted">{acca ? "Stake" : "Stake each"}</span>
             {QUICK_STAKES.map((amount) => (
-              <button key={amount} type="button" className="bet-chip" onClick={() => onChange((list) => list.map((item) => ({ ...item, stake: String(amount) })))}>
+              <button
+                key={amount}
+                type="button"
+                className="bet-chip"
+                onClick={() => (acca ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
+              >
                 ${amount}
               </button>
             ))}
@@ -514,6 +573,9 @@ function BetSlip({
                         </>
                       )}
                     </span>
+                    {acca ? (
+                      <span className="bet-slip-return muted">{sameMatch && items.some((other) => other !== item && other.eventId === item.eventId) ? "Same match as another pick" : ""}</span>
+                    ) : (
                     <label className="bet-stake">
                       <span className="muted">$</span>
                       <input
@@ -528,12 +590,43 @@ function BetSlip({
                         disabled={item.closed}
                       />
                     </label>
-                    <span className="bet-slip-return muted">{stake > 0 ? `Returns ${formatMoney(returns(stake, item.odds))}` : ""}</span>
+                    )}
+                    {acca ? null : <span className="bet-slip-return muted">{stake > 0 ? `Returns ${formatMoney(returns(stake, item.odds))}` : ""}</span>}
                   </div>
                 </li>
               );
             })}
           </ul>
+
+          {acca ? (
+            <div className="bet-slip-item bet-acca-stake">
+              <div className="bet-slip-item-bottom">
+                <span className="bet-slip-odds">
+                  <span className="muted">Combined</span>
+                  <strong>{accaOdds.toFixed(2)}</strong>
+                </span>
+                <label className="bet-stake">
+                  <span className="muted">$</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    step="0.01"
+                    placeholder="Stake"
+                    value={accaStake}
+                    onChange={(e) => {
+                      setError(null);
+                      onAccaStake(e.target.value);
+                    }}
+                    aria-label="Accumulator stake"
+                  />
+                </label>
+              </div>
+              <p className="muted bet-slip-note" style={{ margin: 0 }}>
+                Every pick has to win. A pick on a match that is called off drops out and the rest still count.
+              </p>
+            </div>
+          ) : null}
 
           <dl className="bet-slip-totals">
             <div>
@@ -563,7 +656,7 @@ function BetSlip({
           ) : null}
 
           <button type="submit" className="bet-place" disabled={Boolean(blocker) || placing}>
-            {placing ? "Placing…" : `Place ${items.length === 1 ? "bet" : `${items.length} bets`} · ${formatMoney(totalStake)}`}
+            {placing ? "Placing…" : acca ? `Place accumulator · ${formatMoney(totalStake)}` : `Place ${items.length === 1 ? "bet" : `${items.length} bets`} · ${formatMoney(totalStake)}`}
           </button>
           {info?.maxStake != null || info?.dailyLossLimit != null ? (
             <p className="muted bet-slip-note">
@@ -662,7 +755,50 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
   );
 }
 
+function AccumulatorCard({ bet }: { bet: Bet }) {
+  const decided = bet.legs.filter((leg) => leg.result !== null).length;
+  const when =
+    bet.status === "OPEN"
+      ? `${decided} of ${bet.legs.length} picks settled`
+      : bet.settledAt
+        ? `Settled ${dateTimeFormat.format(new Date(bet.settledAt))}`
+        : "";
+  return (
+    <li className={`card bet-card is-${bet.status.toLowerCase()}`}>
+      <div className="bet-card-top">
+        <div className="bet-card-name">
+          <strong>Accumulator</strong>
+          <span className="muted">{bet.legs.length} picks</span>
+        </div>
+        <span className={`status-pill bet-status-${bet.status.toLowerCase()}`}>{STATUS_LABEL[bet.status]}</span>
+      </div>
+      <BetLegs legs={bet.legs} />
+      <dl className="bet-card-numbers">
+        <div>
+          <dt className="muted">Stake</dt>
+          <dd>{formatMoney(bet.stake)}</dd>
+        </div>
+        <div>
+          <dt className="muted">Odds</dt>
+          <dd>{bet.odds?.toFixed(2) ?? "–"}</dd>
+        </div>
+        <div>
+          <dt className="muted">{bet.status === "OPEN" ? "To return" : "Returned"}</dt>
+          <dd>
+            <strong>{formatMoney(bet.status === "OPEN" ? bet.potentialPayout ?? 0 : bet.payout)}</strong>
+          </dd>
+        </div>
+      </dl>
+      <p className="muted bet-card-when">
+        {when}
+        {bet.voidReason ? ` · ${bet.voidReason}` : ""}
+      </p>
+    </li>
+  );
+}
+
 function BetCard({ bet }: { bet: Bet }) {
+  if (bet.kind === "ACCUMULATOR") return <AccumulatorCard bet={bet} />;
   const event = bet.event;
   const score = event?.result ?? (event && event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING" ? { home: event.homeScore, away: event.awayScore } : null);
   let when = "";

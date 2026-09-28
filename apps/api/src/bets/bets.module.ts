@@ -8,11 +8,13 @@ import { SecurityModule } from "../security/security.module";
 import { UsersModule } from "../users/users.module";
 import { BetsController } from "./bets.controller";
 import { BetsService } from "./bets.service";
+import { RiskController } from "./risk.controller";
+import { RiskService } from "./risk.service";
 import { SettlementService } from "./settlement.service";
 
 @Module({
   imports: [AuthModule, SecurityModule, AuditModule, UsersModule, NotificationsModule, OddsModule, CommissionsModule],
-  controllers: [BetsController],
-  providers: [BetsService, SettlementService],
+  controllers: [BetsController, RiskController],
+  providers: [BetsService, SettlementService, RiskService],
 })
 export class BetsModule {}

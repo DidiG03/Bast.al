@@ -59,7 +59,7 @@ export default async function DashboardLayout({
     <RealtimeProvider>
       <RealtimeRefresh />
       <div className="dashboard-shell">
-        <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} isPlayer={me.role === "PLAYER"} isSuperAdmin={me.role === "SUPER_ADMIN"} username={me.username} initialCollapsed={initialCollapsed} />
+        <DashboardSidebar canManageUsers={canManageUsers} canViewReports={canViewReports} canViewFinancial={canViewFinancial} isPlayer={me.role === "PLAYER"} isSuperAdmin={me.role === "SUPER_ADMIN"} canViewRisk={me.role === "OWNER" || me.role === "SUPER_ADMIN"} username={me.username} initialCollapsed={initialCollapsed} />
         <main className="dashboard-content">
           <header className="dashboard-topbar">
             <Link href="/dashboard" className="topbar-brand">

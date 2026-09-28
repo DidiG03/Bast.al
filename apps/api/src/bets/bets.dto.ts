@@ -25,12 +25,45 @@ export class SlipBetDto {
   odds!: number;
 }
 
+export class AccumulatorLegDto {
+  @IsString()
+  @MaxLength(64)
+  selectionId!: string;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(MIN_ODDS)
+  @Max(MAX_ODDS)
+  odds!: number;
+}
+
+export class AccumulatorDto {
+  @ValidateNested({ each: true })
+  @Type(() => AccumulatorLegDto)
+  @ArrayMinSize(2)
+  @ArrayMaxSize(MAX_SLIP)
+  legs!: AccumulatorLegDto[];
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(MIN_STAKE)
+  @Max(MAX_STAKE)
+  stake!: number;
+}
+
 export class PlaceBetsDto {
+  /** Singles. */
+  @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => SlipBetDto)
-  @ArrayMinSize(1)
   @ArrayMaxSize(MAX_SLIP)
-  bets!: SlipBetDto[];
+  bets?: SlipBetDto[];
+
+  /** At most one accumulator per slip. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AccumulatorDto)
+  accumulator?: AccumulatorDto;
 
   @IsOptional()
   @IsBoolean()
@@ -84,4 +117,22 @@ export class ResultDto {
   @Min(0)
   @Max(99)
   away!: number;
+}
+
+export class RiskQueryDto {
+  /** Super Admin only: whose team. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  ownerId?: string;
+}
+
+export class RiskCapDto {
+  /** Null removes the cap. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(1)
+  @Max(100_000_000)
+  maxOutcomePayout!: number | null;
 }

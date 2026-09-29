@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { LoadingSpinner } from "../../../components/loading-spinner";
+import { UserMenu } from "../../../components/user-menu";
 import { apiFetch, type SecurityOverview } from "../../../lib/api";
 
 export default function SecurityPage() {
@@ -87,6 +88,11 @@ export default function SecurityPage() {
         <h2 style={{ margin: 0 }}>Password</h2>
         <p className="muted">Use the account profile to change your password or start a password reset.</p>
         <a className="button-link" href="/security/recovery">Open password recovery</a>
+      </section>
+      <section className="card stack">
+        <h2 style={{ margin: 0 }}>Sign out</h2>
+        <p className="muted" style={{ margin: 0 }}>End your session on this device.</p>
+        <UserMenu />
       </section>
     </div>
   );

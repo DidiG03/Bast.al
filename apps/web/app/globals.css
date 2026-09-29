@@ -9,6 +9,12 @@
   --border: #262a18;
   --focus: #eaffa0;
   --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  /* Tells the browser which palette this page actually uses, so it stops
+     guessing from the OS setting for things it renders itself (native form
+     controls, scrollbars, and some text/control color heuristics on iOS
+     Safari) — without this, a light-mode device can second-guess colors on
+     an always-dark page like a Player's. */
+  color-scheme: dark;
 }
 
 :root[data-theme="light"] {
@@ -21,6 +27,7 @@
   --danger: #c9364a;
   --border: #d6e2da;
   --focus: #007d15;
+  color-scheme: light;
 }
 
 /* No saved choice: follow the device setting. */
@@ -35,6 +42,7 @@
     --danger: #c9364a;
     --border: #d6e2da;
     --focus: #007d15;
+    color-scheme: light;
   }
 }
 
@@ -3715,6 +3723,9 @@ button.odds-selection:hover,
   --danger: #ff5c72;
   --border: #262a18;
   --focus: #eaffa0;
+  /* Fixed dark theme regardless of the toggle or the device setting — see
+     the color-scheme note on :root. */
+  color-scheme: dark;
   background: var(--bg);
   min-height: 100vh;
 }
@@ -3776,6 +3787,19 @@ button.odds-selection:hover,
 
 .odds-teams > :last-child.odds-team {
   justify-content: flex-end;
+}
+
+/* Force-correct text color for Players regardless of what else targets these
+   elements: the admin theme's heading rules use :where(.role-admin ...), which
+   carries zero specificity, so anything else matching h1/h2/h3/strong at that
+   same low specificity can end up deciding the color instead — including on a
+   page that isn't even admin-themed. This simply always wins here. */
+.role-player h1,
+.role-player h2,
+.role-player h3,
+.role-player strong,
+.role-player .odds-team {
+  color: var(--text);
 }
 
 /* Balance chip in the topbar */

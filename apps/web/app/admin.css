@@ -130,6 +130,10 @@ html:has(.role-admin) body {
   --sidebar-width: 15rem;
   --sidebar-collapsed: 4.25rem;
   min-height: 100vh;
+  /* Supports both and tracks the toggle/device setting already driving the
+     --a-* tokens above — without this, native form controls and some
+     WebKit text-color heuristics can disagree with the page's own colors. */
+  color-scheme: light dark;
   background: var(--a-page);
   color: var(--a-text);
   font-size: 0.9375rem;

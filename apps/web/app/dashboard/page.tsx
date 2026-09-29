@@ -30,6 +30,19 @@ import {
 import { formatMoney, formatSignedMoney } from "../../lib/format";
 
 const matchTimeFormat = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
+
+/** "Today", "Tomorrow", or DD/MM/YYYY — so a match's day is never ambiguous. */
+function topEventDayLabel(iso: string): string {
+  const date = new Date(iso);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${date.getFullYear()}`;
+}
 const DAY_MS = 86_400_000;
 const weekdayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" });
 const shortDateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -649,7 +662,11 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
                     <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
                   </div>
                   <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
-                    {event.status === "LIVE" ? (event.elapsed === null ? "Live" : `Live ${event.elapsed}'`) : matchTimeFormat.format(new Date(event.startsAt))}
+                    {event.status === "LIVE"
+                      ? event.elapsed === null
+                        ? "Live"
+                        : `Live ${event.elapsed}'`
+                      : `${topEventDayLabel(event.startsAt)} · ${matchTimeFormat.format(new Date(event.startsAt))}`}
                   </span>
                 </Link>
               ))}

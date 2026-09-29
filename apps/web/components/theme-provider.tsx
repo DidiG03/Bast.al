@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -45,6 +46,23 @@ export function ThemeProvider({ children, initialTheme }: { children: ReactNode;
   }, []);
 
   const theme = choice ?? system;
+  const pathname = usePathname();
+
+  // The browser's own chrome (mobile status bar, address bar) is told the
+  // page's color via <meta name="theme-color">. Player pages are always dark
+  // regardless of the light/dark toggle (their theme is fixed), so reading
+  // the *actual* rendered --bg — from the dashboard shell if there is one,
+  // the <html> element otherwise — is the only way this stays correct for
+  // every role and every toggle state, not just the two static colors a
+  // plain light/dark media query can express. Re-runs on navigation too,
+  // since a Player route and an admin route can disagree while `theme` itself
+  // hasn't changed.
+  useEffect(() => {
+    const target = document.querySelector<HTMLElement>(".dashboard-shell") ?? document.documentElement;
+    const bg = getComputedStyle(target).getPropertyValue("--bg").trim();
+    if (!bg) return;
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.setAttribute("content", bg));
+  }, [theme, pathname]);
 
   const toggleTheme = useCallback(() => {
     const next: Theme = theme === "dark" ? "light" : "dark";

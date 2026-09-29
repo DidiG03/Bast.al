@@ -158,6 +158,10 @@ test("the extra markets parse from a real API-Football response", async () => {
   const ht = markets.find((m) => m.key === "ht_ft");
   assert.equal(ht.selections.length, 9);
   assert.equal(ht.selections.find((s) => s.key === "home_draw").name, "Home FC / Draw");
+  const corners = markets.filter((m) => m.key.startsWith("corners_"));
+  assert.ok(corners.length >= 1 && corners.length <= 3, "up to three corner lines");
+  assert.ok(corners.every((m) => /^corners_\d+_5$/.test(m.key)), "only half lines, so no pushes");
+  assert.match(corners[0].name, /^Total corners \d+\.5$/);
   const cs = markets.find((m) => m.key === "correct_score");
   assert.ok(cs.selections.every((s) => /^\d-\d$/.test(s.key)));
 });

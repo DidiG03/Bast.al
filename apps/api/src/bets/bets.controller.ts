@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards, BadRequestException } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { BetStatus, Role } from "@prisma/client";
@@ -62,7 +62,13 @@ export class BetsController {
   @Idempotent()
   correctResult(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() body: ResultDto) {
     const half = body.halfHome !== undefined && body.halfAway !== undefined ? { home: body.halfHome, away: body.halfAway } : null;
-    return this.settlement.correctResult(actor, id, body.home, body.away, half);
+    const counts = [body.cornersHome, body.cornersAway, body.cardsHome, body.cardsAway];
+    if (counts.some((n) => n !== undefined) && counts.some((n) => n === undefined)) throw new BadRequestException("Enter corners and cards for both teams, or leave all four empty");
+    const stats =
+      body.cornersHome !== undefined && body.cornersAway !== undefined && body.cardsHome !== undefined && body.cardsAway !== undefined
+        ? { cornersHome: body.cornersHome, cornersAway: body.cornersAway, cardsHome: body.cardsHome, cardsAway: body.cardsAway }
+        : null;
+    return this.settlement.correctResult(actor, id, body.home, body.away, half, stats);
   }
 
   @Post("admin/events/:id/void")

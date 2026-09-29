@@ -272,6 +272,17 @@ model Event {
   /// The half-time score, for the 1st and 2nd half markets.
   resultHalfHome Int?      @map("result_half_home")
   resultHalfAway Int?      @map("result_half_away")
+  /// Went to extra time or penalties: match statistics include extra time then, so corner and card bets wait for Super Admin.
+  extraTime    Boolean     @default(false) @map("extra_time")
+  /// Corners and cards (every yellow and red counts as one) the corner and card markets settle on.
+  resultCornersHome Int?   @map("result_corners_home")
+  resultCornersAway Int?   @map("result_corners_away")
+  resultCardsHome   Int?   @map("result_cards_home")
+  resultCardsAway   Int?   @map("result_cards_away")
+  /// "feed" or "manual". The feed never overwrites numbers Super Admin entered.
+  statsSource  String?     @map("stats_source")
+  /// Last time the feed was asked for this match's statistics.
+  statsCheckedAt DateTime? @map("stats_checked_at")
   /// "feed" or "manual". The feed never overwrites a manual result.
   resultSource String?     @map("result_source")
   createdAt    DateTime    @default(now())

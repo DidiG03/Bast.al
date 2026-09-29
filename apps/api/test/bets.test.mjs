@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Prisma } from "@prisma/client";
 import { gradeSelection, payoutFor } from "../dist/bets/grading.js";
-import { parseFixture } from "../dist/odds/api-football.js";
+import { parseFixture, parseStatistics } from "../dist/odds/api-football.js";
 
 test("match winner and double chance follow the 90-minute score", () => {
   assert.equal(gradeSelection("match_winner", "home", 2, 1), "WON");
@@ -76,6 +76,19 @@ test("half markets settle on the half-time score, and wait without one", () => {
   assert.equal(gradeSelection("h2_goals_0_5", "over", 2, 2), null);
 });
 
+test("corner and card markets settle on match stats, and wait without them", () => {
+  const stats = { cornersHome: 3, cornersAway: 13, cardsHome: 3, cardsAway: 0 }; // Fulham 1-1 Man United
+  assert.equal(gradeSelection("corners_9_5", "over", 1, 1, null, stats), "WON");
+  assert.equal(gradeSelection("corners_16_5", "under", 1, 1, null, stats), "WON");
+  assert.equal(gradeSelection("home_corners_3_5", "under", 1, 1, null, stats), "WON");
+  assert.equal(gradeSelection("away_corners_5_5", "over", 1, 1, null, stats), "WON");
+  assert.equal(gradeSelection("cards_3_5", "over", 1, 1, null, stats), "LOST");
+  assert.equal(gradeSelection("home_cards_2_5", "over", 1, 1, null, stats), "WON");
+  assert.equal(gradeSelection("away_cards_0_5", "under", 1, 1, null, stats), "WON");
+  assert.equal(gradeSelection("corners_9_5", "over", 1, 1), null);
+  assert.equal(gradeSelection("cards_3_5", "over", 1, 1, { home: 0, away: 0 }), null);
+});
+
 test("an unknown market is left for Super Admin", () => {
   assert.equal(gradeSelection("corners", "over", 1, 0), null);
   assert.equal(gradeSelection("match_winner", "nobody", 1, 0), null);
@@ -130,4 +143,35 @@ test("a void leg drops out and an all-void accumulator is refunded", async () =>
   const oneVoid = accumulatorOutcome(legs(["2.00", "WON"], ["3.00", "VOID"], ["1.50", "WON"]));
   assert.deepEqual([oneVoid.status, oneVoid.odds.toFixed(2)], ["WON", "3.00"]);
   assert.equal(accumulatorOutcome(legs(["2.00", "VOID"], ["3.00", "VOID"])).status, "VOID");
+});
+
+test("a match that went to extra time is flagged", () => {
+  assert.equal(parseFixture(raw("AET", { home: 2, away: 1 }, { home: 1, away: 1 })).extraTime, true);
+  assert.equal(parseFixture(raw("FT", { home: 2, away: 1 }, { home: 2, away: 1 })).extraTime, false);
+});
+
+const teamStats = (id, name, corners, yellow, red) => ({
+  team: { id, name },
+  statistics: [
+    { type: "Shots on Goal", value: 4 },
+    { type: "Corner Kicks", value: corners },
+    { type: "Yellow Cards", value: yellow },
+    { type: "Red Cards", value: red },
+  ],
+});
+
+test("corners and cards are read from match statistics", () => {
+  // Real numbers from Fulham 1-1 Manchester United; null means none.
+  const fulham = teamStats(36, "Fulham", 3, 3, null);
+  const united = teamStats(33, "Manchester United", 13, 0, null);
+  assert.deepEqual(parseStatistics([fulham, united], "Fulham"), { cornersHome: 3, cornersAway: 13, cardsHome: 3, cardsAway: 0 });
+  // Order flipped in the feed: matched on the home team's name.
+  assert.deepEqual(parseStatistics([united, fulham], "Fulham"), { cornersHome: 3, cornersAway: 13, cardsHome: 3, cardsAway: 0 });
+  // A red counts as one card on top of the yellows.
+  assert.equal(parseStatistics([teamStats(1, "A", 5, 2, 1), teamStats(2, "B", 4, null, null)], "A").cardsHome, 3);
+});
+
+test("no statistics means no numbers, not zeros", () => {
+  assert.equal(parseStatistics([], "Fulham"), null);
+  assert.equal(parseStatistics([{ team: { id: 1, name: "A" }, statistics: [] }, { team: { id: 2, name: "B" }, statistics: [] }], "A"), null);
 });

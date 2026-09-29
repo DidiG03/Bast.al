@@ -3982,3 +3982,8 @@ button.odds-selection:hover,
     padding-left: max(0.75rem, env(safe-area-inset-left));
   }
 }
+
+.odds-market-rule {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+}

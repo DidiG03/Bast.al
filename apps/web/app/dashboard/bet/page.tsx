@@ -397,6 +397,8 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
               );
             })}
           </div>
+          {/^(home_|away_)?cards_/.test(market.key) ? <p className="muted odds-market-rule">Settles on the official match stats after 90 minutes. Every yellow and red card counts as 1.</p> : null}
+          {/^(home_|away_)?corners_/.test(market.key) ? <p className="muted odds-market-rule">Settles on the official match stats after 90 minutes.</p> : null}
           <MarketPriceHistory selections={market.selections} />
         </div>
       ))}

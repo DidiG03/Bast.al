@@ -71,6 +71,8 @@ export type FeedFixture = {
   result: { home: number; away: number } | null;
   /** The half-time score, for the half markets. Null until the match has finished or if the feed didn't send it. */
   halfTime: { home: number; away: number } | null;
+  /** Went to extra time or penalties. Match statistics then include extra time, so corner and card bets can't settle from them. */
+  extraTime: boolean;
 };
 
 export type FeedMarket = {
@@ -113,6 +115,7 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     homeScore: raw.goals.home,
     awayScore: raw.goals.away,
     result: status === EventStatus.COMPLETED && home !== null && away !== null ? { home, away } : null,
+    extraTime: raw.fixture.status.short === "AET" || raw.fixture.status.short === "PEN",
     halfTime:
       status === EventStatus.COMPLETED && raw.score?.halftime?.home != null && raw.score.halftime.away != null
         ? { home: raw.score.halftime.home, away: raw.score.halftime.away }
@@ -154,6 +157,21 @@ function lines(prefix: string, name: (home: string, away: string, line: string) 
         { key: "under", name: `Under ${line}`, odds: priceOf(bet, `Under ${line}`), sortOrder: 1 },
       ],
     }));
+}
+
+/**
+ * Over/under on a count whose lines change from match to match (corners,
+ * cards): one market per half line the feed prices, up to `max` of them,
+ * keyed e.g. `corners_9_5`. Whole lines (Over 10) are skipped, so there's
+ * never a push.
+ */
+function feedLines(prefix: string, name: (home: string, away: string, line: string) => string, max = 3) {
+  return (bet: FeedBet, home: string, away: string): Built[] => {
+    const offered = [...new Set(bet.values.map((v) => /^Over (\d+\.5)$/.exec(String(v.value))?.[1]).filter((line): line is string => Boolean(line)))]
+      .sort((a, b) => Number(a) - Number(b))
+      .slice(0, max);
+    return lines(prefix, name, offered)(bet, home, away);
+  };
 }
 
 /** Correct score: every scoreline the feed prices up to 4 goals a side, keyed `2-1`. */
@@ -261,6 +279,13 @@ const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away:
   ],
   ["Win Both Halves", fixed("win_both_halves", () => "Win both halves", eitherTeam)],
   ["To Win Either Half", fixed("win_either_half", () => "Win either half", eitherTeam)],
+  // Corners and cards settle from the match statistics fetched after full time.
+  ["Corners Over Under", feedLines("corners", (_h, _a, line) => `Total corners ${line}`)],
+  ["Home Corners Over/Under", feedLines("home_corners", (home, _a, line) => `${home} corners ${line}`)],
+  ["Away Corners Over/Under", feedLines("away_corners", (_h, away, line) => `${away} corners ${line}`)],
+  ["Cards Over/Under", feedLines("cards", (_h, _a, line) => `Total cards ${line}`)],
+  ["Home Team Total Cards", feedLines("home_cards", (home, _a, line) => `${home} cards ${line}`)],
+  ["Away Team Total Cards", feedLines("away_cards", (_h, away, line) => `${away} cards ${line}`)],
 ];
 const MARKET_INDEX = new Map(MARKETS.map(([betName, build], index) => [betName, { build, index }]));
 
@@ -370,6 +395,44 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
   };
 }
 
+/** One team's numbers from `/fixtures/statistics`. A count the feed has no events for comes back null, meaning 0. */
+export type RawTeamStatistics = {
+  team: { id: number; name: string };
+  statistics: Array<{ type: string; value: number | string | null }>;
+};
+
+/** Corners and cards for a finished match. Every yellow and every red card counts as one card. */
+export type MatchStats = { cornersHome: number; cornersAway: number; cardsHome: number; cardsAway: number };
+
+/**
+ * Reads corners and cards out of a match's statistics. Returns null when the
+ * feed has no statistics for the match (common outside the bigger leagues),
+ * so those bets wait for Super Admin instead of settling on made-up zeros.
+ */
+export function parseStatistics(raw: RawTeamStatistics[], homeTeam: string): MatchStats | null {
+  if (raw.length !== 2) return null;
+  // Home comes first in the feed; the name check guards against it ever flipping.
+  const [first, second] = raw;
+  const [home, away] = second.team.name === homeTeam && first.team.name !== homeTeam ? [second, first] : [first, second];
+  const read = (team: RawTeamStatistics, type: string): number | undefined => {
+    const stat = team.statistics.find((s) => s.type === type);
+    if (!stat) return undefined;
+    const value = Number(stat.value ?? 0);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const cornersHome = read(home, "Corner Kicks");
+  const cornersAway = read(away, "Corner Kicks");
+  const yellowHome = read(home, "Yellow Cards");
+  const yellowAway = read(away, "Yellow Cards");
+  if (cornersHome === undefined || cornersAway === undefined || yellowHome === undefined || yellowAway === undefined) return null;
+  return {
+    cornersHome,
+    cornersAway,
+    cardsHome: yellowHome + (read(home, "Red Cards") ?? 0),
+    cardsAway: yellowAway + (read(away, "Red Cards") ?? 0),
+  };
+}
+
 export class ApiFootballClient {
   constructor(private readonly fetchJson: FetchJson) {}
 
@@ -388,6 +451,12 @@ export class ApiFootballClient {
     if (ids.length === 0) return [];
     const res = (await this.fetchJson("/fixtures", { ids: ids.slice(0, 20).join("-") })) as ApiResponse<RawFixture>;
     return res.response.map(parseFixture);
+  }
+
+  /** Corners and cards for one finished match, or null if the feed has no statistics for it. */
+  async statistics(fixtureId: string, homeTeam: string): Promise<MatchStats | null> {
+    const res = (await this.fetchJson("/fixtures/statistics", { fixture: fixtureId })) as ApiResponse<RawTeamStatistics>;
+    return parseStatistics(res.response, homeTeam);
   }
 
   /** In-play odds for every match the feed is pricing live, in one request. */

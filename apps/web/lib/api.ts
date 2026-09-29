@@ -410,6 +410,11 @@ export type SettlementEvent = {
   result: { home: number; away: number } | null;
   /** The half-time score the 1st and 2nd half markets settle on. */
   halfTime: { home: number; away: number } | null;
+  /** Corners and cards the corner and card markets settle on. */
+  stats: { cornersHome: number; cornersAway: number; cardsHome: number; cardsAway: number } | null;
+  statsSource: "feed" | "manual" | null;
+  /** Went to extra time, so corners and cards must be entered by hand. */
+  extraTime: boolean;
   resultSource: "feed" | "manual" | null;
   suspended: boolean;
   bets: { open: number; total: number; staked: number; openStaked: number };

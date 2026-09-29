@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { EventStatus, Prisma } from "@prisma/client";
+import { BetStatus, EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { ApiFootballClient, FeedFixture, FeedLiveMarket, FeedMarket, httpFetchJson, parseLiveOdds, parseMarkets } from "./api-football";
@@ -21,6 +21,8 @@ export type FeedMode = "api-football" | "mock" | "off";
 type SyncSummary = { events: number; markets: number; live: number };
 
 const LOCK_KEY = "bastal:odds-sync";
+/** Markets settled from match statistics rather than the score. */
+const STATS_MARKET_PREFIXES = ["corners_", "home_corners_", "away_corners_", "cards_", "home_cards_", "away_cards_"];
 
 /**
  * Keeps events, markets and feed prices up to date:
@@ -156,6 +158,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       }
     }
     const live = await this.syncLive();
+    await this.syncStats();
     await this.recordStatus(`Synced ${events} matches and ${markets} markets`, true);
     return { events, markets, live };
   }
@@ -186,7 +189,59 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       updated++;
     }
     await this.syncLiveOdds();
+    if (finished.length > 0) await this.syncStats();
     return updated;
+  }
+
+  /**
+   * Corners and cards for finished matches, which the corner and card
+   * markets settle on. Only matches with open bets on those markets are
+   * asked about (one request each), at most every 10 minutes and for 3 days
+   * after kick-off, since the feed can take a while to publish statistics.
+   * A match that went to extra time is skipped: its statistics include extra
+   * time, so Super Admin enters the 90-minute numbers by hand.
+   */
+  private async syncStats(): Promise<number> {
+    const provider = this.provider();
+    const now = Date.now();
+    const openOnStats = {
+      OR: STATS_MARKET_PREFIXES.map((prefix) => ({ key: { startsWith: prefix } })),
+      selections: { some: { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null } } }] } },
+    };
+    const due = await this.prisma.event.findMany({
+      where: {
+        provider,
+        externalId: { not: null },
+        status: EventStatus.COMPLETED,
+        extraTime: false,
+        statsSource: null,
+        startsAt: { gte: new Date(now - 3 * 86_400_000) },
+        OR: [{ statsCheckedAt: null }, { statsCheckedAt: { lt: new Date(now - 10 * 60_000) } }],
+        markets: { some: openOnStats },
+      },
+      select: { id: true, externalId: true, homeTeam: true, name: true },
+      take: 20,
+    });
+    let found = 0;
+    for (const event of due) {
+      const stats = await this.client!.statistics(event.externalId!, event.homeTeam ?? event.name).catch(() => null);
+      await this.prisma.event.updateMany({
+        // Re-checked here so numbers Super Admin typed in meanwhile are never overwritten.
+        where: { id: event.id, statsSource: null },
+        data: stats
+          ? {
+              resultCornersHome: stats.cornersHome,
+              resultCornersAway: stats.cornersAway,
+              resultCardsHome: stats.cardsHome,
+              resultCardsAway: stats.cardsAway,
+              statsSource: "feed",
+              statsCheckedAt: new Date(),
+            }
+          : { statsCheckedAt: new Date() },
+      });
+      if (stats) found++;
+    }
+    return found;
   }
 
   /**
@@ -259,6 +314,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         resultAway: fixture.result.away,
         resultHalfHome: fixture.halfTime?.home ?? null,
         resultHalfAway: fixture.halfTime?.away ?? null,
+        extraTime: fixture.extraTime,
         resultSource: "feed",
       },
     });

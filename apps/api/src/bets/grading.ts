@@ -1,6 +1,8 @@
 import { BetStatus, Prisma, SelectionResult } from "@prisma/client";
 
 type Score = { home: number; away: number };
+/** Corners and cards from the match statistics; every yellow and red counts as one card. */
+export type Stats = { cornersHome: number; cornersAway: number; cardsHome: number; cardsAway: number };
 type Side = "home" | "draw" | "away";
 
 const sideOf = (score: Score): Side => (score.home > score.away ? "home" : score.home < score.away ? "away" : "draw");
@@ -16,11 +18,27 @@ export function gradeSelection(
   home: number,
   away: number,
   half: Score | null = null,
+  stats: Stats | null = null,
 ): SelectionResult | null {
   const full = { home, away };
   const second = half ? { home: home - half.home, away: away - half.away } : null;
   const won = (yes: boolean) => (yes ? SelectionResult.WON : SelectionResult.LOST);
   const total = home + away;
+
+  // Corners and cards: corners_9_5, home_corners_4_5, cards_3_5, away_cards_1_5 …
+  const counted = /^(corners|home_corners|away_corners|cards|home_cards|away_cards)_(\d+)_5$/.exec(marketKey);
+  if (counted) {
+    if (!stats) return null;
+    const [, scope, whole] = counted;
+    const threshold = Number(whole) + 0.5;
+    const corners = scope.endsWith("corners");
+    const homeCount = corners ? stats.cornersHome : stats.cardsHome;
+    const awayCount = corners ? stats.cornersAway : stats.cardsAway;
+    const count = scope.startsWith("home") ? homeCount : scope.startsWith("away") ? awayCount : homeCount + awayCount;
+    if (selectionKey === "over") return won(count > threshold);
+    if (selectionKey === "under") return won(count < threshold);
+    return null;
+  }
 
   // Over/under lines: goals_1_5, home_goals_0_5, h1_goals_1_5, h2_goals_2_5 …
   const line = /^(goals|home_goals|away_goals|h1_goals|h2_goals)_(\d+)_5$/.exec(marketKey);

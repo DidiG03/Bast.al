@@ -159,6 +159,10 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
   const [away, setAway] = useState(String(event.result?.away ?? event.awayScore ?? 0));
   const [halfHome, setHalfHome] = useState(event.halfTime ? String(event.halfTime.home) : "");
   const [halfAway, setHalfAway] = useState(event.halfTime ? String(event.halfTime.away) : "");
+  const [cornersHome, setCornersHome] = useState(event.stats ? String(event.stats.cornersHome) : "");
+  const [cornersAway, setCornersAway] = useState(event.stats ? String(event.stats.cornersAway) : "");
+  const [cardsHome, setCardsHome] = useState(event.stats ? String(event.stats.cardsHome) : "");
+  const [cardsAway, setCardsAway] = useState(event.stats ? String(event.stats.cardsAway) : "");
   const [reason, setReason] = useState("");
   const started = new Date(event.startsAt).getTime() <= Date.now();
 
@@ -171,9 +175,20 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
       window.alert("Enter both half-time goals, or leave both empty.");
       return;
     }
-    const halfText = hasHalf ? ` (half time ${halfHome}–${halfAway})` : "";
+    const counts = [cornersHome, cornersAway, cardsHome, cardsAway];
+    const hasStats = counts.every((n) => n !== "");
+    if (!hasStats && counts.some((n) => n !== "")) {
+      window.alert("Enter corners and cards for both teams, or leave all four empty.");
+      return;
+    }
+    const halfText = `${hasHalf ? ` (half time ${halfHome}–${halfAway})` : ""}${hasStats ? `, corners ${cornersHome}–${cornersAway}, cards ${cardsHome}–${cardsAway}` : ""}`;
     if (!window.confirm(`Set ${event.name} to ${home}–${away}${halfText}?${warning}`)) return;
-    const body = { home: Number(home), away: Number(away), ...(hasHalf ? { halfHome: Number(halfHome), halfAway: Number(halfAway) } : {}) };
+    const body = {
+      home: Number(home),
+      away: Number(away),
+      ...(hasHalf ? { halfHome: Number(halfHome), halfAway: Number(halfAway) } : {}),
+      ...(hasStats ? { cornersHome: Number(cornersHome), cornersAway: Number(cornersAway), cardsHome: Number(cardsHome), cardsAway: Number(cardsAway) } : {}),
+    };
     void run(`/bets/admin/events/${event.id}/result`, body, `${event.name} is now ${home}–${away}${halfText}. Its bets were settled on that score.`).then((ok) => ok && setMode(null));
   }
 
@@ -192,6 +207,7 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
         <span className="odds-event-badges">
           {event.needsAttention ? <span className="status-pill odds-pill-warn">Needs a result</span> : null}
           {event.resultSource === "manual" ? <span className="status-pill">Set by hand</span> : null}
+          {event.extraTime && !event.stats ? <span className="status-pill odds-pill-warn">Extra time: enter corners and cards</span> : null}
           <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>{STATUS_TEXT[event.status]}</span>
         </span>
       </header>
@@ -199,6 +215,12 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
         <strong>{event.name}</strong>
         {event.result ? <strong className="odds-score">{event.result.home} – {event.result.away}{event.halfTime ? <span className="muted"> (HT {event.halfTime.home}–{event.halfTime.away})</span> : null}</strong> : event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING" ? <span className="odds-score muted">{event.homeScore} – {event.awayScore}</span> : null}
       </div>
+      {event.stats ? (
+        <p className="muted odds-note">
+          Corners {event.stats.cornersHome}–{event.stats.cornersAway} · Cards {event.stats.cardsHome}–{event.stats.cardsAway}
+          {event.statsSource === "manual" ? " · set by hand" : ""}
+        </p>
+      ) : null}
       <p className="muted odds-note">
         {event.bets.total} {event.bets.total === 1 ? "bet" : "bets"} · {formatMoney(event.bets.staked)} staked
         {event.bets.open > 0 ? ` · ${event.bets.open} open (${formatMoney(event.bets.openStaked)})` : " · all settled"}
@@ -220,6 +242,22 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
               <input type="number" inputMode="numeric" min={0} max={99} value={halfHome} onChange={(e) => setHalfHome(e.target.value)} aria-label="Home goals at half time" />
               <span>–</span>
               <input type="number" inputMode="numeric" min={0} max={99} value={halfAway} onChange={(e) => setHalfAway(e.target.value)} aria-label="Away goals at half time" />
+            </span>
+          </label>
+          <label>
+            <span>Corners after 90 minutes</span>
+            <span className="settle-score-inputs">
+              <input type="number" inputMode="numeric" min={0} max={99} value={cornersHome} onChange={(e) => setCornersHome(e.target.value)} aria-label="Home corners" />
+              <span>–</span>
+              <input type="number" inputMode="numeric" min={0} max={99} value={cornersAway} onChange={(e) => setCornersAway(e.target.value)} aria-label="Away corners" />
+            </span>
+          </label>
+          <label>
+            <span>Cards after 90 minutes (each yellow and red counts as 1)</span>
+            <span className="settle-score-inputs">
+              <input type="number" inputMode="numeric" min={0} max={99} value={cardsHome} onChange={(e) => setCardsHome(e.target.value)} aria-label="Home cards" />
+              <span>–</span>
+              <input type="number" inputMode="numeric" min={0} max={99} value={cardsAway} onChange={(e) => setCardsAway(e.target.value)} aria-label="Away cards" />
             </span>
           </label>
           <div className="odds-editor-actions">

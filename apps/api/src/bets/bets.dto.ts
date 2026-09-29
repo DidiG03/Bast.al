@@ -132,6 +132,35 @@ export class ResultDto {
   @Min(0)
   @Max(99)
   halfAway?: number;
+
+  /** Corners and cards (every yellow and red counts as one), for the corner and card markets. Send all four or none. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(99)
+  cornersHome?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(99)
+  cornersAway?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(99)
+  cardsHome?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(99)
+  cardsAway?: number;
 }
 
 export class RiskQueryDto {

@@ -138,3 +138,26 @@ test("live prices ignore an Owner's fixed price and pause on a suspended market"
   const prematch = selectionQuote({ ...input, event: { ...event, status: "UPCOMING", startsAt: new Date(now.getTime() + 60_000) } });
   assert.deepEqual(prematch, { price: 2.5, bettable: true, live: false, suspended: false });
 });
+
+test("the extra markets parse from a real API-Football response", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const raw = JSON.parse(await readFile(new URL("./fixtures/api-football-odds.json", import.meta.url), "utf8"));
+  const markets = parseMarkets(raw, "Home FC", "Away FC", 8);
+  const keys = markets.map((m) => m.key);
+  // The original four keep their keys and stay first.
+  assert.deepEqual(keys.slice(0, 2), ["match_winner", "double_chance"]);
+  assert.ok(keys.indexOf("goals_2_5") < keys.indexOf("goals_1_5"));
+  for (const key of ["goals_0_5", "goals_3_5", "draw_no_bet", "h1_winner", "ht_ft", "correct_score", "odd_even", "h1_goals_0_5", "h2_goals_1_5"]) {
+    assert.ok(keys.includes(key), `missing ${key}`);
+  }
+  assert.equal(new Set(keys).size, keys.length, "market keys are unique");
+  for (const market of markets) {
+    assert.ok(market.selections.length >= 2, `${market.key} has outcomes`);
+    for (const s of market.selections) assert.ok(Number.isFinite(s.odds) && s.odds > 1, `${market.key}/${s.key} is priced`);
+  }
+  const ht = markets.find((m) => m.key === "ht_ft");
+  assert.equal(ht.selections.length, 9);
+  assert.equal(ht.selections.find((s) => s.key === "home_draw").name, "Home FC / Draw");
+  const cs = markets.find((m) => m.key === "correct_score");
+  assert.ok(cs.selections.every((s) => /^\d-\d$/.test(s.key)));
+});

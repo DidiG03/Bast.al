@@ -21,7 +21,7 @@ export type RawFixture = {
   teams: { home: { name: string }; away: { name: string } };
   goals: { home: number | null; away: number | null };
   /** `fulltime` is the score after 90 minutes, before any extra time. */
-  score?: { fulltime?: { home: number | null; away: number | null } };
+  score?: { halftime?: { home: number | null; away: number | null }; fulltime?: { home: number | null; away: number | null } };
 };
 
 export type RawOdds = {
@@ -69,6 +69,8 @@ export type FeedFixture = {
   awayScore: number | null;
   /** The score bets settle on, once the match has finished. Null until then. */
   result: { home: number; away: number } | null;
+  /** The half-time score, for the half markets. Null until the match has finished or if the feed didn't send it. */
+  halfTime: { home: number; away: number } | null;
 };
 
 export type FeedMarket = {
@@ -111,54 +113,156 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     homeScore: raw.goals.home,
     awayScore: raw.goals.away,
     result: status === EventStatus.COMPLETED && home !== null && away !== null ? { home, away } : null,
+    halfTime:
+      status === EventStatus.COMPLETED && raw.score?.halftime?.home != null && raw.score.halftime.away != null
+        ? { home: raw.score.halftime.home, away: raw.score.halftime.away }
+        : null,
   };
 }
 
-type MarketSpec = {
-  key: string;
-  name: string;
-  /** Feed value → our selection key and display name. */
-  values: Array<[feedValue: string, key: string, name: (home: string, away: string) => string]>;
-};
+type Namer = (home: string, away: string) => string;
+type FeedBet = { name: string; values: Array<{ value: string | number; odd: string }> };
+type Built = Omit<FeedMarket, "sortOrder">;
 
-/** The markets Bast.al offers, matched on API-Football's bet names. */
-const MARKETS: Record<string, MarketSpec> = {
-  "Match Winner": {
-    key: "match_winner",
-    name: "Match winner",
-    values: [
-      ["Home", "home", (home) => home],
-      ["Draw", "draw", () => "Draw"],
-      ["Away", "away", (_home, away) => away],
-    ],
-  },
-  "Double Chance": {
-    key: "double_chance",
-    name: "Double chance",
-    values: [
-      ["Home/Draw", "home_draw", (home) => `${home} or draw`],
-      ["Home/Away", "home_away", (home, away) => `${home} or ${away}`],
-      ["Draw/Away", "draw_away", (_home, away) => `Draw or ${away}`],
-    ],
-  },
-  "Goals Over/Under": {
-    key: "goals_2_5",
-    name: "Total goals 2.5",
-    values: [
-      ["Over 2.5", "over", () => "Over 2.5"],
-      ["Under 2.5", "under", () => "Under 2.5"],
-    ],
-  },
-  "Both Teams Score": {
-    key: "btts",
-    name: "Both teams score",
-    values: [
-      ["Yes", "yes", () => "Yes"],
-      ["No", "no", () => "No"],
-    ],
-  },
-};
-const MARKET_ORDER = Object.keys(MARKETS);
+/** A market with a fixed set of outcomes. Feed value → our selection key and display name. */
+function fixed(key: string, name: Namer, values: Array<[feedValue: string, key: string, name: Namer]>) {
+  return (bet: FeedBet, home: string, away: string): Built[] => [
+    {
+      key,
+      name: name(home, away),
+      selections: values.map(([feedValue, selectionKey, selectionName], sortOrder) => ({
+        key: selectionKey,
+        name: selectionName(home, away),
+        odds: priceOf(bet, feedValue),
+        sortOrder,
+      })),
+    },
+  ];
+}
+
+/**
+ * Over/under on goals: one market per half-goal line the feed prices, keyed
+ * e.g. `goals_1_5`. Only .5 lines are offered, so there's never a push.
+ */
+function lines(prefix: string, name: (home: string, away: string, line: string) => string, offered: string[]) {
+  return (bet: FeedBet, home: string, away: string): Built[] =>
+    offered.map((line) => ({
+      key: `${prefix}_${line.replace(".", "_")}`,
+      name: name(home, away, line),
+      selections: [
+        { key: "over", name: `Over ${line}`, odds: priceOf(bet, `Over ${line}`), sortOrder: 0 },
+        { key: "under", name: `Under ${line}`, odds: priceOf(bet, `Under ${line}`), sortOrder: 1 },
+      ],
+    }));
+}
+
+/** Correct score: every scoreline the feed prices up to 4 goals a side, keyed `2-1`. */
+function scores(key: string, name: string) {
+  return (bet: FeedBet): Built[] => {
+    const selections = bet.values
+      .map((v) => ({ match: /^(\d+):(\d+)$/.exec(String(v.value)), odds: Number(v.odd) }))
+      .filter((v): v is { match: RegExpExecArray; odds: number } => v.match !== null && Number(v.match[1]) <= 4 && Number(v.match[2]) <= 4)
+      .sort((a, b) => Number(a.match[1]) - Number(b.match[1]) || Number(a.match[2]) - Number(b.match[2]))
+      .map((v, sortOrder) => ({ key: `${v.match[1]}-${v.match[2]}`, name: `${v.match[1]}–${v.match[2]}`, odds: v.odds, sortOrder }));
+    return selections.length >= 2 ? [{ key, name, selections }] : [];
+  };
+}
+
+function priceOf(bet: FeedBet, feedValue: string): number {
+  return Number(bet.values.find((v) => String(v.value) === feedValue)?.odd);
+}
+
+const outcomes: Array<[feed: string, key: string, name: Namer]> = [
+  ["Home", "home", (home) => home],
+  ["Draw", "draw", () => "Draw"],
+  ["Away", "away", (_home, away) => away],
+];
+const yesNo: Array<[string, string, Namer]> = [
+  ["Yes", "yes", () => "Yes"],
+  ["No", "no", () => "No"],
+];
+const eitherTeam: Array<[string, string, Namer]> = [
+  ["Home", "home", (home) => home],
+  ["Away", "away", (_home, away) => away],
+];
+const doubleChance: Array<[string, string, Namer]> = [
+  ["Home/Draw", "home_draw", (home) => `${home} or draw`],
+  ["Home/Away", "home_away", (home, away) => `${home} or ${away}`],
+  ["Draw/Away", "draw_away", (_home, away) => `Draw or ${away}`],
+];
+const sideName = (side: string, home: string, away: string) => (side === "home" ? home : side === "away" ? away : "Draw");
+const pairs = (left: string[], right: string[]) => left.flatMap((l) => right.map((r) => [l, r] as const));
+const cap = (word: string) => word[0].toUpperCase() + word.slice(1);
+
+/**
+ * The markets Bast.al offers, matched on API-Football's pre-match bet names,
+ * in the order Players see them. Every one settles from the 90-minute score,
+ * plus the half-time score for the half markets (see bets/grading.ts), so
+ * nothing here needs data the feed doesn't already send with the result.
+ */
+const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away: string) => Built[]]> = [
+  ["Match Winner", fixed("match_winner", () => "Match winner", outcomes)],
+  ["Double Chance", fixed("double_chance", () => "Double chance", doubleChance)],
+  // `goals_2_5` keeps its original key and name, since placed bets point at it.
+  ["Goals Over/Under", lines("goals", (_h, _a, line) => `Total goals ${line}`, ["2.5", "1.5", "3.5", "0.5", "4.5"])],
+  ["Both Teams Score", fixed("btts", () => "Both teams score", yesNo)],
+  ["Home/Away", fixed("draw_no_bet", () => "Draw no bet", eitherTeam)],
+  ["First Half Winner", fixed("h1_winner", () => "1st half result", outcomes)],
+  [
+    "HT/FT Double",
+    fixed(
+      "ht_ft",
+      () => "Half time / full time",
+      pairs(["home", "draw", "away"], ["home", "draw", "away"]).map(([ht, ft]) => [`${cap(ht)}/${cap(ft)}`, `${ht}_${ft}`, (home, away) => `${sideName(ht, home, away)} / ${sideName(ft, home, away)}`]),
+    ),
+  ],
+  [
+    "Results/Both Teams Score",
+    fixed(
+      "result_btts",
+      () => "Result and both teams score",
+      pairs(["home", "draw", "away"], ["yes", "no"]).map(([side, btts]) => [`${cap(side)}/${cap(btts)}`, `${side}_${btts}`, (home, away) => `${sideName(side, home, away)} / ${cap(btts)}`]),
+    ),
+  ],
+  ["Exact Score", scores("correct_score", "Correct score")],
+  [
+    "Exact Goals Number",
+    fixed("exact_goals", () => "Exact total goals", [
+      ...["0", "1", "2", "3", "4", "5", "6"].map((n): [string, string, Namer] => [n, n, () => `${n} goals`]),
+      ["more 7", "7+", () => "7+ goals"],
+    ]),
+  ],
+  ["Total - Home", lines("home_goals", (home, _a, line) => `${home} goals ${line}`, ["0.5", "1.5", "2.5"])],
+  ["Total - Away", lines("away_goals", (_h, away, line) => `${away} goals ${line}`, ["0.5", "1.5", "2.5"])],
+  [
+    "Odd/Even",
+    fixed("odd_even", () => "Total goals odd/even", [
+      ["Odd", "odd", () => "Odd"],
+      ["Even", "even", () => "Even"],
+    ]),
+  ],
+  ["Clean Sheet - Home", fixed("clean_sheet_home", (home) => `${home} clean sheet`, yesNo)],
+  ["Clean Sheet - Away", fixed("clean_sheet_away", (_h, away) => `${away} clean sheet`, yesNo)],
+  ["Win To Nil", fixed("win_to_nil", () => "Win to nil", eitherTeam)],
+  ["Double Chance - First Half", fixed("h1_double_chance", () => "1st half double chance", doubleChance)],
+  ["Goals Over/Under First Half", lines("h1_goals", (_h, _a, line) => `1st half goals ${line}`, ["0.5", "1.5", "2.5"])],
+  ["Both Teams Score - First Half", fixed("h1_btts", () => "1st half both teams score", yesNo)],
+  ["Correct Score - First Half", scores("h1_correct_score", "1st half correct score")],
+  ["Second Half Winner", fixed("h2_winner", () => "2nd half result", outcomes)],
+  ["Goals Over/Under - Second Half", lines("h2_goals", (_h, _a, line) => `2nd half goals ${line}`, ["0.5", "1.5", "2.5"])],
+  ["Both Teams To Score - Second Half", fixed("h2_btts", () => "2nd half both teams score", yesNo)],
+  [
+    "Highest Scoring Half",
+    fixed("highest_half", () => "Highest scoring half", [
+      ["1st Half", "first", () => "1st half"],
+      ["2nd Half", "second", () => "2nd half"],
+      ["Draw", "equal", () => "Equal"],
+    ]),
+  ],
+  ["Win Both Halves", fixed("win_both_halves", () => "Win both halves", eitherTeam)],
+  ["To Win Either Half", fixed("win_either_half", () => "Win either half", eitherTeam)],
+];
+const MARKET_INDEX = new Map(MARKETS.map(([betName, build], index) => [betName, { build, index }]));
 
 /**
  * Picks the markets we offer out of one bookmaker's odds. A market is kept
@@ -169,15 +273,17 @@ export function parseMarkets(raw: RawOdds, homeTeam: string, awayTeam: string, b
   const bookmaker = raw.bookmakers.find((b) => b.id === bookmakerId) ?? raw.bookmakers[0];
   if (!bookmaker) return [];
   const markets: FeedMarket[] = [];
+  const seen = new Set<string>();
   for (const bet of bookmaker.bets) {
-    const spec = MARKETS[bet.name];
+    const spec = MARKET_INDEX.get(bet.name);
     if (!spec) continue;
-    const selections = spec.values.map(([feedValue, key, name], sortOrder) => {
-      const odd = Number(bet.values.find((v) => String(v.value) === feedValue)?.odd);
-      return { key, name: name(homeTeam, awayTeam), odds: odd, sortOrder };
+    spec.build(bet, homeTeam, awayTeam).forEach((market, position) => {
+      if (seen.has(market.key)) return;
+      if (market.selections.some((s) => !Number.isFinite(s.odds) || s.odds <= 1)) return;
+      seen.add(market.key);
+      // Room for up to 10 lines per bet type while keeping the overall order.
+      markets.push({ ...market, sortOrder: spec.index * 10 + position });
     });
-    if (selections.some((s) => !Number.isFinite(s.odds) || s.odds <= 1)) continue;
-    markets.push({ key: spec.key, name: spec.name, sortOrder: MARKET_ORDER.indexOf(bet.name), selections });
   }
   return markets.sort((a, b) => a.sortOrder - b.sortOrder);
 }
@@ -255,7 +361,7 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
     });
     // A goals line the feed isn't offering right now (e.g. only 3.5 is up) is simply absent.
     if (spec.handicap && selections.every((s) => s.odds === 0)) continue;
-    markets.set(spec.key, { key: spec.key, name: spec.name, sortOrder: LIVE_ORDER.indexOf(spec.key), selections, suspended });
+    markets.set(spec.key, { key: spec.key, name: spec.name, sortOrder: LIVE_ORDER.indexOf(spec.key) * 10, selections, suspended });
   }
   return {
     externalId: String(raw.fixture.id),

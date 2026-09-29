@@ -269,6 +269,9 @@ model Event {
   /// Super Admin when correcting a result.
   resultHome   Int?        @map("result_home")
   resultAway   Int?        @map("result_away")
+  /// The half-time score, for the 1st and 2nd half markets.
+  resultHalfHome Int?      @map("result_half_home")
+  resultHalfAway Int?      @map("result_half_away")
   /// "feed" or "manual". The feed never overwrites a manual result.
   resultSource String?     @map("result_source")
   createdAt    DateTime    @default(now())

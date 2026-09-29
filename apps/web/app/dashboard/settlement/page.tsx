@@ -157,6 +157,8 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
   const [mode, setMode] = useState<"result" | "void" | null>(null);
   const [home, setHome] = useState(String(event.result?.home ?? event.homeScore ?? 0));
   const [away, setAway] = useState(String(event.result?.away ?? event.awayScore ?? 0));
+  const [halfHome, setHalfHome] = useState(event.halfTime ? String(event.halfTime.home) : "");
+  const [halfAway, setHalfAway] = useState(event.halfTime ? String(event.halfTime.away) : "");
   const [reason, setReason] = useState("");
   const started = new Date(event.startsAt).getTime() <= Date.now();
 
@@ -164,8 +166,15 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
     formEvent.preventDefault();
     const settled = event.bets.total - event.bets.open;
     const warning = settled > 0 ? ` ${settled} settled ${settled === 1 ? "bet" : "bets"} will be re-settled, and Players' balances changed to match.` : "";
-    if (!window.confirm(`Set ${event.name} to ${home}–${away}?${warning}`)) return;
-    void run(`/bets/admin/events/${event.id}/result`, { home: Number(home), away: Number(away) }, `${event.name} is now ${home}–${away}. Its bets were settled on that score.`).then((ok) => ok && setMode(null));
+    const hasHalf = halfHome !== "" && halfAway !== "";
+    if (!hasHalf && (halfHome !== "" || halfAway !== "")) {
+      window.alert("Enter both half-time goals, or leave both empty.");
+      return;
+    }
+    const halfText = hasHalf ? ` (half time ${halfHome}–${halfAway})` : "";
+    if (!window.confirm(`Set ${event.name} to ${home}–${away}${halfText}?${warning}`)) return;
+    const body = { home: Number(home), away: Number(away), ...(hasHalf ? { halfHome: Number(halfHome), halfAway: Number(halfAway) } : {}) };
+    void run(`/bets/admin/events/${event.id}/result`, body, `${event.name} is now ${home}–${away}${halfText}. Its bets were settled on that score.`).then((ok) => ok && setMode(null));
   }
 
   function voidAll(formEvent: FormEvent) {
@@ -188,7 +197,7 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
       </header>
       <div className="settle-event-name">
         <strong>{event.name}</strong>
-        {event.result ? <strong className="odds-score">{event.result.home} – {event.result.away}</strong> : event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING" ? <span className="odds-score muted">{event.homeScore} – {event.awayScore}</span> : null}
+        {event.result ? <strong className="odds-score">{event.result.home} – {event.result.away}{event.halfTime ? <span className="muted"> (HT {event.halfTime.home}–{event.halfTime.away})</span> : null}</strong> : event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING" ? <span className="odds-score muted">{event.homeScore} – {event.awayScore}</span> : null}
       </div>
       <p className="muted odds-note">
         {event.bets.total} {event.bets.total === 1 ? "bet" : "bets"} · {formatMoney(event.bets.staked)} staked
@@ -203,6 +212,14 @@ function SettlementEventCard({ event, run, onShowBets }: { event: SettlementEven
               <input type="number" inputMode="numeric" min={0} max={99} value={home} onChange={(e) => setHome(e.target.value)} aria-label="Home goals" required />
               <span>–</span>
               <input type="number" inputMode="numeric" min={0} max={99} value={away} onChange={(e) => setAway(e.target.value)} aria-label="Away goals" required />
+            </span>
+          </label>
+          <label>
+            <span>Half-time score (for 1st and 2nd half bets)</span>
+            <span className="settle-score-inputs">
+              <input type="number" inputMode="numeric" min={0} max={99} value={halfHome} onChange={(e) => setHalfHome(e.target.value)} aria-label="Home goals at half time" />
+              <span>–</span>
+              <input type="number" inputMode="numeric" min={0} max={99} value={halfAway} onChange={(e) => setHalfAway(e.target.value)} aria-label="Away goals at half time" />
             </span>
           </label>
           <div className="odds-editor-actions">

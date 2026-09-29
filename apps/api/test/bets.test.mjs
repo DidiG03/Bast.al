@@ -25,6 +25,57 @@ test("goals and both-teams-score markets", () => {
   assert.equal(gradeSelection("btts", "yes", 3, 0), "LOST");
 });
 
+test("more goal lines and team totals", () => {
+  assert.equal(gradeSelection("goals_0_5", "over", 1, 0), "WON");
+  assert.equal(gradeSelection("goals_0_5", "under", 0, 0), "WON");
+  assert.equal(gradeSelection("goals_3_5", "over", 2, 1), "LOST");
+  assert.equal(gradeSelection("goals_4_5", "over", 3, 2), "WON");
+  assert.equal(gradeSelection("home_goals_1_5", "over", 2, 0), "WON");
+  assert.equal(gradeSelection("away_goals_0_5", "under", 2, 0), "WON");
+  assert.equal(gradeSelection("away_goals_0_5", "sideways", 2, 0), null);
+});
+
+test("full-time score markets", () => {
+  assert.equal(gradeSelection("draw_no_bet", "home", 1, 1), "VOID");
+  assert.equal(gradeSelection("draw_no_bet", "home", 2, 1), "WON");
+  assert.equal(gradeSelection("draw_no_bet", "away", 2, 1), "LOST");
+  assert.equal(gradeSelection("correct_score", "2-1", 2, 1), "WON");
+  assert.equal(gradeSelection("correct_score", "1-2", 2, 1), "LOST");
+  assert.equal(gradeSelection("exact_goals", "3", 2, 1), "WON");
+  assert.equal(gradeSelection("exact_goals", "7+", 5, 2), "WON");
+  assert.equal(gradeSelection("exact_goals", "7+", 5, 1), "LOST");
+  assert.equal(gradeSelection("odd_even", "odd", 2, 1), "WON");
+  assert.equal(gradeSelection("odd_even", "even", 0, 0), "WON");
+  assert.equal(gradeSelection("clean_sheet_home", "yes", 1, 0), "WON");
+  assert.equal(gradeSelection("clean_sheet_away", "yes", 1, 0), "LOST");
+  assert.equal(gradeSelection("win_to_nil", "home", 2, 0), "WON");
+  assert.equal(gradeSelection("win_to_nil", "home", 2, 1), "LOST");
+  assert.equal(gradeSelection("win_to_nil", "away", 0, 0), "LOST");
+  assert.equal(gradeSelection("result_btts", "home_yes", 2, 1), "WON");
+  assert.equal(gradeSelection("result_btts", "draw_no", 0, 0), "WON");
+  assert.equal(gradeSelection("result_btts", "home_no", 2, 1), "LOST");
+});
+
+test("half markets settle on the half-time score, and wait without one", () => {
+  const ht = { home: 1, away: 0 }; // 1-0 at half time, 2-2 at full time: second half 1-2
+  assert.equal(gradeSelection("h1_winner", "home", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("h2_winner", "away", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("ht_ft", "home_draw", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("ht_ft", "home_home", 2, 2, ht), "LOST");
+  assert.equal(gradeSelection("h1_double_chance", "home_draw", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("h1_goals_0_5", "over", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("h2_goals_2_5", "over", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("h1_btts", "no", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("h2_btts", "yes", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("h1_correct_score", "1-0", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("highest_half", "second", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("highest_half", "equal", 2, 0, { home: 1, away: 0 }), "WON");
+  assert.equal(gradeSelection("win_both_halves", "home", 2, 2, ht), "LOST");
+  assert.equal(gradeSelection("win_either_half", "away", 2, 2, ht), "WON");
+  assert.equal(gradeSelection("h1_winner", "home", 2, 2), null);
+  assert.equal(gradeSelection("h2_goals_0_5", "over", 2, 2), null);
+});
+
 test("an unknown market is left for Super Admin", () => {
   assert.equal(gradeSelection("corners", "over", 1, 0), null);
   assert.equal(gradeSelection("match_winner", "nobody", 1, 0), null);
@@ -50,6 +101,12 @@ test("bets settle on the 90-minute score, not extra time", () => {
   assert.deepEqual(parseFixture(raw("FT", { home: 2, away: 1 }, { home: 2, away: 1 })).result, { home: 2, away: 1 });
   assert.deepEqual(parseFixture(raw("AET", { home: 2, away: 1 }, { home: 1, away: 1 })).result, { home: 1, away: 1 });
   assert.equal(parseFixture(raw("2H", { home: 2, away: 1 }, { home: null, away: null })).result, null);
+});
+
+test("the half-time score is kept once the match has finished", () => {
+  const finished = { ...raw("FT", { home: 2, away: 1 }, { home: 2, away: 1 }), score: { halftime: { home: 1, away: 1 }, fulltime: { home: 2, away: 1 } } };
+  assert.deepEqual(parseFixture(finished).halfTime, { home: 1, away: 1 });
+  assert.equal(parseFixture(raw("FT", { home: 2, away: 1 }, { home: 2, away: 1 })).halfTime, null);
 });
 
 const d = (v) => new Prisma.Decimal(v);

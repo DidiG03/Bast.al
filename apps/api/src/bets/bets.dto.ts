@@ -117,6 +117,21 @@ export class ResultDto {
   @Min(0)
   @Max(99)
   away!: number;
+
+  /** The half-time score, for the half markets. Send both or neither. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(99)
+  halfHome?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(99)
+  halfAway?: number;
 }
 
 export class RiskQueryDto {

@@ -94,7 +94,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         let grade: SelectionResult | null = null;
         if (event.status === EventStatus.CANCELLED) grade = SelectionResult.VOID;
         else if (event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null) {
-          grade = gradeSelection(market.key, selection.key, event.resultHome, event.resultAway);
+          const half = event.resultHalfHome !== null && event.resultHalfAway !== null ? { home: event.resultHalfHome, away: event.resultHalfAway } : null;
+          grade = gradeSelection(market.key, selection.key, event.resultHome, event.resultAway, half);
         }
         grades.set(selection.id, grade);
         if (grade !== null && grade !== selection.result) {
@@ -160,20 +161,35 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Super Admin: sets the score bets settle on, and re-settles the match. */
-  async correctResult(actor: Actor, eventId: string, home: number, away: number) {
-    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, name: true, status: true, startsAt: true, resultHome: true, resultAway: true } });
+  async correctResult(actor: Actor, eventId: string, home: number, away: number, half: { home: number; away: number } | null = null) {
+    if (half && (half.home > home || half.away > away)) throw new BadRequestException("The half-time score can't be higher than the full-time score");
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, name: true, status: true, startsAt: true, resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true },
+    });
     if (!event) throw new NotFoundException("Match not found");
     if (event.startsAt > new Date()) throw new BadRequestException("This match hasn't started yet");
     if (event.status === EventStatus.CANCELLED) throw new BadRequestException("This match was cancelled and its bets refunded");
     await this.prisma.event.update({
       where: { id: eventId },
-      data: { resultHome: home, resultAway: away, resultSource: "manual", status: EventStatus.COMPLETED },
+      // Without a half-time score the one already stored stays, unless it no longer fits the new full-time score.
+      data: {
+        resultHome: home,
+        resultAway: away,
+        ...(half
+          ? { resultHalfHome: half.home, resultHalfAway: half.away }
+          : (event.resultHalfHome ?? 0) > home || (event.resultHalfAway ?? 0) > away
+            ? { resultHalfHome: null, resultHalfAway: null }
+            : {}),
+        resultSource: "manual",
+        status: EventStatus.COMPLETED,
+      },
     });
     const changes = await this.settleEvent(eventId, true);
     await this.audit.log({
       actorId: actor.id,
       action: "bet.result_correct",
-      metadata: { eventId, event: event.name, from: event.resultHome === null ? null : `${event.resultHome}-${event.resultAway}`, to: `${home}-${away}`, betsChanged: changes.length },
+      metadata: { eventId, event: event.name, from: event.resultHome === null ? null : `${event.resultHome}-${event.resultAway}`, to: `${home}-${away}`, halfTime: half ? `${half.home}-${half.away}` : undefined, betsChanged: changes.length },
     });
     return { eventId, result: { home, away }, betsChanged: changes.length };
   }
@@ -237,7 +253,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       where: { id: { in: [...stats.keys()] } },
       orderBy: { startsAt: "desc" },
       take: 100,
-      select: { id: true, name: true, league: true, startsAt: true, status: true, homeScore: true, awayScore: true, resultHome: true, resultAway: true, resultSource: true, suspended: true },
+      select: { id: true, name: true, league: true, startsAt: true, status: true, homeScore: true, awayScore: true, resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true, resultSource: true, suspended: true },
     });
     const now = new Date();
     return events.map((event) => {
@@ -246,6 +262,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       return {
         ...event,
         result: event.resultHome === null || event.resultAway === null ? null : { home: event.resultHome, away: event.resultAway },
+        halfTime: event.resultHalfHome === null || event.resultHalfAway === null ? null : { home: event.resultHalfHome, away: event.resultHalfAway },
         bets: { open, total: Number(stat.total), staked: Number(stat.staked), openStaked: Number(stat.open_staked) },
         /** Started long ago but still has open bets: the feed hasn't settled it, so it may need a hand. */
         needsAttention: open > 0 && event.startsAt.getTime() < now.getTime() - 3 * 3_600_000,

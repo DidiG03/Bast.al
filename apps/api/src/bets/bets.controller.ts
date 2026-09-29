@@ -61,7 +61,8 @@ export class BetsController {
   @Roles(Role.SUPER_ADMIN)
   @Idempotent()
   correctResult(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() body: ResultDto) {
-    return this.settlement.correctResult(actor, id, body.home, body.away);
+    const half = body.halfHome !== undefined && body.halfAway !== undefined ? { home: body.halfHome, away: body.halfAway } : null;
+    return this.settlement.correctResult(actor, id, body.home, body.away, half);
   }
 
   @Post("admin/events/:id/void")

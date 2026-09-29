@@ -254,7 +254,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     if (!fixture.result) return;
     await this.prisma.event.updateMany({
       where: { provider, externalId: fixture.externalId, OR: [{ resultSource: null }, { resultSource: "feed" }] },
-      data: { resultHome: fixture.result.home, resultAway: fixture.result.away, resultSource: "feed" },
+      data: {
+        resultHome: fixture.result.home,
+        resultAway: fixture.result.away,
+        resultHalfHome: fixture.halfTime?.home ?? null,
+        resultHalfAway: fixture.halfTime?.away ?? null,
+        resultSource: "feed",
+      },
     });
   }
 

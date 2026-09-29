@@ -408,6 +408,8 @@ export type SettlementEvent = {
   homeScore: number | null;
   awayScore: number | null;
   result: { home: number; away: number } | null;
+  /** The half-time score the 1st and 2nd half markets settle on. */
+  halfTime: { home: number; away: number } | null;
   resultSource: "feed" | "manual" | null;
   suspended: boolean;
   bets: { open: number; total: number; staked: number; openStaked: number };

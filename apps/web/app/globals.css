@@ -1,13 +1,13 @@
 :root {
-  --bg: #071d14;
-  --bg-elevated: #102b20;
-  --text: #f2f7f4;
-  --muted: #9bb2a6;
-  --accent: #00e701;
-  --accent-strong: #00c900;
-  --danger: #ff6b78;
-  --border: #244438;
-  --focus: #75ff83;
+  --bg: #0a0b07;
+  --bg-elevated: #16180e;
+  --text: #f6f8ee;
+  --muted: #9aa189;
+  --accent: #d6ff3f;
+  --accent-strong: #c3f01a;
+  --danger: #ff5c72;
+  --border: #262a18;
+  --focus: #eaffa0;
   --font: "IBM Plex Sans", "Segoe UI", sans-serif;
 }
 
@@ -670,7 +670,7 @@ main {
 .card {
   background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 1.25rem;
 }
 

@@ -16,6 +16,7 @@ import { CommissionsModule } from "./commissions/commissions.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { OddsModule } from "./odds/odds.module";
 import { BetsModule } from "./bets/bets.module";
+import { MaintenanceModule } from "./maintenance/maintenance.module";
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { BetsModule } from "./bets/bets.module";
     CommissionsModule,
     OddsModule,
     BetsModule,
+    MaintenanceModule,
   ],
   controllers: [HealthController, RootController, EventsController],
   providers: [QueueService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

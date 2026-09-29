@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { NotificationItem } from "../lib/api";
 import { NamedIcon, type IconName } from "./icons";
+import { getT } from "../lib/i18n/server";
 
 /** A framed block: a quiet header strip with the title, and the content on a raised inner sheet. */
 export function Panel({
@@ -45,9 +46,10 @@ function deltaTone(delta: Delta, goodWhenUp: boolean): Tone {
 }
 
 function DeltaBadge({ delta, goodWhenUp = true }: { delta: Delta; goodWhenUp?: boolean }) {
+  const { t } = getT();
   const { current, previous } = delta;
-  if (previous === 0 && current === 0) return <span className="kpi-compare">No change {delta.label}</span>;
-  if (previous === 0) return <span className="kpi-compare">Nothing {delta.label.replace(/^vs /, "")}</span>;
+  if (previous === 0 && current === 0) return <span className="kpi-compare">{t("No change {label}", { label: delta.label })}</span>;
+  if (previous === 0) return <span className="kpi-compare">{t("Nothing to compare with last week")}</span>;
   const change = (current - previous) / Math.abs(previous);
   const up = change >= 0;
   const tone = deltaTone(delta, goodWhenUp);
@@ -188,12 +190,13 @@ export type AttentionItem = { label: string; count: number; href: string };
 
 /** Things waiting on this person, across pages, so nothing gets missed. */
 export function AttentionList({ items }: { items: AttentionItem[] }) {
+  const { t } = getT();
   const active = items.filter((item) => item.count > 0);
   if (active.length === 0) {
     return (
       <p className="panel-empty">
         <NamedIcon name="check" className="panel-empty-icon" />
-        Nothing is waiting on you.
+        {t("Nothing is waiting on you.")}
       </p>
     );
   }
@@ -218,17 +221,18 @@ const CATEGORY_ICONS: Record<NotificationItem["category"], IconName> = {
   SYSTEM: "info",
 };
 
-const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Tirane" });
-const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/Tirane" });
+const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Tirane" };
+const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", timeZone: "Europe/Tirane" };
 
 function when(iso: string, now: Date) {
-  const date = new Date(iso);
-  return dayFormat.format(date) === dayFormat.format(now) ? timeFormat.format(date) : dayFormat.format(date);
+  const { date } = getT();
+  return date(iso, DAY) === date(now, DAY) ? date(iso, TIME) : date(iso, DAY);
 }
 
 /** The latest notifications, newest first, as a quiet timeline. */
 export function ActivityFeed({ items, now }: { items: NotificationItem[]; now: Date }) {
-  if (items.length === 0) return <p className="panel-empty">No activity yet this week.</p>;
+  const { t, ts } = getT();
+  if (items.length === 0) return <p className="panel-empty">{t("No activity yet this week.")}</p>;
   return (
     <ol className="activity">
       {items.map((item) => (
@@ -238,10 +242,10 @@ export function ActivityFeed({ items, now }: { items: NotificationItem[]; now: D
           </span>
           <div>
             <div className="activity-title">
-              <strong>{item.title}</strong>
+              <strong>{ts(item.title)}</strong>
               <time dateTime={item.createdAt}>{when(item.createdAt, now)}</time>
             </div>
-            <p>{item.message}</p>
+            <p>{ts(item.message)}</p>
           </div>
         </li>
       ))}

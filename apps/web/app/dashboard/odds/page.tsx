@@ -5,43 +5,45 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { LoadingSpinner } from "../../../components/loading-spinner";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { apiFetch, type MeResponse, type OddsEvent, type OddsFilter, type OddsSelection, type OddsSettings, type UserRow } from "../../../lib/api";
+import { useI18n, type I18n } from "../../../components/i18n-provider";
+import { msg } from "../../../lib/i18n/core";
 
 const FILTERS: Array<[OddsFilter, string]> = [
-  ["upcoming", "Upcoming"],
-  ["live", "Live"],
-  ["finished", "Finished"],
+  ["upcoming", msg("Upcoming")],
+  ["live", msg("Live")],
+  ["finished", msg("Finished")],
 ];
 
 const odds = (value: number) => value.toFixed(2);
 
-function dayLabel(iso: string): string {
+function dayLabel(iso: string, { t, date: format }: I18n): string {
   const date = new Date(iso);
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-  if (date.toDateString() === today.toDateString()) return "Today";
-  if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-  return new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "short" }).format(date);
+  if (date.toDateString() === today.toDateString()) return t("Today");
+  if (date.toDateString() === tomorrow.toDateString()) return t("Tomorrow");
+  return format(date, { weekday: "long", day: "numeric", month: "short" });
 }
 
-const timeFormat = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
-
-function statusText(event: OddsEvent): string {
-  if (event.status === "LIVE") return event.elapsed === null ? "Live" : `Live ${event.elapsed}'`;
-  if (event.status === "COMPLETED") return "Full time";
-  if (event.status === "POSTPONED") return "Postponed";
-  if (event.status === "CANCELLED") return "Cancelled";
-  return timeFormat.format(new Date(event.startsAt));
+function statusText(event: OddsEvent, { t, date }: I18n): string {
+  if (event.status === "LIVE") return event.elapsed === null ? t("Live") : t("Live {minute}'", { minute: event.elapsed });
+  if (event.status === "COMPLETED") return t("Full time");
+  if (event.status === "POSTPONED") return t("Postponed");
+  if (event.status === "CANCELLED") return t("Cancelled");
+  return date(event.startsAt, { hour: "2-digit", minute: "2-digit" });
 }
 
-function feedLabel(feed: NonNullable<OddsSettings["feed"]>): string {
+function feedLabel(feed: NonNullable<OddsSettings["feed"]>, t: I18n["t"]): string {
   if (feed.mode === "api-football") return "API-Football";
-  if (feed.mode === "mock") return "Test data (not real matches)";
-  return "Not connected";
+  if (feed.mode === "mock") return t("Test data (not real matches)");
+  return t("Not connected");
 }
 
 export default function OddsPage() {
   const { getToken } = useAuth();
+  const i18n = useI18n();
+  const { t } = i18n;
   const [me, setMe] = useState<MeResponse | null>(null);
   const [owners, setOwners] = useState<UserRow[]>([]);
   const [ownerId, setOwnerId] = useState("");
@@ -76,13 +78,13 @@ export default function OddsPage() {
         const users = await apiFetch<UserRow[]>("/users", token);
         setOwners(users.filter((user) => user.role === "OWNER"));
       }
-    })().catch((err) => setError(err instanceof Error ? err.message : "Could not load your account"));
+    })().catch((err) => setError(err instanceof Error ? err.message : t("Could not load your account")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setEvents(null);
-    load().catch((err) => setError(err instanceof Error ? err.message : "Could not load odds"));
+    load().catch((err) => setError(err instanceof Error ? err.message : t("Could not load odds")));
   }, [load]);
 
   // Live scores change every few seconds at the source; refresh the Live tab every 30.
@@ -104,7 +106,7 @@ export default function OddsPage() {
       if (success) setNotice(success);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : t("Something went wrong"));
       return false;
     }
   }
@@ -113,7 +115,7 @@ export default function OddsPage() {
     setSyncing(true);
     await run(async (token) => {
       const result = await apiFetch<{ events: number; markets: number }>("/odds/sync", token, { method: "POST" });
-      setNotice(`Synced ${result.events} matches and ${result.markets} markets.`);
+      setNotice(t("Synced {events} matches and {markets} markets.", { events: result.events, markets: result.markets }));
     });
     setSyncing(false);
   }
@@ -122,13 +124,13 @@ export default function OddsPage() {
   const isAdmin = me?.role === "SUPER_ADMIN";
   const canEditPrices = Boolean(settings?.canEditTeam);
 
-  let subtitle = "Your Owner's prices for every match. Only Owners can change them.";
-  if (isOwner) subtitle = "Prices come from the feed, less the margin. Tap any price to set your own for your team.";
-  if (isAdmin) subtitle = ownerId ? "This Owner's prices. Changes here apply to their team only." : "Feed prices less your base margin, which every team starts from.";
+  let subtitle = t("Your Owner's prices for every match. Only Owners can change them.");
+  if (isOwner) subtitle = t("Prices come from the feed, less the margin. Tap any price to set your own for your team.");
+  if (isAdmin) subtitle = ownerId ? t("This Owner's prices. Changes here apply to their team only.") : t("Feed prices less your base margin, which every team starts from.");
 
   const groups: Array<[string, OddsEvent[]]> = [];
   for (const event of events ?? []) {
-    const label = dayLabel(event.startsAt);
+    const label = dayLabel(event.startsAt, i18n);
     const last = groups[groups.length - 1];
     if (last && last[0] === label) last[1].push(event);
     else groups.push([label, [event]]);
@@ -138,17 +140,17 @@ export default function OddsPage() {
     <div className="stack">
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>Odds</h1>
+          <h1 style={{ margin: 0 }}>{t("Odds")}</h1>
           <p className="muted report-subtitle">{subtitle}</p>
         </div>
         {isAdmin && owners.length > 0 ? (
           <label className="odds-team-picker">
-            <span className="muted">Prices for</span>
+            <span className="muted">{t("Prices for")}</span>
             <select id="odds-owner" value={ownerId} onChange={(event) => setOwnerId(event.target.value)}>
-              <option value="">Base prices</option>
+              <option value="">{t("Base prices")}</option>
               {owners.map((owner) => (
                 <option key={owner.id} value={owner.id}>
-                  {owner.username}&apos;s team
+                  {t("{name}'s team", { name: owner.username })}
                 </option>
               ))}
             </select>
@@ -163,7 +165,7 @@ export default function OddsPage() {
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       {notice ? <p className="success-text" role="status">{notice}</p> : null}
 
-      <nav className="tabs-nav" aria-label="Match filter">
+      <nav className="tabs-nav" aria-label={t("Match filter")}>
         {FILTERS.map(([key, label]) => (
           <button
             key={key}
@@ -172,7 +174,7 @@ export default function OddsPage() {
             onClick={() => setFilter(key)}
             aria-current={filter === key ? "page" : undefined}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </nav>
@@ -182,7 +184,13 @@ export default function OddsPage() {
       ) : events.length === 0 ? (
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>
-            {filter === "live" ? "No matches are live right now." : filter === "finished" ? "No matches finished in the last three days." : settings?.feed?.mode === "off" ? "No matches yet. They'll appear once the odds feed is connected." : "No upcoming matches yet. The feed syncs every 10 minutes."}
+            {filter === "live"
+              ? t("No matches are live right now.")
+              : filter === "finished"
+                ? t("No matches finished in the last three days.")
+                : settings?.feed?.mode === "off"
+                  ? t("No matches yet. They'll appear once the odds feed is connected.")
+                  : t("No upcoming matches yet. The feed syncs every 10 minutes.")}
           </p>
         </div>
       ) : (
@@ -204,20 +212,21 @@ type Run = (action: (token: string) => Promise<unknown>, success?: string) => Pr
 function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings: OddsSettings; run: Run; syncing: boolean; onSync: () => void; ownerQuery: string }) {
   const [base, setBase] = useState(String(settings.baseMargin));
   const [teamMargin, setTeamMargin] = useState(String(settings.team?.margin ?? 0));
+  const { t, ts, date } = useI18n();
 
   useEffect(() => setBase(String(settings.baseMargin)), [settings.baseMargin]);
   useEffect(() => setTeamMargin(String(settings.team?.margin ?? 0)), [settings.team?.margin, settings.team?.ownerId]);
 
   function saveBase(event: FormEvent) {
     event.preventDefault();
-    void run((token) => apiFetch("/odds/settings/base-margin", token, { method: "PUT", body: JSON.stringify({ margin: Number(base) }) }), "Base margin saved.");
+    void run((token) => apiFetch("/odds/settings/base-margin", token, { method: "PUT", body: JSON.stringify({ margin: Number(base) }) }), t("Base margin saved."));
   }
 
   function saveTeam(event: FormEvent) {
     event.preventDefault();
     void run(
       (token) => apiFetch(`/odds/settings/team-margin?${ownerQuery}`, token, { method: "PUT", body: JSON.stringify({ margin: Number(teamMargin) }) }),
-      "Team margin saved.",
+      t("Team margin saved."),
     );
   }
 
@@ -227,37 +236,37 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
     <section className="card odds-settings">
       {feed ? (
         <div className="odds-setting">
-          <span className="muted">Odds feed</span>
-          <strong>{feedLabel(feed)}</strong>
+          <span className="muted">{t("Odds feed")}</span>
+          <strong>{feedLabel(feed, t)}</strong>
           <span className="muted odds-setting-note">
-            {feed.syncedAt ? `Last synced ${new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(feed.syncedAt))}` : "Not synced yet"}
-            {feed.status?.startsWith("Failed") ? <span className="error-text"> · {feed.status}</span> : null}
+            {feed.syncedAt ? t("Last synced {when}", { when: date(feed.syncedAt, { dateStyle: "medium", timeStyle: "short" }) }) : t("Not synced yet")}
+            {feed.status?.startsWith("Failed") ? <span className="error-text"> · {ts(feed.status)}</span> : null}
           </span>
           {settings.canManageEvents && feed.mode !== "off" ? (
             <button type="button" className="secondary" onClick={onSync} disabled={syncing}>
-              {syncing ? "Syncing…" : "Sync now"}
+              {syncing ? t("Syncing…") : t("Sync now")}
             </button>
           ) : null}
         </div>
       ) : null}
 
       <div className="odds-setting">
-        <span className="muted">Base margin</span>
+        <span className="muted">{t("Base margin")}</span>
         {settings.canEditBase ? (
           <form className="commission-input" onSubmit={saveBase}>
-            <input id="odds-base-margin" type="number" inputMode="decimal" min={0} max={settings.limits.maxMargin} step="0.1" value={base} onChange={(event) => setBase(event.target.value)} aria-label="Base margin in percent" />
+            <input id="odds-base-margin" type="number" inputMode="decimal" min={0} max={settings.limits.maxMargin} step="0.1" value={base} onChange={(event) => setBase(event.target.value)} aria-label={t("Base margin in percent")} />
             <span>%</span>
-            <button type="submit">Save</button>
+            <button type="submit">{t("Save")}</button>
           </form>
         ) : (
           <strong>{settings.baseMargin}%</strong>
         )}
-        <span className="muted odds-setting-note">Set by Super Admin. Taken off every feed price for every team.</span>
+        <span className="muted odds-setting-note">{t("Set by Super Admin. Taken off every feed price for every team.")}</span>
       </div>
 
       {team ? (
         <div className="odds-setting">
-          <span className="muted">{settings.canEditTeam && settings.team?.ownerName && !ownerQuery ? "Your team's margin" : `${team.ownerName}'s team margin`}</span>
+          <span className="muted">{settings.canEditTeam && settings.team?.ownerName && !ownerQuery ? t("Your team's margin") : t("{name}'s team margin", { name: team.ownerName })}</span>
           {settings.canEditTeam ? (
             <form className="commission-input" onSubmit={saveTeam}>
               <input
@@ -269,16 +278,16 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
                 step="0.1"
                 value={teamMargin}
                 onChange={(event) => setTeamMargin(event.target.value)}
-                aria-label="Team margin in percent"
+                aria-label={t("Team margin in percent")}
               />
               <span>%</span>
-              <button type="submit">Save</button>
+              <button type="submit">{t("Save")}</button>
             </form>
           ) : (
             <strong>{team.margin}%</strong>
           )}
           <span className="muted odds-setting-note">
-            Added to the base margin, so this team&apos;s prices run at {team.effectiveMargin}% under the feed. A negative number gives Players better odds, down to the feed price.
+            {t("Added to the base margin, so this team's prices run at {margin}% under the feed. A negative number gives Players better odds, down to the feed price.", { margin: team.effectiveMargin })}
           </span>
         </div>
       ) : null}
@@ -287,6 +296,8 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
 }
 
 function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event: OddsEvent; canEditPrices: boolean; canManage: boolean; ownerQuery: string; run: Run }) {
+  const i18n = useI18n();
+  const { t, tn, ts } = i18n;
   const [showAll, setShowAll] = useState(false);
   const [editing, setEditing] = useState<OddsSelection | null>(null);
   const [price, setPrice] = useState("");
@@ -305,20 +316,28 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
     const selection = editing;
     void run(
       (token) => apiFetch(`/odds/overrides/${selection.id}?${ownerQuery}`, token, { method: "PUT", body: JSON.stringify({ odds: Number(price) }) }),
-      `${selection.name} set to ${Number(price).toFixed(2)} for your team.`,
+      t("{pick} set to {odds} for your team.", { pick: ts(selection.name), odds: Number(price).toFixed(2) }),
     ).then((ok) => ok && setEditing(null));
   }
 
   function resetPrice() {
     if (!editing) return;
     const selection = editing;
-    void run((token) => apiFetch(`/odds/overrides/${selection.id}?${ownerQuery}`, token, { method: "DELETE" }), `${selection.name} is back to the feed price.`).then((ok) => ok && setEditing(null));
+    void run((token) => apiFetch(`/odds/overrides/${selection.id}?${ownerQuery}`, token, { method: "DELETE" }), t("{pick} is back to the feed price.", { pick: ts(selection.name) })).then((ok) => ok && setEditing(null));
   }
 
   function toggle(field: "hidden" | "suspended") {
     const next = !event[field];
-    const verb = field === "hidden" ? (next ? "hidden from everyone" : "visible again") : next ? "suspended" : "open for bets again";
-    void run((token) => apiFetch(`/odds/events/${event.id}`, token, { method: "PATCH", body: JSON.stringify({ [field]: next }) }), `${event.name} is ${verb}.`);
+    const vars = { match: event.name };
+    const done =
+      field === "hidden"
+        ? next
+          ? t("{match} is hidden from everyone.", vars)
+          : t("{match} is visible again.", vars)
+        : next
+          ? t("{match} is suspended.", vars)
+          : t("{match} is open for bets again.", vars);
+    void run((token) => apiFetch(`/odds/events/${event.id}`, token, { method: "PATCH", body: JSON.stringify({ [field]: next }) }), done);
   }
 
   return (
@@ -329,9 +348,9 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
           {event.country ? ` · ${event.country}` : ""}
         </span>
         <span className="odds-event-badges">
-          {event.hidden ? <span className="status-pill">Hidden</span> : null}
-          {event.suspended ? <span className="status-pill odds-pill-warn">Suspended</span> : null}
-          <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>{statusText(event)}</span>
+          {event.hidden ? <span className="status-pill">{t("Hidden")}</span> : null}
+          {event.suspended ? <span className="status-pill odds-pill-warn">{t("Suspended")}</span> : null}
+          <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>{statusText(event, i18n)}</span>
         </span>
       </header>
 
@@ -344,34 +363,34 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
       {event.status === "LIVE" ? (
         <p className="muted odds-note">
           {event.bettable
-            ? "Live prices from the feed, less the team margin. Your own fixed prices only apply before kick-off."
-            : "Live betting on this match is paused: the feed has stopped or suspended it, or its prices are out of date."}
+            ? t("Live prices from the feed, less the team margin. Your own fixed prices only apply before kick-off.")
+            : t("Live betting on this match is paused: the feed has stopped or suspended it, or its prices are out of date.")}
         </p>
       ) : null}
 
       {event.markets.length === 0 ? (
-        event.status === "LIVE" ? null : <p className="muted odds-note">No odds from the feed yet.</p>
+        event.status === "LIVE" ? null : <p className="muted odds-note">{t("No odds from the feed yet.")}</p>
       ) : (
         markets.map((market) => (
           <div key={market.id} className="odds-market">
             <span className="odds-market-name">
-              {market.name}
-              {market.suspended ? <span className="muted"> · Suspended</span> : null}
+              {ts(market.name)}
+              {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
             </span>
             <div className="odds-selections">
               {market.selections.map((selection) => {
                 const content = (
                   <>
-                    <span className="odds-selection-name">{selection.name}</span>
+                    <span className="odds-selection-name">{ts(selection.name)}</span>
                     <strong className="odds-price">{odds(selection.price)}</strong>
                     {selection.feedOdds !== undefined ? (
-                      <span className="odds-feed">{selection.custom ? "Your price" : `Feed ${odds(selection.feedOdds)}`}</span>
+                      <span className="odds-feed">{selection.custom ? t("Your price") : t("Feed {odds}", { odds: odds(selection.feedOdds) })}</span>
                     ) : null}
                   </>
                 );
                 const className = `odds-selection${selection.custom ? " is-custom" : ""}${selection.result === "WON" ? " is-won" : ""}${editing?.id === selection.id ? " is-editing" : ""}`;
                 return canEditPrices && !finished && event.status !== "LIVE" ? (
-                  <button key={selection.id} type="button" className={className} onClick={() => startEdit(selection)} aria-label={`Change the price for ${selection.name}, now ${odds(selection.price)}`}>
+                  <button key={selection.id} type="button" className={className} onClick={() => startEdit(selection)} aria-label={t("Change the price for {pick}, now {odds}", { pick: ts(selection.name), odds: odds(selection.price) })}>
                     {content}
                   </button>
                 ) : (
@@ -385,20 +404,20 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
               <form className="odds-editor" onSubmit={savePrice}>
                 <label className="field">
                   <span>
-                    Your price for {editing.name}
-                    {editing.feedOdds !== undefined ? <span className="muted"> (feed {odds(editing.feedOdds)})</span> : null}
+                    {t("Your price for {pick}", { pick: ts(editing.name) })}
+                    {editing.feedOdds !== undefined ? <span className="muted"> ({t("feed {odds}", { odds: odds(editing.feedOdds) })})</span> : null}
                   </span>
                   <input id={`odds-price-${editing.id}`} type="number" inputMode="decimal" min={1.01} max={1000} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} autoFocus />
                 </label>
                 <div className="odds-editor-actions">
-                  <button type="submit">Save</button>
+                  <button type="submit">{t("Save")}</button>
                   {editing.custom ? (
                     <button type="button" className="secondary" onClick={resetPrice}>
-                      Use feed price
+                      {t("Use feed price")}
                     </button>
                   ) : null}
                   <button type="button" className="secondary" onClick={() => setEditing(null)}>
-                    Cancel
+                    {t("Cancel")}
                   </button>
                 </div>
               </form>
@@ -411,7 +430,7 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
       <footer className="odds-event-footer">
         {event.markets.length > 1 ? (
           <button type="button" className="text-button" onClick={() => setShowAll(!showAll)}>
-            {showAll ? "Fewer markets" : `${event.markets.length - 1} more markets`}
+            {showAll ? t("Fewer markets") : tn(event.markets.length - 1, "{count} more market", "{count} more markets")}
           </button>
         ) : (
           <span />
@@ -419,10 +438,10 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
         {canManage ? (
           <span className="odds-admin-actions">
             <button type="button" className="secondary" onClick={() => toggle("suspended")} disabled={finished}>
-              {event.suspended ? "Resume bets" : "Suspend"}
+              {event.suspended ? t("Resume bets") : t("Suspend")}
             </button>
             <button type="button" className="secondary" onClick={() => toggle("hidden")}>
-              {event.hidden ? "Show" : "Hide"}
+              {event.hidden ? t("Show") : t("Hide")}
             </button>
           </span>
         ) : null}

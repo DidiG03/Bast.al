@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, type TouchEvent } from "react";
 import type { UserRole } from "../lib/api";
 import { NamedIcon, type IconName } from "./icons";
 import { UserMenu } from "./user-menu";
+import { msg } from "../lib/i18n/core";
+import { useI18n } from "./i18n-provider";
 
 type SidebarProps = {
   role: UserRole;
@@ -17,46 +19,48 @@ type NavLink = { href: string; label: string; icon: IconName };
 type NavGroup = { label: string; links: NavLink[] };
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  SUPER_ADMIN: "Super Admin",
-  OWNER: "Owner",
-  MANAGER: "Manager",
-  PLAYER: "Player",
+  SUPER_ADMIN: msg("Super Admin"),
+  OWNER: msg("Owner"),
+  MANAGER: msg("Manager"),
+  PLAYER: msg("Player"),
 };
 
 /** What each role can open, grouped the way people think about the work. */
 function navGroups(role: UserRole): NavGroup[] {
   if (role === "PLAYER") {
     return [
-      { label: "Play", links: [{ href: "/dashboard", label: "Overview", icon: "dashboard" }, { href: "/dashboard/bet", label: "Bet", icon: "bet" }] },
-      { label: "Account", links: [{ href: "/dashboard/security", label: "Security", icon: "security" }] },
+      { label: msg("Play"), links: [{ href: "/dashboard", label: msg("Overview"), icon: "dashboard" }, { href: "/dashboard/bet", label: msg("Bet"), icon: "bet" }] },
+      { label: msg("Account"), links: [{ href: "/dashboard/security", label: msg("Security"), icon: "security" }] },
     ];
   }
-  const betting: NavLink[] = [{ href: "/dashboard/odds", label: "Odds", icon: "odds" }];
-  if (role === "OWNER" || role === "SUPER_ADMIN") betting.push({ href: "/dashboard/risk", label: "Risk", icon: "risk" });
-  if (role === "SUPER_ADMIN") betting.push({ href: "/dashboard/settlement", label: "Settlement", icon: "settlement" });
+  const betting: NavLink[] = [{ href: "/dashboard/odds", label: msg("Odds"), icon: "odds" }];
+  if (role === "OWNER" || role === "SUPER_ADMIN") betting.push({ href: "/dashboard/risk", label: msg("Risk"), icon: "risk" });
+  // Owners and Managers see it read-only, limited to their own Players' bets.
+  betting.push({ href: "/dashboard/settlement", label: msg("Settlement"), icon: "settlement" });
   return [
     {
-      label: "Workspace",
+      label: msg("Workspace"),
       links: [
-        { href: "/dashboard", label: "Overview", icon: "dashboard" },
-        { href: "/dashboard/users", label: "Users", icon: "users" },
-        { href: "/dashboard/reports", label: "Reports", icon: "reports" },
+        { href: "/dashboard", label: msg("Overview"), icon: "dashboard" },
+        { href: "/dashboard/users", label: msg("Users"), icon: "users" },
+        { href: "/dashboard/reports", label: msg("Reports"), icon: "reports" },
       ],
     },
     {
-      label: "Money",
+      label: msg("Money"),
       links: [
-        { href: "/dashboard/finance", label: "Finance", icon: "finance" },
-        { href: "/dashboard/commissions", label: "Commissions", icon: "commissions" },
+        { href: "/dashboard/finance", label: msg("Finance"), icon: "finance" },
+        { href: "/dashboard/commissions", label: msg("Commissions"), icon: "commissions" },
       ],
     },
-    { label: "Betting", links: betting },
-    { label: "Account", links: [{ href: "/dashboard/security", label: "Security", icon: "security" }] },
+    { label: msg("Betting"), links: betting },
+    { label: msg("Account"), links: [{ href: "/dashboard/security", label: msg("Security"), icon: "security" }] },
   ];
 }
 
 export function DashboardSidebar({ role, username, initialCollapsed }: SidebarProps) {
   const pathname = usePathname();
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
@@ -122,7 +126,7 @@ export function DashboardSidebar({ role, username, initialCollapsed }: SidebarPr
         className="sidebar-mobile-trigger secondary"
         type="button"
         onClick={() => setMobileOpen(true)}
-        aria-label="Open navigation"
+        aria-label={t("Open navigation")}
         aria-expanded={mobileOpen}
       >
         <NamedIcon name="menu" />
@@ -131,7 +135,7 @@ export function DashboardSidebar({ role, username, initialCollapsed }: SidebarPr
         <button
           className="sidebar-backdrop"
           type="button"
-          aria-label="Close navigation"
+          aria-label={t("Close navigation")}
           onClick={() => setMobileOpen(false)}
           onTouchStart={startSwipe}
           onTouchEnd={(event) => finishSwipe(event, false)}
@@ -155,8 +159,8 @@ export function DashboardSidebar({ role, username, initialCollapsed }: SidebarPr
             className="sidebar-collapse secondary"
             type="button"
             onClick={toggleCollapsed}
-            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-            title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            aria-label={t(collapsed ? "Expand navigation" : "Collapse navigation")}
+            title={t(collapsed ? "Expand navigation" : "Collapse navigation")}
           >
             <NamedIcon name="panel" />
           </button>
@@ -164,26 +168,26 @@ export function DashboardSidebar({ role, username, initialCollapsed }: SidebarPr
             className="sidebar-mobile-close secondary"
             type="button"
             onClick={() => setMobileOpen(false)}
-            aria-label="Close navigation"
+            aria-label={t("Close navigation")}
           >
             <NamedIcon name="close" />
           </button>
         </div>
-        <nav className="sidebar-nav" aria-label="Main navigation">
+        <nav className="sidebar-nav" aria-label={t("Main navigation")}>
           {groups.map((group) => (
             <div key={group.label} className="sidebar-group">
-              <span className="sidebar-section-label">{group.label}</span>
+              <span className="sidebar-section-label">{t(group.label)}</span>
               {group.links.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={`sidebar-link${isActive(link.href) ? " is-active" : ""}`}
                   aria-current={isActive(link.href) ? "page" : undefined}
-                  title={collapsed ? link.label : undefined}
+                  title={collapsed ? t(link.label) : undefined}
                   onClick={() => setMobileOpen(false)}
                 >
                   <NamedIcon name={link.icon} />
-                  <span className="sidebar-link-label">{link.label}</span>
+                  <span className="sidebar-link-label">{t(link.label)}</span>
                 </Link>
               ))}
             </div>
@@ -196,13 +200,13 @@ export function DashboardSidebar({ role, username, initialCollapsed }: SidebarPr
             </span>
             <span className="sidebar-account-text">
               <span className="sidebar-account-name">{username}</span>
-              <span className="sidebar-account-role">{ROLE_LABELS[role]}</span>
+              <span className="sidebar-account-role">{t(ROLE_LABELS[role])}</span>
             </span>
           </div>
           <UserMenu />
         </div>
       </aside>
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+      <nav className="mobile-bottom-nav" aria-label={t("Mobile navigation")}>
         {mobileLinks.map((link) => (
           <Link
             key={link.href}
@@ -211,7 +215,7 @@ export function DashboardSidebar({ role, username, initialCollapsed }: SidebarPr
             aria-current={isActive(link.href) ? "page" : undefined}
           >
             <NamedIcon name={link.icon} />
-            <span>{link.label}</span>
+            <span>{t(link.label)}</span>
           </Link>
         ))}
       </nav>

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { BetStatus, EventStatus, NotificationSeverity, NotificationType, Prisma, SelectionResult } from "@prisma/client";
+import { BalanceTransactionType, BetStatus, EventStatus, NotificationSeverity, NotificationType, Prisma, SelectionResult } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -81,7 +81,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
    * already settled are corrected too (after Super Admin changed the result);
    * bets Super Admin voided by hand always stay void.
    */
-  async settleEvent(eventId: string, regrade = false): Promise<Change[]> {
+  async settleEvent(eventId: string, regrade = false, actorId: string | null = null): Promise<Change[]> {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       include: { markets: { include: { selections: { select: { id: true, key: true, result: true } } } } },
@@ -109,14 +109,14 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         selectionId: { in: [...grades.keys()] },
         ...(regrade ? { voidReason: null } : { status: BetStatus.OPEN }),
       },
-      select: { id: true, playerId: true, stake: true, odds: true, payout: true, status: true, selectionId: true },
+      select: { id: true, playerId: true, stake: true, odds: true, payout: true, status: true, selectionId: true, description: true },
     });
     const changes: Change[] = [];
     for (const bet of bets) {
       const grade = grades.get(bet.selectionId!);
       if (!grade || bet.odds === null) continue;
       const status = grade as BetStatus;
-      const change = await this.move(bet, status, payoutFor(status, bet.stake, bet.odds), null);
+      const change = await this.move(bet, status, payoutFor(status, bet.stake, bet.odds), null, actorId);
       if (change) changes.push({ ...change, eventName: event.name });
     }
 
@@ -133,7 +133,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       if (grade !== leg.result) await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: grade } });
       touched.add(leg.betId);
     }
-    changes.push(...(await this.resettleAccumulators([...touched], regrade)));
+    changes.push(...(await this.resettleAccumulators([...touched], regrade, actorId)));
 
     await this.announce(changes, regrade ? "corrected" : "settled");
     return changes;
@@ -144,7 +144,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
    * move (a lost one is final until a result is corrected); with it, a
    * settled one can move again, even back to open.
    */
-  private async resettleAccumulators(betIds: string[], regrade: boolean): Promise<Change[]> {
+  private async resettleAccumulators(betIds: string[], regrade: boolean, actorId: string | null = null): Promise<Change[]> {
     if (betIds.length === 0) return [];
     const bets = await this.prisma.bet.findMany({
       where: { id: { in: betIds }, voidReason: null, ...(regrade ? {} : { status: BetStatus.OPEN }) },
@@ -154,7 +154,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     for (const bet of bets) {
       const outcome = accumulatorOutcome(bet.legs);
       const payout = outcome.status === BetStatus.OPEN ? new Prisma.Decimal(0) : payoutFor(outcome.status, bet.stake, outcome.odds);
-      const change = await this.move(bet, outcome.status, payout, null);
+      const change = await this.move(bet, outcome.status, payout, null, actorId);
       if (change) changes.push({ ...change, eventName: bet.description ?? "Accumulator", accumulator: true });
     }
     return changes;
@@ -201,7 +201,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         status: EventStatus.COMPLETED,
       },
     });
-    const changes = await this.settleEvent(eventId, true);
+    const changes = await this.settleEvent(eventId, true, actor.id);
     await this.audit.log({
       actorId: actor.id,
       action: "bet.result_correct",
@@ -218,7 +218,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     });
     if (!bet) throw new NotFoundException("Bet not found");
     if (bet.status === BetStatus.VOID && bet.voidReason) throw new BadRequestException("This bet is already void");
-    const change = await this.move(bet, BetStatus.VOID, bet.stake, reason);
+    const change = await this.move(bet, BetStatus.VOID, bet.stake, reason, actor.id);
     if (!change) throw new BadRequestException("This bet changed while you were voiding it. Refresh and try again.");
     await this.announce([{ ...change, eventName: bet.description ?? "A bet", voidReason: reason }], "voided");
     await this.audit.log({ actorId: actor.id, action: "bet.void", targetId: bet.playerId, metadata: { betId, reason, from: bet.status, refund: Number(change.delta) } });
@@ -233,25 +233,30 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.event.update({ where: { id: eventId }, data: { suspended: true } });
     const bets = await this.prisma.bet.findMany({
       where: { selection: { market: { eventId } }, voidReason: null },
-      select: { id: true, playerId: true, stake: true, payout: true, status: true },
+      select: { id: true, playerId: true, stake: true, payout: true, status: true, description: true },
     });
     const changes: Change[] = [];
     for (const bet of bets) {
-      const change = await this.move(bet, BetStatus.VOID, bet.stake, reason);
+      const change = await this.move(bet, BetStatus.VOID, bet.stake, reason, actor.id);
       if (change) changes.push({ ...change, eventName: event.name, voidReason: reason });
     }
     // In an accumulator only this match's pick is voided; the rest still counts.
     const legs = await this.prisma.betLeg.findMany({ where: { selection: { market: { eventId } }, voidReason: null }, select: { id: true, betId: true } });
     for (const leg of legs) await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: reason } });
-    const accaChanges = await this.resettleAccumulators([...new Set(legs.map((leg) => leg.betId))], true);
+    const accaChanges = await this.resettleAccumulators([...new Set(legs.map((leg) => leg.betId))], true, actor.id);
     changes.push(...accaChanges);
     await this.announce(changes, "voided");
     await this.audit.log({ actorId: actor.id, action: "bet.void_event", metadata: { eventId, event: event.name, reason, bets: changes.length } });
     return { eventId, betsVoided: changes.length };
   }
 
-  /** Super Admin: matches with bets on them, newest first, for settling by hand. */
-  async adminEvents() {
+  /**
+   * Matches with bets on them, newest first. Super Admin sees every bet, to
+   * settle by hand; with `teamOf`, only that Owner's or Manager's Players'
+   * bets are counted (Players they created, plus their Managers' Players).
+   */
+  async adminEvents(teamOf?: string) {
+    const team = teamOf ? Prisma.sql`WHERE p.parent_id = ${teamOf} OR pm.parent_id = ${teamOf}` : Prisma.empty;
     const rows = await this.prisma.$queryRaw<Array<{ event_id: string; open: bigint; total: bigint; staked: Prisma.Decimal; open_staked: Prisma.Decimal }>>`
       SELECT m.event_id,
              COUNT(*) FILTER (WHERE b.status = 'OPEN') AS open,
@@ -259,9 +264,12 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
              COALESCE(SUM(b.stake), 0) AS staked,
              COALESCE(SUM(b.stake) FILTER (WHERE b.status = 'OPEN'), 0) AS open_staked
       FROM bets b
+      JOIN users p ON p.id = b.player_id
+      LEFT JOIN users pm ON pm.id = p.parent_id
       LEFT JOIN bet_legs l ON l.bet_id = b.id
       JOIN selections s ON s.id = COALESCE(l.selection_id, b.selection_id)
       JOIN markets m ON m.id = s.market_id
+      ${team}
       GROUP BY m.event_id
     `;
     const stats = new Map(rows.map((r) => [r.event_id, r]));
@@ -287,12 +295,18 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /** Super Admin: recent bets, to find one to void. */
-  async adminBets(filter: { status?: BetStatus; player?: string; eventId?: string }) {
+  /** Recent bets: every Player's for Super Admin (to find one to void), or only the team's with `teamOf`. */
+  async adminBets(filter: { status?: BetStatus; player?: string; playerId?: string; eventId?: string }, teamOf?: string) {
     const bets = await this.prisma.bet.findMany({
       where: {
         ...(filter.status ? { status: filter.status } : {}),
-        ...(filter.player ? { player: { username: { contains: filter.player.toLowerCase() } } } : {}),
+        player: {
+          AND: [
+            teamOf ? teamPlayers(teamOf) : {},
+            filter.player ? { username: { contains: filter.player.toLowerCase() } } : {},
+            filter.playerId ? { id: filter.playerId } : {},
+          ],
+        },
         ...(filter.eventId ? { OR: [{ selection: { market: { eventId: filter.eventId } } }, { legs: { some: { selection: { market: { eventId: filter.eventId } } } } }] } : {}),
       },
       orderBy: { placedAt: "desc" },
@@ -302,16 +316,30 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     return bets.map(({ player, ...bet }) => ({ ...betView(bet), player }));
   }
 
+  /** Open bets per Player: how many and their total stake. Every Player for Super Admin, only the team's with `teamOf`. */
+  async openByPlayer(teamOf?: string): Promise<Record<string, { bets: number; staked: number }>> {
+    const groups = await this.prisma.bet.groupBy({
+      by: ["playerId"],
+      where: { status: BetStatus.OPEN, ...(teamOf ? { player: teamPlayers(teamOf) } : {}) },
+      _count: { _all: true },
+      _sum: { stake: true },
+    });
+    return Object.fromEntries(groups.map((g) => [g.playerId, { bets: g._count._all, staked: Number(g._sum.stake ?? 0) }]));
+  }
+
   /**
    * Moves one bet to `status` paying `payout`, and changes the Player's
-   * balance by the difference from what it paid before. Returns null when
-   * nothing changed or someone else moved the bet first.
+   * balance by the difference from what it paid before, with a matching
+   * entry in their balance ledger. `actorId` is Super Admin for a change
+   * made by hand, null when the feed settled it. Returns null when nothing
+   * changed or someone else moved the bet first.
    */
   private async move(
-    bet: { id: string; playerId: string; stake: Prisma.Decimal; payout: Prisma.Decimal; status: BetStatus },
+    bet: { id: string; playerId: string; stake: Prisma.Decimal; payout: Prisma.Decimal; status: BetStatus; description?: string | null },
     status: BetStatus,
     payout: Prisma.Decimal,
     voidReason: string | null,
+    actorId: string | null = null,
   ): Promise<Omit<Change, "eventName"> | null> {
     if (bet.status === status && bet.payout.equals(payout) && !voidReason) return null;
     const delta = payout.sub(bet.payout);
@@ -321,7 +349,19 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         data: { status, payout, settledAt: status === BetStatus.OPEN ? null : new Date(), ...(voidReason ? { voidReason } : {}) },
       });
       if (updated.count === 0) return false;
-      if (!delta.isZero()) await tx.user.update({ where: { id: bet.playerId }, data: { balance: { increment: delta } } });
+      if (!delta.isZero()) {
+        await tx.user.update({ where: { id: bet.playerId }, data: { balance: { increment: delta } } });
+        await tx.balanceTransaction.create({
+          data: {
+            toUserId: bet.playerId,
+            actorId,
+            type: BalanceTransactionType.BET_SETTLEMENT,
+            amount: delta,
+            reason: ledgerReason(bet.status, status, delta, bet.description ?? null, voidReason),
+            betId: bet.id,
+          },
+        });
+      }
       return true;
     });
     return moved ? { playerId: bet.playerId, delta, status, voidReason } : null;
@@ -397,6 +437,22 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
 }
 
 const betSelectWithPlayer = { ...betSelect, player: { select: { id: true, username: true } } } satisfies Prisma.BetSelect;
+
+/** What a settlement move says in the Player's balance ledger. */
+export function ledgerReason(from: BetStatus, to: BetStatus, delta: Prisma.Decimal, description: string | null, voidReason: string | null): string {
+  const what = description ?? "bet";
+  if (to === BetStatus.VOID) return `Bet refunded: ${what}${voidReason ? ` (${voidReason})` : ""}`;
+  // A bet that had already paid out and now pays less: a corrected result.
+  if (from !== BetStatus.OPEN && delta.isNegative()) return `Bet corrected, payout taken back: ${what}`;
+  if (from !== BetStatus.OPEN) return `Bet corrected: ${what}`;
+  if (to === BetStatus.WON) return `Bet won: ${what}`;
+  return `Bet settled: ${what}`;
+}
+
+/** An Owner's or Manager's Players: ones they created, plus their Managers' Players. */
+function teamPlayers(teamOf: string): Prisma.UserWhereInput {
+  return { OR: [{ parentId: teamOf }, { parent: { parentId: teamOf } }] };
+}
 
 /** The corners and cards a match settles on, once all four numbers are known. */
 function statsOf(event: { resultCornersHome: number | null; resultCornersAway: number | null; resultCardsHome: number | null; resultCardsAway: number | null }) {

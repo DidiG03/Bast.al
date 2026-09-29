@@ -45,16 +45,28 @@ export class BetsController {
     return this.bets.slipInfo(actor);
   }
 
+  /** Super Admin sees every bet; an Owner or Manager only their own Players' bets. */
   @Get("admin")
-  @Roles(Role.SUPER_ADMIN)
-  adminBets(@Query() query: AdminBetsQueryDto) {
-    return this.settlement.adminBets({ status: query.status as BetStatus | undefined, player: query.player, eventId: query.eventId });
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  adminBets(@CurrentActor() actor: Actor, @Query() query: AdminBetsQueryDto) {
+    return this.settlement.adminBets(
+      { status: query.status as BetStatus | undefined, player: query.player, playerId: query.playerId, eventId: query.eventId },
+      teamOf(actor),
+    );
   }
 
+  /** How many open bets each Player has, and their total stake, for the Users tree. */
+  @Get("admin/open-by-player")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  openByPlayer(@CurrentActor() actor: Actor) {
+    return this.settlement.openByPlayer(teamOf(actor));
+  }
+
+  /** Matches with bets on them; for an Owner or Manager, only their own Players' bets are counted. */
   @Get("admin/events")
-  @Roles(Role.SUPER_ADMIN)
-  adminEvents() {
-    return this.settlement.adminEvents();
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  adminEvents(@CurrentActor() actor: Actor) {
+    return this.settlement.adminEvents(teamOf(actor));
   }
 
   @Post("admin/events/:id/result")
@@ -84,4 +96,9 @@ export class BetsController {
   voidBet(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() body: VoidDto) {
     return this.settlement.voidBet(actor, id, body.reason);
   }
+}
+
+/** Whose Players a settlement view is limited to: none for Super Admin, the viewer's own team otherwise. */
+function teamOf(actor: Actor): string | undefined {
+  return actor.role === Role.SUPER_ADMIN ? undefined : actor.id;
 }

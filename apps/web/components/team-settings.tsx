@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { apiFetch, type TeamSettings } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { LoadingSpinner } from "./loading-spinner";
+import { useI18n } from "./i18n-provider";
 
 function parse(text: string): number | null | "invalid" {
   if (text.trim() === "") return null;
@@ -16,6 +17,7 @@ function parse(text: string): number | null | "invalid" {
 /** Owner-wide settings: the low-balance alert and the default approval limit for their Managers. */
 export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
   const { getToken } = useAuth();
+  const { t } = useI18n();
   const [settings, setSettings] = useState<TeamSettings | null>(null);
   const [threshold, setThreshold] = useState("");
   const [approval, setApproval] = useState("");
@@ -30,7 +32,7 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
       setSettings(current);
       setThreshold(current.lowBalanceThreshold === null ? "" : String(current.lowBalanceThreshold));
       setApproval(current.managerApprovalLimit === null ? "" : String(current.managerApprovalLimit));
-    })().catch((err) => setError(err instanceof Error ? err.message : "Could not load team settings"));
+    })().catch((err) => setError(err instanceof Error ? err.message : t("Could not load team settings")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -40,17 +42,17 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
     const lowBalanceThreshold = parse(threshold);
     const managerApprovalLimit = parse(approval);
     if (lowBalanceThreshold === "invalid" || managerApprovalLimit === "invalid") {
-      setError("Enter an amount between $0 and $1,000,000, or leave it blank");
+      setError(t("Enter an amount between $0 and $1,000,000, or leave it blank"));
       return;
     }
     setBusy(true);
     try {
       const token = await getToken();
-      if (!token) throw new Error("Not signed in");
+      if (!token) throw new Error(t("You're not signed in"));
       await apiFetch<TeamSettings>("/users/me/team-settings", token, { method: "POST", body: JSON.stringify({ lowBalanceThreshold, managerApprovalLimit }) });
-      onSaved("Team settings saved.");
+      onSaved(t("Team settings saved."));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save team settings");
+      setError(err instanceof Error ? err.message : t("Could not save team settings"));
     } finally {
       setBusy(false);
     }
@@ -62,25 +64,25 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
       <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="team-settings-title">
         <div className="modal-header">
-          <h2 id="team-settings-title">Team settings</h2>
-          <button type="button" className="modal-close secondary" onClick={onClose} disabled={busy} aria-label="Close">×</button>
+          <h2 id="team-settings-title">{t("Team settings")}</h2>
+          <button type="button" className="modal-close secondary" onClick={onClose} disabled={busy} aria-label={t("Close")}>×</button>
         </div>
         {!settings && !error ? (
           <div className="loading-state"><LoadingSpinner label="Loading team settings" /></div>
         ) : (
           <form className="stack" onSubmit={submit}>
             <label className="stack" style={{ gap: "0.35rem" }}>
-              <strong>Low-balance alert</strong>
-              <span className="muted">You and their parent get a notification when a Manager or Player drops below this. Leave blank to turn it off.</span>
+              <strong>{t("Low-balance alert")}</strong>
+              <span className="muted">{t("You and their Manager or Owner get a notification when a Manager or Player drops below this. Leave blank to turn it off.")}</span>
               <div className="commission-input">
                 <span aria-hidden="true">$</span>
-                <input type="number" min="0" max="1000000" step="0.01" inputMode="decimal" placeholder="Off" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+                <input type="number" min="0" max="1000000" step="0.01" inputMode="decimal" placeholder={t("Off")} value={threshold} onChange={(e) => setThreshold(e.target.value)} />
               </div>
             </label>
             <label className="stack" style={{ gap: "0.35rem" }}>
-              <strong>Managers&rsquo; approval limit</strong>
+              <strong>{t("Managers' approval limit")}</strong>
               <span className="muted">
-                Your Managers can send up to this much to a Player without your approval. A limit you set on one Manager in their Balance window still wins. Leave blank for the standard {formatMoney(standard)}.
+                {t("Your Managers can send up to this much to a Player without your approval. A limit you set on one Manager in their Balance window still wins. Leave blank for the standard {amount}.", { amount: formatMoney(standard) })}
               </span>
               <div className="commission-input">
                 <span aria-hidden="true">$</span>
@@ -89,8 +91,8 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
             </label>
             {error ? <p className="error-text" role="alert">{error}</p> : null}
             <div className="modal-actions">
-              <button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button>
-              <button type="submit" disabled={busy || !settings}>{busy ? <LoadingSpinner label="Saving" size="small" /> : "Save settings"}</button>
+              <button type="button" className="secondary" onClick={onClose} disabled={busy}>{t("Cancel")}</button>
+              <button type="submit" disabled={busy || !settings}>{busy ? <LoadingSpinner label="Saving" size="small" /> : t("Save settings")}</button>
             </div>
           </form>
         )}

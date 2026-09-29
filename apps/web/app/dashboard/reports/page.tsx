@@ -5,15 +5,17 @@ import { apiFetch, type MeResponse, type UserReport } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 import { ReportsTabs } from "./reports-tabs";
 import { AuditLog } from "./audit-log";
+import { msg } from "../../../lib/i18n/core";
+import { getT } from "../../../lib/i18n/server";
 
 function dateLabel(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return getT().date(value, { dateStyle: "medium", timeStyle: "short" });
 }
 
+const STATUS_NAMES: Record<string, string> = { ACTIVE: msg("Active"), SUSPENDED: msg("Suspended") };
+
 export default async function ReportsPage() {
+  const { t, tn, ts } = getT();
   const { getToken, userId } = await auth();
   if (!userId) redirect("/sign-in");
   const token = await getToken();
@@ -24,15 +26,21 @@ export default async function ReportsPage() {
   const report = await apiFetch<UserReport>("/users/report", token);
   const isOwner = me.role === "OWNER";
   const isManager = me.role === "MANAGER";
-  const accountNoun = report.accountRole === "OWNER" ? "owner" : report.accountRole === "MANAGER" ? "manager" : "player";
+  const accountCount =
+    report.accountRole === "OWNER"
+      ? tn(report.accounts.length, "{count} owner", "{count} owners")
+      : report.accountRole === "MANAGER"
+        ? tn(report.accounts.length, "{count} manager", "{count} managers")
+        : tn(report.accounts.length, "{count} player", "{count} players");
+  const noAccounts = report.accountRole === "OWNER" ? t("No Owner accounts yet.") : report.accountRole === "MANAGER" ? t("No Manager accounts yet.") : t("No Player accounts yet.");
 
   const cards = [
-    ["Total users", report.totals.users],
-    ...(isOwner || isManager ? [] : [["Owners", report.totals.owners] as const]),
-    ...(isManager ? [] : [["Managers", report.totals.managers] as const]),
-    ["Players", report.totals.players],
-    ["Active", report.totals.active],
-    ["Suspended", report.totals.suspended],
+    [t("Total users"), report.totals.users],
+    ...(isOwner || isManager ? [] : [[t("Owners"), report.totals.owners] as const]),
+    ...(isManager ? [] : [[t("Managers"), report.totals.managers] as const]),
+    [t("Players"), report.totals.players],
+    [t("Active"), report.totals.active],
+    [t("Suspended"), report.totals.suspended],
   ] as const;
 
   const overviewContent = (
@@ -45,7 +53,7 @@ export default async function ReportsPage() {
           </div>
         ))}
         <div className="card report-stat">
-          <span className="muted">{isManager ? "Balance held by your players" : isOwner ? "Balance held by your team" : "Total balance in circulation"}</span>
+          <span className="muted">{isManager ? t("Balance held by your players") : isOwner ? t("Balance held by your team") : t("Total balance in circulation")}</span>
           <strong>{formatMoney(report.totals.totalBalance)}</strong>
         </div>
       </div>
@@ -53,11 +61,11 @@ export default async function ReportsPage() {
       <div className="reports-columns">
         <section className="card stack">
           <div className="tree-header">
-            <h2>{isManager ? "Player accounts" : isOwner ? "Manager accounts" : "Owner accounts"}</h2>
-            <span className="muted">{report.accounts.length} {accountNoun}s</span>
+            <h2>{isManager ? t("Player accounts") : isOwner ? t("Manager accounts") : t("Owner accounts")}</h2>
+            <span className="muted">{accountCount}</span>
           </div>
           {report.accounts.length === 0 ? (
-            <p className="muted">No {accountNoun} accounts yet.</p>
+            <p className="muted">{noAccounts}</p>
           ) : (
             <div className="report-list">
               {report.accounts.map((owner) => (
@@ -65,7 +73,9 @@ export default async function ReportsPage() {
                   <div>
                     {isManager ? <Link href={`/dashboard/players/${owner.id}`}><strong>{owner.username}</strong></Link> : <strong>{owner.username}</strong>}
                     <span className="muted">
-                      {isManager ? `${owner.status} · View activity` : `${owner.directReports} direct reports · ${owner.status} · ${owner.commissionRate}% commission`}
+                      {isManager
+                        ? `${t(STATUS_NAMES[owner.status] ?? owner.status)} · ${t("View activity")}`
+                        : `${tn(owner.directReports, "{count} direct report", "{count} direct reports")} · ${t(STATUS_NAMES[owner.status] ?? owner.status)} · ${t("{rate}% commission", { rate: owner.commissionRate })}`}
                     </span>
                   </div>
                   <strong>{formatMoney(owner.balance)}</strong>
@@ -77,11 +87,11 @@ export default async function ReportsPage() {
 
         <section className="card stack">
           <div className="tree-header">
-            <h2>Recent activity</h2>
-            <span className="muted">Latest 25</span>
+            <h2>{t("Recent activity")}</h2>
+            <span className="muted">{t("Latest {count}", { count: 25 })}</span>
           </div>
           {report.recentAudit.length === 0 ? (
-            <p className="muted">No activity recorded yet.</p>
+            <p className="muted">{t("No activity recorded yet.")}</p>
           ) : (
             <div className="report-list">
               {report.recentAudit.map((entry) => (
@@ -90,9 +100,9 @@ export default async function ReportsPage() {
                   key={entry.id}
                 >
                   <div>
-                    <strong>{entry.action.replaceAll(".", " ")}</strong>
+                    <strong>{ts(entry.action.replaceAll(".", " "))}</strong>
                     <span className="muted">
-                      {entry.actor?.username ?? "System"}
+                      {entry.actor?.username ?? t("System")}
                       {entry.target ? ` → ${entry.target.username}` : ""}
                     </span>
                   </div>
@@ -112,17 +122,17 @@ export default async function ReportsPage() {
     <div className="stack reports-page">
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>Reports</h1>
+          <h1 style={{ margin: 0 }}>{t("Reports")}</h1>
           <p className="muted report-subtitle">
             {isManager
-              ? "An overview of your players and their audit log."
+              ? t("An overview of your players and their audit log.")
               : isOwner
-              ? "An overview of your team and its audit log."
-              : "A complete overview of accounts and administrative audit logs."}
+              ? t("An overview of your team and its audit log.")
+              : t("A complete overview of accounts and administrative audit logs.")}
           </p>
         </div>
         <span className="muted report-updated">
-          Updated {dateLabel(report.generatedAt)}
+          {t("Updated {when}", { when: dateLabel(report.generatedAt) })}
         </span>
       </div>
 

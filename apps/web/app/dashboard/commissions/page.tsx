@@ -6,6 +6,7 @@ import { ManagerHistory, ManagerView, SuperAdminView, TeamView, teamPerformanceR
 import {
   apiFetch,
   type CommissionHistory,
+  type CommissionPayout,
   type ManagerCommissions,
   type MeResponse,
   type SuperAdminCommissions,
@@ -13,14 +14,16 @@ import {
 } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
+import { useI18n, type I18n } from "../../../components/i18n-provider";
+import { msg } from "../../../lib/i18n/core";
 
 type Range = "this-week" | "last-week" | "this-month" | "custom";
 
 const RANGES: Array<[Range, string]> = [
-  ["this-week", "This week"],
-  ["last-week", "Last week"],
-  ["this-month", "This month"],
-  ["custom", "Custom"],
+  ["this-week", msg("This week")],
+  ["last-week", msg("Last week")],
+  ["this-month", msg("This month")],
+  ["custom", msg("Custom")],
 ];
 
 function startOfWeek(date: Date): Date {
@@ -46,11 +49,18 @@ function rangeDates(range: Range, customFrom: string, customTo: string): { from:
   return { from: new Date(`${customFrom}T00:00:00`), to };
 }
 
-function periodLabel(from: string, to: string): string {
+/** "1 Sep to 7 Sep", in English: it goes into the ledger, which the API keeps in English. */
+function ledgerPeriod(from: string, to: string): string {
   const format = new Intl.DateTimeFormat("en", { day: "numeric", month: "short" });
   // `to` is exclusive; show the last day actually included.
   const last = new Date(new Date(to).getTime() - 1);
   return `${format.format(new Date(from))} to ${format.format(last)}`;
+}
+
+/** The same period in the reader's language, for the page. */
+function periodLabel({ t, date }: I18n, from: string, to: string): string {
+  const last = new Date(new Date(to).getTime() - 1);
+  return t("{from} to {to}", { from: date(from, { day: "numeric", month: "short" }), to: date(last, { day: "numeric", month: "short" }) });
 }
 
 function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
@@ -65,6 +75,8 @@ function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
 
 export default function CommissionsPage() {
   const { getToken } = useAuth();
+  const i18n = useI18n();
+  const { t } = i18n;
   const [me, setMe] = useState<MeResponse | null>(null);
   const [range, setRange] = useState<Range>("this-week");
   const [customFrom, setCustomFrom] = useState("");
@@ -78,11 +90,9 @@ export default function CommissionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [collectingId, setCollectingId] = useState<string | null>(null);
-  // Session-only: which `id:from:to` combos were just collected, so the button
-  // can't be double-clicked into a double reclaim/payment. This doesn't
-  // survive a reload — the underlying commission report is a live calculation
-  // over the date range, not a stored, per-period record of what's been paid.
-  const [collectedIds, setCollectedIds] = useState<Set<string>>(new Set());
+  // Commission already paid for periods overlapping the one on screen, stored
+  // on the server, so a period can't be paid twice even after a reload.
+  const [payouts, setPayouts] = useState<CommissionPayout[]>([]);
   const idempotency = useIdempotencyKey();
 
   const load = useCallback(async () => {
@@ -92,7 +102,7 @@ export default function CommissionsPage() {
     setError(null);
     try {
       const token = await getToken();
-      if (!token) throw new Error("Not signed in");
+      if (!token) throw new Error(t("You're not signed in"));
       const profile = me ?? (await apiFetch<MeResponse>("/users/me", token));
       setMe(profile);
       const params = new URLSearchParams({ from: dates.from.toISOString(), to: dates.to.toISOString() });
@@ -113,8 +123,12 @@ export default function CommissionsPage() {
           setOwners(await apiFetch<SuperAdminCommissions>(`/commissions/owners?${params}`, token));
         }
       }
+      if (profile.role === "SUPER_ADMIN" || profile.role === "OWNER") {
+        const period = new URLSearchParams({ from: dates.from.toISOString(), to: dates.to.toISOString() });
+        setPayouts(await apiFetch<CommissionPayout[]>(`/commissions/payouts?${period}`, token));
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load commissions");
+      setError(err instanceof Error ? err.message : t("Unable to load commissions"));
     } finally {
       setLoading(false);
     }
@@ -134,123 +148,105 @@ export default function CommissionsPage() {
     const stamp = current.from.slice(0, 10);
     if (me.role === "MANAGER" && mine) {
       downloadCsv(`commission-${stamp}.csv`, [
-        ["Player", "Settled bets", "Staked", "Paid out", "Player lost (+) / won (-)"],
+        [t("Player"), t("Settled bets"), t("Staked"), t("Paid out"), t("Player lost (+) / won (-)")],
         ...mine.players.map((p) => [p.username, p.bets, p.staked, p.paidOut, p.net]),
-        ["Total", mine.totals.bets, mine.totals.staked, mine.totals.paidOut, mine.totals.net],
-        [`Your commission (${mine.manager.commissionRate}%)`, "", "", "", mine.totals.commission],
+        [t("Total"), mine.totals.bets, mine.totals.staked, mine.totals.paidOut, mine.totals.net],
+        [t("Your commission ({rate}%)", { rate: mine.manager.commissionRate }), "", "", "", mine.totals.commission],
       ]);
     } else if (showingTeam && team) {
       downloadCsv(`team-commission-${team.owner.username}-${stamp}.csv`, [
-        ["Manager", "Rate %", "Players", "Settled bets", "Turnover", "Team profit", "Owner pays Manager"],
+        [t("Manager"), t("Rate %"), t("Players"), t("Settled bets"), t("Turnover"), t("Team profit"), t("Owner pays Manager")],
         ...team.managers.map((m) => [m.username, m.commissionRate, m.players.length, m.bets, m.staked, m.net, m.commission]),
-        ["Players with no Manager", "", team.directPlayers.length, team.directPlayers.reduce((s, p) => s + p.bets, 0), team.directPlayers.reduce((s, p) => s + p.staked, 0), team.directPlayers.reduce((s, p) => s + p.net, 0), 0],
+        [t("Players with no Manager"), "", team.directPlayers.length, team.directPlayers.reduce((s, p) => s + p.bets, 0), team.directPlayers.reduce((s, p) => s + p.staked, 0), team.directPlayers.reduce((s, p) => s + p.net, 0), 0],
         [],
-        ["Team profit", team.totals.net],
-        [`Super Admin cut (${team.owner.commissionRate}%)`, team.totals.superAdminCut],
-        ["Paid to Managers", team.totals.managerCommission],
-        ["Owner keeps", team.totals.ownerKeeps],
+        [t("Team profit"), team.totals.net],
+        [t("Super Admin cut ({rate}%)", { rate: team.owner.commissionRate }), team.totals.superAdminCut],
+        [t("Paid to Managers"), team.totals.managerCommission],
+        [t("Owner keeps"), team.totals.ownerKeeps],
         [],
-        ["Player", "Manager", "Bets", "Turnover", "Team profit", "Manager earns"],
-        ...teamPerformanceRows(team).map((p) => [p.username, p.manager ?? "No Manager", p.bets, p.staked, p.net, p.manager ? p.commission : ""]),
+        [t("Player"), t("Manager"), t("Bets"), t("Turnover"), t("Team profit"), t("Manager earns")],
+        ...teamPerformanceRows(team).map((p) => [p.username, p.manager ?? t("No Manager"), p.bets, p.staked, p.net, p.manager ? p.commission : ""]),
       ]);
     } else if (owners) {
       downloadCsv(`owner-commission-${stamp}.csv`, [
-        ["Owner", "Rate %", "Players", "Settled bets", "Team profit", "Super Admin cut", "Paid to Managers", "Owner keeps"],
+        [t("Owner"), t("Rate %"), t("Players"), t("Settled bets"), t("Team profit"), t("Super Admin cut"), t("Paid to Managers"), t("Owner keeps")],
         ...owners.owners.map((o) => [o.username, o.commissionRate, o.players, o.bets, o.net, o.superAdminCut, o.managerCommission, o.ownerKeeps]),
-        ["Total", "", "", owners.totals.bets, owners.totals.net, owners.totals.superAdminCut, owners.totals.managerCommission, owners.totals.ownerKeeps],
+        [t("Total"), "", "", owners.totals.bets, owners.totals.net, owners.totals.superAdminCut, owners.totals.managerCommission, owners.totals.ownerKeeps],
       ]);
     }
   }
 
-  function periodKey(id: string): string {
-    return current ? `${id}:${current.from}:${current.to}` : id;
-  }
-
-  /** Super Admin collecting their cut from an Owner: a reclaim, same as taking back any credit. */
-  async function collectFromOwner(owner: { id: string; username: string; superAdminCut: number }) {
+  /**
+   * Collects Super Admin's cut from an Owner, or pays a Manager as their Owner.
+   * The server works out the amount itself and refuses a period that overlaps
+   * one already paid; the amount shown here is only for the confirmation.
+   */
+  async function payCommission(user: { id: string; username: string }, amount: number, kind: "collect" | "pay") {
     if (!current) return;
-    const amount = Math.round(owner.superAdminCut * 100) / 100;
-    const label = periodLabel(current.from, current.to);
-    if (!window.confirm(`Reclaim ${formatMoney(amount)} from ${owner.username} for your commission (${label})?`)) return;
+    const label = periodLabel(i18n, current.from, current.to);
+    const vars = { amount: formatMoney(amount), name: user.username, period: label };
+    const question = kind === "collect" ? t("Take {amount} back from {name} for your commission ({period})?", vars) : t("Pay {amount} to {name} for their commission ({period})?", vars);
+    if (!window.confirm(question)) return;
     setError(null);
     setNotice(null);
-    setCollectingId(owner.id);
+    setCollectingId(user.id);
     try {
       const token = await getToken();
-      if (!token) throw new Error("Not signed in");
-      const path = `/users/${owner.id}/reclaim`;
-      const body = JSON.stringify({ amount, reason: `Commission for ${label}` });
-      await apiFetch(path, token, { method: "POST", body, idempotencyKey: idempotency.keyFor(path, body) });
+      if (!token) throw new Error(t("You're not signed in"));
+      const path = "/commissions/payouts";
+      const body = JSON.stringify({ userId: user.id, from: current.from, to: current.to, label: ledgerPeriod(current.from, current.to) });
+      const payout = await apiFetch<CommissionPayout>(path, token, { method: "POST", body, idempotencyKey: idempotency.keyFor(path, body) });
       idempotency.done();
-      setCollectedIds((current) => new Set(current).add(periodKey(owner.id)));
-      setNotice(`Collected ${formatMoney(amount)} from ${owner.username}.`);
+      setPayouts((list) => [payout, ...list]);
+      setNotice(
+        payout.status === "PENDING"
+          ? t("Submitted for approval: {amount} to {name}.", { amount: formatMoney(payout.amount), name: user.username })
+          : kind === "collect"
+            ? t("Collected {amount} from {name}.", { amount: formatMoney(payout.amount), name: user.username })
+            : t("Paid {amount} to {name}.", { amount: formatMoney(payout.amount), name: user.username }),
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not collect commission");
+      setError(err instanceof Error ? err.message : kind === "collect" ? t("Couldn't collect the commission") : t("Couldn't pay the commission"));
     } finally {
       setCollectingId(null);
     }
   }
 
-  /** An Owner paying a Manager's commission: a delegation, same as funding them normally. */
-  async function payManager(manager: { id: string; username: string; commission: number }) {
-    if (!current) return;
-    const amount = Math.round(manager.commission * 100) / 100;
-    const label = periodLabel(current.from, current.to);
-    if (!window.confirm(`Pay ${formatMoney(amount)} to ${manager.username} for their commission (${label})?`)) return;
-    setError(null);
-    setNotice(null);
-    setCollectingId(manager.id);
-    try {
-      const token = await getToken();
-      if (!token) throw new Error("Not signed in");
-      const path = `/users/${manager.id}/delegate`;
-      const body = JSON.stringify({ amount, reason: `Commission for ${label}` });
-      const result = await apiFetch<{ requiresApproval?: boolean }>(path, token, { method: "POST", body, idempotencyKey: idempotency.keyFor(path, body) });
-      idempotency.done();
-      setCollectedIds((current) => new Set(current).add(periodKey(manager.id)));
-      setNotice(result.requiresApproval ? `Submitted for approval: ${formatMoney(amount)} to ${manager.username}.` : `Paid ${formatMoney(amount)} to ${manager.username}.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not pay commission");
-    } finally {
-      setCollectingId(null);
-    }
+  // The latest payout that still counts (not rejected) for each account, among those overlapping this period.
+  const payoutById: Record<string, CommissionPayout> = {};
+  for (const payout of payouts) {
+    if (payout.status === "REJECTED" || payoutById[payout.userId]) continue;
+    payoutById[payout.userId] = payout;
   }
-
-  // The session-only collected set is keyed by `id:from:to`; narrow it to plain
-  // ids for the current period so the view components can do a simple `.has(id)`.
-  const collectedThisPeriod = current
-    ? new Set(
-        Array.from(collectedIds)
-          .filter((key) => key.endsWith(`:${current.from}:${current.to}`))
-          .map((key) => key.slice(0, key.indexOf(":"))),
-      )
-    : new Set<string>();
+  // Only a period that's over can be paid: "this week" is still running, and
+  // paying part of it would block the rest of it later.
+  const periodEnded = range === "last-week" || (range === "custom" && current !== null && new Date(current.to).getTime() <= Date.now());
 
   const subtitle =
     me?.role === "MANAGER"
-      ? "What you earn from your players. You get your rate on what they lose, paid by your Owner."
+      ? t("What you earn from your players. You get your rate on what they lose, paid by your Owner.")
       : me?.role === "OWNER"
-        ? "What your team made, what you owe Super Admin and each Manager, and what you keep."
+        ? t("What your team made, what you owe Super Admin and each Manager, and what you keep.")
         : ownerId
-          ? "What this Owner's team made, your cut, and what the Owner pays each Manager."
-          : "Your cut from each Owner's team. Open an Owner to see what they owe their Managers.";
+          ? t("What this Owner's team made, your cut, and what the Owner pays each Manager.")
+          : t("Your cut from each Owner's team. Open an Owner to see what they owe their Managers.");
 
   return (
     <div className="stack">
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{showingTeam && me?.role === "SUPER_ADMIN" && team ? `${team.owner.username}'s team` : "Commissions"}</h1>
+          <h1 style={{ margin: 0 }}>{showingTeam && me?.role === "SUPER_ADMIN" && team ? t("{name}'s team", { name: team.owner.username }) : t("Commissions")}</h1>
           <p className="muted report-subtitle">{subtitle}</p>
         </div>
         {me?.role === "SUPER_ADMIN" && ownerId ? (
           <button type="button" className="text-button back-link" onClick={() => { setOwnerId(null); setTeam(null); }}>
-            Back to all Owners
+            {t("Back to all Owners")}
           </button>
         ) : null}
       </div>
 
       <div className="card stack commission-period">
-        <nav className="tabs-nav commission-range" aria-label="Period">
+        <nav className="tabs-nav commission-range" aria-label={t("Period")}>
           {RANGES.map(([value, label]) => (
             <button
               type="button"
@@ -259,23 +255,23 @@ export default function CommissionsPage() {
               aria-pressed={range === value}
               onClick={() => setRange(value)}
             >
-              {label}
+              {t(label)}
             </button>
           ))}
         </nav>
         {range === "custom" ? (
           <div className="filter-bar">
-            <label>From<input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /></label>
-            <label>To<input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></label>
+            <label>{t("From")}<input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /></label>
+            <label>{t("To")}<input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></label>
           </div>
         ) : null}
         <div className="commission-period-footer">
           <span className="muted">
-            {current ? periodLabel(current.from, current.to) : range === "custom" ? "Pick a start and end date" : ""}
-            {loading ? " · Loading…" : ""}
+            {current ? periodLabel(i18n, current.from, current.to) : range === "custom" ? t("Pick a start and end date") : ""}
+            {loading ? ` · ${t("Loading…")}` : ""}
           </span>
           <button type="button" className="secondary" onClick={exportCsv} disabled={!current || loading}>
-            Export CSV
+            {t("Export CSV")}
           </button>
         </div>
       </div>
@@ -289,13 +285,21 @@ export default function CommissionsPage() {
         <TeamView
           data={team}
           viewer={me.role === "OWNER" ? "OWNER" : "SUPER_ADMIN"}
-          onCollect={me.role === "OWNER" ? payManager : undefined}
+          onCollect={me.role === "OWNER" ? (manager) => void payCommission(manager, manager.commission, "pay") : undefined}
           collectingId={collectingId}
-          collectedIds={collectedThisPeriod}
+          payouts={payoutById}
+          periodEnded={periodEnded}
         />
       ) : null}
       {me?.role === "SUPER_ADMIN" && !ownerId && owners ? (
-        <SuperAdminView data={owners} onOpen={setOwnerId} onCollect={collectFromOwner} collectingId={collectingId} collectedIds={collectedThisPeriod} />
+        <SuperAdminView
+          data={owners}
+          onOpen={setOwnerId}
+          onCollect={(owner) => void payCommission(owner, owner.superAdminCut, "collect")}
+          collectingId={collectingId}
+          payouts={payoutById}
+          periodEnded={periodEnded}
+        />
       ) : null}
     </div>
   );

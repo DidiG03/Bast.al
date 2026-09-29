@@ -4,8 +4,8 @@ import { useAuth } from "@clerk/nextjs";
 import { useState } from "react";
 import { apiFetch, type PricePoint } from "../lib/api";
 import { LoadingSpinner } from "./loading-spinner";
+import { useI18n } from "./i18n-provider";
 
-const dateFormat = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 type MarketSelection = { id: string; name: string };
 
@@ -16,6 +16,7 @@ type MarketSelection = { id: string; name: string };
  */
 export function MarketPriceHistory({ selections }: { selections: MarketSelection[] }) {
   const { getToken } = useAuth();
+  const { t, ts } = useI18n();
   const [open, setOpen] = useState(false);
   const [byId, setById] = useState<Record<string, PricePoint[] | "error"> | null>(null);
 
@@ -47,7 +48,7 @@ export function MarketPriceHistory({ selections }: { selections: MarketSelection
           <path d="M4 19V5M4 19h17" />
           <path d="m7 15 4-4 3 2 5-6" />
         </svg>
-        {open ? "Hide price history" : "Price history"}
+        {open ? t("Hide price history") : t("Price history")}
       </button>
       {open ? (
         byId === null ? (
@@ -58,11 +59,11 @@ export function MarketPriceHistory({ selections }: { selections: MarketSelection
               const points = byId[selection.id];
               return (
                 <div className="price-history-row" key={selection.id}>
-                  <span className="price-history-name">{selection.name}</span>
+                  <span className="price-history-name">{ts(selection.name)}</span>
                   {points === "error" ? (
-                    <span className="error-text">Could not load</span>
+                    <span className="error-text">{t("Couldn't load")}</span>
                   ) : !points || points.length < 2 ? (
-                    <span className="muted">No movement recorded yet</span>
+                    <span className="muted">{t("No movement recorded yet")}</span>
                   ) : (
                     <PriceHistorySpark points={points} />
                   )}
@@ -77,6 +78,7 @@ export function MarketPriceHistory({ selections }: { selections: MarketSelection
 }
 
 function PriceHistorySpark({ points }: { points: PricePoint[] }) {
+  const { t, date } = useI18n();
   const width = 140;
   const height = 32;
   const prices = points.map((point) => point.price);
@@ -102,7 +104,7 @@ function PriceHistorySpark({ points }: { points: PricePoint[] }) {
         {first.price.toFixed(2)} → {last.price.toFixed(2)}
       </span>
       <span className="muted price-history-range">
-        since {dateFormat.format(new Date(first.recordedAt))}
+        {t("since {when}", { when: date(first.recordedAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) })}
       </span>
     </span>
   );

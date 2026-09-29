@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useI18n } from "../../../components/i18n-provider";
 
 type ReportsTabsProps = {
   overview: ReactNode;
@@ -9,17 +10,18 @@ type ReportsTabsProps = {
 
 export function ReportsTabs({ overview, auditLog }: ReportsTabsProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "audit">("overview");
+  const { t } = useI18n();
 
   return (
     <div className="stack">
-      <nav className="tabs-nav" aria-label="Reports tabs">
+      <nav className="tabs-nav" aria-label={t("Reports tabs")}>
         <button
           type="button"
           className={`tab-button ${activeTab === "overview" ? "is-active" : ""}`}
           onClick={() => setActiveTab("overview")}
           aria-current={activeTab === "overview" ? "page" : undefined}
         >
-          Overview
+          {t("Overview")}
         </button>
         <button
           type="button"
@@ -27,7 +29,7 @@ export function ReportsTabs({ overview, auditLog }: ReportsTabsProps) {
           onClick={() => setActiveTab("audit")}
           aria-current={activeTab === "audit" ? "page" : undefined}
         >
-          Audit Log
+          {t("Audit log")}
         </button>
       </nav>
 

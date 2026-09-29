@@ -1,3 +1,5 @@
+import { currentBrowserLang, msg, translateServer } from "./i18n/core";
+
 function apiBase(): string {
   // Browser → Next BFF (adds HMAC). Server components → Nest directly.
   if (typeof window !== "undefined") {
@@ -58,7 +60,7 @@ export type CreateUserRequest = {
 
 export type BalanceEntry = {
   id: string;
-  type: "DELEGATION" | "RECLAIM" | "ADJUSTMENT";
+  type: "DELEGATION" | "RECLAIM" | "ADJUSTMENT" | "BET_STAKE" | "BET_SETTLEMENT";
   status?: "PENDING" | "APPROVED" | "REJECTED";
   approvedAt?: string | null;
   /** Signed from the viewed account's perspective: received = positive, given away = negative. */
@@ -179,11 +181,32 @@ export type PendingApproval = {
   actor: { id: string; username: string; role: UserRole } | null;
 };
 
+const TRANSACTION_LABELS: Record<BalanceEntry["type"], string> = {
+  DELEGATION: msg("Delegation"),
+  RECLAIM: msg("Reclaim"),
+  ADJUSTMENT: msg("Adjustment"),
+  BET_STAKE: msg("Bet placed"),
+  BET_SETTLEMENT: msg("Bet settled"),
+};
+
 export function transactionLabel(type: BalanceEntry["type"]): string {
-  return type === "DELEGATION" ? "Delegation" : type === "RECLAIM" ? "Reclaim" : "Adjustment";
+  return TRANSACTION_LABELS[type];
 }
 
 export type CommissionRateResponse = { rate: number };
+
+/** Commission paid for a period: collected from an Owner, or paid to a Manager. */
+export type CommissionPayout = {
+  id: string;
+  /** The Owner who paid Super Admin, or the Manager who was paid. */
+  userId: string;
+  periodFrom: string;
+  periodTo: string;
+  amount: number;
+  createdAt: string;
+  /** PENDING while an Owner's payment waits for approval; REJECTED payouts don't count. */
+  status: "PENDING" | "APPROVED" | "REJECTED";
+};
 
 /** Settled-bet totals. `net` is the team's profit: what Players staked minus what they were paid. */
 export type CommissionTotals = { bets: number; staked: number; paidOut: number; net: number };
@@ -269,6 +292,17 @@ export function newIdempotencyKey(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** An API error: `message` is in the reader's language, `original` is the API's English, for code that reacts to it. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly original: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   token: string,
@@ -295,7 +329,9 @@ export async function apiFetch<T>(
         : Array.isArray(body?.message)
           ? body.message.join(", ")
           : `Request failed (${res.status})`;
-    throw new Error(message);
+    // In the browser, show the API's (English) message in the reader's language.
+    // Server components keep it as it is: the dashboard layout reads it.
+    throw new ApiError(typeof window === "undefined" ? message : translateServer(currentBrowserLang(), message), message, res.status);
   }
 
   return res.json() as Promise<T>;

@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min, ValidateIf } from "class-validator";
+import { IsDateString, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, MaxLength, Min, ValidateIf } from "class-validator";
 
 export class CommissionPeriodDto {
   @IsOptional()
@@ -9,6 +9,28 @@ export class CommissionPeriodDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+}
+
+/** A period that must be given in full: [from, to). */
+export class PayoutPeriodDto {
+  @IsDateString()
+  from!: string;
+
+  @IsDateString()
+  to!: string;
+}
+
+export class CommissionPayoutDto extends PayoutPeriodDto {
+  /** The Owner Super Admin collects from, or the Manager an Owner pays. */
+  @IsString()
+  @MaxLength(64)
+  userId!: string;
+
+  /** How the period reads in the ledger, e.g. "1 Sep to 7 Sep". */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  label?: string;
 }
 
 export class TeamCommissionQueryDto extends CommissionPeriodDto {

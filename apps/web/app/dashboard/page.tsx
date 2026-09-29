@@ -28,24 +28,26 @@ import {
   type UserRow,
 } from "../../lib/api";
 import { formatMoney, formatSignedMoney } from "../../lib/format";
+import { getT } from "../../lib/i18n/server";
 
-const matchTimeFormat = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
+const MATCH_TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
 /** "Today", "Tomorrow", or DD/MM/YYYY — so a match's day is never ambiguous. */
 function topEventDayLabel(iso: string): string {
+  const { t } = getT();
   const date = new Date(iso);
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-  if (date.toDateString() === today.toDateString()) return "Today";
-  if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+  if (date.toDateString() === today.toDateString()) return t("Today");
+  if (date.toDateString() === tomorrow.toDateString()) return t("Tomorrow");
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${day}/${month}/${date.getFullYear()}`;
 }
 const DAY_MS = 86_400_000;
-const weekdayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" });
-const shortDateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const WEEKDAY: Intl.DateTimeFormatOptions = { weekday: "short", timeZone: "UTC" };
+const SHORT_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", timeZone: "UTC" };
 
 /** Monday 00:00 UTC, the same week boundary commissions settle on. */
 function startOfWeek(now: Date): Date {
@@ -81,32 +83,35 @@ async function lastSevenDays(token: string): Promise<Day[]> {
 }
 
 function dayLabel(day: Day, index: number, days: Day[]) {
-  return index === days.length - 1 ? "Today" : weekdayFormat.format(new Date(day.from));
+  const { t, date } = getT();
+  return index === days.length - 1 ? t("Today") : date(day.from, WEEKDAY);
 }
 
 function PageHeader({ username, subtitle, now }: { username: string; subtitle: string; now: Date }) {
+  const { t, date } = getT();
   const weekStart = startOfWeek(now);
   return (
     <div className="overview-header">
       <div>
-        <h1>Welcome back, {username}</h1>
+        <h1>{t("Welcome back, {name}", { name: username })}</h1>
         <p>{subtitle}</p>
       </div>
       <span className="period-chip">
         <NamedIcon name="calendar" className="period-chip-icon" />
         {weekStart.getTime() === new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).getTime()
-          ? `This week · since ${shortDateFormat.format(weekStart)}`
-          : `This week · ${shortDateFormat.format(weekStart)} to ${shortDateFormat.format(now)}`}
+          ? t("This week · since {day}", { day: date(weekStart, SHORT_DATE) })
+          : t("This week · {from} to {to}", { from: date(weekStart, SHORT_DATE), to: date(now, SHORT_DATE) })}
       </span>
     </div>
   );
 }
 
 function StatusDot({ status }: { status: UserRow["status"] }) {
+  const { t } = getT();
   return (
     <span className={`status-tag${status === "SUSPENDED" ? " is-suspended" : ""}`}>
       <span aria-hidden="true" />
-      {status === "SUSPENDED" ? "Suspended" : "Active"}
+      {status === "SUSPENDED" ? t("Suspended") : t("Active")}
     </span>
   );
 }
@@ -142,6 +147,7 @@ async function notificationsFor(token: string) {
 }
 
 async function SuperAdminOverview({ token, me, now }: { token: string; me: MeResponse; now: Date }) {
+  const { t, tn } = getT();
   const { thisWeek, lastWeek } = periods(now);
   const [users, pending, notifications, settlementEvents, week, previous, days] = await Promise.all([
     apiFetch<UserRow[]>("/users", token),
@@ -162,51 +168,51 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
     label: dayLabel(day, index, days),
     value: day.staked,
     current: index === days.length - 1,
-    detail: `${formatMoney(day.staked)} staked`,
+    detail: t("{amount} staked", { amount: formatMoney(day.staked) }),
   }));
   const weekStaked = days.reduce((total, day) => total + day.staked, 0);
 
   return (
     <div className="overview">
-      <PageHeader username={me.username} now={now} subtitle="How the whole platform is doing this week, and what each Owner owes you." />
+      <PageHeader username={me.username} now={now} subtitle={t("How the whole platform is doing this week, and what each Owner owes you.")} />
 
       <div className="overview-layout">
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label="Turnover"
+              label={t("Turnover")}
               icon="turnover"
               value={formatMoney(totals?.staked ?? 0)}
               spark={days.map((day) => day.staked)}
-              delta={{ current: totals?.staked ?? 0, previous: previousTotals?.staked ?? 0, label: "vs last week" }}
-              hint={`${totals?.bets ?? 0} settled bets`}
+              delta={{ current: totals?.staked ?? 0, previous: previousTotals?.staked ?? 0, label: t("vs last week") }}
+              hint={tn(totals?.bets ?? 0, "{count} settled bet", "{count} settled bets")}
             />
             <KpiCard
-              label="Platform profit"
+              label={t("Platform profit")}
               icon="profit"
               value={formatSignedMoney(totals?.net ?? 0)}
               tone={(totals?.net ?? 0) < 0 ? "bad" : undefined}
               spark={days.map((day) => day.net)}
-              delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: "vs last week" }}
-              hint="Stakes minus payouts, across every team"
+              delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: t("vs last week") }}
+              hint={t("Stakes minus payouts, across every team")}
             />
             <KpiCard
-              label="Owed to you"
+              label={t("Owed to you")}
               icon="wallet"
               value={formatSignedMoney(totals?.superAdminCut ?? 0)}
               tone={(totals?.superAdminCut ?? 0) < 0 ? "bad" : undefined}
-              delta={{ current: totals?.superAdminCut ?? 0, previous: previousTotals?.superAdminCut ?? 0, label: "vs last week" }}
-              hint="Each Owner's rate on their team's profit"
+              delta={{ current: totals?.superAdminCut ?? 0, previous: previousTotals?.superAdminCut ?? 0, label: t("vs last week") }}
+              hint={t("Each Owner's rate on their team's profit")}
             />
           </div>
 
-          <Panel title="Daily turnover" icon="chart" action={<Link href="/dashboard/reports" className="panel-link">Reports</Link>}>
+          <Panel title={t("Daily turnover")} icon="chart" action={<Link href="/dashboard/reports" className="panel-link">{t("Reports")}</Link>}>
             <BarChart
               points={chart}
               summary={
                 <>
                   <strong>{formatMoney(weekStaked)}</strong>
-                  <span>staked over the last 7 days</span>
+                  <span>{t("staked over the last 7 days")}</span>
                 </>
               }
             />
@@ -214,68 +220,68 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
         </div>
 
         <aside className="overview-rail">
-          <Panel title="Needs your attention" icon="inbox">
+          <Panel title={t("Needs your attention")} icon="inbox">
             <AttentionList
               items={[
-                { label: "Delegations to approve", count: pending?.length ?? 0, href: "/dashboard/finance" },
-                { label: "Matches needing a result", count: needsSettlement, href: "/dashboard/settlement" },
-                { label: "Low-balance alerts", count: notifications.lowBalance, href: "/dashboard/users" },
+                { label: t("Delegations to approve"), count: pending?.length ?? 0, href: "/dashboard/finance" },
+                { label: t("Matches needing a result"), count: needsSettlement, href: "/dashboard/settlement" },
+                { label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/users" },
               ]}
             />
           </Panel>
-          <Panel title="Platform" icon="users" action={<Link href="/dashboard/users" className="panel-link">Users</Link>}>
+          <Panel title={t("Platform")} icon="users" action={<Link href="/dashboard/users" className="panel-link">{t("Users")}</Link>}>
             <Facts
               rows={[
-                { label: "Owners", value: count("OWNER") },
-                { label: "Managers", value: count("MANAGER") },
-                { label: "Players", value: count("PLAYER") },
-                { label: "Balance in circulation", value: formatMoney(inCirculation) },
+                { label: t("Owners"), value: count("OWNER") },
+                { label: t("Managers"), value: count("MANAGER") },
+                { label: t("Players"), value: count("PLAYER") },
+                { label: t("Balance in circulation"), value: formatMoney(inCirculation) },
               ]}
             />
           </Panel>
-          <Panel title="Latest updates" icon="bell" flush>
+          <Panel title={t("Latest updates")} icon="bell" flush>
             <ActivityFeed items={notifications.latest} now={now} />
           </Panel>
         </aside>
       </div>
 
-      <Panel title="Owners this week" icon="commissions" flush action={<Link href="/dashboard/commissions" className="panel-link">Commissions</Link>}>
+      <Panel title={t("Owners this week")} icon="commissions" flush action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
         {week && week.owners.length > 0 ? (
           <table className="data-table">
             <thead>
               <tr>
-                <th scope="col">Owner</th>
-                <th scope="col" className="num">Rate</th>
-                <th scope="col" className="num">Players</th>
-                <th scope="col" className="num">Turnover</th>
-                <th scope="col" className="num">Team profit</th>
-                <th scope="col" className="num">Owes you</th>
-                <th scope="col">Status</th>
+                <th scope="col">{t("Owner")}</th>
+                <th scope="col" className="num">{t("Rate")}</th>
+                <th scope="col" className="num">{t("Players")}</th>
+                <th scope="col" className="num">{t("Turnover")}</th>
+                <th scope="col" className="num">{t("Team profit")}</th>
+                <th scope="col" className="num">{t("Owes you")}</th>
+                <th scope="col">{t("Status")}</th>
               </tr>
             </thead>
             <tbody>
               {week.owners.map((owner) => (
                 <tr key={owner.id}>
-                  <th scope="row" data-label="Owner">
+                  <th scope="row" data-label={t("Owner")}>
                     <span className="person">
                       <span className="person-avatar" aria-hidden="true">{owner.username.slice(0, 2).toUpperCase()}</span>
                       {owner.username}
                     </span>
                   </th>
-                  <td className="num" data-label="Rate">{owner.commissionRate}%</td>
-                  <td className="num" data-label="Players">{owner.players}</td>
-                  <td className="num" data-label="Turnover">{formatMoney(owner.staked)}</td>
-                  <td className={`num ${signedTone(owner.net)}`} data-label="Team profit">{formatSignedMoney(owner.net)}</td>
-                  <td className={`num strong${owner.superAdminCut < 0 ? " is-bad" : ""}`} data-label="Owes you">
-                    {owner.superAdminCut < 0 ? `You owe ${formatMoney(-owner.superAdminCut)}` : formatMoney(owner.superAdminCut)}
+                  <td className="num" data-label={t("Rate")}>{owner.commissionRate}%</td>
+                  <td className="num" data-label={t("Players")}>{owner.players}</td>
+                  <td className="num" data-label={t("Turnover")}>{formatMoney(owner.staked)}</td>
+                  <td className={`num ${signedTone(owner.net)}`} data-label={t("Team profit")}>{formatSignedMoney(owner.net)}</td>
+                  <td className={`num strong${owner.superAdminCut < 0 ? " is-bad" : ""}`} data-label={t("Owes you")}>
+                    {owner.superAdminCut < 0 ? t("You owe {amount}", { amount: formatMoney(-owner.superAdminCut) }) : formatMoney(owner.superAdminCut)}
                   </td>
-                  <td data-label="Status"><StatusDot status={owner.status} /></td>
+                  <td data-label={t("Status")}><StatusDot status={owner.status} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
-          <p className="panel-empty">No Owners yet. Create one from the Users page.</p>
+          <p className="panel-empty">{t("No Owners yet. Create one from the Users page.")}</p>
         )}
       </Panel>
     </div>
@@ -283,6 +289,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
 }
 
 async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse; now: Date }) {
+  const { t, tn, ts } = getT();
   const { thisWeek, lastWeek } = periods(now);
   const [users, pending, notifications, week, previous, days, risk] = await Promise.all([
     apiFetch<UserRow[]>("/users", token),
@@ -303,7 +310,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
     label: dayLabel(day, index, days),
     value: day.net,
     current: index === days.length - 1,
-    detail: `${formatSignedMoney(day.net)} profit`,
+    detail: t("{amount} profit", { amount: formatSignedMoney(day.net) }),
   }));
   const weekNet = days.reduce((total, day) => total + day.net, 0);
   const riskiest = [...(risk?.events ?? [])].sort((a, b) => b.worst.payout - a.worst.payout).slice(0, 3);
@@ -311,44 +318,44 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
 
   return (
     <div className="overview">
-      <PageHeader username={me.username} now={now} subtitle="Your team's results this week, what you owe, and where your risk sits." />
+      <PageHeader username={me.username} now={now} subtitle={t("Your team's results this week, what you owe, and where your risk sits.")} />
 
       <div className="overview-layout">
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label="Team profit"
+              label={t("Team profit")}
               icon="profit"
               value={formatSignedMoney(totals?.net ?? 0)}
               tone={(totals?.net ?? 0) < 0 ? "bad" : undefined}
               spark={days.map((day) => day.net)}
-              delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: "vs last week" }}
-              hint={`${formatMoney(totals?.staked ?? 0)} staked on ${totals?.bets ?? 0} bets`}
+              delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: t("vs last week") }}
+              hint={tn(totals?.bets ?? 0, "{amount} staked on {count} bet", "{amount} staked on {count} bets", { amount: formatMoney(totals?.staked ?? 0) })}
             />
             <KpiCard
-              label="You owe Super Admin"
+              label={t("You owe Super Admin")}
               icon="wallet"
               value={formatSignedMoney(totals?.superAdminCut ?? 0)}
               goodWhenUp={false}
-              hint={`${Number(me.commissionRate)}% of team profit, before Managers are paid`}
+              hint={t("{rate}% of team profit, before Managers are paid", { rate: Number(me.commissionRate) })}
             />
             <KpiCard
-              label="You keep"
+              label={t("You keep")}
               icon="money"
               value={formatSignedMoney(totals?.ownerKeeps ?? 0)}
               tone={(totals?.ownerKeeps ?? 0) < 0 ? "bad" : undefined}
-              delta={{ current: totals?.ownerKeeps ?? 0, previous: previousTotals?.ownerKeeps ?? 0, label: "vs last week" }}
-              hint={`After ${formatSignedMoney(totals?.managerCommission ?? 0)} to your Managers`}
+              delta={{ current: totals?.ownerKeeps ?? 0, previous: previousTotals?.ownerKeeps ?? 0, label: t("vs last week") }}
+              hint={t("After {amount} to your Managers", { amount: formatSignedMoney(totals?.managerCommission ?? 0) })}
             />
           </div>
 
-          <Panel title="Daily team profit" icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">Commissions</Link>}>
+          <Panel title={t("Daily team profit")} icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
             <BarChart
               points={chart}
               summary={
                 <>
                   <strong className={weekNet < 0 ? "is-bad" : undefined}>{formatSignedMoney(weekNet)}</strong>
-                  <span>over the last 7 days</span>
+                  <span>{t("over the last 7 days")}</span>
                 </>
               }
             />
@@ -356,15 +363,15 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
         </div>
 
         <aside className="overview-rail">
-          <Panel title="Risk right now" icon="risk" action={<Link href="/dashboard/risk" className="panel-link">Risk</Link>}>
+          <Panel title={t("Risk right now")} icon="risk" action={<Link href="/dashboard/risk" className="panel-link">{t("Risk")}</Link>}>
             {risk ? (
               <div className="stack-tight">
                 <Facts
                   rows={[
-                    { label: "Open bets", value: risk.totals.openBets },
-                    { label: "Staked on them", value: formatMoney(risk.totals.staked) },
-                    { label: "Worst case payout", value: <span className="strong">{formatMoney(risk.totals.worstCase)}</span> },
-                    { label: "Payout cap", value: risk.cap === null ? "None set" : formatMoney(risk.cap) },
+                    { label: t("Open bets"), value: risk.totals.openBets },
+                    { label: t("Staked on them"), value: formatMoney(risk.totals.staked) },
+                    { label: t("Worst case payout"), value: <span className="strong">{formatMoney(risk.totals.worstCase)}</span> },
+                    { label: t("Payout cap"), value: risk.cap === null ? t("None set") : formatMoney(risk.cap) },
                   ]}
                 />
                 {riskiest.length > 0 ? (
@@ -373,89 +380,93 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
                       <li key={event.id}>
                         <div>
                           <strong>{event.name}</strong>
-                          <span>{event.worst.selection} · {event.worst.market}</span>
+                          <span>{ts(event.worst.selection)} · {ts(event.worst.market)}</span>
                         </div>
                         <span className="num">{formatMoney(event.worst.payout)}</span>
-                        {risk.cap ? <Meter share={event.worst.payout / risk.cap} label={`${event.name} against the payout cap`} /> : null}
+                        {risk.cap ? <Meter share={event.worst.payout / risk.cap} label={t("{match} against the payout cap", { match: event.name })} /> : null}
                       </li>
                     ))}
                   </ul>
                 ) : null}
               </div>
             ) : (
-              <p className="panel-empty">No open bets right now.</p>
+              <p className="panel-empty">{t("No open bets right now.")}</p>
             )}
           </Panel>
-          <Panel title="Needs your attention" icon="inbox">
+          <Panel title={t("Needs your attention")} icon="inbox">
             <AttentionList
               items={[
-                { label: "Delegations to approve", count: pending?.length ?? 0, href: "/dashboard/finance" },
-                { label: "Low-balance alerts", count: notifications.lowBalance, href: "/dashboard/users" },
+                { label: t("Delegations to approve"), count: pending?.length ?? 0, href: "/dashboard/finance" },
+                { label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/users" },
               ]}
             />
           </Panel>
-          <Panel title="Latest updates" icon="bell" flush>
+          <Panel title={t("Latest updates")} icon="bell" flush>
             <ActivityFeed items={notifications.latest} now={now} />
           </Panel>
         </aside>
       </div>
 
       <Panel
-        title="Managers this week"
+        title={t("Managers this week")}
         icon="users"
         flush
-        action={<span className="panel-meta">{managers} Managers · {players} Players · {formatMoney(teamBalance)} delegated</span>}
+        action={
+          <span className="panel-meta">
+            {tn(managers, "{count} Manager", "{count} Managers")} · {tn(players, "{count} Player", "{count} Players")} · {t("{amount} given out", { amount: formatMoney(teamBalance) })}
+          </span>
+        }
       >
         {week && (week.managers.length > 0 || directPlayers.length > 0) ? (
           <table className="data-table">
             <thead>
               <tr>
-                <th scope="col">Manager</th>
-                <th scope="col" className="num">Rate</th>
-                <th scope="col" className="num">Players</th>
-                <th scope="col" className="num">Turnover</th>
-                <th scope="col" className="num">Profit</th>
-                <th scope="col" className="num">You pay them</th>
-                <th scope="col">Status</th>
+                <th scope="col">{t("Manager")}</th>
+                <th scope="col" className="num">{t("Rate")}</th>
+                <th scope="col" className="num">{t("Players")}</th>
+                <th scope="col" className="num">{t("Turnover")}</th>
+                <th scope="col" className="num">{t("Profit")}</th>
+                <th scope="col" className="num">{t("You pay them")}</th>
+                <th scope="col">{t("Status")}</th>
               </tr>
             </thead>
             <tbody>
               {week.managers.map((manager) => (
                 <tr key={manager.id}>
-                  <th scope="row" data-label="Manager">
+                  <th scope="row" data-label={t("Manager")}>
                     <span className="person">
                       <span className="person-avatar" aria-hidden="true">{manager.username.slice(0, 2).toUpperCase()}</span>
                       {manager.username}
                     </span>
                   </th>
-                  <td className="num" data-label="Rate">{manager.commissionRate}%</td>
-                  <td className="num" data-label="Players">{manager.players.length}</td>
-                  <td className="num" data-label="Turnover">{formatMoney(manager.staked)}</td>
-                  <td className={`num ${signedTone(manager.net)}`} data-label="Profit">{formatSignedMoney(manager.net)}</td>
-                  <td className="num strong" data-label="You pay them">{formatSignedMoney(manager.commission)}</td>
-                  <td data-label="Status"><StatusDot status={manager.status} /></td>
+                  <td className="num" data-label={t("Rate")}>{manager.commissionRate}%</td>
+                  <td className="num" data-label={t("Players")}>{manager.players.length}</td>
+                  <td className="num" data-label={t("Turnover")}>{formatMoney(manager.staked)}</td>
+                  <td className={`num ${signedTone(manager.net)}`} data-label={t("Profit")}>{formatSignedMoney(manager.net)}</td>
+                  <td className="num strong" data-label={t("You pay them")}>{formatSignedMoney(manager.commission)}</td>
+                  <td data-label={t("Status")}><StatusDot status={manager.status} /></td>
                 </tr>
               ))}
               {directPlayers.length > 0 ? (
                 <tr className="is-muted-row">
-                  <th scope="row" data-label="Manager">
+                  <th scope="row" data-label={t("Manager")}>
                     <span className="person">
                       <span className="person-avatar" aria-hidden="true">—</span>
-                      Your own Players
+                      {t("Your own Players")}
                     </span>
                   </th>
-                  <td className="num" data-label="Rate">—</td>
-                  <td className="num" data-label="Players">{directPlayers.length}</td>
-                  <td className="num" data-label="Turnover">{formatMoney(directPlayers.reduce((total, player) => total + player.staked, 0))}</td>
-                  <td className="num" data-label="Profit">{formatSignedMoney(directPlayers.reduce((total, player) => total + player.net, 0))}</td>
-                  <td className="num" data-label="You pay them">—</td>
-                  <td data-label="Status" />
+                  <td className="num" data-label={t("Rate")}>—</td>
+                  <td className="num" data-label={t("Players")}>{directPlayers.length}</td>
+                  <td className="num" data-label={t("Turnover")}>{formatMoney(directPlayers.reduce((total, player) => total + player.staked, 0))}</td>
+                  <td className="num" data-label={t("Profit")}>{formatSignedMoney(directPlayers.reduce((total, player) => total + player.net, 0))}</td>
+                  <td className="num" data-label={t("You pay them")}>—</td>
+                  <td data-label={t("Status")} />
                 </tr>
               ) : null}
             </tbody>
           </table>
         ) : (
-          <p className="panel-empty">No Managers yet. Add one from the Users page.</p>
+          <p className="panel-empty">{t("No Managers yet. Add one from the Users page.")}</p>
         )}
       </Panel>
     </div>
@@ -463,6 +474,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
 }
 
 async function ManagerOverview({ token, me, now }: { token: string; me: MeResponse; now: Date }) {
+  const { t, tn, date } = getT();
   const { thisWeek, lastWeek } = periods(now);
   const [users, notifications, week, previous, history] = await Promise.all([
     apiFetch<UserRow[]>("/users", token),
@@ -480,103 +492,107 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
   const limit = Number(me.balanceLimit);
   const weeks = [...(history?.weeks ?? [])].reverse();
   const chart: BarPoint[] = weeks.map((row, index) => ({
-    label: index === weeks.length - 1 ? "This wk" : shortDateFormat.format(new Date(row.from)),
+    label: index === weeks.length - 1 ? t("This wk") : date(row.from, SHORT_DATE),
     value: row.commission,
     current: index === weeks.length - 1,
-    detail: `${formatSignedMoney(row.commission)} earned`,
+    detail: t("{amount} earned", { amount: formatSignedMoney(row.commission) }),
   }));
   const eightWeeks = weeks.reduce((total, row) => total + row.commission, 0);
   const sortedPlayers = [...players].sort((a, b) => (results.get(b.id)?.staked ?? 0) - (results.get(a.id)?.staked ?? 0));
 
   return (
     <div className="overview">
-      <PageHeader username={me.username} now={now} subtitle="Your Players, their balances, and what you've earned this week." />
+      <PageHeader username={me.username} now={now} subtitle={t("Your Players, their balances, and what you've earned this week.")} />
 
       <div className="overview-layout">
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label="Your commission"
+              label={t("Your commission")}
               icon="money"
               value={formatSignedMoney(week?.totals.commission ?? 0)}
               tone={(week?.totals.commission ?? 0) < 0 ? "bad" : undefined}
               spark={weeks.map((row) => row.commission)}
-              delta={{ current: week?.totals.commission ?? 0, previous: previous?.totals.commission ?? 0, label: "vs last week" }}
-              hint={`${Number(me.commissionRate)}% of the profit from your Players${week?.paidBy ? `, paid by ${week.paidBy}` : ""}`}
+              delta={{ current: week?.totals.commission ?? 0, previous: previous?.totals.commission ?? 0, label: t("vs last week") }}
+              hint={
+                week?.paidBy
+                  ? t("{rate}% of the profit from your Players, paid by {name}", { rate: Number(me.commissionRate), name: week.paidBy })
+                  : t("{rate}% of the profit from your Players", { rate: Number(me.commissionRate) })
+              }
             />
             <KpiCard
-              label="Profit from your Players"
+              label={t("Profit from your Players")}
               icon="profit"
               value={formatSignedMoney(week?.totals.net ?? 0)}
               tone={(week?.totals.net ?? 0) < 0 ? "bad" : undefined}
-              delta={{ current: week?.totals.net ?? 0, previous: previous?.totals.net ?? 0, label: "vs last week" }}
-              hint={`${formatMoney(week?.totals.staked ?? 0)} staked on ${week?.totals.bets ?? 0} bets`}
+              delta={{ current: week?.totals.net ?? 0, previous: previous?.totals.net ?? 0, label: t("vs last week") }}
+              hint={tn(week?.totals.bets ?? 0, "{amount} staked on {count} bet", "{amount} staked on {count} bets", { amount: formatMoney(week?.totals.staked ?? 0) })}
             />
             <KpiCard
-              label="Your balance"
+              label={t("Your balance")}
               icon="wallet"
               value={formatMoney(balance)}
               hint={
                 limit > 0 ? (
                   <>
-                    <Meter share={balance / limit} label="Balance used against your limit" />
-                    <span className="kpi-hint-line">Limit {formatMoney(limit)}</span>
+                    <Meter share={balance / limit} label={t("Balance used against your limit")} />
+                    <span className="kpi-hint-line">{t("Limit {amount}", { amount: formatMoney(limit) })}</span>
                   </>
                 ) : (
-                  "Delegated by your Owner"
+                  t("Given to you by your Owner")
                 )
               }
             />
           </div>
 
-          <Panel title="Your commission by week" icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">Commissions</Link>}>
+          <Panel title={t("Your commission by week")} icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
             {chart.length > 0 ? (
               <BarChart
                 points={chart}
                 summary={
                   <>
                     <strong className={eightWeeks < 0 ? "is-bad" : undefined}>{formatSignedMoney(eightWeeks)}</strong>
-                    <span>over the last {chart.length} weeks</span>
+                    <span>{tn(chart.length, "over the last {count} week", "over the last {count} weeks")}</span>
                   </>
                 }
               />
             ) : (
-              <p className="panel-empty">No settled bets yet.</p>
+              <p className="panel-empty">{t("No settled bets yet.")}</p>
             )}
           </Panel>
         </div>
 
         <aside className="overview-rail">
-          <Panel title="Your team" icon="users" action={<Link href="/dashboard/users" className="panel-link">Players</Link>}>
+          <Panel title={t("Your team")} icon="users" action={<Link href="/dashboard/users" className="panel-link">{t("Players")}</Link>}>
             <Facts
               rows={[
-                { label: "Players", value: players.length },
-                { label: "Suspended", value: suspended },
-                { label: "Their balances", value: formatMoney(playerBalances) },
-                { label: "Your Owner", value: me.parent?.username ?? "—" },
+                { label: t("Players"), value: players.length },
+                { label: t("Suspended"), value: suspended },
+                { label: t("Their balances"), value: formatMoney(playerBalances) },
+                { label: t("Your Owner"), value: me.parent?.username ?? "—" },
               ]}
             />
           </Panel>
-          <Panel title="Needs your attention" icon="inbox">
-            <AttentionList items={[{ label: "Low-balance alerts", count: notifications.lowBalance, href: "/dashboard/users" }]} />
+          <Panel title={t("Needs your attention")} icon="inbox">
+            <AttentionList items={[{ label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/users" }]} />
           </Panel>
-          <Panel title="Latest updates" icon="bell" flush>
+          <Panel title={t("Latest updates")} icon="bell" flush>
             <ActivityFeed items={notifications.latest} now={now} />
           </Panel>
         </aside>
       </div>
 
-      <Panel title="Players this week" icon="users" flush action={<Link href="/dashboard/users" className="panel-link">Manage Players</Link>}>
+      <Panel title={t("Players this week")} icon="users" flush action={<Link href="/dashboard/users" className="panel-link">{t("Manage Players")}</Link>}>
         {sortedPlayers.length > 0 ? (
           <table className="data-table">
             <thead>
               <tr>
-                <th scope="col">Player</th>
-                <th scope="col" className="num">Balance</th>
-                <th scope="col" className="num">Bets</th>
-                <th scope="col" className="num">Staked</th>
-                <th scope="col" className="num">Profit</th>
-                <th scope="col">Status</th>
+                <th scope="col">{t("Player")}</th>
+                <th scope="col" className="num">{t("Balance")}</th>
+                <th scope="col" className="num">{t("Bets")}</th>
+                <th scope="col" className="num">{t("Staked")}</th>
+                <th scope="col" className="num">{t("Profit")}</th>
+                <th scope="col">{t("Status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -584,24 +600,24 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
                 const result = results.get(player.id);
                 return (
                   <tr key={player.id}>
-                    <th scope="row" data-label="Player">
+                    <th scope="row" data-label={t("Player")}>
                       <Link href={`/dashboard/players/${player.id}`} className="person">
                         <span className="person-avatar" aria-hidden="true">{player.username.slice(0, 2).toUpperCase()}</span>
                         {player.username}
                       </Link>
                     </th>
-                    <td className="num" data-label="Balance">{formatMoney(Number(player.balance))}</td>
-                    <td className="num" data-label="Bets">{result?.bets ?? 0}</td>
-                    <td className="num" data-label="Staked">{formatMoney(result?.staked ?? 0)}</td>
-                    <td className={`num ${signedTone(result?.net ?? 0)}`} data-label="Profit">{formatSignedMoney(result?.net ?? 0)}</td>
-                    <td data-label="Status"><StatusDot status={player.status} /></td>
+                    <td className="num" data-label={t("Balance")}>{formatMoney(Number(player.balance))}</td>
+                    <td className="num" data-label={t("Bets")}>{result?.bets ?? 0}</td>
+                    <td className="num" data-label={t("Staked")}>{formatMoney(result?.staked ?? 0)}</td>
+                    <td className={`num ${signedTone(result?.net ?? 0)}`} data-label={t("Profit")}>{formatSignedMoney(result?.net ?? 0)}</td>
+                    <td data-label={t("Status")}><StatusDot status={player.status} /></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         ) : (
-          <p className="panel-empty">No Players yet. Add one from the Players page.</p>
+          <p className="panel-empty">{t("No Players yet. Add one from the Users page.")}</p>
         )}
       </Panel>
     </div>
@@ -609,6 +625,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
 }
 
 async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
+  const { t, date } = getT();
   const events = me.parent
     ? await apiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token).catch(() => [])
     : [];
@@ -620,21 +637,21 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
   return (
     <div className="stack player-home">
       <section className="player-hero">
-        <span className="player-hero-label">Your balance</span>
+        <span className="player-hero-label">{t("Your balance")}</span>
         <strong className="player-hero-balance">{formatMoney(Number(me.balance))}</strong>
         <div className="player-hero-meta">
-          <span className={`status-pill player-status-${me.status.toLowerCase()}`}>{me.status}</span>
+          <span className={`status-pill player-status-${me.status.toLowerCase()}`}>{me.status === "SUSPENDED" ? t("Suspended") : t("Active")}</span>
           {me.parent ? (
             <span className="muted">
-              Backed by <strong>{me.parent.username}</strong> ({me.parent.role})
+              {me.parent.role === "OWNER" ? t("Your Owner: {name}", { name: me.parent.username }) : t("Your Manager: {name}", { name: me.parent.username })}
             </span>
           ) : (
-            <span className="muted">Not yet assigned to a Manager or Owner.</span>
+            <span className="muted">{t("Not yet assigned to a Manager or Owner.")}</span>
           )}
         </div>
         {me.parent ? (
           <Link href="/dashboard/bet" className="player-hero-cta">
-            Browse matches →
+            {t("Browse matches")} →
           </Link>
         ) : null}
       </section>
@@ -642,12 +659,12 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
       {me.parent ? (
         <section className="stack">
           <div className="page-title-row">
-            <h2 style={{ margin: 0 }}>Top events</h2>
-            <Link href="/dashboard/bet">View all →</Link>
+            <h2 style={{ margin: 0 }}>{t("Top events")}</h2>
+            <Link href="/dashboard/bet">{t("View all")} →</Link>
           </div>
           {topEvents.length === 0 ? (
             <div className="card">
-              <p className="muted" style={{ margin: 0 }}>No matches open for bets right now. Check back soon.</p>
+              <p className="muted" style={{ margin: 0 }}>{t("No matches are open for bets right now. Check back soon.")}</p>
             </div>
           ) : (
             <div className="player-top-events">
@@ -657,16 +674,16 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
                   <div className="player-top-event-teams">
                     <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
                     <span>{event.homeTeam ?? event.name}</span>
-                    <span className="muted">vs</span>
+                    <span className="muted">{t("vs")}</span>
                     <span>{event.awayTeam ?? ""}</span>
                     <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
                   </div>
                   <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
                     {event.status === "LIVE"
                       ? event.elapsed === null
-                        ? "Live"
-                        : `Live ${event.elapsed}'`
-                      : `${topEventDayLabel(event.startsAt)} · ${matchTimeFormat.format(new Date(event.startsAt))}`}
+                        ? t("Live")
+                        : t("Live {minute}'", { minute: event.elapsed })
+                      : `${topEventDayLabel(event.startsAt)} · ${date(event.startsAt, MATCH_TIME)}`}
                   </span>
                 </Link>
               ))}
@@ -676,15 +693,15 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
       ) : null}
 
       <section className="stack">
-        <h2 style={{ margin: 0 }}>My Bets</h2>
+        <h2 style={{ margin: 0 }}>{t("My bets")}</h2>
         <div className="player-quick-links">
           <Link href="/dashboard/bet?tab=open" className="card player-quick-link">
-            <strong>Open</strong>
-            <span className="muted">Bets still in play</span>
+            <strong>{t("Open")}</strong>
+            <span className="muted">{t("Bets still in play")}</span>
           </Link>
           <Link href="/dashboard/bet?tab=settled" className="card player-quick-link">
-            <strong>Settled</strong>
-            <span className="muted">Wins &amp; losses</span>
+            <strong>{t("Settled")}</strong>
+            <span className="muted">{t("Wins and losses")}</span>
           </Link>
         </div>
       </section>

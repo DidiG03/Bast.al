@@ -1394,6 +1394,52 @@ table {
   font-weight: 700;
 }
 
+/* A Player with open bets: a pill on their tree row that opens the bets. */
+.tree-open-bets {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 0;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.tree-open-bets:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.tree-open-bets-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
+  animation: tree-open-bets-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tree-open-bets-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-open-bets-dot {
+    animation: none;
+  }
+}
+
+.open-bets-summary {
+  margin: 0;
+}
+
 .danger-button {
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--danger) 50%, var(--border));
@@ -3986,4 +4032,57 @@ button.odds-selection:hover,
 .odds-market-rule {
   margin: 0.35rem 0 0;
   font-size: 0.72rem;
+}
+
+.commission-paid-pill {
+  white-space: nowrap;
+}
+
+/* Error and not-found pages. Inside the dashboard they sit in the content
+   area; on their own (error-page) they're centred on the screen. */
+.error-page {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 1rem;
+  background: var(--bg);
+}
+
+.error-view {
+  display: grid;
+  place-items: center;
+  padding: 3rem 0;
+}
+
+.error-view-card {
+  width: min(100%, 30rem);
+}
+
+.error-view-ref {
+  margin: 0;
+  font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.error-view-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* SQ / EN switch in the top bar: a small text button beside the theme and
+   notifications. The admin theme restyles it with those (admin.css). */
+.language-toggle {
+  display: inline-grid;
+  min-width: 2.5rem;
+  min-height: 0;
+  place-items: center;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.role-admin .topbar-actions .language-toggle {
+  font-size: 0.72rem;
+  font-weight: 650;
 }

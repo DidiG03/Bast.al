@@ -92,6 +92,12 @@ export class AdminBetsQueryDto {
   @MaxLength(32)
   player?: string;
 
+  /** One Player exactly, by id. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  playerId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(64)

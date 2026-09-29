@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { Providers } from "../components/providers";
 import type { Theme } from "../components/theme-provider";
+import { getLang } from "../lib/i18n/server";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
@@ -25,11 +26,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const cookieTheme = cookies().get("bastal-theme")?.value;
   // No saved choice means the page follows the device's light or dark setting.
   const initialTheme: Theme | null = cookieTheme === "light" || cookieTheme === "dark" ? cookieTheme : null;
+  const lang = getLang();
 
   return (
-    <html lang="en" data-theme={initialTheme ?? undefined}>
+    <html lang={lang} data-theme={initialTheme ?? undefined}>
       <body>
-        <Providers initialTheme={initialTheme}>{children}</Providers>
+        <Providers initialTheme={initialTheme} lang={lang}>
+          {children}
+        </Providers>
       </body>
     </html>
   );

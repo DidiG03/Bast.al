@@ -8,18 +8,16 @@ import {
   type MeResponse,
 } from "../../../lib/api";
 import { LoadingSpinner } from "../../../components/loading-spinner";
+import { useI18n } from "../../../components/i18n-provider";
+import { msg } from "../../../lib/i18n/core";
 
 const roles = ["", "SUPER_ADMIN", "OWNER", "MANAGER", "PLAYER"] as const;
-
-function dateLabel(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
+const ROLE_NAMES: Record<string, string> = { "": msg("All roles"), SUPER_ADMIN: msg("Super Admin"), OWNER: msg("Owner"), MANAGER: msg("Manager"), PLAYER: msg("Player") };
 
 export function AuditLog() {
   const { getToken } = useAuth();
+  const { t, ts, date } = useI18n();
+  const dateLabel = (value: string) => date(value, { dateStyle: "medium", timeStyle: "short" });
   const [me, setMe] = useState<MeResponse | null>(null);
   const [result, setResult] = useState<AuditResponse | null>(null);
   const [actor, setActor] = useState("");
@@ -59,7 +57,7 @@ export function AuditLog() {
       setPage(nextPage);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load audit log");
+      setError(err instanceof Error ? err.message : t("Could not load audit log"));
     } finally {
       setBusy(false);
     }
@@ -72,7 +70,7 @@ export function AuditLog() {
   }, []);
 
   if (me?.role === "PLAYER")
-    return <p className="muted">Audit logs are restricted to Super Admins, Owners and Managers.</p>;
+    return <p className="muted">{t("Audit logs are restricted to Super Admins, Owners and Managers.")}</p>;
 
   return (
     <div className="stack audit-log-component">
@@ -84,44 +82,44 @@ export function AuditLog() {
         }}
       >
         <label>
-          Actor
+          {t("Done by")}
           <input
             value={actor}
             onChange={(event) => setActor(event.target.value)}
-            placeholder="Username or ID"
+            placeholder={t("Username or ID")}
           />
         </label>
         <label>
-          Target
+          {t("Done to")}
           <input
             value={target}
             onChange={(event) => setTarget(event.target.value)}
-            placeholder="Username or ID"
+            placeholder={t("Username or ID")}
           />
         </label>
         <label>
-          Action
+          {t("Action")}
           <input
             value={action}
             onChange={(event) => setAction(event.target.value)}
-            placeholder="e.g. user.update"
+            placeholder={t("e.g. user.update")}
           />
         </label>
         <label>
-          Role
+          {t("Role")}
           <select
             value={role}
             onChange={(event) => setRole(event.target.value)}
           >
             {roles.map((value) => (
               <option key={value} value={value}>
-                {value || "All roles"}
+                {t(ROLE_NAMES[value])}
               </option>
             ))}
           </select>
         </label>
         <label>
-          From
+          {t("From")}
           <input
             type="date"
             value={from}
@@ -129,7 +127,7 @@ export function AuditLog() {
           />
         </label>
         <label>
-          To
+          {t("To")}
           <input
             type="date"
             value={to}
@@ -138,7 +136,7 @@ export function AuditLog() {
         </label>
         <div className="audit-filter-actions">
           <button type="submit" disabled={busy}>
-            Apply filters
+            {t("Apply filters")}
           </button>
           <button
             type="button"
@@ -153,7 +151,7 @@ export function AuditLog() {
               load(1).catch(() => undefined);
             }}
           >
-            Clear
+            {t("Clear")}
           </button>
         </div>
       </form>
@@ -164,7 +162,7 @@ export function AuditLog() {
       ) : null}
       <section className="card audit-table-card">
         <div className="tree-header">
-          <span>{result ? `${result.total} entries` : "Audit entries"}</span>
+          <span>{result ? t("{count} entries", { count: result.total }) : t("Audit entries")}</span>
           {busy ? (
             <LoadingSpinner label="Loading audit log" size="small" />
           ) : null}
@@ -174,9 +172,9 @@ export function AuditLog() {
             result.items.map((entry) => (
               <article className="audit-row" key={entry.id}>
                 <div>
-                  <strong>{entry.action.replaceAll(".", " ")}</strong>
+                  <strong>{ts(entry.action.replaceAll(".", " "))}</strong>
                   <span className="muted">
-                    {entry.actor?.username ?? "System"}
+                    {entry.actor?.username ?? t("System")}
                     {entry.target ? ` → ${entry.target.username}` : ""}
                   </span>
                 </div>
@@ -184,13 +182,13 @@ export function AuditLog() {
                   <time className="muted" dateTime={entry.createdAt}>
                     {dateLabel(entry.createdAt)}
                   </time>
-                  <span className="muted">{entry.actor?.role ?? "System"}</span>
+                  <span className="muted">{entry.actor?.role ? t(ROLE_NAMES[entry.actor.role] ?? entry.actor.role) : t("System")}</span>
                 </div>
               </article>
             ))
           ) : (
             <p className="muted">
-              {busy ? "Loading…" : "No audit entries match these filters."}
+              {busy ? t("Loading…") : t("No audit entries match these filters.")}
             </p>
           )}
         </div>
@@ -201,17 +199,17 @@ export function AuditLog() {
               disabled={page <= 1 || busy}
               onClick={() => load(page - 1)}
             >
-              Previous
+              {t("Previous")}
             </button>
             <span className="muted">
-              Page {page} of {result.pages}
+              {t("Page {page} of {pages}", { page, pages: result.pages })}
             </span>
             <button
               className="secondary"
               disabled={page >= result.pages || busy}
               onClick={() => load(page + 1)}
             >
-              Next
+              {t("Next")}
             </button>
           </div>
         ) : null}

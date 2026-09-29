@@ -464,6 +464,7 @@ html:has(.role-admin) body {
 }
 
 .role-admin .topbar-actions .theme-toggle,
+.role-admin .topbar-actions .language-toggle,
 .role-admin .dashboard-topbar .notification-trigger {
   display: grid;
   width: 2.1rem;
@@ -480,6 +481,7 @@ html:has(.role-admin) body {
 }
 
 .role-admin .topbar-actions .theme-toggle:hover,
+.role-admin .topbar-actions .language-toggle:hover,
 .role-admin .dashboard-topbar .notification-trigger:hover {
   background: var(--a-hover);
   color: var(--a-text);
@@ -1737,6 +1739,12 @@ html:has(.role-admin) body {
   justify-content: space-between;
 }
 
+.auth-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .role-admin .auth-brand {
   gap: 0.6rem;
 }
@@ -1748,7 +1756,8 @@ html:has(.role-admin) body {
   letter-spacing: -0.01em;
 }
 
-.role-admin .auth-top .theme-toggle {
+.role-admin .auth-top .theme-toggle,
+.role-admin .auth-top .language-toggle {
   display: grid;
   width: 2.25rem;
   min-width: 0;
@@ -1761,7 +1770,8 @@ html:has(.role-admin) body {
   color: var(--a-muted);
 }
 
-.role-admin .auth-top .theme-toggle:hover {
+.role-admin .auth-top .theme-toggle:hover,
+.role-admin .auth-top .language-toggle:hover {
   background: var(--a-hover);
   color: var(--a-text);
 }

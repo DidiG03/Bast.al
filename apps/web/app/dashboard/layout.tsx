@@ -10,10 +10,13 @@ import { ThemeToggle } from "../../components/theme-toggle";
 import { UserMenu } from "../../components/user-menu";
 import { apiFetch, type MeResponse } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
+import { LanguageToggle } from "../../components/language-toggle";
+import { getT } from "../../lib/i18n/server";
 
 export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const { t } = getT();
   const { getToken, userId } = await auth();
   if (!userId) redirect("/sign-in");
 
@@ -37,12 +40,12 @@ export default async function DashboardLayout({
         </div>
         <div className="card stack">
           <h1 style={{ margin: 0 }}>
-            {apiDown ? "API unavailable" : "Account not provisioned"}
+            {t(apiDown ? "The server isn't responding" : "Your account isn't set up yet")}
           </h1>
           <p className="muted">
             {apiDown
-              ? "Could not reach the Nest API on port 4000. Restart npm run dev and refresh."
-              : "Your Clerk session is valid, but there is no local user row yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours."}
+              ? t("Bast.al can't reach its server right now. Wait a moment and refresh the page.")
+              : t("You're signed in, but there's no Bast.al account for you yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours.")}
           </p>
         </div>
       </main>
@@ -69,12 +72,13 @@ export default async function DashboardLayout({
             </Link>
             {isPlayer ? null : <DashboardTrail />}
             {isPlayer ? (
-              <Link href="/dashboard" className="player-balance-chip" title="Your balance, delegated by your Manager or Owner">
+              <Link href="/dashboard" className="player-balance-chip" title={t("Your balance, given to you by your Manager or Owner")}>
                 <span className="player-balance-chip-icon" aria-hidden="true">$</span>
                 {formatMoney(Number(me.balance))}
               </Link>
             ) : null}
             <div className="topbar-actions">
+              <LanguageToggle />
               {isPlayer ? null : <ThemeToggle />}
               <NotificationCenter />
             </div>

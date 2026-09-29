@@ -57,6 +57,16 @@ function dateRange(from?: string, to?: string) {
   return from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {};
 }
 
+/**
+ * Extra work done inside a credit move's own database transaction, so it
+ * commits or rolls back together with the money: `before` runs ahead of any
+ * change (to lock and check), `after` once the ledger entry exists.
+ */
+export type LedgerHooks = {
+  before?: (tx: Prisma.TransactionClient) => Promise<void>;
+  after?: (tx: Prisma.TransactionClient, transactionId: string) => Promise<void>;
+};
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -542,12 +552,12 @@ export class UsersService {
       ...entry,
       // Signed from this account's point of view: received = positive, given away = negative.
       amount: entry.toUserId === id ? Number(entry.amount) : -Number(entry.amount),
-      counterparty: entry.toUserId === id ? entry.fromUser?.username ?? "Platform" : entry.toUser.username,
+      counterparty: entry.toUserId === id ? entry.fromUser?.username ?? noCounterparty(entry.type) : entry.toUser.username,
     }));
   }
 
   /** Give credit to a direct child: Owner→Manager, Owner→Player, or Manager→Player. Super Admin→Owner prints (no source deduction). */
-  async delegateCredit(actor: Actor, id: string, dto: DelegateCreditDto, ipAddress?: string) {
+  async delegateCredit(actor: Actor, id: string, dto: DelegateCreditDto, ipAddress?: string, hooks?: LedgerHooks) {
     const target = await this.prisma.user.findUnique({ where: { id } });
     if (!target) throw new NotFoundException("User not found");
     if (!canDelegateTo(actor, target)) {
@@ -561,17 +571,22 @@ export class UsersService {
     const requiresApproval = !isPrint && dto.amount > (await this.approvalThreshold(actor));
 
     if (requiresApproval) {
-      const pending = await this.prisma.balanceTransaction.create({
-        data: {
-          fromUserId: isPrint ? null : actor.id,
-          toUserId: id,
-          actorId: actor.id,
-          type: BalanceTransactionType.DELEGATION,
-          amount: dto.amount,
-          reason: dto.reason,
-          status: BalanceTransactionStatus.PENDING,
-        },
-        select: { id: true, status: true, amount: true, type: true, reason: true, createdAt: true },
+      const pending = await this.prisma.$transaction(async (tx) => {
+        await hooks?.before?.(tx);
+        const entry = await tx.balanceTransaction.create({
+          data: {
+            fromUserId: isPrint ? null : actor.id,
+            toUserId: id,
+            actorId: actor.id,
+            type: BalanceTransactionType.DELEGATION,
+            amount: dto.amount,
+            reason: dto.reason,
+            status: BalanceTransactionStatus.PENDING,
+          },
+          select: { id: true, status: true, amount: true, type: true, reason: true, createdAt: true },
+        });
+        await hooks?.after?.(tx, entry.id);
+        return entry;
       });
       await this.audit.log({ actorId: actor.id, action: "user.delegation_pending", targetId: id, ipAddress, metadata: { transactionId: pending.id, amount: dto.amount } });
       // The initiator's own parent is the natural approver (Owner for a
@@ -590,6 +605,7 @@ export class UsersService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      await hooks?.before?.(tx);
       if (!isPrint) {
         // Real transfer: the giver must currently hold at least this much.
         // Guarded atomic UPDATE — see delegateCreditGuardedUpdate note below.
@@ -616,7 +632,7 @@ export class UsersService {
         throw new BadRequestException("This would exceed the recipient's balance limit");
       }
 
-      await tx.balanceTransaction.create({
+      const entry = await tx.balanceTransaction.create({
         data: {
           fromUserId: isPrint ? null : actor.id,
           toUserId: id,
@@ -625,7 +641,9 @@ export class UsersService {
           amount: dto.amount,
           reason: dto.reason,
         },
+        select: { id: true },
       });
+      await hooks?.after?.(tx, entry.id);
       return tx.user.findUniqueOrThrow({ where: { id }, select: publicUserSelect });
     });
 
@@ -819,7 +837,7 @@ export class UsersService {
    * Works on suspended accounts too, since winding one down is the main use.
    * Super Admin←Owner retires the credit, since Super Admin holds no balance.
    */
-  async reclaimCredit(actor: Actor, id: string, dto: ReclaimCreditDto, ipAddress?: string) {
+  async reclaimCredit(actor: Actor, id: string, dto: ReclaimCreditDto, ipAddress?: string, hooks?: LedgerHooks) {
     const target = await this.prisma.user.findUnique({ where: { id } });
     if (!target) throw new NotFoundException("User not found");
     if (!canDelegateTo(actor, target)) {
@@ -828,6 +846,7 @@ export class UsersService {
     const isRetire = actor.role === Role.SUPER_ADMIN;
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      await hooks?.before?.(tx);
       const childRows = await tx.$queryRaw<{ id: string }[]>`
         UPDATE users
         SET balance = balance - ${dto.amount}::numeric
@@ -842,7 +861,7 @@ export class UsersService {
       if (!isRetire) {
         await tx.$executeRaw`UPDATE users SET balance = balance + ${dto.amount}::numeric WHERE id = ${actor.id}`;
       }
-      await tx.balanceTransaction.create({
+      const entry = await tx.balanceTransaction.create({
         data: {
           fromUserId: id,
           toUserId: actor.id,
@@ -851,7 +870,9 @@ export class UsersService {
           amount: dto.amount,
           reason: dto.reason,
         },
+        select: { id: true },
       });
+      await hooks?.after?.(tx, entry.id);
       return tx.user.findUniqueOrThrow({ where: { id }, select: publicUserSelect });
     });
 
@@ -909,7 +930,7 @@ export class UsersService {
           ...entry,
           // Signed from this account's point of view, like the ledger.
           amount: incoming ? Number(entry.amount) : -Number(entry.amount),
-          actor: { username: incoming ? fromUser?.username ?? "Platform" : toUser.username },
+          actor: { username: incoming ? fromUser?.username ?? noCounterparty(entry.type) : toUser.username },
         };
       }),
     };
@@ -1425,4 +1446,9 @@ export class UsersService {
 
     return user;
   }
+}
+
+/** Who a ledger entry with no other account came from: a bet, or a Super Admin adjustment. */
+function noCounterparty(type: BalanceTransactionType): string {
+  return type === BalanceTransactionType.BET_STAKE || type === BalanceTransactionType.BET_SETTLEMENT ? "Betting" : "Platform";
 }

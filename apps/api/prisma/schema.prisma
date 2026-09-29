@@ -31,6 +31,13 @@ enum BalanceTransactionType {
   /// Super-Admin-only correction. fromUserId is always null (nothing is
   /// deducted from anyone else); amount may be negative.
   ADJUSTMENT
+  /// A Player placing a bet: the stake leaving their balance. toUserId is the
+  /// Player, fromUserId is null, amount is negative, betId is set.
+  BET_STAKE
+  /// Settlement moving a bet's money: winnings, a refund, or a correction
+  /// taking back a payout. toUserId is the Player, amount is the change
+  /// (negative when a payout is taken back), betId is set.
+  BET_SETTLEMENT
 }
 
 enum NotificationType {
@@ -123,6 +130,7 @@ model User {
   bets                   Bet[]
   bettingLimit           BettingLimit?
   oddsOverrides          OddsOverride[]
+  commissionPayouts      CommissionPayout[]
 
   @@index([parentId])
   @@index([role])
@@ -210,11 +218,16 @@ model BalanceTransaction {
   reason       String
   status       BalanceTransactionStatus @default(APPROVED)
   approvedAt   DateTime?                @map("approved_at")
+  /// BET_STAKE and BET_SETTLEMENT only: the bet this money moved for.
+  betId        String?                  @map("bet_id")
+  bet          Bet?                     @relation(fields: [betId], references: [id], onDelete: SetNull)
   createdAt    DateTime                 @default(now()) @map("created_at")
+  commissionPayout CommissionPayout?
 
   @@index([toUserId, createdAt])
   @@index([fromUserId])
   @@index([status])
+  @@index([betId])
   @@map("balance_transactions")
 }
 
@@ -412,6 +425,8 @@ model Bet {
   /// `odds` is the combined price locked when the bet was placed.
   kind        BetKind    @default(SINGLE)
   legs        BetLeg[]
+  /// The stake and every settlement move, in the Player's balance ledger.
+  ledger      BalanceTransaction[]
 
   @@index([playerId, settledAt])
   @@index([status, settledAt])
@@ -489,4 +504,26 @@ model IdempotencyKey {
   @@unique([userId, key])
   @@index([createdAt])
   @@map("idempotency_keys")
+}
+
+/// A commission paid for one period: Super Admin collecting their cut from an
+/// Owner (a RECLAIM), or an Owner paying a Manager (a DELEGATION). Recorded in
+/// the same database transaction as the money moving, so a period can never be
+/// paid twice: a new payout whose period overlaps an existing one is refused,
+/// unless that one's transaction was rejected.
+model CommissionPayout {
+  id            String             @id @default(cuid())
+  /// The Owner who paid Super Admin, or the Manager who was paid.
+  userId        String             @map("user_id")
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// [periodFrom, periodTo): the settled bets this commission was worked out from.
+  periodFrom    DateTime           @map("period_from")
+  periodTo      DateTime           @map("period_to")
+  amount        Decimal            @db.Decimal(12, 2)
+  transactionId String             @unique @map("transaction_id")
+  transaction   BalanceTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  @@index([userId, periodFrom])
+  @@map("commission_payouts")
 }

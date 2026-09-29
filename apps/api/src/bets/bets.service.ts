@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from "@nestjs/common";
-import { BetKind, BetStatus, Prisma, Role, UserStatus } from "@prisma/client";
+import { BalanceTransactionType, BetKind, BetStatus, Prisma, Role, UserStatus } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { BettingLimitsService } from "../commissions/betting-limits.service";
@@ -242,6 +242,17 @@ export class BetsService {
         );
         for (const leg of pricedAcca.legs) await tx.event.update({ where: { id: leg.eventId }, data: { volume: { increment: pricedAcca.stake } } });
       }
+      // Every stake in the Player's balance ledger, so their statement adds up to their balance.
+      await tx.balanceTransaction.createMany({
+        data: rows.map((bet) => ({
+          toUserId: actor.id,
+          actorId: actor.id,
+          type: BalanceTransactionType.BET_STAKE,
+          amount: bet.stake.negated(),
+          reason: `Bet placed: ${bet.description ?? "bet"}`,
+          betId: bet.id,
+        })),
+      });
       return rows;
     });
 

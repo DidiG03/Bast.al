@@ -6,6 +6,7 @@ import { apiFetch, type UserRow } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
 import { LoadingSpinner } from "./loading-spinner";
+import { useI18n } from "./i18n-provider";
 
 const PRESETS = [10, 20, 50, 100, 200, 500];
 
@@ -22,6 +23,7 @@ type Props = {
 /** One tap to send a Player a preset amount of credit. */
 export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }: Props) {
   const { getToken } = useAuth();
+  const { t } = useI18n();
   const moneyKey = useIdempotencyKey();
   const [custom, setCustom] = useState("");
   const [sending, setSending] = useState<number | null>(null);
@@ -33,18 +35,19 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
     setSending(amount);
     try {
       const token = await getToken();
-      if (!token) throw new Error("Not signed in");
+      if (!token) throw new Error(t("You're not signed in"));
       const path = `/users/${player.id}/delegate`;
+      // Stored in English like every ledger reason, and shown in the reader's language.
       const body = JSON.stringify({ amount, reason: "Quick top-up" });
       const result = await apiFetch<{ requiresApproval?: boolean }>(path, token, { method: "POST", body, idempotencyKey: moneyKey.keyFor(path, body) });
       moneyKey.done();
       onDone(
         result.requiresApproval
-          ? `${formatMoney(amount)} to ${player.username} is waiting for approval.`
-          : `Sent ${formatMoney(amount)} to ${player.username}.`,
+          ? t("{amount} to {name} is waiting for approval.", { amount: formatMoney(amount), name: player.username })
+          : t("Sent {amount} to {name}.", { amount: formatMoney(amount), name: player.username }),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Top-up failed");
+      setError(err instanceof Error ? err.message : t("Top-up failed"));
     } finally {
       setSending(null);
     }
@@ -54,7 +57,7 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
     event.preventDefault();
     const amount = Number(custom);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setError("Enter an amount above $0");
+      setError(t("Enter an amount above $0"));
       return;
     }
     send(Math.round(amount * 100) / 100).catch(() => undefined);
@@ -64,11 +67,11 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="modal card top-up-sheet" role="dialog" aria-modal="true" aria-labelledby="top-up-title">
         <div className="modal-header">
-          <h2 id="top-up-title">Top up {player.username}</h2>
-          <button type="button" className="modal-close secondary" onClick={onClose} aria-label="Close">×</button>
+          <h2 id="top-up-title">{t("Top up {name}", { name: player.username })}</h2>
+          <button type="button" className="modal-close secondary" onClick={onClose} aria-label={t("Close")}>×</button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          Their balance: <strong>{formatMoney(player.balance)}</strong> · Yours: <strong>{formatMoney(available)}</strong>
+          {t("Their balance:")} <strong>{formatMoney(player.balance)}</strong> · {t("Yours:")} <strong>{formatMoney(available)}</strong>
         </p>
         <div className="top-up-presets">
           {PRESETS.map((amount) => (
@@ -85,14 +88,14 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
         </div>
         <form className="top-up-custom" onSubmit={sendCustom}>
           <label>
-            Other amount
+            {t("Other amount")}
             <input type="number" min="0.01" max="1000000" step="0.01" inputMode="decimal" placeholder="0.00" value={custom} onChange={(event) => setCustom(event.target.value)} />
           </label>
-          <button type="submit" disabled={sending !== null || !custom}>Send</button>
+          <button type="submit" disabled={sending !== null || !custom}>{t("Send")}</button>
         </form>
         <p className="muted top-up-note">
-          Sends straight away. Anything over {formatMoney(approvalLimit)} waits for approval.
-          {headroom < PRESETS[0] ? " This player is at their balance limit." : ""}
+          {t("Sends straight away. Anything over {amount} waits for approval.", { amount: formatMoney(approvalLimit) })}
+          {headroom < PRESETS[0] ? ` ${t("This Player is at their balance limit.")}` : ""}
         </p>
         {error ? <p className="error-text" role="alert">{error}</p> : null}
       </section>

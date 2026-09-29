@@ -3,8 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserProfilePanel } from "../../../components/user-profile-panel";
 import { apiFetch, type MeResponse } from "../../../lib/api";
+import { getT } from "../../../lib/i18n/server";
 
 export default async function TwoFactorPage() {
+  const { t } = getT();
   const { getToken, userId } = await auth();
   if (!userId) redirect("/sign-in");
   const token = await getToken();
@@ -28,18 +30,15 @@ export default async function TwoFactorPage() {
         <span className="brand">Bast.al</span>
       </div>
       <div className="card stack auth-card auth-card-wide">
-        <h1 style={{ margin: 0 }}>Two-factor authentication required</h1>
+        <h1 style={{ margin: 0 }}>{t("Two-step verification required")}</h1>
         <p className="muted" style={{ margin: 0 }}>
-          Role <strong>{me.role}</strong> must enable TOTP before accessing the dashboard. Use the
-          Security section below to enroll an authenticator app.
+          {t("Your account needs two-step verification before you can open the dashboard. Add an authenticator app in the Security section below.")}
         </p>
         <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
-          Note: Clerk MFA requires a Pro plan. On Hobby, keep{" "}
-          <code>MFA_ENFORCEMENT_ENABLED=false</code> until you upgrade, or this gate cannot be
-          satisfied.
+          {t("Note: Clerk's two-step verification needs its Pro plan. On the Hobby plan, keep MFA_ENFORCEMENT_ENABLED=false until you upgrade, or this step can't be completed.")}
         </p>
         <UserProfilePanel />
-        <Link href="/dashboard">Continue to dashboard</Link>
+        <Link href="/dashboard">{t("Continue to the dashboard")}</Link>
       </div>
     </main>
   );

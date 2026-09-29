@@ -22,7 +22,7 @@ export default async function TwoFactorPage() {
   }
 
   return (
-    <main className="auth-page">
+    <main className="role-admin auth-page">
       <div className="auth-brand">
         <span className="sidebar-logo" aria-hidden="true">B</span>
         <span className="brand">Bast.al</span>

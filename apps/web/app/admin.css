@@ -502,7 +502,7 @@ html:has(.role-admin) body {
   box-shadow: var(--a-shadow);
 }
 
-:where(.role-admin) button {
+:where(.role-admin) button:not([class*="cl-"]) {
   border-radius: 8px;
   background: var(--a-text);
   color: var(--a-surface);
@@ -514,7 +514,7 @@ html:has(.role-admin) body {
     opacity 120ms ease;
 }
 
-:where(.role-admin) button:not(:disabled):hover {
+:where(.role-admin) button:not([class*="cl-"]):not(:disabled):hover {
   opacity: 0.88;
 }
 
@@ -540,7 +540,7 @@ html:has(.role-admin) body {
   color: var(--a-bad);
 }
 
-:where(.role-admin) input,
+:where(.role-admin) input:not([class*="cl-"]),
 :where(.role-admin) select,
 :where(.role-admin) textarea {
   border: 1px solid var(--a-border);
@@ -551,7 +551,7 @@ html:has(.role-admin) body {
   box-shadow: var(--a-shadow);
 }
 
-:where(.role-admin) input:focus-visible,
+:where(.role-admin) input:not([class*="cl-"]):focus-visible,
 :where(.role-admin) select:focus-visible,
 :where(.role-admin) textarea:focus-visible {
   border-color: var(--a-border-strong);
@@ -1698,5 +1698,199 @@ html:has(.role-admin) body {
 @media (max-width: 560px) {
   .panel-meta {
     display: none;
+  }
+}
+
+/* ---------- Sign-in ---------- */
+
+.role-admin.auth-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0.5rem;
+}
+
+.auth-form-side {
+  display: flex;
+  flex-direction: column;
+  padding: calc(1.25rem + env(safe-area-inset-top)) 2rem calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+.auth-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.role-admin .auth-brand {
+  gap: 0.6rem;
+}
+
+.role-admin .auth-brand .brand {
+  color: var(--a-text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.role-admin .auth-top .theme-toggle {
+  display: grid;
+  width: 2.25rem;
+  min-width: 0;
+  height: 2.25rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--a-muted);
+}
+
+.role-admin .auth-top .theme-toggle:hover {
+  background: var(--a-hover);
+  color: var(--a-text);
+}
+
+.role-admin .auth-top .control-label {
+  display: none;
+}
+
+.auth-form-body {
+  display: flex;
+  width: 100%;
+  max-width: 22rem;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.75rem;
+  margin: 0 auto;
+  padding: 3rem 0;
+}
+
+.auth-heading h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  letter-spacing: -0.025em;
+}
+
+.auth-heading p {
+  margin: 0.45rem 0 0;
+  color: var(--a-muted);
+  font-size: 0.9rem;
+}
+
+.auth-footnote {
+  margin: 0;
+  color: var(--a-faint);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.auth-aside {
+  display: flex;
+  align-items: flex-end;
+  padding: 3rem;
+  border: 1px solid var(--a-border);
+  border-radius: 14px;
+  background:
+    radial-gradient(var(--a-border-strong) 1px, transparent 1.5px) 0 0 / 1.25rem 1.25rem,
+    var(--a-frame);
+}
+
+.auth-aside-inner {
+  width: 100%;
+  max-width: 28rem;
+  padding: 1.75rem;
+  border: 1px solid var(--a-border);
+  border-radius: 12px;
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow);
+}
+
+.auth-aside-lead {
+  margin: 0 0 1.25rem;
+  color: var(--a-text);
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.auth-points {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0;
+  padding: 1.25rem 0 0;
+  border-top: 1px dashed var(--a-border);
+  list-style: none;
+}
+
+.auth-points li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.auth-point-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--a-border);
+  border-radius: 8px;
+  background: var(--a-subtle);
+  color: var(--a-text-2);
+}
+
+.auth-point-icon .sidebar-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.auth-points strong {
+  display: block;
+  color: var(--a-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.auth-points span {
+  color: var(--a-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+/* The two-factor and recovery pages share the same quiet card. */
+.role-admin.auth-page:not(.auth-split) {
+  background: var(--a-page);
+}
+
+.role-admin.auth-page:not(.auth-split) .auth-card {
+  padding: 1.75rem;
+}
+
+@media (max-width: 900px) {
+  .role-admin.auth-split {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0;
+  }
+
+  .auth-aside {
+    display: none;
+  }
+
+  .auth-form-side {
+    padding-inline: max(1.25rem, env(safe-area-inset-left));
+  }
+
+  .auth-form-body {
+    justify-content: flex-start;
+    padding-top: 18vh;
   }
 }

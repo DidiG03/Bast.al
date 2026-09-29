@@ -506,7 +506,13 @@ html:has(.role-admin) body {
   box-shadow: var(--a-shadow);
 }
 
-:where(.role-admin) button:not([class*="cl-"]) {
+/* Plain buttons read as primary, but only as a default: the :not() sits inside
+   :where() so this carries element-level weight and never beats a class rule.
+   Outside :where() the attribute selector outranked classes like
+   .notification-backdrop, .action-menu button or .text-button, painting
+   invisible backdrops and ghost buttons as solid inverted blocks — dark in
+   light mode, white in dark mode. */
+:where(.role-admin) button:where(:not([class*="cl-"])) {
   border-radius: 8px;
   background: var(--a-text);
   color: var(--a-surface);
@@ -518,7 +524,7 @@ html:has(.role-admin) body {
     opacity 120ms ease;
 }
 
-:where(.role-admin) button:not([class*="cl-"]):not(:disabled):hover {
+:where(.role-admin) button:where(:not([class*="cl-"]):not(:disabled):hover) {
   opacity: 0.88;
 }
 

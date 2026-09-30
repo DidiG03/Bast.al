@@ -5,10 +5,12 @@ import { json, urlencoded } from "express";
 import type { IncomingMessage } from "http";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
+import { syncSchema } from "./schema-sync";
 import { initSentry } from "./sentry";
 
 async function bootstrap() {
   initSentry();
+  syncSchema();
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
     rawBody: true,

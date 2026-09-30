@@ -353,6 +353,8 @@ export type OddsSelection = {
   /** True when the Owner set this price by hand. */
   custom: boolean;
   result: "WON" | "LOST" | "VOID" | null;
+  /** Live only: the feed isn't pricing this outcome right now. */
+  suspended?: boolean;
 };
 
 export type PricePoint = { price: number; recordedAt: string };

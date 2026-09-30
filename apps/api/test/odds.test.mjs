@@ -121,6 +121,35 @@ test("every half-goal line in the live goals market gets its own market", () => 
   assert.deepEqual(parsed.markets[1].selections.map((s) => [s.name, s.odds]), [["Over 3.5", 3.4], ["Under 3.5", 1.3]]);
 });
 
+test("the wider in-play markets map onto the markets we already settle", () => {
+  const odds = [
+    { id: 48, name: "Draw No Bet", values: [{ value: "Home", odd: "1.50" }, { value: "Away", odd: "2.60" }] },
+    { id: 68, name: "Goals Odd/Even", values: [{ value: "Odd", odd: "1.90" }, { value: "Even", odd: "1.90" }] },
+    { id: 19, name: "1x2 (1st Half)", values: [{ value: "1", odd: "3.00" }, { value: "X", odd: "1.80" }, { value: "2", odd: "5.00" }] },
+    { id: 35, name: "To Win 2nd Half", values: [{ value: "Home", odd: "2.20" }, { value: "Draw", odd: "2.90", suspended: true }, { value: "Away", odd: "3.60" }] },
+    { id: 58, name: "Home Team Goals", values: [{ value: "Over", odd: "1.70", handicap: "1.5" }, { value: "Under", odd: "2.05", handicap: "1.5" }] },
+    { id: 177, name: "Over/Under (2nd Half)", values: [{ value: "Over 0.5", odd: "1.25" }, { value: "Under 0.5", odd: "3.75" }] },
+    { id: 37, name: "Total Corners", values: [{ value: "Over", odd: "1.83", handicap: "9.5" }, { value: "Under", odd: "1.83", handicap: "9.5" }] },
+    { id: 23, name: "Final Score", values: [{ value: "1:0", odd: "4.50" }, { value: "2-1", odd: "9.00" }, { value: "0:0", odd: "7.00", suspended: true }] },
+    { id: 64, name: "Half Time/Full Time", values: [{ value: "Home/Home", odd: "2.50" }, { value: "1/X", odd: "8.00" }] },
+    { id: 29, name: "Result / Both Teams To Score", values: [{ value: "Home & Yes", odd: "4.00" }, { value: "Draw/No", odd: "6.50" }] },
+    { id: 999, name: "Which team will score the 2nd goal?", values: [{ value: "Home", odd: "1.90" }] },
+  ];
+  const parsed = parseLiveOdds(liveRaw({ odds }), "Tirana", "Partizani");
+  const byKey = Object.fromEntries(parsed.markets.map((m) => [m.key, m]));
+  assert.deepEqual(Object.keys(byKey).sort(), ["corners_9_5", "correct_score", "draw_no_bet", "h1_winner", "h2_goals_0_5", "h2_winner", "home_goals_1_5", "ht_ft", "odd_even", "result_btts"]);
+  assert.deepEqual(byKey.h1_winner.selections.map((s) => [s.key, s.odds]), [["home", 3], ["draw", 1.8], ["away", 5]], "1X2 symbols count as Home/Draw/Away");
+  assert.equal(byKey.h2_winner.suspended, true, "a three-way market is off while one outcome is");
+  assert.equal(byKey.home_goals_1_5.name, "Tirana goals 1.5");
+  assert.deepEqual(byKey.correct_score.selections.map((s) => s.key), ["1-0", "2-1"], "a suspended scoreline is left out");
+  assert.equal(byKey.correct_score.suspended, false);
+  assert.deepEqual(byKey.ht_ft.selections.map((s) => [s.key, s.odds]), [["home_home", 2.5], ["home_draw", 8]], "partial markets keep what's priced");
+  assert.equal(byKey.ht_ft.suspended, false);
+  assert.deepEqual(byKey.result_btts.selections.map((s) => s.key), ["home_yes", "draw_no"]);
+  const order = parsed.markets.map((m) => m.key);
+  assert.ok(order.indexOf("draw_no_bet") < order.indexOf("h1_winner") && order.indexOf("h1_winner") < order.indexOf("corners_9_5"), "live markets keep the pre-match order");
+});
+
 test("the mock feed prices live matches and suspends them just after a goal", async () => {
   const start = Date.parse("2026-01-01T12:00:00Z");
   let now = start + 70 * 60_000; // Tirana (kick-off 50 min before start) is in the second half

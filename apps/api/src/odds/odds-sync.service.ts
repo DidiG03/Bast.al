@@ -457,6 +457,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
             update: { liveOdds },
           });
         }
+        // An outcome the feed no longer prices (0–0 once a goal is in) loses its live price, so it can't be bet on.
+        await tx.selection.updateMany({ where: { marketId: row.id, key: { notIn: market.selections.map((s) => s.key) } }, data: { liveOdds: null } });
       }
     });
   }

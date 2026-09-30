@@ -313,71 +313,148 @@ export function parseMarkets(raw: RawOdds, homeTeam: string, awayTeam: string, b
   return markets.sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-type LiveMarketSpec = {
-  key: string;
-  name: string;
-  values: Array<[feedValues: string[], key: string, name: (home: string, away: string) => string]>;
-};
+type LiveValue = RawLiveOdds["odds"][number]["values"][number];
 
 /**
- * In-play markets use different bet names from pre-match ones, so they're
- * matched on their own names (compared case-insensitively) onto the same
- * market and selection keys. Anything else in the feed is ignored.
+ * How one in-play bet maps onto our markets. `order` names the pre-match bet
+ * the market sits with, so live-only markets line up with the rest.
+ * - fixed: known outcomes; `partial` markets (many outcomes, some of which
+ *   become impossible) stay open with just the outcomes still priced;
+ * - lines: over/under, one `{prefix}_X_5` market per .5 line;
+ * - scores: correct score, every scoreline the feed prices.
  */
-const LIVE_MARKETS: Record<string, LiveMarketSpec> = {
-  "fulltime result": {
-    key: "match_winner",
-    name: "Match winner",
-    values: [
-      [["Home", "1"], "home", (home) => home],
-      [["Draw", "X"], "draw", () => "Draw"],
-      [["Away", "2"], "away", (_home, away) => away],
-    ],
-  },
-  "double chance": {
-    key: "double_chance",
-    name: "Double chance",
-    values: [
-      [["Home/Draw", "1X"], "home_draw", (home) => `${home} or draw`],
-      [["Home/Away", "12"], "home_away", (home, away) => `${home} or ${away}`],
-      [["Draw/Away", "X2"], "draw_away", (_home, away) => `Draw or ${away}`],
-    ],
-  },
-  "both teams to score": {
-    key: "btts",
-    name: "Both teams score",
-    values: [
-      [["Yes"], "yes", () => "Yes"],
-      [["No"], "no", () => "No"],
-    ],
-  },
-};
-/** In-play goals markets: every .5 line in them becomes a `goals_X_5` market, the same ones offered before kick-off. */
-const LIVE_GOAL_LINES = new Set(["over/under line", "match goals"]);
-const LIVE_ORDER = ["match_winner", "double_chance", "goals", "btts"];
+type LiveSpec =
+  | { kind: "fixed"; key: string; name: Namer; order: string; values: Array<[aliases: string[], key: string, name: Namer]>; partial?: boolean }
+  | { kind: "lines"; prefix: string; name: (home: string, away: string, line: string) => string; order: string }
+  | { kind: "scores"; key: string; name: string; order: string };
+
+const SIDE_ALIASES: Record<string, string[]> = { home: ["home", "1"], draw: ["draw", "x"], away: ["away", "2"] };
+const liveOutcomes: Array<[string[], string, Namer]> = [
+  [SIDE_ALIASES.home, "home", (home) => home],
+  [SIDE_ALIASES.draw, "draw", () => "Draw"],
+  [SIDE_ALIASES.away, "away", (_home, away) => away],
+];
+const liveYesNo: Array<[string[], string, Namer]> = [
+  [["yes"], "yes", () => "Yes"],
+  [["no"], "no", () => "No"],
+];
+const liveEitherTeam: Array<[string[], string, Namer]> = [
+  [SIDE_ALIASES.home, "home", (home) => home],
+  [SIDE_ALIASES.away, "away", (_home, away) => away],
+];
+const liveDoubleChance: Array<[string[], string, Namer]> = [
+  [["home/draw", "1x", "1/x"], "home_draw", (home) => `${home} or draw`],
+  [["home/away", "12", "1/2"], "home_away", (home, away) => `${home} or ${away}`],
+  [["draw/away", "x2", "x/2"], "draw_away", (_home, away) => `Draw or ${away}`],
+];
+const sides = ["home", "draw", "away"] as const;
+const liveHtFt: Array<[string[], string, Namer]> = sides.flatMap((ht) =>
+  sides.map((ft): [string[], string, Namer] => [
+    SIDE_ALIASES[ht].flatMap((l) => SIDE_ALIASES[ft].map((r) => `${l}/${r}`)),
+    `${ht}_${ft}`,
+    (home, away) => `${sideName(ht, home, away)} / ${sideName(ft, home, away)}`,
+  ]),
+);
+const liveResultBtts: Array<[string[], string, Namer]> = sides.flatMap((side) =>
+  (["yes", "no"] as const).map((btts): [string[], string, Namer] => [
+    SIDE_ALIASES[side].map((l) => `${l}/${btts}`),
+    `${side}_${btts}`,
+    (home, away) => `${sideName(side, home, away)} / ${cap(btts)}`,
+  ]),
+);
 
 /**
- * The in-play prices for one match. A market with any suspended or missing
- * outcome comes back suspended, with the prices it does have.
+ * In-play markets use different bet names from pre-match ones (see
+ * API-Football's /odds/live/bets), so they're matched on their own names,
+ * compared case-insensitively, onto the same market and selection keys, and
+ * settle the same way. Anything else in the feed is ignored.
+ */
+const LIVE_MARKETS: Record<string, LiveSpec> = {
+  "fulltime result": { kind: "fixed", key: "match_winner", name: () => "Match winner", order: "Match Winner", values: liveOutcomes },
+  "double chance": { kind: "fixed", key: "double_chance", name: () => "Double chance", order: "Double Chance", values: liveDoubleChance },
+  "over/under line": { kind: "lines", prefix: "goals", name: (_h, _a, line) => `Total goals ${line}`, order: "Goals Over/Under" },
+  "match goals": { kind: "lines", prefix: "goals", name: (_h, _a, line) => `Total goals ${line}`, order: "Goals Over/Under" },
+  "both teams to score": { kind: "fixed", key: "btts", name: () => "Both teams score", order: "Both Teams Score", values: liveYesNo },
+  "draw no bet": { kind: "fixed", key: "draw_no_bet", name: () => "Draw no bet", order: "Home/Away", values: liveEitherTeam },
+  "1x2 (1st half)": { kind: "fixed", key: "h1_winner", name: () => "1st half result", order: "First Half Winner", values: liveOutcomes },
+  "half time/full time": { kind: "fixed", key: "ht_ft", name: () => "Half time / full time", order: "HT/FT Double", values: liveHtFt, partial: true },
+  "result / both teams to score": { kind: "fixed", key: "result_btts", name: () => "Result and both teams score", order: "Results/Both Teams Score", values: liveResultBtts, partial: true },
+  "final score": { kind: "scores", key: "correct_score", name: "Correct score", order: "Exact Score" },
+  "home team goals": { kind: "lines", prefix: "home_goals", name: (home, _a, line) => `${home} goals ${line}`, order: "Total - Home" },
+  "away team goals": { kind: "lines", prefix: "away_goals", name: (_h, away, line) => `${away} goals ${line}`, order: "Total - Away" },
+  "goals odd/even": {
+    kind: "fixed",
+    key: "odd_even",
+    name: () => "Total goals odd/even",
+    order: "Odd/Even",
+    values: [
+      [["odd"], "odd", () => "Odd"],
+      [["even"], "even", () => "Even"],
+    ],
+  },
+  "home team clean sheet": { kind: "fixed", key: "clean_sheet_home", name: (home) => `${home} clean sheet`, order: "Clean Sheet - Home", values: liveYesNo },
+  "away team clean sheet": { kind: "fixed", key: "clean_sheet_away", name: (_h, away) => `${away} clean sheet`, order: "Clean Sheet - Away", values: liveYesNo },
+  "double chance (1st half)": { kind: "fixed", key: "h1_double_chance", name: () => "1st half double chance", order: "Double Chance - First Half", values: liveDoubleChance },
+  "over/under line (1st half)": { kind: "lines", prefix: "h1_goals", name: (_h, _a, line) => `1st half goals ${line}`, order: "Goals Over/Under First Half" },
+  "over/under (1st half)": { kind: "lines", prefix: "h1_goals", name: (_h, _a, line) => `1st half goals ${line}`, order: "Goals Over/Under First Half" },
+  "both teams to score (1st half)": { kind: "fixed", key: "h1_btts", name: () => "1st half both teams score", order: "Both Teams Score - First Half", values: liveYesNo },
+  "correct score (1st half)": { kind: "scores", key: "h1_correct_score", name: "1st half correct score", order: "Correct Score - First Half" },
+  "to win 2nd half": { kind: "fixed", key: "h2_winner", name: () => "2nd half result", order: "Second Half Winner", values: liveOutcomes },
+  "over/under (2nd half)": { kind: "lines", prefix: "h2_goals", name: (_h, _a, line) => `2nd half goals ${line}`, order: "Goals Over/Under - Second Half" },
+  "both teams to score (2nd half)": { kind: "fixed", key: "h2_btts", name: () => "2nd half both teams score", order: "Both Teams To Score - Second Half", values: liveYesNo },
+  // Corners and cards settle from the match statistics fetched after full time.
+  "total corners": { kind: "lines", prefix: "corners", name: (_h, _a, line) => `Total corners ${line}`, order: "Corners Over Under" },
+  "match corners": { kind: "lines", prefix: "corners", name: (_h, _a, line) => `Total corners ${line}`, order: "Corners Over Under" },
+  "home total corners": { kind: "lines", prefix: "home_corners", name: (home, _a, line) => `${home} corners ${line}`, order: "Home Corners Over/Under" },
+  "away total corners": { kind: "lines", prefix: "away_corners", name: (_h, away, line) => `${away} corners ${line}`, order: "Away Corners Over/Under" },
+  "total cards": { kind: "lines", prefix: "cards", name: (_h, _a, line) => `Total cards ${line}`, order: "Cards Over/Under" },
+};
+
+/** Lower case, no spaces, "&" as "/", so "Home & Yes", "1/Yes" and "home/yes" compare alike. */
+const normalize = (value: string | number) => String(value).toLowerCase().replace(/\s+/g, "").replace(/&/g, "/");
+
+function livePrice(value?: LiveValue): number {
+  const odds = Number(value?.odd);
+  return value && !value.suspended && Number.isFinite(odds) && odds > 1 ? odds : 0;
+}
+
+function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: string): FeedLiveMarket[] {
+  const base = (MARKET_INDEX.get(spec.order)?.index ?? MARKETS.length) * 10;
+  if (spec.kind === "fixed") {
+    const selections = spec.values.map(([aliases, key, name], sortOrder) => ({
+      key,
+      name: name(home, away),
+      odds: livePrice(values.find((v) => aliases.includes(normalize(v.value)))),
+      sortOrder,
+    }));
+    const priced = selections.filter((s) => s.odds > 0).length;
+    // A two- or three-way market is off the board if any outcome is; a partial one while none is priced.
+    const suspended = spec.partial ? priced === 0 : priced < selections.length;
+    return [{ key: spec.key, name: spec.name(home, away), sortOrder: base, selections: spec.partial ? selections.filter((s) => s.odds > 0) : selections, suspended }];
+  }
+  if (spec.kind === "scores") {
+    const selections = values
+      .map((v) => ({ match: /^(\d+)[:-](\d+)$/.exec(normalize(v.value)), odds: livePrice(v) }))
+      .filter((v): v is { match: RegExpExecArray; odds: number } => v.match !== null && v.odds > 0)
+      .sort((a, b) => Number(a.match[1]) - Number(b.match[1]) || Number(a.match[2]) - Number(b.match[2]))
+      .map((v, sortOrder) => ({ key: `${v.match[1]}-${v.match[2]}`, name: `${v.match[1]}–${v.match[2]}`, odds: v.odds, sortOrder }));
+    return selections.length > 0 ? [{ key: spec.key, name: spec.name, sortOrder: base, selections, suspended: false }] : [];
+  }
+  return liveLines(values, spec.prefix, (line) => spec.name(home, away, line), base);
+}
+
+/**
+ * The in-play prices for one match. Markets the feed suspends, or two- and
+ * three-way markets missing an outcome, come back suspended with the prices
+ * they do have; a market the feed doesn't send at all is left out, which
+ * suspends it.
  */
 export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: string): FeedLiveOdds {
   const markets = new Map<string, FeedLiveMarket>();
   for (const bet of raw.odds ?? []) {
-    const betName = bet.name.trim().toLowerCase();
-    if (LIVE_GOAL_LINES.has(betName)) {
-      for (const market of liveGoalLines(bet.values)) if (!markets.has(market.key)) markets.set(market.key, market);
-      continue;
-    }
-    const spec = LIVE_MARKETS[betName];
-    if (!spec || markets.has(spec.key)) continue;
-    let suspended = false;
-    const selections = spec.values.map(([feedValues, key, name], sortOrder) => {
-      const value = bet.values.find((v) => feedValues.includes(String(v.value)));
-      const odds = Number(value?.odd);
-      if (!value || value.suspended || !Number.isFinite(odds) || odds <= 1) suspended = true;
-      return { key, name: name(homeTeam, awayTeam), odds: Number.isFinite(odds) && odds > 1 ? odds : 0, sortOrder };
-    });
-    markets.set(spec.key, { key: spec.key, name: spec.name, sortOrder: LIVE_ORDER.indexOf(spec.key) * 10, selections, suspended });
+    const spec = LIVE_MARKETS[bet.name.trim().toLowerCase()];
+    if (!spec) continue;
+    for (const market of liveMarkets(spec, bet.values, homeTeam, awayTeam)) if (!markets.has(market.key)) markets.set(market.key, market);
   }
   return {
     externalId: String(raw.fixture.id),
@@ -386,16 +463,14 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
   };
 }
 
-type LiveValue = RawLiveOdds["odds"][number]["values"][number];
-
 /**
- * The lines in an in-play goals market, one `goals_X_5` market per .5 line.
- * The line is in `handicap`, or in the value itself ("Over 2.5"); whole and
- * quarter lines are skipped, so there's never a push. A line the feed isn't
- * offering right now (1.5 once two goals are in) is simply absent, which
- * suspends it.
+ * The lines in an in-play over/under market, one `{prefix}_X_5` market per .5
+ * line. The line is in `handicap`, or in the value itself ("Over 2.5"); whole
+ * and quarter lines are skipped, so there's never a push. A line the feed
+ * isn't offering right now (1.5 once two goals are in) is simply absent,
+ * which suspends it.
  */
-function liveGoalLines(values: LiveValue[]): FeedLiveMarket[] {
+function liveLines(values: LiveValue[], prefix: string, name: (line: string) => string, base: number): FeedLiveMarket[] {
   const byLine = new Map<string, { over?: LiveValue; under?: LiveValue }>();
   for (const value of values) {
     const [, side, inValue] = /^(over|under)(?:\s+(\d+(?:\.\d+)?))?$/i.exec(String(value.value).trim()) ?? [];
@@ -406,20 +481,16 @@ function liveGoalLines(values: LiveValue[]): FeedLiveMarket[] {
     else entry.under ??= value;
     byLine.set(line, entry);
   }
-  const price = (value?: LiveValue) => {
-    const odds = Number(value?.odd);
-    return value && !value.suspended && Number.isFinite(odds) && odds > 1 ? odds : 0;
-  };
   return [...byLine]
     .map(([line, { over, under }]) => {
       const selections = [
-        { key: "over", name: `Over ${line}`, odds: price(over), sortOrder: 0 },
-        { key: "under", name: `Under ${line}`, odds: price(under), sortOrder: 1 },
+        { key: "over", name: `Over ${line}`, odds: livePrice(over), sortOrder: 0 },
+        { key: "under", name: `Under ${line}`, odds: livePrice(under), sortOrder: 1 },
       ];
       return {
-        key: `goals_${line.replace(".", "_")}`,
-        name: `Total goals ${line}`,
-        sortOrder: LIVE_ORDER.indexOf("goals") * 10 + Math.min(9, Math.floor(Number(line))),
+        key: `${prefix}_${line.replace(".", "_")}`,
+        name: name(line),
+        sortOrder: base + Math.min(9, Math.floor(Number(line))),
         selections,
         suspended: selections.some((selection) => selection.odds === 0),
       };

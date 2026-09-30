@@ -170,7 +170,7 @@ function BetPage() {
   useEffect(() => {
     if (!events) return;
     const byId = new Map<string, { event: OddsEvent; suspended: boolean; selection: OddsSelection }>();
-    for (const event of events) for (const market of event.markets) for (const selection of market.selections) byId.set(selection.id, { event, suspended: Boolean(market.suspended), selection });
+    for (const event of events) for (const market of event.markets) for (const selection of market.selections) byId.set(selection.id, { event, suspended: Boolean(market.suspended || selection.suspended), selection });
     setSlip((items) =>
       items.map((item) => {
         const found = byId.get(item.selectionId);
@@ -384,9 +384,12 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
             {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
           </span>
           <div className="odds-selections">
-            {market.selections.map((selection) => {
+            {market.selections
+              // Live, a market with many outcomes (correct score) hides the ones that can't happen any more.
+              .filter((selection) => !(event.live && selection.suspended && !market.suspended && market.selections.length > 3))
+              .map((selection) => {
               const isSelected = selected.has(selection.id);
-              const locked = !event.bettable || Boolean(market.suspended);
+              const locked = !event.bettable || Boolean(market.suspended || selection.suspended);
               return (
                 <button
                   key={selection.id}

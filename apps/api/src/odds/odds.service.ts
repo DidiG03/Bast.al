@@ -143,14 +143,16 @@ export class OddsService {
             feedOdds: showFeed ? (live ? liveOdds ?? feedOdds : feedOdds) : undefined,
             custom: override !== null,
             result: selection.result,
+            /** Live only: the feed isn't pricing this outcome right now. */
+            suspended: live && quote.suspended,
           };
         });
         return {
           id: market.id,
           key: market.key,
           name: market.name,
-          /** Live only: the feed has this market off the board right now. */
-          suspended: live && (market.liveSuspended || market.selections.some((s) => s.liveOdds === null)),
+          /** Live only: the feed has this market off the board right now (single outcomes can be off on their own). */
+          suspended: live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null)),
           selections,
         };
       }),

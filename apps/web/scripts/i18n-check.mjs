@@ -200,7 +200,7 @@ for (const file of apiSources(apiRoot)) {
     // API docs (Swagger), for developers.
     if (/@?Api\w+\(\{[^}]*description:\s*$/.test(literal.before)) continue;
     // API-Football's own names, which the odds code matches on, not text anyone sees.
-    if (name === "odds/api-football.ts" && /(\[\s*|read\(\w+,\s*|throw new Error\(\s*)$/.test(literal.before)) continue;
+    if (name === "odds/api-football.ts" && /(\[\s*|read\(\w+,\s*|throw new Error\(\s*|order:\s*)$/.test(literal.before)) continue;
     apiCount++;
     const covered =
       literal.kind === "string"

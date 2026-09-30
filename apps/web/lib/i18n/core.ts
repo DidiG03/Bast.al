@@ -53,16 +53,62 @@ export function translateServer(lang: Lang, text: string | null | undefined): st
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
+const SQ_MONTHS = ["janar", "shkurt", "mars", "prill", "maj", "qershor", "korrik", "gusht", "shtator", "tetor", "nëntor", "dhjetor"];
+const SQ_MONTHS_SHORT = ["jan", "shk", "mar", "pri", "maj", "qer", "korr", "gush", "sht", "tet", "nën", "dhj"];
+const SQ_DAYS = ["e diel", "e hënë", "e martë", "e mërkurë", "e enjte", "e premte", "e shtunë"];
+const SQ_DAYS_SHORT = ["Die", "Hën", "Mar", "Mër", "Enj", "Pre", "Sht"];
+
+/** Whether this browser or server knows Albanian dates. Chrome ships without them and quietly uses English. */
+let sqSupported: boolean | null = null;
+function knowsAlbanian(): boolean {
+  if (sqSupported === null) sqSupported = new Intl.DateTimeFormat("sq-AL").resolvedOptions().locale.startsWith("sq");
+  return sqSupported;
+}
+
+/**
+ * Albanian dates without Albanian locale data: the parts from en-GB (which
+ * puts the day before the month, like Albanian), with the day and month
+ * names swapped for Albanian ones.
+ */
+function albanianParts(formatter: Intl.DateTimeFormat, options: Intl.DateTimeFormatOptions, date: Date): string {
+  const parts = formatter.formatToParts(date);
+  return parts
+    .map((part, index) => {
+      if (part.type === "weekday") return options.weekday === "long" ? SQ_DAYS[date.getDay()] : SQ_DAYS_SHORT[date.getDay()];
+      if (part.type === "month" && (options.month === "long" || options.month === "short")) return (options.month === "long" ? SQ_MONTHS : SQ_MONTHS_SHORT)[date.getMonth()];
+      // "e premte, 2 tetor": a comma after the day's name.
+      if (part.type === "literal" && parts[index - 1]?.type === "weekday" && !part.value.includes(",")) return `,${part.value}`;
+      return part.value;
+    })
+    .join("");
+}
+
 /** Dates and times in the reader's language, with a 24-hour clock in Albanian. */
-export function formatDate(lang: Lang, value: Date | string | number, options: Intl.DateTimeFormatOptions): string {
-  const key = `${lang}:${JSON.stringify(options)}`;
+export function formatDate(lang: Lang, value: Date | string | number, requested: Intl.DateTimeFormatOptions): string {
+  const fallback = lang === "sq" && !knowsAlbanian();
+  // dateStyle/timeStyle can't be taken apart by name, so without Albanian data they're spelled out.
+  const options = fallback ? spelledOut(requested) : requested;
+  const key = `${lang}:${fallback}:${JSON.stringify(options)}`;
   let formatter = formatters.get(key);
   if (!formatter) {
     const withClock = lang === "sq" && (options.hour !== undefined || options.timeStyle !== undefined) ? { hourCycle: "h23" as const, ...options } : options;
-    formatter = new Intl.DateTimeFormat(lang === "sq" ? "sq-AL" : "en", withClock);
+    formatter = new Intl.DateTimeFormat(lang === "sq" ? (fallback ? "en-GB" : "sq-AL") : "en", withClock);
     formatters.set(key, formatter);
   }
-  return formatter.format(new Date(value));
+  const date = new Date(value);
+  return fallback ? albanianParts(formatter, options, date) : formatter.format(date);
+}
+
+function spelledOut(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormatOptions {
+  const { dateStyle, timeStyle, ...rest } = options;
+  if (!dateStyle && !timeStyle) return options;
+  const date: Intl.DateTimeFormatOptions = !dateStyle
+    ? {}
+    : dateStyle === "short"
+      ? { day: "2-digit", month: "2-digit", year: "numeric" }
+      : { day: "numeric", month: dateStyle === "medium" ? "short" : "long", year: "numeric", ...(dateStyle === "full" ? { weekday: "long" as const } : {}) };
+  const time: Intl.DateTimeFormatOptions = timeStyle ? { hour: "2-digit", minute: "2-digit", ...(timeStyle === "short" ? {} : { second: "2-digit" as const }) } : {};
+  return { ...rest, ...date, ...time };
 }
 
 /**

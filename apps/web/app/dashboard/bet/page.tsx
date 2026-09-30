@@ -58,7 +58,9 @@ function dayLabel(iso: string, { t, date: format }: I18n): string {
   tomorrow.setDate(today.getDate() + 1);
   if (date.toDateString() === today.toDateString()) return t("Today");
   if (date.toDateString() === tomorrow.toDateString()) return t("Tomorrow");
-  return format(date, { weekday: "long", day: "numeric", month: "short" });
+  // Albanian day names are lower case ("e premte"); as a heading it starts with a capital.
+  const label = format(date, { weekday: "long", day: "numeric", month: "short" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 /** Stake x odds, rounded down to the cent like the server does. */
@@ -134,6 +136,8 @@ function BetPage() {
   const [accaStake, setAccaStake] = useState("");
   const [league, setLeague] = useState("");
   const [search, setSearch] = useState("");
+  /** "" = every day, "live" = playing now, otherwise a day's label (Today, Tomorrow, …). */
+  const [day, setDay] = useState("");
   const [betsVersion, setBetsVersion] = useState(0);
 
   const loadEvents = useCallback(async () => {
@@ -185,6 +189,7 @@ function BetPage() {
     }
     setLeague("");
     setSearch("");
+    setDay("");
     setFocused(found.id);
   }, [matchParam, events, tab, router, toast, t]);
 
@@ -297,14 +302,17 @@ function BetPage() {
   const shown = (events ?? []).filter(
     (event) => (event.bettable || event.live) && event.markets.length > 0 && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
   );
-  const groups: Array<[string, OddsEvent[]]> = [];
+  const allGroups: Array<[string, OddsEvent[]]> = [];
   const liveLabel = t("Live now");
   for (const event of shown) {
     const label = event.live ? liveLabel : dayLabel(event.startsAt, i18n);
-    const last = groups[groups.length - 1];
+    const last = allGroups[allGroups.length - 1];
     if (last && last[0] === label) last[1].push(event);
-    else groups.push([label, [event]]);
+    else allGroups.push([label, [event]]);
   }
+  // A day that no longer has matches (a search, a league filter) falls back to every day.
+  const dayShown = day === "" ? "" : day === "live" ? liveLabel : day;
+  const groups = dayShown && allGroups.some(([label]) => label === dayShown) ? allGroups.filter(([label]) => label === dayShown) : allGroups;
   const selected = new Set(slip.map((item) => item.selectionId));
 
   const slipPanel = (
@@ -331,21 +339,15 @@ function BetPage() {
 
   return (
     <div className="stack bet-page">
-      <div className="page-title-row">
-        <div>
-          <h1 style={{ margin: 0 }}>{t("Bet")}</h1>
-          <p className="muted report-subtitle">{t("Pick a price to add it to your slip. Live matches take bets while they're being played.")}</p>
-        </div>
-        {info ? (
-          <div className="bet-balance">
-            <span className="muted">{t("Balance")}</span>
-            <strong>{formatMoney(info.balance)}</strong>
-          </div>
-        ) : null}
+      {/* The balance is already in the top bar, so the header stays one line. */}
+      <div className="bet-page-head">
+        <h1>
+          {t("Bet")}
+          <HelpTip text="The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: $10 at 2.50 pays back $25 if it wins." />
+        </h1>
       </div>
 
-
-      <nav className="tabs-nav" aria-label={t("Betting sections")}>
+      <nav className="tabs-nav bet-tabs" aria-label={t("Betting sections")}>
         {(
           [
             ["matches", t("Matches")],
@@ -364,6 +366,24 @@ function BetPage() {
           <div className="stack bet-matches">
             <div className="bet-filters">
               <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => setSearch(e.target.value)} aria-label={t("Search matches")} />
+              {allGroups.length > 1 ? (
+                <div className="bet-chips bet-day-chips" role="group" aria-label={t("Day")}>
+                  <button type="button" className={`bet-chip${groups === allGroups ? " is-active" : ""}`} onClick={() => setDay("")} aria-pressed={groups === allGroups}>
+                    {t("All")}
+                  </button>
+                  {allGroups.map(([label, list]) => {
+                    const key = label === liveLabel ? "live" : label;
+                    const active = groups !== allGroups && groups[0][0] === label;
+                    return (
+                      <button key={label} type="button" className={`bet-chip${active ? " is-active" : ""}${key === "live" ? " is-live" : ""}`} onClick={() => setDay(active ? "" : key)} aria-pressed={active}>
+                        {key === "live" ? <span className="live-dot" aria-hidden="true" /> : null}
+                        {label}
+                        <span className="bet-chip-count">{list.length}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               {leagues.length > 1 ? (
                 <div className="bet-chips" role="group" aria-label={t("League")}>
                   <button type="button" className={`bet-chip${league === "" ? " is-active" : ""}`} onClick={() => setLeague("")}>
@@ -391,7 +411,11 @@ function BetPage() {
             ) : (
               groups.map(([label, dayEvents]) => (
                 <section key={label} className="stack odds-day">
-                  <h2 className={`odds-day-label${label === liveLabel ? " bet-live-label" : ""}`}>{label}<HelpTip text="The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: $10 at 2.50 pays back $25 if it wins." /></h2>
+                  <h2 className={`odds-day-label${label === liveLabel ? " bet-live-label" : ""}`}>
+                    {label === liveLabel ? <span className="live-dot" aria-hidden="true" /> : null}
+                    {label}
+                    <span className="odds-day-count">{dayEvents.length}</span>
+                  </h2>
                   {dayEvents.map((event) => (
                     <MatchCard key={event.id} event={event} selected={selected} onPick={toggle} focused={focused === event.id} moves={moves} />
                   ))}
@@ -455,7 +479,10 @@ function MatchCard({
         </span>
         <span className="odds-event-header-side">
           {event.live ? (
-            <span className="status-pill is-active">{event.elapsed !== null ? t("Live {minute}'", { minute: event.elapsed }) : t("Live")}</span>
+            <span className="status-pill is-active">
+              <span className="live-dot" aria-hidden="true" />
+              {event.elapsed !== null ? t("Live {minute}'", { minute: event.elapsed }) : t("Live")}
+            </span>
           ) : (
             <span className="status-pill">{date(event.startsAt, TIME)}</span>
           )}
@@ -485,7 +512,7 @@ function MatchCard({
             {event.homeScore} – {event.awayScore}
           </strong>
         ) : (
-          <span className="muted">v</span>
+          <span className="odds-vs">{t("vs")}</span>
         )}
         <span className="odds-team">
           {event.awayTeam ?? ""}
@@ -495,10 +522,13 @@ function MatchCard({
       {event.live && !event.bettable ? <p className="muted bet-paused">{t("Live betting is paused for a moment.")}</p> : null}
       {markets.map((market) => (
         <div key={market.id} className="odds-market">
-          <span className="odds-market-name">
-            {ts(market.name)}
-            {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
-          </span>
+          <div className="odds-market-head">
+            <span className="odds-market-name">
+              {ts(market.name)}
+              {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
+            </span>
+            <MarketPriceHistory selections={market.selections} compact />
+          </div>
           <div className="odds-selections">
             {market.selections
               // Live, a market with many outcomes (correct score) hides the ones that can't happen any more.
@@ -527,13 +557,15 @@ function MatchCard({
           </div>
           {/^(home_|away_)?cards_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes. Every yellow and red card counts as 1.")}</p> : null}
           {/^(home_|away_)?corners_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes.")}</p> : null}
-          <MarketPriceHistory selections={market.selections} />
         </div>
       ))}
       {event.markets.length > 1 ? (
         <footer className="odds-event-footer">
-          <button type="button" className="text-button" onClick={() => setShowAll(!showAll)}>
+          <button type="button" className={`bet-more-markets${showAll ? " is-open" : ""}`} onClick={() => setShowAll(!showAll)} aria-expanded={showAll}>
             {showAll ? t("Fewer markets") : tn(event.markets.length - 1, "{count} more market", "{count} more markets")}
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
           </button>
         </footer>
       ) : null}
@@ -718,9 +750,14 @@ function BetSlip({
       </div>
 
       {items.length === 0 ? (
-        <p className="muted" style={{ margin: 0 }}>
-          {t("Tap a price to add a bet. Add two or more picks from different matches to combine them into an accumulator.")}
-        </p>
+        <div className="bet-slip-empty">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z" />
+            <path d="M13 5v2M13 11v2M13 17v0" />
+          </svg>
+          <strong>{t("Your slip is empty")}</strong>
+          <p className="muted">{t("Tap a price to add a bet. Add two or more picks from different matches to combine them into an accumulator.")}</p>
+        </div>
       ) : (
         <>
           {items.length >= 2 ? (

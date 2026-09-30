@@ -15,7 +15,7 @@ type MarketSelection = { id: string; name: string };
  * selection. One toggle per market (not per price button) keeps the odds
  * grid from getting cluttered, and avoids nesting a button inside a button.
  */
-export function MarketPriceHistory({ selections }: { selections: MarketSelection[] }) {
+export function MarketPriceHistory({ selections, compact = false }: { selections: MarketSelection[]; /** Just the chart icon, for a market's heading row. */ compact?: boolean }) {
   const { getToken } = useAuth();
   const { t, ts } = useI18n();
   const [open, setOpen] = useState(false);
@@ -45,13 +45,20 @@ export function MarketPriceHistory({ selections }: { selections: MarketSelection
   }
 
   return (
-    <div className="price-history">
-      <button type="button" className="text-button price-history-trigger" onClick={toggle} aria-expanded={open}>
+    <div className={`price-history${compact ? " is-compact" : ""}`}>
+      <button
+        type="button"
+        className={`text-button price-history-trigger${open ? " is-open" : ""}`}
+        onClick={toggle}
+        aria-expanded={open}
+        aria-label={compact ? (open ? t("Hide price history") : t("Price history")) : undefined}
+        title={compact ? (open ? t("Hide price history") : t("Price history")) : undefined}
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 19V5M4 19h17" />
           <path d="m7 15 4-4 3 2 5-6" />
         </svg>
-        {open ? t("Hide price history") : t("Price history")}
+        {compact ? null : open ? t("Hide price history") : t("Price history")}
       </button>
       {open ? (
         byId === null ? (

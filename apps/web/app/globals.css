@@ -4185,3 +4185,16 @@ button.odds-selection:hover,
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* "This device" on the Security page */
+.security-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 500;
+  vertical-align: middle;
+}

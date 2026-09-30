@@ -323,15 +323,18 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const message =
+    // Form checks come back as a list, one message per problem.
+    const parts: string[] =
       typeof body?.message === "string"
-        ? body.message
+        ? [body.message]
         : Array.isArray(body?.message)
-          ? body.message.join(", ")
-          : `Request failed (${res.status})`;
+          ? body.message.map(String)
+          : [`Request failed (${res.status})`];
+    const message = parts.join(", ");
     // In the browser, show the API's (English) message in the reader's language.
     // Server components keep it as it is: the dashboard layout reads it.
-    throw new ApiError(typeof window === "undefined" ? message : translateServer(currentBrowserLang(), message), message, res.status);
+    const shown = typeof window === "undefined" ? message : parts.map((part) => translateServer(currentBrowserLang(), part)).join(", ");
+    throw new ApiError(shown, message, res.status);
   }
 
   return res.json() as Promise<T>;

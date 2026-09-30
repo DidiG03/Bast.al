@@ -131,6 +131,7 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
                   <option value="">{t("Choose a Manager or Owner")}</option>
                   {destinations.map((user) => <option key={user.id} value={user.id}>{user.username} ({user.role === "OWNER" ? t("Owner") : t("Manager")})</option>)}
                 </select>
+                <span className="muted">{t("Each Player's balance goes back to whoever gave it to them. Players with open bets or a balance below zero stay where they are.")}</span>
               </label>
             ) : null}
             <div className="modal-actions">

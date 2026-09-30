@@ -22,16 +22,13 @@ import { ClientThrottlerGuard } from "./security/client-throttler.guard";
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // One limit, per route and per account (see ClientThrottlerGuard). Routes
+    // that need a tighter one say so with @Throttle({ default: … }).
     ThrottlerModule.forRoot([
       {
         name: "default",
         ttl: 60_000,
         limit: 100,
-      },
-      {
-        name: "strict",
-        ttl: 60_000,
-        limit: 20,
       },
     ]),
     PrismaModule,

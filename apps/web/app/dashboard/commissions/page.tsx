@@ -9,10 +9,12 @@ import {
   type CommissionPayout,
   type ManagerCommissions,
   type MeResponse,
+  type PayoutStanding,
   type SuperAdminCommissions,
   type TeamCommissions,
 } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
+import { addDays, fromDateInput, startOfMonth, startOfWeek, TIME_ZONE } from "../../../lib/time";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
@@ -29,32 +31,24 @@ const RANGES: Array<[Range, string]> = [
   ["custom", msg("Custom")],
 ];
 
-function startOfWeek(date: Date): Date {
-  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  return start;
-}
-
-/** [from, to) in the viewer's local time. Weeks run Monday to Sunday. */
+/** [from, to) on Albanian time, the same for everyone wherever they are. Weeks run Monday to Sunday. */
 function rangeDates(range: Range, customFrom: string, customTo: string): { from: Date; to: Date } | null {
   const now = new Date();
   if (range === "this-week") return { from: startOfWeek(now), to: now };
   if (range === "last-week") {
     const to = startOfWeek(now);
-    const from = new Date(to);
-    from.setDate(from.getDate() - 7);
-    return { from, to };
+    return { from: addDays(to, -7), to };
   }
-  if (range === "this-month") return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: now };
-  if (!customFrom || !customTo) return null;
-  const to = new Date(`${customTo}T00:00:00`);
-  to.setDate(to.getDate() + 1);
-  return { from: new Date(`${customFrom}T00:00:00`), to };
+  if (range === "this-month") return { from: startOfMonth(now), to: now };
+  const from = fromDateInput(customFrom);
+  const lastDay = fromDateInput(customTo);
+  if (!from || !lastDay) return null;
+  return { from, to: addDays(lastDay, 1) };
 }
 
 /** "1 Sep to 7 Sep", in English: it goes into the ledger, which the API keeps in English. */
 function ledgerPeriod(from: string, to: string): string {
-  const format = new Intl.DateTimeFormat("en", { day: "numeric", month: "short" });
+  const format = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", timeZone: TIME_ZONE });
   // `to` is exclusive; show the last day actually included.
   const last = new Date(new Date(to).getTime() - 1);
   return `${format.format(new Date(from))} to ${format.format(last)}`;
@@ -181,13 +175,14 @@ export default function CommissionsPage() {
 
   /**
    * Collects Super Admin's cut from an Owner, or pays a Manager as their Owner.
-   * The server works out the amount itself and refuses a period that overlaps
-   * one already paid; the amount shown here is only for the confirmation.
+   * Losses carry over, so a payment covers everything since the last one: the
+   * server works out that amount itself and refuses anything already paid;
+   * what's shown here is only for the confirmation.
    */
-  async function payCommission(user: { id: string; username: string }, amount: number, kind: "collect" | "pay") {
-    if (!current) return;
-    const label = periodLabel(i18n, current.from, current.to);
-    const vars = { amount: formatMoney(amount), name: user.username, period: label };
+  async function payCommission(user: { id: string; username: string }, standing: PayoutStanding, kind: "collect" | "pay") {
+    if (!current || !standing.start) return;
+    const label = periodLabel(i18n, standing.start, current.to);
+    const vars = { amount: formatMoney(standing.due), name: user.username, period: label };
     const question = kind === "collect" ? t("Take {amount} back from {name} for your commission ({period})?", vars) : t("Pay {amount} to {name} for their commission ({period})?", vars);
     if (!window.confirm(question)) return;
     setCollectingId(user.id);
@@ -271,7 +266,7 @@ export default function CommissionsPage() {
         ) : null}
         <div className="commission-period-footer">
           <span className="muted">
-            {current ? periodLabel(i18n, current.from, current.to) : range === "custom" ? t("Pick a start and end date") : ""}<HelpTip text="Choose which days to count. “This week” is still running, so it can't be paid yet. To pay or collect, choose “Last week” or your own dates that are over. Export CSV saves the numbers as a file." />
+            {current ? periodLabel(i18n, current.from, current.to) : range === "custom" ? t("Pick a start and end date") : ""}<HelpTip text="Choose which days to count. “This week” is still running, so it can't be paid yet. To pay or collect, choose “Last week” or your own dates that are over. Losses carry over: each payment covers everything since the last one, so a losing week is made up before anything more is paid. Export CSV saves the numbers as a file." />
           </span>
           {loading ? <LoadingSpinner label="Loading commissions" size="small" /> : null}
           <button type="button" className="secondary" onClick={exportCsv} disabled={!current || loading}>
@@ -287,7 +282,7 @@ export default function CommissionsPage() {
         <TeamView
           data={team}
           viewer={me.role === "OWNER" ? "OWNER" : "SUPER_ADMIN"}
-          onCollect={me.role === "OWNER" ? (manager) => void payCommission(manager, manager.commission, "pay") : undefined}
+          onCollect={me.role === "OWNER" ? (manager) => void payCommission(manager, manager.payout, "pay") : undefined}
           collectingId={collectingId}
           payouts={payoutById}
           periodEnded={periodEnded}
@@ -297,7 +292,7 @@ export default function CommissionsPage() {
         <SuperAdminView
           data={owners}
           onOpen={setOwnerId}
-          onCollect={(owner) => void payCommission(owner, owner.superAdminCut, "collect")}
+          onCollect={(owner) => void payCommission(owner, owner.payout, "collect")}
           collectingId={collectingId}
           payouts={payoutById}
           periodEnded={periodEnded}

@@ -11,6 +11,7 @@ import { useToast } from "../../../components/toaster";
 import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { endOfDateInput, fromDateInput } from "../../../lib/time";
 
 const ROLE_NAMES: Record<string, string> = { SUPER_ADMIN: msg("Super Admin"), OWNER: msg("Owner"), MANAGER: msg("Manager"), PLAYER: msg("Player") };
 
@@ -32,8 +33,8 @@ export default function FinancePage() {
     const token = await getToken();
     if (!token) return;
     const params = new URLSearchParams();
-    if (from) params.set("from", new Date(`${from}T00:00:00`).toISOString());
-    if (to) params.set("to", new Date(`${to}T23:59:59.999`).toISOString());
+    if (from) params.set("from", fromDateInput(from)?.toISOString() ?? "");
+    if (to) params.set("to", endOfDateInput(to)?.toISOString() ?? "");
     try {
       const profile = await apiFetch<MeResponse>("/users/me", token);
       setMe(profile);

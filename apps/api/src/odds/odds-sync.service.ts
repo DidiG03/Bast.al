@@ -63,6 +63,16 @@ const LIVE_SCORE_SOURCE_MS = 60_000;
 const VERIFY_SHARE_MS = 2_000;
 /** Markets settled from match statistics rather than the score. */
 const STATS_MARKET_PREFIXES = ["corners_", "home_corners_", "away_corners_", "cards_", "home_cards_", "away_cards_"];
+/**
+ * A match not played within this long of its kick-off (postponed, abandoned
+ * without word from the feed, or moved to a later date) has its open bets
+ * refunded; see SettlementService.
+ */
+export const UNPLAYED_VOID_MS = (Number(process.env.UNPLAYED_VOID_HOURS) || 48) * 3_600_000;
+/** Finished matches with bets are asked about again for this long after kick-off, in case the feed corrects the score. */
+const RESULT_RECHECK_MS = 48 * 3_600_000;
+/** How often each of those is asked about. */
+const RESULT_RECHECK_EVERY_MS = 60 * 60_000;
 
 /**
  * Keeps events, markets and feed prices up to date:
@@ -310,12 +320,12 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       }
       if (!force && !(await this.isDue(date))) continue;
       const all = await client.fixturesByDate(date);
-      const listed = new Set(
-        (await this.prisma.event.findMany({ where: { provider: this.provider(), externalId: { in: all.map((f) => f.externalId) } }, select: { externalId: true } })).map((e) => e.externalId!),
+      const kickOffs = new Map(
+        (await this.prisma.event.findMany({ where: { provider: this.provider(), externalId: { in: all.map((f) => f.externalId) } }, select: { externalId: true, startsAt: true } })).map((e) => [e.externalId!, e.startsAt]),
       );
-      const fixtures = all.filter((f) => this.wanted(f, listed));
+      const fixtures = all.filter((f) => this.wanted(f, new Set(kickOffs.keys())));
       const ids = new Map<string, string>();
-      for (const fixture of fixtures) ids.set(fixture.externalId, await this.upsertEvent(fixture));
+      for (const fixture of fixtures) ids.set(fixture.externalId, await this.upsertEvent(fixture, kickOffs.get(fixture.externalId)));
       events += fixtures.length;
 
       // Odds are fetched per league, only for matches that haven't started.
@@ -341,6 +351,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     }
     const live = await this.syncLive();
     await this.syncStats();
+    await this.recheckResults();
     if (saving) {
       this.logger.warn(`Only ${this.quotaLeft} API-Football requests left today, so only today's matches are refreshed`);
       await this.recordStatus(`Only ${this.quotaLeft} API-Football requests left today, so only today's matches are refreshed`, refreshed > 0);
@@ -479,6 +490,40 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Asks the feed again about matches that finished in the last two days and
+   * have bets, each at most once an hour, so a score it corrects after the
+   * day's fixture list stopped covering the match still reaches the bets
+   * (see recordResult). Today's matches are covered by the day's own refresh;
+   * this is for the ones before. At most 60 matches (3 requests) a run.
+   */
+  private async recheckResults(): Promise<number> {
+    const provider = this.provider();
+    const now = Date.now();
+    const due = await this.prisma.event.findMany({
+      where: {
+        provider,
+        externalId: { not: null },
+        status: EventStatus.COMPLETED,
+        resultSource: "feed",
+        startsAt: { gte: new Date(now - RESULT_RECHECK_MS) },
+        OR: [{ syncedAt: null }, { syncedAt: { lt: new Date(now - RESULT_RECHECK_EVERY_MS) } }],
+        markets: { some: { selections: { some: { OR: [{ bets: { some: {} } }, { legs: { some: {} } }] } } } },
+      },
+      orderBy: { syncedAt: "asc" },
+      select: { id: true, externalId: true },
+      take: 60,
+    });
+    for (let i = 0; i < due.length; i += 20) {
+      const batch = due.slice(i, i + 20);
+      const fixtures = await this.client!.fixturesByIds(batch.map((event) => event.externalId!));
+      // Only the score is taken: a finished match's bets were settled at full time, whatever the feed says about it later.
+      for (const fixture of fixtures) await this.recordResult(provider, fixture);
+      await this.prisma.event.updateMany({ where: { id: { in: batch.map((event) => event.id) } }, data: { syncedAt: new Date() } });
+    }
+    return due.length;
+  }
+
+  /**
    * In-play prices for the matches that are live now. A market the feed drops
    * or suspends is suspended here too, and a match missing from the feed stops
    * getting fresh prices, so its live bets pause once the prices go stale.
@@ -538,7 +583,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     return this.mode === "mock" ? "mock" : "api-football";
   }
 
-  private async upsertEvent(fixture: FeedFixture): Promise<string> {
+  /** `previousStart` is the kick-off already saved for this match, if it's listed. */
+  private async upsertEvent(fixture: FeedFixture, previousStart?: Date): Promise<string> {
+    // Moved more than UNPLAYED_VOID_MS later: bets placed for the old date are refunded.
+    const rescheduled = previousStart !== undefined && fixture.startsAt.getTime() - previousStart.getTime() > UNPLAYED_VOID_MS;
+    if (rescheduled) this.logger.log(`Match ${fixture.externalId} moved from ${previousStart.toISOString()} to ${fixture.startsAt.toISOString()}`);
     const data = {
       name: `${fixture.homeTeam} v ${fixture.awayTeam}`,
       league: fixture.league,
@@ -557,7 +606,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       where: { provider_externalId: { provider, externalId: fixture.externalId } },
       create: { ...data, provider, externalId: fixture.externalId },
       // hidden and suspended are Super Admin's and never overwritten by the feed.
-      update: data,
+      update: { ...data, ...(rescheduled ? { rescheduledAt: new Date() } : {}) },
       select: { id: true },
     });
     await this.recordResult(provider, fixture);
@@ -567,20 +616,28 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   /**
    * Saves the score bets settle on once a match has finished. A result Super
    * Admin corrected by hand is never overwritten. SettlementService pays the
-   * bets out from here.
+   * bets out from here, and re-settles them if the feed later changes a
+   * score it already sent (resultChangedAt).
    */
   private async recordResult(provider: string, fixture: FeedFixture) {
     if (!fixture.result) return;
+    const where = { provider, externalId: fixture.externalId, OR: [{ resultSource: null }, { resultSource: "feed" }] };
+    const saved = await this.prisma.event.findFirst({ where, select: { resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true } });
+    if (!saved) return;
+    const next = {
+      resultHome: fixture.result.home,
+      resultAway: fixture.result.away,
+      resultHalfHome: fixture.halfTime?.home ?? null,
+      resultHalfAway: fixture.halfTime?.away ?? null,
+    };
+    // A score arriving for the first time (the half-time one can come later) is news, not a change.
+    const changed =
+      (saved.resultHome !== null && (saved.resultHome !== next.resultHome || saved.resultAway !== next.resultAway)) ||
+      (saved.resultHalfHome !== null && next.resultHalfHome !== null && (saved.resultHalfHome !== next.resultHalfHome || saved.resultHalfAway !== next.resultHalfAway));
+    if (changed) this.logger.warn(`The feed changed match ${fixture.externalId} from ${saved.resultHome}-${saved.resultAway} to ${next.resultHome}-${next.resultAway}`);
     await this.prisma.event.updateMany({
-      where: { provider, externalId: fixture.externalId, OR: [{ resultSource: null }, { resultSource: "feed" }] },
-      data: {
-        resultHome: fixture.result.home,
-        resultAway: fixture.result.away,
-        resultHalfHome: fixture.halfTime?.home ?? null,
-        resultHalfAway: fixture.halfTime?.away ?? null,
-        extraTime: fixture.extraTime,
-        resultSource: "feed",
-      },
+      where,
+      data: { ...next, extraTime: fixture.extraTime, resultSource: "feed", ...(changed ? { resultChangedAt: new Date() } : {}) },
     });
   }
 

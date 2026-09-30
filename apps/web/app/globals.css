@@ -4019,6 +4019,21 @@ button.odds-selection:hover,
   white-space: nowrap;
 }
 
+/* The pay button, with what the payment covers when that's more (or less) than
+   the period on screen: losses and unpaid weeks carry over. */
+.commission-payout-action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.commission-payout-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 /* Error and not-found pages. Inside the dashboard they sit in the content
    area; on their own (error-page) they're centred on the screen. */
 .error-page {

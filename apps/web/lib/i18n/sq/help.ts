@@ -103,10 +103,10 @@ export const help: Record<string, string> = {
     "Vetëm për Super Adminin: rregullo një balancë duke shtuar ose hequr para direkt, pa i marrë nga askush. Shkruaj gjithmonë arsyen.",
   "The percent of this Owner's team profit that they pay you each week. Example: at 10%, if their team makes $1,000, they owe you $100.":
     "Përqindja e fitimit të skuadrës së këtij Pronari që të paguan çdo javë. Shembull: me 10%, nëse skuadra e tij fiton $1,000, të detyrohet $100.",
-  "Moves the Player to another Manager or Owner. Their money and bets stay the same; only who looks after them changes.":
-    "E zhvendos Lojtarin te një Menaxher ose Pronar tjetër. Paratë dhe bastet e tij mbeten njësoj; ndryshon vetëm kush kujdeset për të.",
-  "Suspend blocks the account, and everyone under it, from signing in. You can undo it later with Reactivate. Delete removes the account for good, and its balance must be $0 first.":
-    "Pezullo e bllokon llogarinë, dhe të gjithë nën të, nga hyrja. Mund ta kthesh më vonë me Riaktivizo. Fshirja e heq llogarinë përgjithmonë, dhe balanca e saj duhet të jetë më parë $0.",
+  "Moves the Player to another Manager or Owner. Their balance goes back to whoever gave it to them, and the new Manager or Owner gives them credit. Past bets stay with the team they were placed with. A Player with open bets, or a balance below zero, can be moved once that's settled.":
+    "Zhvendos Lojtarin te një Menaxher ose Pronar tjetër. Balanca i kthehet atij që ia dha, dhe Menaxheri ose Pronari i ri i jep kredi. Bastet e kaluara mbeten me skuadrën ku u vendosën. Një Lojtar me baste të hapura, ose me balancë nën zero, mund të zhvendoset pasi të mbyllen ato.",
+  "Suspend blocks the account, and everyone under it, from signing in. You can undo it later with Reactivate. Delete is only for an account made by mistake: once it has placed a bet or moved money it can't be deleted, so its history stays in the reports. Suspend it instead.":
+    "Pezullo e bllokon llogarinë, dhe të gjithë nën të, nga hyrja. Mund ta kthesh më vonë me Riaktivizo. Fshirja është vetëm për një llogari të krijuar gabimisht: pasi ka vendosur një bast ose ka lëvizur para, nuk mund të fshihet, që historiku i saj të mbetet në raporte. Pezulloje në vend të kësaj.",
 
   // Shared cards and windows
   "The most this Manager can send to one Player on their own. A bigger amount waits until you press Approve on the Finance page.":
@@ -142,8 +142,8 @@ export const help: Record<string, string> = {
     "Të gjitha ndeshjet e kësaj dite me koeficientët e tyre. Shtyp një koeficient për ta ndryshuar për këtë skuadër. Fshih e heq ndeshjen nga faqja; Pezullo ndalon bastet e reja në të.",
 
   // Settlement
-  "Every match that has bets on it. Bets are paid out by themselves a minute after the final score arrives. Matches that need a hand (no score after 3 hours) are shown first.":
-    "Çdo ndeshje që ka baste. Bastet paguhen vetë një minutë pasi vjen rezultati përfundimtar. Ndeshjet që duan ndihmë (pa rezultat pas 3 orësh) shfaqen të parat.",
+  "Every match that has bets on it. Bets are paid out by themselves a minute after the final score arrives. Matches that need a hand (no score after 3 hours) are shown first. After 48 hours without a score, their open bets are refunded by themselves.":
+    "Çdo ndeshje që ka baste. Bastet paguhen vetë një minutë pasi vjen rezultati përfundimtar. Ndeshjet që kanë nevojë për ndihmë (pa rezultat pas 3 orësh) shfaqen të parat. Pas 48 orësh pa rezultat, bastet e tyre të hapura rimbursohen vetë.",
   "Every single bet. Use the search and the status list to find one. Open = not finished, Won/Lost = finished, Void = cancelled and the money given back.":
     "Çdo bast. Përdor kërkimin dhe listën e statusit për të gjetur një. Hapur = nuk ka mbaruar, Fituar/Humbur = ka mbaruar, Anuluar = u anulua dhe paratë u kthyen.",
 
@@ -156,8 +156,8 @@ export const help: Record<string, string> = {
     "Një kufi sigurie. Kur një rezultat i ndeshjes do të të bënte të paguash më shumë se kaq, bastet e reja për atë rezultat refuzohen. Lëre të çaktivizuar për pa kufi.",
 
   // Commissions
-  "Choose which days to count. “This week” is still running, so it can't be paid yet. To pay or collect, choose “Last week” or your own dates that are over. Export CSV saves the numbers as a file.":
-    "Zgjidh cilat ditë të numërohen. “Kjo javë” ende po vazhdon, prandaj nuk mund të paguhet ende. Për të paguar ose mbledhur, zgjidh “Java e kaluar” ose datat e tua që kanë mbaruar. Eksporto CSV i ruan numrat si skedar.",
+  "Choose which days to count. “This week” is still running, so it can't be paid yet. To pay or collect, choose “Last week” or your own dates that are over. Losses carry over: each payment covers everything since the last one, so a losing week is made up before anything more is paid. Export CSV saves the numbers as a file.":
+    "Zgjidh cilat ditë të numërohen. “Kjo javë” ende po vazhdon, prandaj nuk mund të paguhet ende. Për të paguar ose mbledhur, zgjidh “Java e kaluar” ose datat e tua që kanë mbaruar. Humbjet mbarten: çdo pagesë mbulon gjithçka që nga pagesa e fundit, kështu që një javë me humbje mbulohet para se të paguhet diçka më shumë. Eksporto CSV i ruan numrat si skedar.",
   "Your money from all Owners for this period: each Owner's rate (%) of their team's profit. Collect it with Mark as collected, below.":
     "Paratë e tua nga të gjithë Pronarët për këtë periudhë: përqindja e çdo Pronari (%) nga fitimi i skuadrës së tij. Mblidhi me Shëno si të mbledhur, më poshtë.",
   "What all teams made together: the money Players lost minus the money paid to winners.":

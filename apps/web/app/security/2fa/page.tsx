@@ -2,7 +2,8 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserProfilePanel } from "../../../components/user-profile-panel";
-import { apiFetch, type MeResponse } from "../../../lib/api";
+import { type MeResponse } from "../../../lib/api";
+import { serverApiFetch } from "../../../lib/api-server";
 import { getT } from "../../../lib/i18n/server";
 
 export default async function TwoFactorPage() {
@@ -14,7 +15,7 @@ export default async function TwoFactorPage() {
 
   let me: MeResponse | null = null;
   try {
-    me = await apiFetch<MeResponse>("/users/me", token);
+    me = await serverApiFetch<MeResponse>("/users/me", token);
   } catch {
     redirect("/dashboard");
   }

@@ -17,6 +17,7 @@ import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
 import { useTopUpRequest } from "../../../components/top-up-request";
 import { pickLabel } from "../../../lib/picks";
+import { isDaysFromToday } from "../../../lib/time";
 
 type Tab = "matches" | "open" | "settled";
 type SlipMode = "singles" | "accumulator";
@@ -52,12 +53,9 @@ const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 const DATE_TIME: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
 
 function dayLabel(iso: string, { t, date: format }: I18n): string {
+  if (isDaysFromToday(iso, 0)) return t("Today");
+  if (isDaysFromToday(iso, 1)) return t("Tomorrow");
   const date = new Date(iso);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  if (date.toDateString() === today.toDateString()) return t("Today");
-  if (date.toDateString() === tomorrow.toDateString()) return t("Tomorrow");
   // Albanian day names are lower case ("e premte"); as a heading it starts with a capital.
   const label = format(date, { weekday: "long", day: "numeric", month: "short" });
   return label.charAt(0).toUpperCase() + label.slice(1);

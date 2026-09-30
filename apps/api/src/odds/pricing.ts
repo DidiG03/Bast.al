@@ -5,6 +5,18 @@ export const MIN_ODDS = 1.01;
 export const MAX_ODDS = 1000;
 /** Largest total margin (Super Admin's base plus an Owner's) in percent. */
 export const MAX_MARGIN = 50;
+/**
+ * How far above the feed price an Owner's own price can go, in percent:
+ * room for a promotion, but a typo (150 for 1.50) or a price made up to pay
+ * someone out is refused.
+ */
+export const MAX_ABOVE_FEED = 10;
+
+/** The highest price an Owner can give a selection: MAX_ABOVE_FEED above its feed price, rounded down to the cent. */
+export function priceCeiling(feedOdds: number): number {
+  const ceiling = Math.floor(feedOdds * (1 + MAX_ABOVE_FEED / 100) * 100 + 1e-6) / 100;
+  return Math.min(MAX_ODDS, Math.max(MIN_ODDS, ceiling));
+}
 
 /**
  * The margin a team's prices run at: Super Admin's base plus the Owner's own,
@@ -25,9 +37,13 @@ export function applyMargin(feedOdds: number, marginPercent: number): number {
   return Math.min(MAX_ODDS, Math.max(MIN_ODDS, price));
 }
 
-/** What a team sees for one selection: the Owner's own price if set, otherwise the feed less the team margin. */
+/**
+ * What a team sees for one selection: the Owner's own price if set,
+ * otherwise the feed less the team margin. An Owner's price never goes above
+ * priceCeiling, even when the feed price drops after it was set.
+ */
 export function teamPrice(input: { feedOdds: number; baseMargin: number; ownerMargin: number; override?: number | null }): number {
-  if (input.override !== undefined && input.override !== null) return input.override;
+  if (input.override !== undefined && input.override !== null) return Math.min(input.override, priceCeiling(input.feedOdds));
   return applyMargin(input.feedOdds, teamMargin(input.baseMargin, input.ownerMargin));
 }
 

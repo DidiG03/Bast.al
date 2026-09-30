@@ -48,7 +48,8 @@ export type ReassignmentPreview = {
   reason: string | null;
   player: { id: string; username: string; currentManagerId: string | null };
   destination: { id: string; username: string; capacity: number; assigned: number; remaining: number };
-  impact: { movedAccounts: number; currentManagerId: string | null };
+  /** `returnedBalance` goes back to `returnedTo`, the Manager or Owner the Player leaves. */
+  impact: { movedAccounts: number; currentManagerId: string | null; returnedBalance: number; returnedTo: string | null };
 };
 
 export type CreateUserRequest = {
@@ -222,7 +223,24 @@ export type CommissionPayout = {
 /** Settled-bet totals. `net` is the team's profit: what Players staked minus what they were paid. */
 export type CommissionTotals = { bets: number; staked: number; paidOut: number; net: number };
 
-export type PlayerResult = CommissionTotals & { id: string; username: string; status: UserRow["status"] };
+/** `commission`: what this Player's results earn their Manager (0 without one). */
+export type PlayerResult = CommissionTotals & { id: string; username: string; status: UserRow["status"]; commission: number };
+
+/**
+ * Where one commission relationship stands (Super Admin and an Owner, or an
+ * Owner and a Manager). Losses carry over: a payment covers everything since
+ * the previous one, so a losing week is made up before more is paid.
+ */
+export type PayoutStanding = {
+  /** The end of the last payment, if any. */
+  paidUpTo: string | null;
+  /** Where a payment now would start. Null when already paid up to the period's end. */
+  start: string | null;
+  /** The commission from `start` to the period's end; below zero while losses are still being made up. */
+  balance: number;
+  /** What a payment now would be. */
+  due: number;
+};
 
 type CommissionPeriod = { from: string; to: string };
 
@@ -236,13 +254,15 @@ export type OwnerSplit = CommissionTotals & {
 
 export type SuperAdminCommissions = CommissionPeriod & {
   totals: OwnerSplit;
-  owners: Array<OwnerSplit & { id: string; username: string; status: UserRow["status"]; commissionRate: number; managers: number; players: number }>;
+  owners: Array<OwnerSplit & { id: string; username: string; status: UserRow["status"]; commissionRate: number; managers: number; players: number; payout: PayoutStanding }>;
 };
 
 export type TeamCommissions = CommissionPeriod & {
   owner: { id: string; username: string; commissionRate: number };
   totals: OwnerSplit;
-  managers: Array<CommissionTotals & { id: string; username: string; status: UserRow["status"]; commissionRate: number; commission: number; players: PlayerResult[] }>;
+  /** Where the Owner stands with Super Admin. */
+  ownerPayout: PayoutStanding;
+  managers: Array<CommissionTotals & { id: string; username: string; status: UserRow["status"]; commissionRate: number; commission: number; players: PlayerResult[]; payout: PayoutStanding }>;
   directPlayers: PlayerResult[];
 };
 
@@ -290,6 +310,8 @@ export type ManagerCommissions = CommissionPeriod & {
   manager: { id: string; username: string; commissionRate: number };
   paidBy: string | null;
   totals: CommissionTotals & { commission: number };
+  /** Where this Manager stands with their Owner. */
+  payout: PayoutStanding;
   players: PlayerResult[];
 };
 
@@ -375,6 +397,8 @@ export type OddsSelection = {
   price: number;
   /** The feed's price before any margin. Not sent to Players. */
   feedOdds?: number;
+  /** The highest price the Owner can set by hand: a little above the feed price. Before kick-off only; not sent to Players. */
+  maxPrice?: number;
   /** True when the Owner set this price by hand. */
   custom: boolean;
   result: "WON" | "LOST" | "VOID" | null;
@@ -415,7 +439,8 @@ export type OddsSettings = {
   canEditTeam: boolean;
   canManageEvents: boolean;
   feed: { mode: "api-football" | "mock" | "off"; syncedAt: string | null; status: string | null } | null;
-  limits: { minOdds: number; maxOdds: number; maxMargin: number };
+  /** `maxAboveFeed`: how far above the feed price an Owner's own price can go, in percent. */
+  limits: { minOdds: number; maxOdds: number; maxMargin: number; maxAboveFeed: number };
 };
 
 export type BetStatus = "OPEN" | "WON" | "LOST" | "VOID";

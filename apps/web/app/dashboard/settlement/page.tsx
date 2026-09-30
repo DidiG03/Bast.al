@@ -128,14 +128,14 @@ export default function SettlementPage() {
         <h1 style={{ margin: 0 }}>{t("Settlement")}</h1>
         <p className="muted report-subtitle">
           {canSettle
-            ? t("Bets settle by themselves a minute or so after the feed reports a final score. Use this page to correct a result, void a match, or void one bet. Every change is refunded or charged to the Player straight away and written to the audit log.")
+            ? t("Bets settle by themselves a minute or so after the feed reports a final score, and again if the feed corrects that score within two days. Bets on a match that isn't played within 48 hours of kick-off are refunded. Use this page to correct a result, void a match, or void one bet. Every change is refunded or charged to the Player straight away and written to the audit log.")
             : t("The matches your Players are betting on, and every bet they've placed. Bets settle by themselves a minute or so after the final score. If a result looks wrong, ask Super Admin to correct it.")}
         </p>
       </div>
 
 
       <section className="stack">
-        <h2 style={{ margin: 0 }}>{t("Matches with bets")}<HelpTip text="Every match that has bets on it. Bets are paid out by themselves a minute after the final score arrives. Matches that need a hand (no score after 3 hours) are shown first." /></h2>
+        <h2 style={{ margin: 0 }}>{t("Matches with bets")}<HelpTip text="Every match that has bets on it. Bets are paid out by themselves a minute after the final score arrives. Matches that need a hand (no score after 3 hours) are shown first. After 48 hours without a score, their open bets are refunded by themselves." /></h2>
         {events.length === 0 ? (
           <div className="card">
             <p className="muted" style={{ margin: 0 }}>{canSettle ? t("No bets have been placed yet.") : t("Your Players haven't placed any bets yet.")}</p>

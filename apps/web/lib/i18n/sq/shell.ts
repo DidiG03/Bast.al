@@ -6,6 +6,8 @@ export const shell: Record<string, string> = {
   "Your balance, given to you by your Manager or Owner": "Balanca jote, e dhënë nga Menaxheri ose Pronari yt",
   "The server isn't responding": "Serveri nuk po përgjigjet",
   "Your account isn't set up yet": "Llogaria jote ende nuk është krijuar",
+  "Your account is suspended": "Llogaria jote është e pezulluar",
+  "Your account, or one above it, is suspended, so you can't sign in right now. Ask whoever runs your team to reactivate it.": "Llogaria jote, ose një llogari mbi të, është e pezulluar, prandaj nuk mund të hysh tani. Kërkoji atij që drejton skuadrën tënde ta riaktivizojë.",
   "Loading dashboard": "Duke ngarkuar panelin",
   "Open navigation": "Hap menunë",
   "Close navigation": "Mbyll menunë",

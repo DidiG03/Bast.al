@@ -4,7 +4,7 @@ import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { OddsSyncService } from "./odds-sync.service";
-import { MAX_MARGIN, MAX_ODDS, MIN_ODDS, applyMargin, eventOpen, livePause, selectionQuote, teamMargin } from "./pricing";
+import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
@@ -42,7 +42,7 @@ export class OddsService {
       canEditTeam: actor.role === Role.OWNER || (actor.role === Role.SUPER_ADMIN && owner !== null),
       canManageEvents: actor.role === Role.SUPER_ADMIN,
       feed: actor.role === Role.PLAYER ? null : { mode: this.sync.mode, syncedAt: platform.oddsSyncedAt, status: platform.oddsSyncStatus },
-      limits: { minOdds: MIN_ODDS, maxOdds: MAX_ODDS, maxMargin: MAX_MARGIN },
+      limits: { minOdds: MIN_ODDS, maxOdds: MAX_ODDS, maxMargin: MAX_MARGIN, maxAboveFeed: MAX_ABOVE_FEED },
     };
   }
 
@@ -146,6 +146,8 @@ export class OddsService {
             name: selection.name,
             price: quote.price,
             feedOdds: showFeed ? (live ? liveOdds ?? feedOdds : feedOdds) : undefined,
+            /** The highest price the Owner can set on it. */
+            maxPrice: showFeed && !live ? priceCeiling(feedOdds) : undefined,
             custom: override !== null,
             result: selection.result,
             /** Live only: the feed isn't pricing this outcome right now. */
@@ -189,6 +191,11 @@ export class OddsService {
     const ownerId = await this.editableOwner(actor, ownerIdParam);
     if (!(odds >= MIN_ODDS && odds <= MAX_ODDS)) throw new BadRequestException(`Odds must be between ${MIN_ODDS} and ${MAX_ODDS}`);
     const selection = await this.openSelection(selectionId);
+    const feed = Number(selection.feedOdds);
+    const ceiling = priceCeiling(feed);
+    if (odds > ceiling) {
+      throw new BadRequestException(`That's more than ${MAX_ABOVE_FEED}% above the feed price (${feed.toFixed(2)}). The most you can set is ${ceiling.toFixed(2)}.`);
+    }
     const price = new Prisma.Decimal(odds.toFixed(2));
     await this.prisma.oddsOverride.upsert({
       where: { ownerId_selectionId: { ownerId, selectionId } },

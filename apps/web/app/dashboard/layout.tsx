@@ -8,7 +8,8 @@ import { NotificationCenter } from "../../components/notification-center";
 import { RealtimeProvider, RealtimeRefresh } from "../../components/realtime-provider";
 import { ThemeToggle } from "../../components/theme-toggle";
 import { UserMenu } from "../../components/user-menu";
-import { apiFetch, type MeResponse } from "../../lib/api";
+import { ApiError, type MeResponse } from "../../lib/api";
+import { serverApiFetch } from "../../lib/api-server";
 import { formatMoney } from "../../lib/format";
 import { LanguageToggle } from "../../components/language-toggle";
 import { getT } from "../../lib/i18n/server";
@@ -25,12 +26,18 @@ export default async function DashboardLayout({
 
   let me: MeResponse;
   try {
-    me = await apiFetch<MeResponse>("/users/me", token);
+    me = await serverApiFetch<MeResponse>("/users/me", token);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    const apiDown =
-      /fetch failed|ECONNREFUSED|Failed to fetch|network/i.test(message) ||
-      message.includes("Request failed");
+    // Only the API's own answer says why this account can't come in. Anything
+    // else (the API unreachable, busy, or failing) is the server's problem,
+    // not the account's.
+    const original = err instanceof ApiError ? err.original : "";
+    const problem =
+      original === "Account is not provisioned in this application"
+        ? "missing"
+        : err instanceof ApiError && err.status === 403 && original.startsWith("Account is suspended")
+          ? "suspended"
+          : "server";
 
     return (
       <main className="stack">
@@ -40,12 +47,18 @@ export default async function DashboardLayout({
         </div>
         <div className="card stack">
           <h1 style={{ margin: 0 }}>
-            {t(apiDown ? "The server isn't responding" : "Your account isn't set up yet")}
+            {problem === "missing"
+              ? t("Your account isn't set up yet")
+              : problem === "suspended"
+                ? t("Your account is suspended")
+                : t("The server isn't responding")}
           </h1>
           <p className="muted">
-            {apiDown
-              ? t("Bast.al can't reach its server right now. Wait a moment and refresh the page.")
-              : t("You're signed in, but there's no Bast.al account for you yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours.")}
+            {problem === "missing"
+              ? t("You're signed in, but there's no Bast.al account for you yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours.")
+              : problem === "suspended"
+                ? t("Your account, or one above it, is suspended, so you can't sign in right now. Ask whoever runs your team to reactivate it.")
+                : t("Bast.al can't reach its server right now. Wait a moment and refresh the page.")}
           </p>
         </div>
       </main>

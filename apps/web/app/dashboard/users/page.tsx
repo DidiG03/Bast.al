@@ -18,6 +18,7 @@ import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { endOfDateInput, fromDateInput } from "../../../lib/time";
 
 const ROLE_NAMES: Record<MeResponse["role"], string> = { SUPER_ADMIN: msg("Super Admin"), OWNER: msg("Owner"), MANAGER: msg("Manager"), PLAYER: msg("Player") };
 const STATUS_NAMES: Record<UserRow["status"], string> = { ACTIVE: msg("Active"), SUSPENDED: msg("Suspended") };
@@ -455,8 +456,8 @@ export default function UsersPage() {
     const token = await getToken();
     if (!token) return;
     const params = new URLSearchParams();
-    if (statementFrom) params.set("from", new Date(`${statementFrom}T00:00:00`).toISOString());
-    if (statementTo) params.set("to", new Date(`${statementTo}T23:59:59.999`).toISOString());
+    if (statementFrom) params.set("from", fromDateInput(statementFrom)?.toISOString() ?? "");
+    if (statementTo) params.set("to", endOfDateInput(statementTo)?.toISOString() ?? "");
     const statement = await apiFetch<BalanceStatement>(`/users/${balanceUser.id}/balance/statement?${params}`, token);
     const rows = [[t("Date"), t("Type"), t("Amount"), t("Reason"), t("By")], ...statement.entries.map((entry) => [new Date(entry.createdAt).toISOString(), t(transactionLabel(entry.type)), entry.amount.toFixed(2), ts(entry.reason), ts(entry.actor?.username ?? "System")])];
     const url = URL.createObjectURL(new Blob([rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\n")], { type: "text/csv;charset=utf-8" }));
@@ -580,7 +581,7 @@ export default function UsersPage() {
             <span className="tree-meta">
               <span className="tree-role">{t(ROLE_NAMES[user.role])}</span>
               <span className="tree-status">{user.status === "ACTIVE" && lockedByAncestor(user) ? t("Locked (parent suspended)") : t(STATUS_NAMES[user.status])}</span>
-              {user.role !== "SUPER_ADMIN" ? <span className="tree-balance">{formatMoney(user.balance)}</span> : null}
+              {user.role !== "SUPER_ADMIN" ? <span className={`tree-balance${Number(user.balance) < 0 ? " ledger-negative" : ""}`}>{formatMoney(user.balance)}</span> : null}
               {user.role === "PLAYER" && openBets[user.id] ? (
                 <button
                   type="button"
@@ -802,7 +803,8 @@ export default function UsersPage() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setBalanceUser(null)}>
           <section className="modal modal-wide card" role="dialog" aria-modal="true" aria-labelledby="charge-balance-title">
             <div className="modal-header"><h2 id="charge-balance-title">{t("Balance")}<HelpTip text="Everything about this account's money: give it money, take money back, set limits, and see every past money move." /></h2><button type="button" className="modal-close secondary" onClick={() => setBalanceUser(null)} aria-label={t("Close")}>×</button></div>
-            <p className="muted">{t("Current balance:")} <strong>{formatMoney(balanceUser.balance)}</strong> · {t("Limit:")} <strong>{formatMoney(balanceUser.balanceLimit)}</strong></p>
+            <p className="muted">{t("Current balance:")} <strong className={Number(balanceUser.balance) < 0 ? "ledger-negative" : undefined}>{formatMoney(balanceUser.balance)}</strong> · {t("Limit:")} <strong>{formatMoney(balanceUser.balanceLimit)}</strong></p>
+            {Number(balanceUser.balance) < 0 ? <p className="error-text" style={{ margin: 0 }}>{t("{name} owes {amount}: a corrected result took back winnings they had already used. Giving credit pays this off first.", { name: balanceUser.username, amount: formatMoney(-Number(balanceUser.balance)) })}</p> : null}
             <div className="modal-settings">
               <form className="inline-edit-form" onSubmit={onSetBalanceLimit}>
                 <label>{t("Balance limit")}<HelpTip text="The most money this account can hold. You can't send more once it reaches this amount." /><input type="number" min="0.01" step="0.01" max="100000000" value={balanceLimit} onChange={(event) => setBalanceLimit(event.target.value)} inputMode="decimal" /></label>
@@ -895,14 +897,14 @@ export default function UsersPage() {
       {reassignUser ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setReassignUser(null)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="reassign-title">
-            <div className="modal-header"><h2 id="reassign-title">{t("Move this Player?")}<HelpTip text="Moves the Player to another Manager or Owner. Their money and bets stay the same; only who looks after them changes." /></h2><button type="button" className="modal-close secondary" onClick={() => setReassignUser(null)} aria-label={t("Close")}>×</button></div>
+            <div className="modal-header"><h2 id="reassign-title">{t("Move this Player?")}<HelpTip text="Moves the Player to another Manager or Owner. Their balance goes back to whoever gave it to them, and the new Manager or Owner gives them credit. Past bets stay with the team they were placed with. A Player with open bets, or a balance below zero, can be moved once that's settled." /></h2><button type="button" className="modal-close secondary" onClick={() => setReassignUser(null)} aria-label={t("Close")}>×</button></div>
             <p>{t("Move {name} to a different Manager or Owner? This is recorded and the affected accounts are notified.", { name: reassignUser.username })}</p>
             <form className="stack" onSubmit={onReassign}>
               <label>{t("New Manager or Owner")}<select required value={reassignManagerId} onChange={(event) => loadReassignmentPreview(event.target.value, reassignUser)}>
                 <option value="">{t("Select a Manager or Owner")}</option>
                 {reassignDestinations.filter((manager) => manager.id !== reassignUser.parentId).map((manager) => <option key={manager.id} value={manager.id}>{manager.username}{manager.id === me.id ? ` ${t("(you)")}` : ""} · {t(ROLE_NAMES[manager.role])} · {users.filter((child) => child.parentId === manager.id && child.role === "PLAYER").length}/{manager.managerCapacity}</option>)}
               </select></label>
-              {reassignmentPreview?.valid ? <div className="impact-preview"><strong>{t("Ready to move")}</strong><span>{t("Move {player} to {destination}? Room for {remaining} more Players.", { player: reassignmentPreview.player.username, destination: reassignmentPreview.destination.username, remaining: reassignmentPreview.destination.remaining })}</span><span>{tn(reassignmentPreview.impact.movedAccounts, "Impact: {count} Player account affected.", "Impact: {count} Player accounts affected.")}</span></div> : null}
+              {reassignmentPreview?.valid ? <div className="impact-preview"><strong>{t("Ready to move")}</strong><span>{t("Move {player} to {destination}? Room for {remaining} more Players.", { player: reassignmentPreview.player.username, destination: reassignmentPreview.destination.username, remaining: reassignmentPreview.destination.remaining })}</span><span>{tn(reassignmentPreview.impact.movedAccounts, "Impact: {count} Player account affected.", "Impact: {count} Player accounts affected.")}</span>{reassignmentPreview.impact.returnedBalance > 0 && reassignmentPreview.impact.returnedTo ? <span>{t("Their {amount} balance goes back to {name}; they start at $0.00.", { amount: formatMoney(reassignmentPreview.impact.returnedBalance), name: reassignmentPreview.impact.returnedTo })}</span> : null}</div> : null}
               <div className="modal-actions"><button type="button" className="secondary" onClick={() => setReassignUser(null)} disabled={busy}>{t("Cancel")}</button><button type="submit" disabled={busy || !reassignmentPreview?.valid}>{busy ? <LoadingSpinner label="Reassigning player" size="small" /> : t("Confirm move")}</button></div>
             </form>
           </section>
@@ -911,13 +913,13 @@ export default function UsersPage() {
       {confirmation ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setConfirmation(null)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-            <div className="modal-header"><h2 id="confirm-title">{confirmation.action === "delete" ? t("Delete user?") : t("Suspend user?")}<HelpTip text="Suspend blocks the account, and everyone under it, from signing in. You can undo it later with Reactivate. Delete removes the account for good, and its balance must be $0 first." /></h2><button type="button" className="modal-close secondary" onClick={() => setConfirmation(null)} aria-label={t("Close")}>×</button></div>
+            <div className="modal-header"><h2 id="confirm-title">{confirmation.action === "delete" ? t("Delete user?") : t("Suspend user?")}<HelpTip text="Suspend blocks the account, and everyone under it, from signing in. You can undo it later with Reactivate. Delete is only for an account made by mistake: once it has placed a bet or moved money it can't be deleted, so its history stays in the reports. Suspend it instead." /></h2><button type="button" className="modal-close secondary" onClick={() => setConfirmation(null)} aria-label={t("Close")}>×</button></div>
             <p>
               {confirmation.action === "delete"
                 ? tn(
                     users.filter((user) => user.parentId === confirmation.user.id).length,
-                    "Are you sure you want to delete {name}? This can't be undone. {count} account directly under them blocks deletion until it's moved, and any remaining balance must be taken back first.",
-                    "Are you sure you want to delete {name}? This can't be undone. {count} accounts directly under them block deletion until they're moved, and any remaining balance must be taken back first.",
+                    "Are you sure you want to delete {name}? This can't be undone. Only an account that has never placed a bet or moved money can be deleted, and {count} account directly under them blocks deletion until it's moved.",
+                    "Are you sure you want to delete {name}? This can't be undone. Only an account that has never placed a bet or moved money can be deleted, and {count} accounts directly under them block deletion until they're moved.",
                     { name: confirmation.user.username },
                   )
                 : confirmation.user.role === "PLAYER"

@@ -8,18 +8,20 @@ import {
 import { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma.service";
-import { RealtimeService } from "../realtime/realtime.service";
 import { clientContext } from "../security/client-context";
 import { clientIp } from "../security/client-ip";
 import { ThreatIntelService } from "../security/threat-intel.service";
 import { parseUserAgent } from "../security/user-agent";
-import { ClerkService } from "./clerk.service";
+import { bearerToken, ClerkService } from "./clerk.service";
 import { Actor, isActive } from "./permissions";
 
 export type AuthenticatedRequest = Request & {
   actor?: Actor;
   clerkUserId?: string;
 };
+
+/** A refused account's attempts are recorded at most this often, not on every request its open tabs make. */
+const REFUSAL_AUDIT_EVERY_MS = 60 * 60_000;
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -28,12 +30,11 @@ export class AuthGuard implements CanActivate {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly threats: ThreatIntelService,
-    private readonly realtime: RealtimeService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const token = this.extractBearerToken(request);
+    const token = bearerToken(request);
     const ip = clientIp(request) ?? "unknown";
 
     if (await this.threats.isBlocked(ip)) {
@@ -41,29 +42,28 @@ export class AuthGuard implements CanActivate {
     }
 
     if (!token) {
-      await this.fail(ip, null, "missing_bearer_token");
+      await this.fail(ip, "missing_bearer_token");
       throw new UnauthorizedException("Missing authentication token");
     }
 
-    let clerkUserId: string;
-    let sessionId: string | undefined;
-    try {
-      const verified = await this.clerk.verifySessionToken(token);
-      clerkUserId = verified.userId;
-      sessionId = verified.sessionId;
-    } catch {
-      await this.fail(ip, null, "invalid_clerk_token");
+    const verified = await this.clerk.sessionFor(request);
+    if (!verified) {
+      await this.fail(ip, "invalid_clerk_token");
       throw new UnauthorizedException("Invalid or expired session");
     }
+    const { userId: clerkUserId, sessionId } = verified;
 
+    // The three refusals below are someone with a real, signed-in session who
+    // isn't allowed in, not someone guessing: their open tabs keep asking every
+    // few seconds. So they never count towards a lockout.
     const user = await this.prisma.user.findUnique({ where: { clerkId: clerkUserId } });
     if (!user) {
-      await this.fail(ip, null, "no_local_user", { clerkUserId });
+      await this.refuse(ip, null, "no_local_user", clerkUserId);
       throw new UnauthorizedException("Account is not provisioned in this application");
     }
 
     if (!isActive(user)) {
-      await this.fail(ip, user.id, "suspended");
+      await this.refuse(ip, user.id, "suspended", clerkUserId);
       throw new ForbiddenException("Account is suspended");
     }
 
@@ -71,7 +71,7 @@ export class AuthGuard implements CanActivate {
     // suspended, everyone under them is locked out too, without having to
     // flip each downline row (so reactivating the parent restores them all).
     if (user.parentId && (await this.hasSuspendedAncestor(user.id))) {
-      await this.fail(ip, user.id, "ancestor_suspended");
+      await this.refuse(ip, user.id, "ancestor_suspended", clerkUserId);
       throw new ForbiddenException("Account is suspended because an account above it is suspended");
     }
 
@@ -99,40 +99,32 @@ export class AuthGuard implements CanActivate {
     return Boolean(rows[0]?.blocked);
   }
 
-  private async fail(
-    ip: string,
-    actorId: string | null,
-    reason: string,
-    metadata: Record<string, unknown> = {},
-  ) {
+  /** A request with no valid session: counts towards locking out the visitor's address. */
+  private async fail(ip: string, reason: string) {
     const result = await this.threats.recordFailure(ip);
     await this.audit.log({
-      actorId,
       action: "auth.failure",
       ipAddress: ip,
-      metadata: { reason, banned: result.banned, failures: result.failures, ...metadata },
+      metadata: { reason, banned: result.banned, failures: result.failures },
     });
-    if (actorId) {
-      const notification = await this.prisma.notification.create({
-        data: {
-          userId: actorId,
-          type: "SUSPICIOUS_LOGIN",
-          title: "Suspicious login activity",
-          message: result.banned ? "Your account was temporarily locked after repeated failed sign-in attempts." : "A failed sign-in attempt was detected on your account.",
-          metadata: { ipAddress: ip, reason, failures: result.failures },
-        },
-      });
-      await this.realtime.publish(actorId, { type: "notification.created", notification });
-    }
     if (result.banned) {
       await this.threats.ban(ip, reason);
     }
   }
 
-  private extractBearerToken(request: Request): string | null {
-    const header = request.headers.authorization;
-    if (!header?.startsWith("Bearer ")) return null;
-    return header.slice("Bearer ".length).trim() || null;
+  /**
+   * A signed-in account that isn't allowed in (suspended, or not set up here).
+   * Recorded once an hour per account, never counted as a failed sign-in.
+   */
+  private async refuse(ip: string, userId: string | null, reason: string, clerkUserId: string) {
+    if (!(await this.threats.firstInWindow(`auth-refused:${clerkUserId}:${reason}`, REFUSAL_AUDIT_EVERY_MS))) return;
+    await this.audit.log({
+      actorId: userId,
+      action: "auth.refused",
+      targetId: userId,
+      ipAddress: ip,
+      metadata: { reason, ...(userId ? {} : { clerkUserId }) },
+    });
   }
 
   /**

@@ -15,7 +15,6 @@ import {
   type BarPoint,
 } from "../../components/overview";
 import {
-  apiFetch,
   type CommissionDaily,
   type CommissionHistory,
   type ManagerCommissions,
@@ -31,34 +30,24 @@ import {
   type TeamCommissions,
   type UserRow,
 } from "../../lib/api";
+import { serverApiFetch } from "../../lib/api-server";
 import { formatMoney, formatSignedMoney } from "../../lib/format";
 import { getT } from "../../lib/i18n/server";
+import { addDays, dayKey, isDaysFromToday, startOfDay, startOfWeek } from "../../lib/time";
 
 const MATCH_TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
 /** "Today", "Tomorrow", or DD/MM/YYYY — so a match's day is never ambiguous. */
 function topEventDayLabel(iso: string): string {
   const { t } = getT();
-  const date = new Date(iso);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  if (date.toDateString() === today.toDateString()) return t("Today");
-  if (date.toDateString() === tomorrow.toDateString()) return t("Tomorrow");
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${day}/${month}/${date.getFullYear()}`;
+  if (isDaysFromToday(iso, 0)) return t("Today");
+  if (isDaysFromToday(iso, 1)) return t("Tomorrow");
+  const [year, month, day] = dayKey(iso).split("-");
+  return `${day}/${month}/${year}`;
 }
 const DAY_MS = 86_400_000;
-const WEEKDAY: Intl.DateTimeFormatOptions = { weekday: "short", timeZone: "UTC" };
-const SHORT_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", timeZone: "UTC" };
-
-/** Monday 00:00 UTC, the same week boundary commissions settle on. */
-function startOfWeek(now: Date): Date {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
-  return start;
-}
+const WEEKDAY: Intl.DateTimeFormatOptions = { weekday: "short" };
+const SHORT_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
 
 type Period = { from: Date; to: Date };
 
@@ -66,7 +55,7 @@ type Period = { from: Date; to: Date };
 function periods(now: Date) {
   const weekStart = startOfWeek(now);
   const thisWeek: Period = { from: weekStart, to: now };
-  const lastWeek: Period = { from: new Date(weekStart.getTime() - 7 * DAY_MS), to: new Date(now.getTime() - 7 * DAY_MS) };
+  const lastWeek: Period = { from: addDays(weekStart, -7), to: new Date(now.getTime() - 7 * DAY_MS) };
   return { thisWeek, lastWeek };
 }
 
@@ -82,7 +71,7 @@ async function optional<T>(request: Promise<T>): Promise<T | null> {
 type Day = CommissionDaily["days"][number];
 
 async function lastSevenDays(token: string): Promise<Day[]> {
-  const response = await optional(apiFetch<CommissionDaily>("/commissions/daily?days=7", token));
+  const response = await optional(serverApiFetch<CommissionDaily>("/commissions/daily?days=7", token));
   return response?.days ?? [];
 }
 
@@ -102,7 +91,7 @@ function PageHeader({ username, subtitle, now }: { username: string; subtitle: s
       </div>
       <span className="period-chip">
         <NamedIcon name="calendar" className="period-chip-icon" />
-        {weekStart.getTime() === new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).getTime()
+        {weekStart.getTime() === startOfDay(now).getTime()
           ? t("This week · since {day}", { day: date(weekStart, SHORT_DATE) })
           : t("This week · {from} to {to}", { from: date(weekStart, SHORT_DATE), to: date(now, SHORT_DATE) })}
       </span>
@@ -129,7 +118,7 @@ export default async function DashboardPage() {
   const token = await getToken();
   if (!token) redirect("/sign-in");
 
-  const me = await apiFetch<MeResponse>("/users/me", token);
+  const me = await serverApiFetch<MeResponse>("/users/me", token);
 
   if (me.role === "PLAYER") {
     return <PlayerHome me={me} token={token} />;
@@ -142,7 +131,7 @@ export default async function DashboardPage() {
 }
 
 async function notificationsFor(token: string) {
-  const response = await optional(apiFetch<NotificationResponse>("/notifications", token));
+  const response = await optional(serverApiFetch<NotificationResponse>("/notifications", token));
   const items = response?.items ?? [];
   return {
     latest: items.filter((item) => !item.archivedAt).slice(0, 6),
@@ -154,12 +143,12 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
   const { t, tn } = getT();
   const { thisWeek, lastWeek } = periods(now);
   const [users, pending, notifications, settlementEvents, week, previous, days] = await Promise.all([
-    apiFetch<UserRow[]>("/users", token),
-    optional(apiFetch<PendingApproval[]>("/users/balance/pending", token)),
+    serverApiFetch<UserRow[]>("/users", token),
+    optional(serverApiFetch<PendingApproval[]>("/users/balance/pending", token)),
     notificationsFor(token),
-    optional(apiFetch<SettlementEvent[]>("/bets/admin/events", token)),
-    optional(apiFetch<SuperAdminCommissions>(`/commissions/owners?${query(thisWeek)}`, token)),
-    optional(apiFetch<SuperAdminCommissions>(`/commissions/owners?${query(lastWeek)}`, token)),
+    optional(serverApiFetch<SettlementEvent[]>("/bets/admin/events", token)),
+    optional(serverApiFetch<SuperAdminCommissions>(`/commissions/owners?${query(thisWeek)}`, token)),
+    optional(serverApiFetch<SuperAdminCommissions>(`/commissions/owners?${query(lastWeek)}`, token)),
     lastSevenDays(token),
   ]);
 
@@ -296,13 +285,13 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
   const { t, tn, ts } = getT();
   const { thisWeek, lastWeek } = periods(now);
   const [users, pending, notifications, week, previous, days, risk] = await Promise.all([
-    apiFetch<UserRow[]>("/users", token),
-    optional(apiFetch<PendingApproval[]>("/users/balance/pending", token)),
+    serverApiFetch<UserRow[]>("/users", token),
+    optional(serverApiFetch<PendingApproval[]>("/users/balance/pending", token)),
     notificationsFor(token),
-    optional(apiFetch<TeamCommissions>(`/commissions/team?${query(thisWeek)}`, token)),
-    optional(apiFetch<TeamCommissions>(`/commissions/team?${query(lastWeek)}`, token)),
+    optional(serverApiFetch<TeamCommissions>(`/commissions/team?${query(thisWeek)}`, token)),
+    optional(serverApiFetch<TeamCommissions>(`/commissions/team?${query(lastWeek)}`, token)),
     lastSevenDays(token),
-    optional(apiFetch<RiskView>("/risk", token)),
+    optional(serverApiFetch<RiskView>("/risk", token)),
   ]);
 
   const managers = users.filter((user) => user.role === "MANAGER").length;
@@ -481,11 +470,11 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
   const { t, tn, date } = getT();
   const { thisWeek, lastWeek } = periods(now);
   const [users, notifications, week, previous, history] = await Promise.all([
-    apiFetch<UserRow[]>("/users", token),
+    serverApiFetch<UserRow[]>("/users", token),
     notificationsFor(token),
-    optional(apiFetch<ManagerCommissions>(`/commissions/mine?${query(thisWeek)}`, token)),
-    optional(apiFetch<ManagerCommissions>(`/commissions/mine?${query(lastWeek)}`, token)),
-    optional(apiFetch<CommissionHistory>("/commissions/mine/history?weeks=8", token)),
+    optional(serverApiFetch<ManagerCommissions>(`/commissions/mine?${query(thisWeek)}`, token)),
+    optional(serverApiFetch<ManagerCommissions>(`/commissions/mine?${query(lastWeek)}`, token)),
+    optional(serverApiFetch<CommissionHistory>("/commissions/mine/history?weeks=8", token)),
   ]);
 
   const players = users.filter((user) => user.role === "PLAYER");
@@ -648,10 +637,10 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
   const { t, tn, ts, date } = getT();
   const [live, upcoming, slip, bets] = me.parent
     ? await Promise.all([
-        apiFetch<OddsEvent[]>("/odds/events?filter=live", token).catch(() => []),
-        apiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token).catch(() => []),
-        apiFetch<SlipInfo>("/bets/slip", token).catch(() => null),
-        apiFetch<MyBets>("/bets/mine?status=open", token).catch(() => null),
+        serverApiFetch<OddsEvent[]>("/odds/events?filter=live", token).catch(() => []),
+        serverApiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token).catch(() => []),
+        serverApiFetch<SlipInfo>("/bets/slip", token).catch(() => null),
+        serverApiFetch<MyBets>("/bets/mine?status=open", token).catch(() => null),
       ])
     : [[], [], null, null];
   const topEvents = pickTopEvents(live, upcoming, 4);

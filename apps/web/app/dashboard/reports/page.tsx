@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { apiFetch, type MeResponse, type UserReport } from "../../../lib/api";
+import { type MeResponse, type UserReport } from "../../../lib/api";
+import { serverApiFetch } from "../../../lib/api-server";
 import { formatMoney } from "../../../lib/format";
 import { ReportsTabs } from "./reports-tabs";
 import { AuditLog } from "./audit-log";
@@ -22,9 +23,9 @@ export default async function ReportsPage() {
   const token = await getToken();
   if (!token) redirect("/sign-in");
 
-  const me = await apiFetch<MeResponse>("/users/me", token);
+  const me = await serverApiFetch<MeResponse>("/users/me", token);
   if (me.role === "PLAYER") redirect("/dashboard");
-  const report = await apiFetch<UserReport>("/users/report", token);
+  const report = await serverApiFetch<UserReport>("/users/report", token);
   const isOwner = me.role === "OWNER";
   const isManager = me.role === "MANAGER";
   const accountCount =

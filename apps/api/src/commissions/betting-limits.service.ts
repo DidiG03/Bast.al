@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { BetStatus, Prisma, Role } from "@prisma/client";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
+import { startOfDay } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
 
 type Limits = { maxStake: number | null; dailyLossLimit: number | null };
@@ -15,10 +16,6 @@ function stricter(a: number | null, b: number | null): number | null {
   if (a === null) return b;
   if (b === null) return a;
   return Math.min(a, b);
-}
-
-function startOfUtcDay(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 /**
@@ -97,7 +94,7 @@ export class BettingLimitsService {
       throw new BadRequestException(`The most this Player can stake on one bet is $${maxStake.toFixed(2)}`);
     }
     if (dailyLossLimit !== null) {
-      const today = startOfUtcDay(new Date());
+      const today = startOfDay(new Date());
       const open = await this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: today } }, _sum: { stake: true } });
       const worstCase = (await this.lossToday(playerId)) + Number(open._sum.stake ?? 0) + alsoStaking + stake;
       if (worstCase > dailyLossLimit) {
@@ -111,14 +108,14 @@ export class BettingLimitsService {
    * stakes placed today that are still open, the same sum assertCanPlace checks.
    */
   async usedToday(playerId: string): Promise<number> {
-    const open = await this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfUtcDay(new Date()) } }, _sum: { stake: true } });
+    const open = await this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfDay(new Date()) } }, _sum: { stake: true } });
     return Math.round(((await this.lossToday(playerId)) + Number(open._sum.stake ?? 0)) * 100) / 100;
   }
 
-  /** Net amount the Player has lost on bets settled today (UTC); 0 if they're up. */
+  /** Net amount the Player has lost on bets settled today (since midnight, Albanian time); 0 if they're up. */
   private async lossToday(playerId: string): Promise<number> {
     const settled = await this.prisma.bet.aggregate({
-      where: { playerId, status: { in: [BetStatus.WON, BetStatus.LOST] }, settledAt: { gte: startOfUtcDay(new Date()) } },
+      where: { playerId, status: { in: [BetStatus.WON, BetStatus.LOST] }, settledAt: { gte: startOfDay(new Date()) } },
       _sum: { stake: true, payout: true },
     });
     const net = Number(settled._sum.stake ?? 0) - Number(settled._sum.payout ?? 0);

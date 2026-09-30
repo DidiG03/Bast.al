@@ -12,6 +12,7 @@ import { HelpTip } from "../../../components/help-tip";
 import { useToast } from "../../../components/toaster";
 import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
+import { endOfDateInput, fromDateInput } from "../../../lib/time";
 
 const roles = ["", "SUPER_ADMIN", "OWNER", "MANAGER", "PLAYER"] as const;
 const ROLE_NAMES: Record<string, string> = { "": msg("All roles"), SUPER_ADMIN: msg("Super Admin"), OWNER: msg("Owner"), MANAGER: msg("Manager"), PLAYER: msg("Player") };
@@ -48,8 +49,8 @@ export function AuditLog() {
       if (target.trim()) params.set("target", target.trim());
       if (action.trim()) params.set("action", action.trim());
       if (role) params.set("role", role);
-      if (from) params.set("from", new Date(`${from}T00:00:00`).toISOString());
-      if (to) params.set("to", new Date(`${to}T23:59:59.999`).toISOString());
+      if (from) params.set("from", fromDateInput(from)?.toISOString() ?? "");
+      if (to) params.set("to", endOfDateInput(to)?.toISOString() ?? "");
       setResult(
         await apiFetch<AuditResponse>(
           `/users/audit?${params.toString()}`,

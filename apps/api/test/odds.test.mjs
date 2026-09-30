@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
 import { bigSwing, cooldownFor, laterCooldown } from "../dist/odds/live-guard.js";
-import { applyMargin, eventOpen, livePause, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
+import { applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 
 test("a margin comes off the feed price and rounds down to the cent", () => {
   assert.equal(applyMargin(2.0, 5), 1.9);
@@ -268,12 +268,12 @@ test("live odds carry the score and minute they were made for, and can be fetche
 test("live prices ignore an Owner's fixed price and pause on a suspended market", () => {
   const now = new Date("2026-01-01T12:00:00Z");
   const event = { status: "LIVE", startsAt: new Date("2026-01-01T11:00:00Z"), suspended: false, hidden: false, liveStopped: false, liveOddsAt: now };
-  const input = { event, market: { liveSuspended: false }, selection: { feedOdds: 2.0, liveOdds: 3.0, result: null }, baseMargin: 5, ownerMargin: 0, override: 2.5, now };
+  const input = { event, market: { liveSuspended: false }, selection: { feedOdds: 2.0, liveOdds: 3.0, result: null }, baseMargin: 5, ownerMargin: 0, override: 2.15, now };
   assert.deepEqual(selectionQuote(input), { price: 2.85, bettable: true, live: true, suspended: false });
   assert.equal(selectionQuote({ ...input, market: { liveSuspended: true } }).bettable, false);
   assert.equal(selectionQuote({ ...input, selection: { ...input.selection, liveOdds: null } }).bettable, false);
   const prematch = selectionQuote({ ...input, event: { ...event, status: "UPCOMING", startsAt: new Date(now.getTime() + 60_000) } });
-  assert.deepEqual(prematch, { price: 2.5, bettable: true, live: false, suspended: false });
+  assert.deepEqual(prematch, { price: 2.15, bettable: true, live: false, suspended: false });
 });
 
 test("the extra markets parse from a real API-Football response", async () => {
@@ -395,4 +395,13 @@ test("a live bet's match is checked with the feed itself, and a goal found there
   answer = null;
   await service.verifyLive(["e1"]);
   assert.equal(updates.at(-1).liveStopped, true);
+});
+
+test("an Owner's own price can't go more than 10% above the feed price", () => {
+  assert.equal(priceCeiling(1.5), 1.65);
+  assert.equal(priceCeiling(2.1), 2.31);
+  assert.equal(priceCeiling(950), 1000, "never above the highest price there is");
+  // A typo (150 for 1.50) is held to the ceiling, and so is a price set before the feed price dropped.
+  assert.equal(teamPrice({ feedOdds: 1.5, baseMargin: 5, ownerMargin: 0, override: 150 }), 1.65);
+  assert.equal(teamPrice({ feedOdds: 1.5, baseMargin: 5, ownerMargin: 0, override: 1.4 }), 1.4, "a price below the feed stands");
 });

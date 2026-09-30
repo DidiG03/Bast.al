@@ -128,6 +128,11 @@ model User {
   notificationPreference NotificationPreference?
   loginHistory           LoginHistory[]
   bets                   Bet[]
+  betsAsOwner            Bet[]                   @relation("BetOwner")
+  betsAsManager          Bet[]                   @relation("BetManager")
+  settlementsAsPlayer    SettlementEntry[]       @relation("SettlementPlayer")
+  settlementsAsOwner     SettlementEntry[]       @relation("SettlementOwner")
+  settlementsAsManager   SettlementEntry[]       @relation("SettlementManager")
   bettingLimit           BettingLimit?
   oddsOverrides          OddsOverride[]
   commissionPayouts      CommissionPayout[]
@@ -203,16 +208,20 @@ model NotificationPreference {
 /// decreases, the receiver's increases). ADJUSTMENT rows have fromUserId
 /// null (a Super-Admin-only correction with no counterparty) and amount may
 /// be negative.
+///
+/// Ledger entries, bets and commission payouts are never deleted with a user:
+/// every relation to User is Restrict, so an account with any money history
+/// can only be suspended (UsersService.deleteUser refuses it first).
 model BalanceTransaction {
   id           String                   @id @default(cuid())
   fromUserId   String?                  @map("from_user_id")
-  fromUser     User?                    @relation("DelegationFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  fromUser     User?                    @relation("DelegationFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
   toUserId     String                   @map("to_user_id")
-  toUser       User                     @relation("DelegationTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  toUser       User                     @relation("DelegationTo", fields: [toUserId], references: [id], onDelete: Restrict)
   actorId      String?                  @map("actor_id")
-  actor        User?                    @relation("DelegationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actor        User?                    @relation("DelegationActor", fields: [actorId], references: [id], onDelete: Restrict)
   approvedById String?                  @map("approved_by_id")
-  approvedBy   User?                    @relation("DelegationApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedBy   User?                    @relation("DelegationApprover", fields: [approvedById], references: [id], onDelete: Restrict)
   type         BalanceTransactionType
   amount       Decimal                  @db.Decimal(12, 2)
   reason       String
@@ -302,6 +311,12 @@ model Event {
   statsCheckedAt DateTime? @map("stats_checked_at")
   /// "feed" or "manual". The feed never overwrites a manual result.
   resultSource String?     @map("result_source")
+  /// When the feed last changed a result bets were already settled on. Once
+  /// it has stayed the same for a while, settlement re-settles the bets and clears this.
+  resultChangedAt DateTime? @map("result_changed_at")
+  /// When the feed moved kick-off more than 48 hours later. Open bets placed
+  /// before then are refunded, and this is cleared.
+  rescheduledAt DateTime?  @map("rescheduled_at")
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   markets      Market[]
@@ -412,7 +427,7 @@ model PlatformSettings {
 model Bet {
   id          String     @id @default(cuid())
   playerId    String     @map("player_id")
-  player      User       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player      User       @relation(fields: [playerId], references: [id], onDelete: Restrict)
   stake       Decimal    @db.Decimal(12, 2)
   /// What the Player was paid back, stake included. 0 for a lost bet.
   payout      Decimal    @default(0) @db.Decimal(12, 2)
@@ -434,10 +449,27 @@ model Bet {
   legs        BetLeg[]
   /// The stake and every settlement move, in the Player's balance ledger.
   ledger      BalanceTransaction[]
+  /// The team that took the bet and the commission rates in force when it was
+  /// placed. Commission is worked out from these, so moving the Player to
+  /// another Manager or changing a rate later never rewrites past results.
+  /// Null only on bets placed before this was recorded (filled in on start).
+  ownerId     String?    @map("owner_id")
+  owner       User?      @relation("BetOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  /// Null when the Player sat directly under the Owner.
+  managerId   String?    @map("manager_id")
+  manager     User?      @relation("BetManager", fields: [managerId], references: [id], onDelete: Restrict)
+  /// Super Admin's cut of the Owner's profit, in percent.
+  ownerRate   Decimal?   @map("owner_rate") @db.Decimal(5, 2)
+  /// The Manager's cut of their Players' profit, in percent (0 without a Manager).
+  managerRate Decimal?   @map("manager_rate") @db.Decimal(5, 2)
+  /// What each settlement did to the team's numbers, see SettlementEntry.
+  settlements SettlementEntry[]
 
   @@index([playerId, settledAt])
   @@index([status, settledAt])
   @@index([selectionId])
+  @@index([ownerId])
+  @@index([managerId])
   @@map("bets")
 }
 
@@ -497,6 +529,42 @@ enum EventStatus {
   CANCELLED
 }
 
+/// What one settlement did to a team's numbers, dated when it happened. A
+/// bet settling adds its stake and payout; a correction later adds only the
+/// difference, in the week it's made, so a week that has been reported and
+/// paid never changes afterwards. Only WON and LOST bets count (a void one
+/// is refunded), so voiding a settled bet takes it back out:
+///   settled LOST       -> +1 bet, +stake, +0
+///   corrected to WON   ->  0,      0,     +payout
+///   voided             -> -1 bet, -stake, -payout
+/// Summing a bet's rows gives what it counts for now. Team and rates are
+/// copied from the bet, as they were when it was placed.
+model SettlementEntry {
+  id          String   @id @default(cuid())
+  betId       String   @map("bet_id")
+  bet         Bet      @relation(fields: [betId], references: [id], onDelete: Restrict)
+  playerId    String   @map("player_id")
+  player      User     @relation("SettlementPlayer", fields: [playerId], references: [id], onDelete: Restrict)
+  ownerId     String?  @map("owner_id")
+  owner       User?    @relation("SettlementOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  managerId   String?  @map("manager_id")
+  manager     User?    @relation("SettlementManager", fields: [managerId], references: [id], onDelete: Restrict)
+  ownerRate   Decimal  @default(0) @map("owner_rate") @db.Decimal(5, 2)
+  managerRate Decimal  @default(0) @map("manager_rate") @db.Decimal(5, 2)
+  /// Change in settled bets counted: +1, -1 or 0.
+  bets        Int
+  /// Change in stakes and payouts counted.
+  stake       Decimal  @db.Decimal(12, 2)
+  payout      Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([ownerId, createdAt])
+  @@index([managerId, createdAt])
+  @@index([playerId, createdAt])
+  @@index([betId])
+  @@map("settlement_entries")
+}
+
 /// One row per client-supplied Idempotency-Key, so a double tap or a retried
 /// request replays the first response instead of moving money twice.
 model IdempotencyKey {
@@ -522,7 +590,7 @@ model CommissionPayout {
   id            String             @id @default(cuid())
   /// The Owner who paid Super Admin, or the Manager who was paid.
   userId        String             @map("user_id")
-  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User               @relation(fields: [userId], references: [id], onDelete: Restrict)
   /// [periodFrom, periodTo): the settled bets this commission was worked out from.
   periodFrom    DateTime           @map("period_from")
   periodTo      DateTime           @map("period_to")

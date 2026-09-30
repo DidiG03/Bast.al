@@ -5,7 +5,8 @@ export const admin: Record<string, string> = {
   "Could not load matches": "Ndeshjet nuk u ngarkuan",
   "Could not load bets": "Bastet nuk u ngarkuan",
   "Settlement": "Shlyerja",
-  "Bets settle by themselves a minute or so after the feed reports a final score. Use this page to correct a result, void a match, or void one bet. Every change is refunded or charged to the Player straight away and written to the audit log.": "Bastet mbyllen vetë rreth një minutë pasi burimi raporton rezultatin përfundimtar. Përdor këtë faqe për të korrigjuar një rezultat, për të anuluar një ndeshje ose një bast të vetëm. Çdo ndryshim i rimbursohet ose i ngarkohet Lojtarit menjëherë dhe shkruhet në regjistrin e auditimit.",
+  "Bets settle by themselves a minute or so after the feed reports a final score, and again if the feed corrects that score within two days. Bets on a match that isn't played within 48 hours of kick-off are refunded. Use this page to correct a result, void a match, or void one bet. Every change is refunded or charged to the Player straight away and written to the audit log.":
+    "Bastet mbyllen vetë rreth një minutë pasi burimi raporton rezultatin përfundimtar, dhe sërish nëse burimi e korrigjon atë rezultat brenda dy ditësh. Bastet për një ndeshje që nuk luhet brenda 48 orëve nga fillimi rimbursohen. Përdor këtë faqe për të korrigjuar një rezultat, për të anuluar një ndeshje ose një bast të vetëm. Çdo ndryshim i rimbursohet ose i ngarkohet Lojtarit menjëherë dhe shkruhet në regjistrin e auditimit.",
   "The matches your Players are betting on, and every bet they've placed. Bets settle by themselves a minute or so after the final score. If a result looks wrong, ask Super Admin to correct it.": "Ndeshjet ku po vënë baste Lojtarët e tu dhe çdo bast që kanë vendosur. Bastet mbyllen vetë rreth një minutë pas rezultatit përfundimtar. Nëse një rezultat duket i gabuar, kërkoji Super Adminit ta korrigjojë.",
   "Matches with bets": "Ndeshje me baste",
   "No bets have been placed yet.": "Ende nuk është vendosur asnjë bast.",
@@ -137,6 +138,7 @@ export const admin: Record<string, string> = {
   "Leave blank to keep the current password": "Lëre bosh për të mbajtur fjalëkalimin aktual",
   "Save changes": "Ruaj ndryshimet",
   "Current balance:": "Balanca aktuale:",
+  "{name} owes {amount}: a corrected result took back winnings they had already used. Giving credit pays this off first.": "{name} ka borxh {amount}: një rezultat i korrigjuar mori mbrapsht fitime që i kishte përdorur tashmë. Krediti që jep e shlyen së pari këtë borxh.",
   "Limit:": "Limiti:",
   "Balance limit": "Limiti i balancës",
   "Set limit": "Vendos limitin",
@@ -196,8 +198,9 @@ export const admin: Record<string, string> = {
   "{count} users": "{count} përdorues",
   "Impact: {count} Player account affected.": "Ndikimi: preket {count} llogari Lojtari.",
   "Impact: {count} Player accounts affected.": "Ndikimi: preken {count} llogari Lojtarësh.",
-  "Are you sure you want to delete {name}? This can't be undone. {count} account directly under them blocks deletion until it's moved, and any remaining balance must be taken back first.": "Je i sigurt që do të fshish {name}? Kjo nuk kthehet mbrapsht. {count} llogari direkt nën të e bllokon fshirjen derisa të zhvendoset, dhe çdo balancë e mbetur duhet të merret mbrapsht më parë.",
-  "Are you sure you want to delete {name}? This can't be undone. {count} accounts directly under them block deletion until they're moved, and any remaining balance must be taken back first.": "Je i sigurt që do të fshish {name}? Kjo nuk kthehet mbrapsht. {count} llogari direkt nën të e bllokojnë fshirjen derisa të zhvendosen, dhe çdo balancë e mbetur duhet të merret mbrapsht më parë.",
+  "Their {amount} balance goes back to {name}; they start at $0.00.": "Balanca e tyre prej {amount} i kthehet {name}; fillojnë me $0.00.",
+  "Are you sure you want to delete {name}? This can't be undone. Only an account that has never placed a bet or moved money can be deleted, and {count} account directly under them blocks deletion until it's moved.": "Je i sigurt që do të fshish {name}? Kjo nuk kthehet mbrapsht. Mund të fshihet vetëm një llogari që nuk ka vendosur kurrë bast dhe nuk ka lëvizur para, dhe {count} llogari direkt nën të e bllokon fshirjen derisa të zhvendoset.",
+  "Are you sure you want to delete {name}? This can't be undone. Only an account that has never placed a bet or moved money can be deleted, and {count} accounts directly under them block deletion until they're moved.": "Je i sigurt që do të fshish {name}? Kjo nuk kthehet mbrapsht. Mund të fshihet vetëm një llogari që nuk ka vendosur kurrë bast dhe nuk ka lëvizur para, dhe {count} llogari direkt nën të e bllokojnë fshirjen derisa të zhvendosen.",
 
   // Quick top-up
   "{amount} to {name} is waiting for approval.": "{amount} për {name} janë në pritje të miratimit.",
@@ -265,6 +268,7 @@ export const admin: Record<string, string> = {
   "Amount for each": "Shuma për secilin",
   "{amount} in total": "{amount} gjithsej",
   "Move to": "Zhvendos te",
+  "Each Player's balance goes back to whoever gave it to them. Players with open bets or a balance below zero stay where they are.": "Balanca e çdo Lojtari i kthehet atij që ia dha. Lojtarët me baste të hapura ose me balancë nën zero mbeten ku janë.",
   "Choose a Manager or Owner": "Zgjidh një Menaxher ose Pronar",
   "Working": "Duke punuar",
   "Suspend {count} account": "Pezullo {count} llogari",

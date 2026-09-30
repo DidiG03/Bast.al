@@ -3,6 +3,7 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import { signedClientHeaders } from "../../../../lib/client-signature";
 
 const UPSTREAM = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -81,7 +82,7 @@ async function proxy(request: NextRequest, parts: string[]) {
   if (userAgent) headers["user-agent"] = userAgent;
 
   const secret = process.env.REQUEST_INTEGRITY_SECRET;
-  if (secret) Object.assign(headers, signClient(request, secret));
+  Object.assign(headers, signedClientHeaders(request.headers));
   if (secret && bodyText !== undefined) {
     Object.assign(headers, sign({ secret, method, path: targetPath, body: bodyText }));
   }
@@ -155,38 +156,6 @@ function sign(input: { secret: string; method: string; path: string; body: strin
     "x-bastal-nonce": nonce,
     "x-bastal-signature": signature,
   };
-}
-
-/**
- * The visitor as this server sees them (address, browser, and Vercel's
- * geolocation), signed so the API can believe it: behind its own hosting
- * proxy the API only sees a proxy address and no location. See
- * apps/api/src/security/client-context.ts.
- */
-function signClient(request: NextRequest, secret: string): Record<string, string> {
-  if (!/^[0-9a-fA-F]{64}$/.test(secret)) return {};
-  const header = (name: string) => request.headers.get(name)?.trim() || null;
-  const decode = (value: string | null) => {
-    if (!value) return null;
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  };
-  const ip = header("x-real-ip") ?? header("x-vercel-forwarded-for")?.split(",")[0]?.trim() ?? header("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-  const payload = Buffer.from(
-    JSON.stringify({
-      ip,
-      ua: header("user-agent"),
-      country: header("x-vercel-ip-country") ?? header("cf-ipcountry"),
-      region: decode(header("x-vercel-ip-country-region")),
-      city: decode(header("x-vercel-ip-city")),
-      ts: Date.now(),
-    }),
-  ).toString("base64url");
-  const signature = createHmac("sha256", Buffer.from(secret, "hex")).update(payload).digest("hex");
-  return { "x-bastal-client": payload, "x-bastal-client-sig": signature };
 }
 
 function cryptoRandom() {

@@ -10,6 +10,7 @@ import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { useToast } from "../../../components/toaster";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { isDaysFromToday } from "../../../lib/time";
 
 const FILTERS: Array<[OddsFilter, string]> = [
   ["upcoming", msg("Upcoming")],
@@ -20,12 +21,9 @@ const FILTERS: Array<[OddsFilter, string]> = [
 const odds = (value: number) => value.toFixed(2);
 
 function dayLabel(iso: string, { t, date: format }: I18n): string {
+  if (isDaysFromToday(iso, 0)) return t("Today");
+  if (isDaysFromToday(iso, 1)) return t("Tomorrow");
   const date = new Date(iso);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  if (date.toDateString() === today.toDateString()) return t("Today");
-  if (date.toDateString() === tomorrow.toDateString()) return t("Tomorrow");
   return format(date, { weekday: "long", day: "numeric", month: "short" });
 }
 
@@ -131,7 +129,7 @@ export default function OddsPage() {
   const canEditPrices = Boolean(settings?.canEditTeam);
 
   let subtitle = t("Your Owner's prices for every match. Only Owners can change them.");
-  if (isOwner) subtitle = t("Prices come from the feed, less the margin. Tap any price to set your own for your team.");
+  if (isOwner) subtitle = t("Prices come from the feed, less the margin. Tap any price to set your own for your team, up to {percent}% above the feed price.", { percent: settings?.limits.maxAboveFeed ?? 10 });
   if (isAdmin) subtitle = ownerId ? t("This Owner's prices. Changes here apply to their team only.") : t("Feed prices less your base margin, which every team starts from.");
 
   // The first time, only the spinner shows until your account, the prices and the matches are in.
@@ -423,9 +421,14 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
                 <label className="field">
                   <span>
                     {t("Your price for {pick}", { pick: ts(editing.name) })}
-                    {editing.feedOdds !== undefined ? <span className="muted"> ({t("feed {odds}", { odds: odds(editing.feedOdds) })})</span> : null}
+                    {editing.feedOdds !== undefined ? (
+                      <span className="muted">
+                        {" "}
+                        ({editing.maxPrice !== undefined ? t("feed {odds}, at most {max}", { odds: odds(editing.feedOdds), max: odds(editing.maxPrice) }) : t("feed {odds}", { odds: odds(editing.feedOdds) })})
+                      </span>
+                    ) : null}
                   </span>
-                  <input id={`odds-price-${editing.id}`} type="number" inputMode="decimal" min={1.01} max={1000} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} autoFocus />
+                  <input id={`odds-price-${editing.id}`} type="number" inputMode="decimal" min={1.01} max={editing.maxPrice ?? 1000} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} autoFocus />
                 </label>
                 <div className="odds-editor-actions">
                   <button type="submit">{t("Save")}</button>

@@ -1,3 +1,4 @@
+import { TIME_ZONE } from "../time";
 import { createServerTranslator } from "./match";
 import { sq } from "./sq";
 
@@ -65,6 +66,23 @@ function knowsAlbanian(): boolean {
   return sqSupported;
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const dayAndMonthFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** The weekday (0 = Sunday) and month (0 = January) a moment falls on in a time zone. */
+function dayAndMonth(date: Date, timeZone: string): { weekday: number; month: number } {
+  let format = dayAndMonthFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short", month: "numeric" });
+    dayAndMonthFormats.set(timeZone, format);
+  }
+  const parts = format.formatToParts(date);
+  return {
+    weekday: WEEKDAYS.indexOf(parts.find((part) => part.type === "weekday")?.value ?? ""),
+    month: Number(parts.find((part) => part.type === "month")?.value) - 1,
+  };
+}
+
 /**
  * Albanian dates without Albanian locale data: the parts from en-GB (which
  * puts the day before the month, like Albanian), with the day and month
@@ -72,10 +90,11 @@ function knowsAlbanian(): boolean {
  */
 function albanianParts(formatter: Intl.DateTimeFormat, options: Intl.DateTimeFormatOptions, date: Date): string {
   const parts = formatter.formatToParts(date);
+  const { weekday, month } = dayAndMonth(date, formatter.resolvedOptions().timeZone);
   return parts
     .map((part, index) => {
-      if (part.type === "weekday") return options.weekday === "long" ? SQ_DAYS[date.getDay()] : SQ_DAYS_SHORT[date.getDay()];
-      if (part.type === "month" && (options.month === "long" || options.month === "short")) return (options.month === "long" ? SQ_MONTHS : SQ_MONTHS_SHORT)[date.getMonth()];
+      if (part.type === "weekday") return options.weekday === "long" ? SQ_DAYS[weekday] : SQ_DAYS_SHORT[weekday];
+      if (part.type === "month" && (options.month === "long" || options.month === "short")) return (options.month === "long" ? SQ_MONTHS : SQ_MONTHS_SHORT)[month];
       // "e premte, 2 tetor": a comma after the day's name.
       if (part.type === "literal" && parts[index - 1]?.type === "weekday" && !part.value.includes(",")) return `,${part.value}`;
       return part.value;
@@ -83,11 +102,16 @@ function albanianParts(formatter: Intl.DateTimeFormat, options: Intl.DateTimeFor
     .join("");
 }
 
-/** Dates and times in the reader's language, with a 24-hour clock in Albanian. */
+/**
+ * Dates and times in the reader's language, with a 24-hour clock in
+ * Albanian, on Albanian time (TIME_ZONE) unless the options name another
+ * zone: the same on the server, which runs on UTC, as in any browser.
+ */
 export function formatDate(lang: Lang, value: Date | string | number, requested: Intl.DateTimeFormatOptions): string {
   const fallback = lang === "sq" && !knowsAlbanian();
+  const zoned = { timeZone: TIME_ZONE, ...requested };
   // dateStyle/timeStyle can't be taken apart by name, so without Albanian data they're spelled out.
-  const options = fallback ? spelledOut(requested) : requested;
+  const options = fallback ? spelledOut(zoned) : zoned;
   const key = `${lang}:${fallback}:${JSON.stringify(options)}`;
   let formatter = formatters.get(key);
   if (!formatter) {

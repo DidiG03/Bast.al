@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { BalanceTransactionStatus, BalanceTransactionType, NotificationSeverity, NotificationType, Prisma, Role, UserStatus } from "@prisma/client";
+import { BalanceTransactionStatus, BalanceTransactionType, BetStatus, NotificationSeverity, NotificationType, Prisma, Role, UserStatus } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { ClerkService } from "../auth/clerk.service";
 import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/permissions";
@@ -49,6 +49,8 @@ function holdsDirectReports(role: Role): boolean {
  * is nobody above it to approve.
  */
 const APPROVAL_THRESHOLD = 10000;
+
+const HAS_HISTORY = "This account has bets or money history, so it can't be deleted without changing past reports. Suspend it instead.";
 
 /** Most accounts a bulk action may touch at once. */
 const BULK_LIMIT = 100;
@@ -695,7 +697,9 @@ export class UsersService {
         UPDATE users
         SET balance = balance + ${dto.amount}::numeric
         WHERE id = ${id}
-          AND balance + ${dto.amount}::numeric >= 0
+          -- Adding is always allowed, even when it leaves a balance that was
+          -- below zero (after a corrected result) still below zero.
+          AND (${dto.amount}::numeric >= 0 OR balance + ${dto.amount}::numeric >= 0)
           AND balance + ${dto.amount}::numeric <= balance_limit
         RETURNING id
       `;
@@ -1073,6 +1077,13 @@ export class UsersService {
     return updated;
   }
 
+  /**
+   * Moves a Player to another Manager or Owner. Their balance was given to
+   * them by the one they leave, so it goes back there (a reclaim in both
+   * ledgers) and the new one tops them up; otherwise the new team could take
+   * back credit the old team paid for. A Player with bets still open, or
+   * below zero, waits: those winnings and that debt belong to the old team.
+   */
   async reassignPlayer(actor: Actor, id: string, managerId: string, ipAddress?: string) {
     const player = await this.prisma.user.findUnique({
       where: { id },
@@ -1118,23 +1129,54 @@ export class UsersService {
     const previousManager = player.parentId
       ? await this.prisma.user.findUnique({ where: { id: player.parentId }, select: { id: true, username: true } })
       : null;
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: { parentId: managerId },
-      select: publicUserSelect,
+    const { updated, returned } = await this.prisma.$transaction(async (tx) => {
+      // Locks the Player, so no bet or transfer changes the balance while it moves.
+      const [row] = await tx.$queryRaw<Array<{ balance: Prisma.Decimal; parent_id: string | null }>>`
+        SELECT balance, parent_id FROM users WHERE id = ${id} FOR UPDATE
+      `;
+      if (!row || row.parent_id !== player.parentId) {
+        throw new ConflictException("This Player changed while you were moving them. Refresh and try again.");
+      }
+      const blocked = moveBlocker(player.username, row.balance, await tx.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }));
+      if (blocked) throw new BadRequestException(blocked);
+
+      const balance = new Prisma.Decimal(row.balance);
+      if (balance.isPositive() && previousManager) {
+        await tx.user.update({ where: { id }, data: { balance: 0 } });
+        await tx.user.update({ where: { id: previousManager.id }, data: { balance: { increment: balance } } });
+        await tx.balanceTransaction.create({
+          data: {
+            fromUserId: id,
+            toUserId: previousManager.id,
+            actorId: actor.id,
+            type: BalanceTransactionType.RECLAIM,
+            amount: balance,
+            reason: `Returned when moved to ${manager.username}`,
+          },
+        });
+      }
+      // Transfers to or from the Player still waiting for approval were asked for by the team they're leaving.
+      await tx.balanceTransaction.updateMany({
+        where: { status: BalanceTransactionStatus.PENDING, OR: [{ toUserId: id }, { fromUserId: id }] },
+        data: { status: BalanceTransactionStatus.REJECTED },
+      });
+      const moved = await tx.user.update({ where: { id }, data: { parentId: managerId }, select: publicUserSelect });
+      return { updated: moved, returned: balance.isPositive() && previousManager ? Number(balance) : 0 };
     });
     await this.audit.log({
       actorId: actor.id,
       action: "user.reassign",
       targetId: id,
       ipAddress,
-      metadata: { fromManagerId: previousManager?.id ?? null, toManagerId: manager.id },
+      metadata: { fromManagerId: previousManager?.id ?? null, toManagerId: manager.id, returnedBalance: returned },
     });
+    if (returned > 0) await this.realtime.publishBalances([id, previousManager?.id ?? null]);
+    const back = returned > 0 && previousManager ? ` Your $${returned.toFixed(2)} balance went back to ${previousManager.username}.` : "";
     await this.notifications.create({
       userId: id,
       type: NotificationType.ACCOUNT_REASSIGNED,
       title: "Account reassigned",
-      message: `Your account was reassigned to manager ${manager.username}.`,
+      message: `Your account was reassigned to manager ${manager.username}.${back}`,
       deepLink: `/dashboard/users?userId=${manager.id}`,
       metadata: { managerId: manager.id },
     });
@@ -1143,16 +1185,16 @@ export class UsersService {
         userId: previousManager.id,
         type: NotificationType.ACCOUNT_REASSIGNED,
         title: "Player reassigned",
-        message: `${player.username} was moved to another manager.`,
+        message: returned > 0 ? `${player.username} was moved to another manager. Their $${returned.toFixed(2)} balance came back to you.` : `${player.username} was moved to another manager.`,
         deepLink: `/dashboard/users?userId=${id}`,
-        metadata: { userId: id, managerId: manager.id },
+        metadata: { userId: id, managerId: manager.id, returnedBalance: returned },
       });
     }
     await this.notifications.create({
       userId: manager.id,
       type: NotificationType.ACCOUNT_REASSIGNED,
       title: "Player assigned",
-      message: `${player.username} was assigned to your team.`,
+      message: `${player.username} was assigned to your team. Their balance starts at $0.00.`,
       deepLink: `/dashboard/users?userId=${id}`,
       metadata: { userId: id },
     });
@@ -1220,6 +1262,13 @@ export class UsersService {
     return updated;
   }
 
+  /**
+   * Deletes an account for good, for one made by mistake. An account that has
+   * placed a bet, moved money or been paid a commission can't be deleted:
+   * its bets and ledger entries are part of other people's history too (the
+   * Owner's statement, the team's past profit and commission), so it's
+   * suspended instead. The database enforces the same rule.
+   */
   async deleteUser(actor: Actor, id: string, ipAddress?: string) {
     if (actor.id === id) throw new BadRequestException("Cannot delete yourself");
     const target = await this.prisma.user.findUnique({ where: { id } });
@@ -1230,23 +1279,31 @@ export class UsersService {
     if (actor.role === Role.MANAGER && target.role !== Role.PLAYER) {
       throw new ForbiddenException("Managers may only delete Players");
     }
-    const descendants = await this.hierarchy.getDescendantIds(id);
-    if (descendants.length > 0) {
-      const childCount = await this.prisma.user.count({ where: { parentId: id } });
+    const childCount = await this.prisma.user.count({ where: { parentId: id } });
+    if (childCount > 0) {
       throw new ConflictException(`Manager must be reassigned before deletion; ${childCount} direct child account(s) still depend on this Manager`);
     }
-    if (Number(target.balance) > 0) {
+    if (await this.hasMoneyHistory(id)) throw new ConflictException(HAS_HISTORY);
+    if (!target.balance.isZero()) {
       throw new ConflictException("Account still holds a balance; reclaim it before deleting");
     }
 
     try {
-      await this.clerk.deleteUserStrict(target.clerkId);
-      await this.prisma.$transaction([
-        this.prisma.auditLog.updateMany({ where: { actorId: id }, data: { actorId: null } }),
-        this.prisma.auditLog.updateMany({ where: { targetId: id }, data: { targetId: null } }),
-        this.prisma.user.delete({ where: { id } }),
-      ]);
+      // The database row goes first, inside the transaction, and the sign-in
+      // last: if Clerk fails the row comes back, so nobody is left able to
+      // sign in to an account that no longer exists, or the other way round.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.auditLog.updateMany({ where: { actorId: id }, data: { actorId: null } });
+        await tx.auditLog.updateMany({ where: { targetId: id }, data: { targetId: null } });
+        await tx.user.delete({ where: { id } });
+        await this.clerk.deleteUserStrict(target.clerkId).catch((error: unknown) => {
+          // Already gone from Clerk (deleted there by hand): nothing left to do.
+          if ((error as { status?: number }).status !== 404) throw error;
+        });
+      }, { timeout: 15_000 });
     } catch (error) {
+      // Something was added between the check and the delete (a bet, a transfer).
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") throw new ConflictException(HAS_HISTORY);
       throw new ConflictException(
         `Failed to delete user: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -1257,20 +1314,40 @@ export class UsersService {
     return { id };
   }
 
+  /** Whether an account has any bet (its own, or one its team took), ledger entry (on either side, as initiator or approver) or commission payout. */
+  private async hasMoneyHistory(id: string): Promise<boolean> {
+    const [bet, entry, payout] = await Promise.all([
+      this.prisma.bet.findFirst({ where: { OR: [{ playerId: id }, { ownerId: id }, { managerId: id }] }, select: { id: true } }),
+      this.prisma.balanceTransaction.findFirst({
+        where: { OR: [{ toUserId: id }, { fromUserId: id }, { actorId: id }, { approvedById: id }] },
+        select: { id: true },
+      }),
+      this.prisma.commissionPayout.findFirst({ where: { userId: id }, select: { id: true } }),
+    ]);
+    return Boolean(bet || entry || payout);
+  }
+
   async reassignmentPreview(actor: Actor, id: string, managerId: string) {
-    const player = await this.prisma.user.findUnique({ where: { id }, select: { id: true, username: true, role: true, parentId: true } });
+    const player = await this.prisma.user.findUnique({ where: { id }, select: { id: true, username: true, role: true, parentId: true, balance: true, parent: { select: { username: true } } } });
     const manager = await this.prisma.user.findUnique({ where: { id: managerId }, select: { id: true, username: true, role: true, status: true, managerCapacity: true } });
     if (!player || !manager) throw new NotFoundException("Player or Manager not found");
     const directChildren = await this.prisma.user.findMany({ where: { parentId: managerId, role: Role.PLAYER }, select: { id: true, username: true } });
     const playerDescendants = await this.hierarchy.getDescendantIds(id);
     const authorized = await this.hierarchy.canActOn(actor, id) && await this.hierarchy.canActOn(actor, managerId);
-    const valid = authorized && player.role === Role.PLAYER && holdsDirectReports(manager.role) && manager.status === UserStatus.ACTIVE && player.parentId !== managerId && !playerDescendants.includes(managerId) && directChildren.length < manager.managerCapacity;
+    const blocked = moveBlocker(player.username, player.balance, await this.prisma.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }));
+    const reason = !authorized ? "Outside your hierarchy" : player.role !== Role.PLAYER ? "Only Players can be reassigned" : !holdsDirectReports(manager.role) ? "Destination is not a Manager or Owner" : manager.status !== UserStatus.ACTIVE ? "Destination is suspended" : player.parentId === managerId ? "Player is already assigned here" : playerDescendants.includes(managerId) ? "Circular hierarchy detected" : directChildren.length >= manager.managerCapacity ? "Destination capacity reached" : blocked;
     return {
-      valid,
-      reason: !authorized ? "Outside your hierarchy" : player.role !== Role.PLAYER ? "Only Players can be reassigned" : !holdsDirectReports(manager.role) ? "Destination is not a Manager or Owner" : manager.status !== UserStatus.ACTIVE ? "Destination is suspended" : player.parentId === managerId ? "Player is already assigned here" : playerDescendants.includes(managerId) ? "Circular hierarchy detected" : directChildren.length >= manager.managerCapacity ? "Destination capacity reached" : null,
+      valid: reason === null,
+      reason,
       player: { id: player.id, username: player.username, currentManagerId: player.parentId },
       destination: { id: manager.id, username: manager.username, capacity: manager.managerCapacity, assigned: directChildren.length, remaining: Math.max(0, manager.managerCapacity - directChildren.length) },
-      impact: { movedAccounts: 1, currentManagerId: player.parentId },
+      impact: {
+        movedAccounts: 1,
+        currentManagerId: player.parentId,
+        /** What goes back to the Manager or Owner they leave, and who that is. */
+        returnedBalance: authorized && player.balance.isPositive() && player.parent ? Number(player.balance) : 0,
+        returnedTo: player.parent?.username ?? null,
+      },
     };
   }
 
@@ -1324,13 +1401,7 @@ export class UsersService {
     const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, role: true, balance: true, parentId: true } });
     if (!account || (account.role !== Role.MANAGER && account.role !== Role.PLAYER)) return;
 
-    let owner: { id: string; lowBalanceThreshold: Prisma.Decimal | null } | null = null;
-    let cursor = account.parentId;
-    for (let depth = 0; cursor && depth < 5 && !owner; depth++) {
-      const next: { id: string; role: Role; parentId: string | null; lowBalanceThreshold: Prisma.Decimal | null } | null = await this.prisma.user.findUnique({ where: { id: cursor }, select: { id: true, role: true, parentId: true, lowBalanceThreshold: true } });
-      if (next?.role === Role.OWNER) owner = next;
-      cursor = next?.parentId ?? null;
-    }
+    const owner = await this.ownerAbove(account.parentId);
     if (!owner || owner.lowBalanceThreshold === null) return;
 
     const threshold = Number(owner.lowBalanceThreshold);
@@ -1348,6 +1419,42 @@ export class UsersService {
         metadata: { accountId: account.id, balance, threshold },
       });
     }
+  }
+
+  /**
+   * After a corrected result took winnings back: if that left the Player's
+   * balance below zero, tell whoever looks after them and their Owner. The
+   * debt stays on the balance, so the next top-up pays it off first, and the
+   * Player can't bet until it's back above zero.
+   */
+  async alertNegativeBalance(userId: string) {
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, balance: true, parentId: true } });
+    if (!account || !account.balance.isNegative()) return;
+    const owner = await this.ownerAbove(account.parentId);
+    const balance = `-$${account.balance.abs().toFixed(2)}`;
+    const recipients = new Set([account.parentId, owner?.id].filter((id): id is string => Boolean(id)));
+    for (const recipient of recipients) {
+      await this.notifications.create({
+        userId: recipient,
+        type: NotificationType.LOW_BALANCE,
+        severity: NotificationSeverity.WARNING,
+        title: "Balance below zero",
+        message: `${account.username}'s balance is ${balance} after a result was corrected. Their next top-up pays it off first.`,
+        deepLink: `/dashboard/players/${account.id}`,
+        metadata: { accountId: account.id, balance: Number(account.balance) },
+      });
+    }
+  }
+
+  /** The Owner at the top of an account's team, starting from its parent. */
+  private async ownerAbove(parentId: string | null) {
+    let cursor = parentId;
+    for (let depth = 0; cursor && depth < 5; depth++) {
+      const next: { id: string; role: Role; parentId: string | null; lowBalanceThreshold: Prisma.Decimal | null } | null = await this.prisma.user.findUnique({ where: { id: cursor }, select: { id: true, role: true, parentId: true, lowBalanceThreshold: true } });
+      if (next?.role === Role.OWNER) return next;
+      cursor = next?.parentId ?? null;
+    }
+    return null;
   }
 
   /**
@@ -1489,6 +1596,14 @@ export class UsersService {
 
     return user;
   }
+}
+
+/** Why a Player can't be moved yet, or null if they can. */
+function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number): string | null {
+  if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;
+  if (openBets > 1) return `${username} still has ${openBets} open bets. Move them once they're settled.`;
+  if (balance.isNegative()) return `${username}'s balance is below zero (-$${balance.abs().toFixed(2)}). Give them credit to clear it before moving them.`;
+  return null;
 }
 
 /** Who a ledger entry with no other account came from: a bet, or a Super Admin adjustment. */

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { formatMoney, formatSignedMoney } from "../lib/format";
-import type { CommissionHistory, CommissionPayout, CommissionTotals, ManagerCommissions, PlayerResult, SuperAdminCommissions, TeamCommissions } from "../lib/api";
+import type { CommissionHistory, CommissionPayout, CommissionTotals, ManagerCommissions, PayoutStanding, PlayerResult, SuperAdminCommissions, TeamCommissions } from "../lib/api";
 import { LoadingSpinner } from "./loading-spinner";
 import { useToast } from "./toaster";
 import { useI18n, type I18n } from "./i18n-provider";
@@ -17,29 +17,54 @@ function periodText({ t, date }: I18n, from: string, to: string, options: Intl.D
 }
 
 /**
- * The collect/pay button for one row, or where that row's commission already
- * stands for this period: paid, waiting for approval, or paid for a period
- * that overlaps this one (so this one can't be paid without paying days twice).
+ * What's special about where a commission stands, in a few words, or null
+ * when a payment would cover exactly the period on screen:
+ * - already paid up to the end of it;
+ * - a payment would also cover earlier weeks (or only the rest of this one);
+ * - losses since the last payment are still being made up, so nothing is due.
+ */
+export function standingNote(i18n: I18n, standing: PayoutStanding, period: { from: string; to: string }): string | null {
+  const { t, date } = i18n;
+  if (!standing.start) {
+    return standing.paidUpTo ? t("Paid up to {day}", { day: date(new Date(new Date(standing.paidUpTo).getTime() - 1), DAY) }) : null;
+  }
+  if (standing.due > 0) {
+    return new Date(standing.start).getTime() !== new Date(period.from).getTime()
+      ? t("Due {amount} for {period}", { amount: formatMoney(standing.due), period: periodText(i18n, standing.start, period.to) })
+      : null;
+  }
+  if (standing.balance < 0) return t("{amount} below zero carries over", { amount: formatMoney(-standing.balance) });
+  return null;
+}
+
+/**
+ * The collect/pay button for one row, or where that row's commission
+ * stands: paid, waiting for approval, due for more than this period (losses
+ * and unpaid weeks carry over), or below zero and carried over.
  */
 function PayoutAction({
   payout,
+  standing,
   period,
   periodEnded,
   busy,
   kind,
   onClick,
 }: {
+  /** The latest payment overlapping this period, if any. */
   payout: CommissionPayout | undefined;
+  standing: PayoutStanding;
   period: { from: string; to: string };
   periodEnded: boolean;
   busy: boolean;
   kind: "collect" | "pay";
-  onClick: () => void;
+  /** Left out when the viewer can't pay (Super Admin looking at a team): then only where it stands is shown. */
+  onClick?: () => void;
 }) {
   const i18n = useI18n();
   const { t, date } = i18n;
   const toast = useToast();
-  if (payout) {
+  if (payout && (payout.status === "PENDING" || !standing.start)) {
     const samePeriod = new Date(payout.periodFrom).getTime() === new Date(period.from).getTime() && new Date(payout.periodTo).getTime() === new Date(period.to).getTime();
     const amount = formatMoney(payout.amount);
     const text =
@@ -52,36 +77,39 @@ function PayoutAction({
           : kind === "collect"
             ? t("Collected for {period}", { period: periodText(i18n, payout.periodFrom, payout.periodTo) })
             : t("Paid for {period}", { period: periodText(i18n, payout.periodFrom, payout.periodTo) });
-    return (
-      <span className="status-pill commission-paid-pill" title={samePeriod ? undefined : t("This overlaps a period that was already paid, so it can't be paid again.")}>
-        {text}
-      </span>
-    );
+    return <span className="status-pill commission-paid-pill">{text}</span>;
+  }
+  const note = standingNote(i18n, standing, period);
+  if (!onClick || !standing.start || standing.due <= 0) {
+    return note ? <span className="status-pill commission-paid-pill">{note}</span> : null;
   }
   return (
-    <button
-      type="button"
-      className={`secondary${periodEnded ? "" : " is-blocked"}`}
-      disabled={busy}
-      aria-disabled={!periodEnded}
-      onClick={(event) => {
-        // Inside a <summary>, a click would also open or close the row.
-        event.preventDefault();
-        event.stopPropagation();
-        // A running period can't be paid yet: a tap says why instead of doing nothing.
-        if (!periodEnded) {
-          toast.info(
-            kind === "collect"
-              ? t("This period is still running. To collect commission, choose Last week or a custom range that has ended.")
-              : t("This period is still running. To pay commission, choose Last week or a custom range that has ended."),
-          );
-          return;
-        }
-        onClick();
-      }}
-    >
-      {busy ? <LoadingSpinner label={kind === "collect" ? "Collecting" : "Paying"} size="small" /> : kind === "collect" ? t("Mark as collected") : t("Mark as paid")}
-    </button>
+    <span className="commission-payout-action">
+      {note ? <span className="commission-payout-note">{note}</span> : null}
+      <button
+        type="button"
+        className={`secondary${periodEnded ? "" : " is-blocked"}`}
+        disabled={busy}
+        aria-disabled={!periodEnded}
+        onClick={(event) => {
+          // Inside a <summary>, a click would also open or close the row.
+          event.preventDefault();
+          event.stopPropagation();
+          // A running period can't be paid yet: a tap says why instead of doing nothing.
+          if (!periodEnded) {
+            toast.info(
+              kind === "collect"
+                ? t("This period is still running. To collect commission, choose Last week or a custom range that has ended.")
+                : t("This period is still running. To pay commission, choose Last week or a custom range that has ended."),
+            );
+            return;
+          }
+          onClick();
+        }}
+      >
+        {busy ? <LoadingSpinner label={kind === "collect" ? "Collecting" : "Paying"} size="small" /> : kind === "collect" ? t("Mark as collected") : t("Mark as paid")}
+      </button>
+    </span>
   );
 }
 
@@ -141,7 +169,7 @@ export function SuperAdminView({
 }: {
   data: SuperAdminCommissions;
   onOpen: (ownerId: string) => void;
-  onCollect: (owner: { id: string; username: string; superAdminCut: number }) => void;
+  onCollect: (owner: { id: string; username: string; payout: PayoutStanding }) => void;
   collectingId: string | null;
   /** The payout already made for each Owner in a period overlapping this one. */
   payouts: Record<string, CommissionPayout>;
@@ -178,9 +206,7 @@ export function SuperAdminView({
                   <div className="commission-amount-block">
                     <strong className={owner.superAdminCut < 0 ? "ledger-negative" : undefined}>{formatSignedMoney(owner.superAdminCut)}</strong>
                     <div className="commission-row-actions">
-                      {owner.superAdminCut > 0 || payouts[owner.id] ? (
-                        <PayoutAction payout={payouts[owner.id]} period={data} periodEnded={periodEnded} busy={collectingId === owner.id} kind="collect" onClick={() => onCollect(owner)} />
-                      ) : null}
+                      <PayoutAction payout={payouts[owner.id]} standing={owner.payout} period={data} periodEnded={periodEnded} busy={collectingId === owner.id} kind="collect" onClick={() => onCollect(owner)} />
                       <button type="button" className="text-button" onClick={() => onOpen(owner.id)}>
                         {t("View team")}
                       </button>
@@ -206,13 +232,14 @@ export function TeamView({
 }: {
   data: TeamCommissions;
   viewer: "OWNER" | "SUPER_ADMIN";
-  onCollect?: (manager: { id: string; username: string; commission: number }) => void;
+  onCollect?: (manager: { id: string; username: string; payout: PayoutStanding }) => void;
   collectingId?: string | null;
   /** The payout already made to each Manager in a period overlapping this one. */
   payouts?: Record<string, CommissionPayout>;
   periodEnded?: boolean;
 }) {
-  const { t, tn } = useI18n();
+  const i18n = useI18n();
+  const { t, tn } = i18n;
   const isOwner = viewer === "OWNER";
   const { totals, owner } = data;
   return (
@@ -228,7 +255,7 @@ export function TeamView({
           label={isOwner ? t("You pay Super Admin") : t("Your cut")}
           help="Super Admin's share: the Owner's rate (%) of the team's profit, paid before the Managers."
           value={formatSignedMoney(totals.superAdminCut)}
-          hint={t("{rate}% of team profit", { rate: owner.commissionRate })}
+          hint={standingNote(i18n, data.ownerPayout, data) ?? t("{rate}% of team profit", { rate: owner.commissionRate })}
           highlight={isOwner ? undefined : totals.superAdminCut < 0 ? "bad" : "good"}
         />
         <Stat label={isOwner ? t("You pay your Managers") : t("Owner pays Managers")} help="The commission for all Managers together: each Manager's rate (%) of what their own Players lost." value={formatSignedMoney(totals.managerCommission)} hint={tn(data.managers.length, "{count} manager", "{count} managers")} />
@@ -258,9 +285,15 @@ export function TeamView({
                       {manager.commission < 0 ? t("Owes {amount}", { amount: formatMoney(-manager.commission) }) : t("Pay {amount}", { amount: formatMoney(manager.commission) })}
                     </strong>
                     <div className="commission-row-actions">
-                      {payouts[manager.id] || (isOwner && onCollect && manager.commission > 0 && manager.status !== "SUSPENDED") ? (
-                        <PayoutAction payout={payouts[manager.id]} period={data} periodEnded={periodEnded} busy={collectingId === manager.id} kind="pay" onClick={() => onCollect?.(manager)} />
-                      ) : null}
+                      <PayoutAction
+                        payout={payouts[manager.id]}
+                        standing={manager.payout}
+                        period={data}
+                        periodEnded={periodEnded}
+                        busy={collectingId === manager.id}
+                        kind="pay"
+                        onClick={isOwner && onCollect && manager.status !== "SUSPENDED" ? () => onCollect(manager) : undefined}
+                      />
                       <span className="muted">{t("Show players")}</span>
                     </div>
                   </div>
@@ -287,16 +320,16 @@ export function TeamView({
   );
 }
 
-type PerformanceRow = PlayerResult & { manager: string | null; commission: number };
+type PerformanceRow = PlayerResult & { manager: string | null; key: string };
 type SortKey = "net" | "staked" | "bets" | "commission";
 
 /** Every Player in the team side by side: turnover, result and what their Manager earns from them. */
 export function teamPerformanceRows(data: TeamCommissions): PerformanceRow[] {
   return [
     ...data.managers.flatMap((manager) =>
-      manager.players.map((player) => ({ ...player, manager: manager.username, commission: Math.round(player.net * manager.commissionRate) / 100 })),
+      manager.players.map((player) => ({ ...player, manager: manager.username, key: `${manager.id}:${player.id}` })),
     ),
-    ...data.directPlayers.map((player) => ({ ...player, manager: null, commission: 0 })),
+    ...data.directPlayers.map((player) => ({ ...player, manager: null, commission: 0, key: `-:${player.id}` })),
   ];
 }
 
@@ -336,7 +369,7 @@ function TeamPerformance({ data }: { data: TeamCommissions }) {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr key={row.key}>
                   <th scope="row">
                     <span className="performance-player">
                       <Link href={`/dashboard/players/${row.id}`} className="commission-player-link">{row.username}</Link>
@@ -358,7 +391,8 @@ function TeamPerformance({ data }: { data: TeamCommissions }) {
 }
 
 export function ManagerView({ data }: { data: ManagerCommissions }) {
-  const { t, tn } = useI18n();
+  const i18n = useI18n();
+  const { t, tn } = i18n;
   const { totals, manager } = data;
   return (
     <>
@@ -367,7 +401,7 @@ export function ManagerView({ data }: { data: ManagerCommissions }) {
           label={totals.commission < 0 ? t("You owe") : t("You earned")}
           help="Your commission for this period. If your Players won more than they lost, it is below zero and you owe it back."
           value={formatMoney(Math.abs(totals.commission))}
-          hint={data.paidBy ? t("Settled with {name}", { name: data.paidBy }) : undefined}
+          hint={standingNote(i18n, data.payout, data) ?? (data.paidBy ? t("Settled with {name}", { name: data.paidBy }) : undefined)}
           highlight={totals.commission < 0 ? "bad" : "good"}
         />
         <Stat
@@ -405,7 +439,7 @@ export function ManagerHistory({ data }: { data: CommissionHistory }) {
         {data.weeks.map((week, index) => (
           <div className="report-list-row commission-week" key={week.from}>
             <div>
-              <strong>{index === 0 ? t("This week") : periodText(i18n, week.from, week.to, { ...DAY, timeZone: "UTC" })}</strong>
+              <strong>{index === 0 ? t("This week") : periodText(i18n, week.from, week.to, DAY)}</strong>
               <span className="muted">
                 {week.bets === 0
                   ? t("No settled bets")

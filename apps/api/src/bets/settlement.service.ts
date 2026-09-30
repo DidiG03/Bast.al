@@ -1,24 +1,71 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { BalanceTransactionType, BetStatus, EventStatus, NotificationSeverity, NotificationType, Prisma, SelectionResult } from "@prisma/client";
+import { BalanceTransactionType, BetStatus, EventStatus, NotificationSeverity, NotificationType, Prisma, Role, SelectionResult } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { NotificationsService } from "../notifications/notifications.service";
+import { UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { betSelect, betView } from "./bets.service";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
+import { teamOf } from "./team";
 
 type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean };
 
 const money = (value: Prisma.Decimal | number) => `$${Number(value).toFixed(2)}`;
 
+/** What `move` needs to know about a bet. */
+const movable = {
+  id: true,
+  playerId: true,
+  stake: true,
+  payout: true,
+  status: true,
+  description: true,
+  settledAt: true,
+  ownerId: true,
+  managerId: true,
+  ownerRate: true,
+  managerRate: true,
+} satisfies Prisma.BetSelect;
+
+type MovableBet = Prisma.BetGetPayload<{ select: typeof movable }>;
+
+/** Only won and lost bets count in a team's results; a void one was refunded. */
+function counted(status: BetStatus, stake: Prisma.Decimal, payout: Prisma.Decimal) {
+  const zero = new Prisma.Decimal(0);
+  return status === BetStatus.WON || status === BetStatus.LOST ? { bets: 1, stake, payout } : { bets: 0, stake: zero, payout: zero };
+}
+
+/** The id of the row that records where a bet settled before the journal existed. Fixed, so it's only ever written once. */
+const baseEntryId = (betId: string) => `bf_${betId}`;
+
+/** A score the feed changed is used once it has stayed the same this long, so a feed that flips back and forth doesn't move money each time. */
+const FEED_CORRECTION_DELAY_MS = 10 * 60_000;
+const UNPLAYED_HOURS = Math.round(UNPLAYED_VOID_MS / 3_600_000);
+const NOT_PLAYED = `Not played within ${UNPLAYED_HOURS} hours of kick-off`;
+const MOVED = `Moved more than ${UNPLAYED_HOURS} hours after the original kick-off`;
+
+/** Open bets, or accumulator picks still waiting on an open bet: what an unplayed match can still refund. */
+const hasOpenBets = {
+  markets: {
+    some: {
+      selections: {
+        some: { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null, bet: { status: BetStatus.OPEN, voidReason: null } } } }] },
+      },
+    },
+  },
+} satisfies Prisma.EventWhereInput;
+
 /**
  * Pays bets out. Every SETTLEMENT_INTERVAL_MS (one minute by default) it
  * settles the open bets on matches the feed reports as finished (from the
- * 90-minute score) or cancelled (refunded). Super Admin can also void a bet
- * or a whole match, and correct a result, which re-settles bets that were
- * already paid.
+ * 90-minute score) or cancelled (refunded), re-settles matches whose score
+ * the feed corrected, and refunds bets on matches not played within
+ * UNPLAYED_VOID_MS of kick-off (postponed, never finished, or moved to a
+ * later date). Super Admin can also void a bet or a whole match, and correct
+ * a result, which re-settles bets that were already paid.
  *
  * Each bet is moved with a conditional update on its current status and
  * payout, and the Player's balance changes in the same transaction by the
@@ -38,42 +85,176 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     private readonly audit: AuditService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
+    await this.backfillJournal().catch((error) => this.logger.error(`Couldn't fill in the settlement journal: ${error instanceof Error ? error.message : String(error)}`));
     const every = Number(process.env.SETTLEMENT_INTERVAL_MS) || 60_000;
     this.timer = setInterval(() => void this.settleDue(), every);
+  }
+
+  /**
+   * For bets from before teams, rates and the settlement journal were
+   * recorded: the team and rates the Player has now, and one journal row per
+   * settled bet, dated when it settled. Safe to run on every start and on
+   * several instances at once; after the first run there's nothing to do.
+   */
+  async backfillJournal() {
+    const teams = await this.prisma.$executeRaw`
+      UPDATE bets b SET
+        owner_id = CASE WHEN parent.role = 'OWNER' THEN parent.id WHEN parent.role = 'MANAGER' AND grand.role = 'OWNER' THEN grand.id END,
+        manager_id = CASE WHEN parent.role = 'MANAGER' THEN parent.id END,
+        owner_rate = CASE WHEN parent.role = 'OWNER' THEN parent.commission_rate WHEN parent.role = 'MANAGER' AND grand.role = 'OWNER' THEN grand.commission_rate ELSE 0 END,
+        manager_rate = CASE WHEN parent.role = 'MANAGER' THEN parent.commission_rate ELSE 0 END
+      FROM users p
+      LEFT JOIN users parent ON parent.id = p.parent_id
+      LEFT JOIN users grand ON grand.id = parent.parent_id
+      WHERE b.player_id = p.id AND b.owner_rate IS NULL
+    `;
+    const entries = await this.prisma.$executeRaw`
+      INSERT INTO settlement_entries (id, bet_id, player_id, owner_id, manager_id, owner_rate, manager_rate, bets, stake, payout, created_at)
+      SELECT 'bf_' || b.id, b.id, b.player_id, b.owner_id, b.manager_id, COALESCE(b.owner_rate, 0), COALESCE(b.manager_rate, 0), 1, b.stake, b.payout, COALESCE(b.settled_at, b.placed_at)
+      FROM bets b
+      WHERE b.status IN ('WON', 'LOST') AND NOT EXISTS (SELECT 1 FROM settlement_entries e WHERE e.bet_id = b.id)
+      ON CONFLICT (id) DO NOTHING
+    `;
+    if (teams > 0 || entries > 0) this.logger.log(`Recorded the team for ${teams} earlier bets and journalled ${entries} earlier settlements`);
   }
 
   onModuleDestroy() {
     clearInterval(this.timer);
   }
 
-  /** Settles every finished or cancelled match that still has open bets. */
+  /** Settles finished and cancelled matches, applies the feed's corrections, and refunds unplayed matches. Returns how many bets moved. */
   async settleDue(): Promise<number> {
     if (this.running) return 0;
     this.running = true;
     let settled = 0;
     try {
-      const events = await this.prisma.event.findMany({
-        where: {
-          OR: [{ status: EventStatus.COMPLETED, resultHome: { not: null }, resultAway: { not: null } }, { status: EventStatus.CANCELLED }],
-          markets: {
-            some: {
-              selections: {
-                some: { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null, bet: { voidReason: null } } } }] },
-              },
-            },
-          },
-        },
-        select: { id: true },
-        take: 50,
-      });
-      for (const event of events) settled += (await this.settleEvent(event.id)).length;
-    } catch (error) {
-      this.logger.warn(`Settlement failed: ${error instanceof Error ? error.message : String(error)}`);
+      // Each step on its own, so one failing doesn't hold up the others.
+      for (const step of [this.settleFinished, this.applyFeedCorrections, this.refundUnplayed]) {
+        settled += await step.call(this).catch((error: unknown) => {
+          this.logger.warn(`Settlement (${step.name}) failed: ${error instanceof Error ? error.message : String(error)}`);
+          return 0;
+        });
+      }
     } finally {
       this.running = false;
     }
     return settled;
+  }
+
+  /** Every finished or cancelled match that still has open bets. */
+  private async settleFinished(): Promise<number> {
+    const events = await this.prisma.event.findMany({
+      where: {
+        OR: [{ status: EventStatus.COMPLETED, resultHome: { not: null }, resultAway: { not: null } }, { status: EventStatus.CANCELLED }],
+        markets: {
+          some: {
+            selections: {
+              some: { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null, bet: { voidReason: null } } } }] },
+            },
+          },
+        },
+      },
+      select: { id: true },
+      take: 50,
+    });
+    let settled = 0;
+    for (const event of events) settled += (await this.settleEvent(event.id)).length;
+    return settled;
+  }
+
+  /**
+   * Matches whose score the feed changed after their bets were settled (see
+   * OddsSyncService.recordResult): once the new score has held for
+   * FEED_CORRECTION_DELAY_MS, the bets are settled again on it, like a
+   * correction Super Admin makes by hand, and Super Admin is told.
+   */
+  private async applyFeedCorrections(): Promise<number> {
+    const events = await this.prisma.event.findMany({
+      where: { resultChangedAt: { not: null, lte: new Date(Date.now() - FEED_CORRECTION_DELAY_MS) } },
+      select: { id: true, name: true, status: true, resultSource: true, resultHome: true, resultAway: true, resultChangedAt: true },
+      take: 20,
+    });
+    let settled = 0;
+    for (const event of events) {
+      // A result Super Admin set by hand was settled when they set it.
+      const changes = event.status === EventStatus.COMPLETED && event.resultSource === "feed" ? await this.settleEvent(event.id, true) : [];
+      // Cleared only if the feed hasn't changed it again meanwhile; then it waits its turn once more.
+      await this.prisma.event.updateMany({ where: { id: event.id, resultChangedAt: event.resultChangedAt }, data: { resultChangedAt: null } });
+      if (changes.length === 0) continue;
+      settled += changes.length;
+      const score = `${event.resultHome}-${event.resultAway}`;
+      await this.audit.log({ action: "bet.result_feed_correct", metadata: { eventId: event.id, event: event.name, to: score, betsChanged: changes.length } });
+      const admins = await this.prisma.user.findMany({ where: { role: Role.SUPER_ADMIN }, select: { id: true } });
+      for (const admin of admins) {
+        await this.notifications.create({
+          userId: admin.id,
+          type: NotificationType.BET_SETTLED,
+          severity: NotificationSeverity.WARNING,
+          title: "Result corrected by the feed",
+          message:
+            changes.length === 1
+              ? `The feed changed ${event.name} to ${score}, so 1 bet was settled again.`
+              : `The feed changed ${event.name} to ${score}, so ${changes.length} bets were settled again.`,
+          deepLink: "/dashboard/settlement",
+          metadata: { eventId: event.id, betsChanged: changes.length },
+        });
+      }
+    }
+    return settled;
+  }
+
+  /**
+   * Refunds open bets on matches that weren't played within UNPLAYED_VOID_MS
+   * of kick-off: postponed, or never reported finished. A match the feed
+   * moved to a later date refunds the bets placed before the move; bets
+   * placed for the new date stand.
+   */
+  private async refundUnplayed(): Promise<number> {
+    let refunded = 0;
+    const moved = await this.prisma.event.findMany({ where: { rescheduledAt: { not: null } }, select: { id: true, name: true, rescheduledAt: true }, take: 50 });
+    for (const event of moved) {
+      refunded += (await this.refund(event, MOVED, event.rescheduledAt!)).length;
+      await this.prisma.event.updateMany({ where: { id: event.id, rescheduledAt: event.rescheduledAt }, data: { rescheduledAt: null } });
+    }
+    const unplayed = await this.prisma.event.findMany({
+      where: {
+        externalId: { not: null },
+        status: { in: [EventStatus.UPCOMING, EventStatus.LIVE, EventStatus.POSTPONED] },
+        startsAt: { lt: new Date(Date.now() - UNPLAYED_VOID_MS) },
+        ...hasOpenBets,
+      },
+      select: { id: true, name: true },
+      take: 50,
+    });
+    for (const event of unplayed) refunded += (await this.refund(event, NOT_PLAYED)).length;
+    return refunded;
+  }
+
+  /** Voids a match's open bets (only those placed before `placedBefore`, if given) and the matching accumulator picks, refunding the stakes. */
+  private async refund(event: { id: string; name: string }, reason: string, placedBefore?: Date): Promise<Change[]> {
+    const placed = placedBefore ? { placedAt: { lt: placedBefore } } : {};
+    const bets = await this.prisma.bet.findMany({
+      where: { selection: { market: { eventId: event.id } }, status: BetStatus.OPEN, voidReason: null, ...placed },
+      select: movable,
+    });
+    const changes: Change[] = [];
+    for (const bet of bets) {
+      const change = await this.move(bet, BetStatus.VOID, bet.stake, reason);
+      if (change) changes.push({ ...change, eventName: event.name, voidReason: reason });
+    }
+    // In an accumulator only this match's pick is void; the rest still counts.
+    const legs = await this.prisma.betLeg.findMany({
+      where: { selection: { market: { eventId: event.id } }, result: null, voidReason: null, bet: { status: BetStatus.OPEN, voidReason: null, ...placed } },
+      select: { id: true, betId: true },
+    });
+    for (const leg of legs) await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: reason } });
+    changes.push(...(await this.resettleAccumulators([...new Set(legs.map((leg) => leg.betId))], false)));
+    await this.announce(changes, "voided");
+    if (bets.length > 0 || legs.length > 0) {
+      await this.audit.log({ action: "bet.void_unplayed", metadata: { eventId: event.id, event: event.name, reason, bets: bets.length, accumulatorPicks: legs.length } });
+    }
+    return changes;
   }
 
   /**
@@ -109,7 +290,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         selectionId: { in: [...grades.keys()] },
         ...(regrade ? { voidReason: null } : { status: BetStatus.OPEN }),
       },
-      select: { id: true, playerId: true, stake: true, odds: true, payout: true, status: true, selectionId: true, description: true },
+      select: { ...movable, odds: true, selectionId: true },
     });
     const changes: Change[] = [];
     for (const bet of bets) {
@@ -148,7 +329,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     if (betIds.length === 0) return [];
     const bets = await this.prisma.bet.findMany({
       where: { id: { in: betIds }, voidReason: null, ...(regrade ? {} : { status: BetStatus.OPEN }) },
-      select: { id: true, playerId: true, stake: true, payout: true, status: true, description: true, legs: { select: { odds: true, result: true } } },
+      select: { ...movable, legs: { select: { odds: true, result: true } } },
     });
     const changes: Change[] = [];
     for (const bet of bets) {
@@ -214,7 +395,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   async voidBet(actor: Actor, betId: string, reason: string) {
     const bet = await this.prisma.bet.findUnique({
       where: { id: betId },
-      select: { id: true, playerId: true, stake: true, payout: true, status: true, voidReason: true, description: true },
+      select: { ...movable, voidReason: true },
     });
     if (!bet) throw new NotFoundException("Bet not found");
     if (bet.status === BetStatus.VOID && bet.voidReason) throw new BadRequestException("This bet is already void");
@@ -233,7 +414,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.event.update({ where: { id: eventId }, data: { suspended: true } });
     const bets = await this.prisma.bet.findMany({
       where: { selection: { market: { eventId } }, voidReason: null },
-      select: { id: true, playerId: true, stake: true, payout: true, status: true, description: true },
+      select: movable,
     });
     const changes: Change[] = [];
     for (const bet of bets) {
@@ -330,12 +511,15 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   /**
    * Moves one bet to `status` paying `payout`, and changes the Player's
    * balance by the difference from what it paid before, with a matching
-   * entry in their balance ledger. `actorId` is Super Admin for a change
-   * made by hand, null when the feed settled it. Returns null when nothing
-   * changed or someone else moved the bet first.
+   * entry in their balance ledger and in the settlement journal. `actorId` is
+   * Super Admin for a change made by hand, null when the feed settled it.
+   * Returns null when nothing changed or someone else moved the bet first.
+   *
+   * The bet keeps the date it first settled: a later correction is dated in
+   * the journal instead, so a week already reported and paid stays as it was.
    */
   private async move(
-    bet: { id: string; playerId: string; stake: Prisma.Decimal; payout: Prisma.Decimal; status: BetStatus; description?: string | null },
+    bet: MovableBet,
     status: BetStatus,
     payout: Prisma.Decimal,
     voidReason: string | null,
@@ -343,10 +527,11 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   ): Promise<Omit<Change, "eventName"> | null> {
     if (bet.status === status && bet.payout.equals(payout) && !voidReason) return null;
     const delta = payout.sub(bet.payout);
+    const settledAt = status === BetStatus.OPEN ? { settledAt: null } : bet.status === BetStatus.OPEN || !bet.settledAt ? { settledAt: new Date() } : {};
     const moved = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.bet.updateMany({
         where: { id: bet.id, status: bet.status, payout: bet.payout },
-        data: { status, payout, settledAt: status === BetStatus.OPEN ? null : new Date(), ...(voidReason ? { voidReason } : {}) },
+        data: { status, payout, ...settledAt, ...(voidReason ? { voidReason } : {}) },
       });
       if (updated.count === 0) return false;
       if (!delta.isZero()) {
@@ -362,9 +547,36 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
           },
         });
       }
+      await this.journal(tx, bet, status, payout);
       return true;
     });
     return moved ? { playerId: bet.playerId, delta, status, voidReason } : null;
+  }
+
+  /** Records in the settlement journal what this move changes in the team's results. */
+  private async journal(tx: Prisma.TransactionClient, bet: MovableBet, status: BetStatus, payout: Prisma.Decimal) {
+    const before = counted(bet.status, bet.stake, bet.payout);
+    const after = counted(status, bet.stake, payout);
+    const change = { bets: after.bets - before.bets, stake: after.stake.sub(before.stake), payout: after.payout.sub(before.payout) };
+    if (change.bets === 0 && change.stake.isZero() && change.payout.isZero()) return;
+
+    // A bet placed before teams were recorded gets the team its Player has now.
+    let team = { ownerId: bet.ownerId, managerId: bet.managerId, ownerRate: bet.ownerRate, managerRate: bet.managerRate };
+    if (team.ownerRate === null || team.managerRate === null) {
+      team = await teamOf(tx, bet.playerId);
+      await tx.bet.update({ where: { id: bet.id }, data: team });
+    }
+    const row = { betId: bet.id, playerId: bet.playerId, ownerId: team.ownerId, managerId: team.managerId, ownerRate: team.ownerRate ?? 0, managerRate: team.managerRate ?? 0 };
+
+    // Settled before the journal existed and not filled in yet: first record
+    // where it stood, on the day it settled, so this move adds only the difference.
+    if (before.bets > 0 && (await tx.settlementEntry.count({ where: { betId: bet.id } })) === 0) {
+      await tx.settlementEntry.createMany({
+        data: [{ id: baseEntryId(bet.id), ...row, ...before, createdAt: bet.settledAt ?? new Date() }],
+        skipDuplicates: true,
+      });
+    }
+    await tx.settlementEntry.create({ data: { ...row, ...change } });
   }
 
   /** Live balances, a refresh of the Player's bets, and one notification per Player per match. */
@@ -394,7 +606,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         message,
         deepLink: status === BetStatus.OPEN ? "/dashboard/bet?tab=open" : "/dashboard/bet?tab=settled",
       });
-      if (delta.isNegative()) await this.users.alertLowBalance(playerId, Number(delta.abs()));
+      if (delta.isNegative()) await this.afterTakingBack(playerId, delta);
     }
 
     const grouped = new Map<string, Change[]>();
@@ -431,8 +643,14 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         message,
         deepLink: "/dashboard/bet?tab=settled",
       });
-      if (delta.isNegative()) await this.users.alertLowBalance(playerId, Number(delta.abs()));
+      if (delta.isNegative()) await this.afterTakingBack(playerId, delta);
     }
+  }
+
+  /** Money came back out of a Player's balance: warn if it's now low, or below zero. */
+  private async afterTakingBack(playerId: string, delta: Prisma.Decimal) {
+    await this.users.alertLowBalance(playerId, Number(delta.abs()));
+    await this.users.alertNegativeBalance(playerId);
   }
 }
 

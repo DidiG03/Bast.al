@@ -133,7 +133,8 @@ export const betting: Record<string, string> = {
   "Could not load odds": "Koeficientët nuk u ngarkuan",
   "Synced {events} matches and {markets} markets.": "U sinkronizuan {events} ndeshje dhe {markets} tregje.",
   "Your Owner's prices for every match. Only Owners can change them.": "Koeficientët e Pronarit tënd për çdo ndeshje. Vetëm Pronarët mund t'i ndryshojnë.",
-  "Prices come from the feed, less the margin. Tap any price to set your own for your team.": "Koeficientët vijnë nga burimi, minus marzhin. Prek çdo koeficient për të vendosur tëndin për skuadrën.",
+  "Prices come from the feed, less the margin. Tap any price to set your own for your team, up to {percent}% above the feed price.":
+    "Koeficientët vijnë nga burimi, minus marzhin. Prek çdo koeficient për të vendosur tëndin për skuadrën, deri në {percent}% mbi koeficientin e burimit.",
   "This Owner's prices. Changes here apply to their team only.": "Koeficientët e këtij Pronari. Ndryshimet këtu vlejnë vetëm për skuadrën e tij.",
   "Feed prices less your base margin, which every team starts from.": "Koeficientët e burimit minus marzhin bazë, nga i cili nis çdo skuadër.",
   "Prices for": "Koeficientët për",
@@ -172,6 +173,7 @@ export const betting: Record<string, string> = {
   "Change the price for {pick}, now {odds}": "Ndrysho koeficientin për {pick}, tani {odds}",
   "Your price for {pick}": "Koeficienti yt për {pick}",
   "feed {odds}": "burimi {odds}",
+  "feed {odds}, at most {max}": "burimi {odds}, maksimumi {max}",
   "Use feed price": "Përdor koeficientin e burimit",
   "Resume bets": "Rifillo bastet",
   "Show": "Shfaq",

@@ -10,6 +10,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { combinedOdds, payoutFor } from "./grading";
 import { RiskService } from "./risk.service";
+import { teamOf, type TeamSnapshot } from "./team";
 
 type SlipBet = { selectionId: string; stake: number; odds: number };
 type SlipAccumulator = { legs: Array<{ selectionId: string; odds: number }>; stake: number };
@@ -132,7 +133,10 @@ export class BetsService {
    */
   async place(actor: Actor, input: { bets?: SlipBet[]; accumulator?: SlipAccumulator; acceptOddsChanges?: boolean }, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players can place bets");
-    const ownerId = await this.assertOnTeam(actor);
+    // Recorded on each bet, so later moves and rate changes never rewrite its commission.
+    const team = await this.assertOnTeam(actor);
+    const ownerId = team.ownerId;
+    const snapshot = { ownerId: team.ownerId, managerId: team.managerId, ownerRate: team.ownerRate, managerRate: team.managerRate };
     const singles = input.bets ?? [];
     const acca = input.accumulator;
     if (singles.length === 0 && !acca) throw new BadRequestException("Your slip is empty");
@@ -220,7 +224,7 @@ export class BetsService {
       for (const bet of pricedSingles) {
         rows.push(
           await tx.bet.create({
-            data: { playerId: actor.id, selectionId: bet.selectionId, stake: bet.stake, odds: bet.price, description: bet.description },
+            data: { playerId: actor.id, selectionId: bet.selectionId, stake: bet.stake, odds: bet.price, description: bet.description, ...snapshot },
             select: betSelect,
           }),
         );
@@ -235,6 +239,7 @@ export class BetsService {
               stake: pricedAcca.stake,
               odds: pricedAcca.odds,
               description: `Accumulator · ${pricedAcca.legs.length} picks`,
+              ...snapshot,
               legs: {
                 create: pricedAcca.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price, description: leg.description, sortOrder })),
               },
@@ -351,13 +356,14 @@ export class BetsService {
    * only ever made by their Manager or Owner, so this also shuts out any
    * account that got in some other way.
    */
-  private async assertOnTeam(actor: Actor): Promise<string> {
-    const parent = actor.parentId
-      ? await this.prisma.user.findUnique({ where: { id: actor.parentId }, select: { id: true, role: true, status: true, parent: { select: { id: true, role: true } } } })
-      : null;
-    const ownerId = parent?.role === Role.OWNER ? parent.id : parent?.role === Role.MANAGER && parent.parent?.role === Role.OWNER ? parent.parent.id : null;
+  private async assertOnTeam(actor: Actor): Promise<TeamSnapshot & { ownerId: string }> {
+    const [parent, team] = await Promise.all([
+      actor.parentId ? this.prisma.user.findUnique({ where: { id: actor.parentId }, select: { status: true } }) : null,
+      teamOf(this.prisma, actor.id),
+    ]);
+    const ownerId = team.ownerId;
     if (!parent || !ownerId) throw new ForbiddenException("Your account isn't on a team yet, so it can't place bets. Your Manager or Owner has to set it up.");
     if (parent.status !== UserStatus.ACTIVE) throw new ForbiddenException("Your Manager's account is suspended, so betting is paused.");
-    return ownerId;
+    return { ...team, ownerId };
   }
 }

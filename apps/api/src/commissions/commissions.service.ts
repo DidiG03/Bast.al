@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { BetStatus, Role, UserStatus } from "@prisma/client";
+import { BalanceTransactionStatus, Prisma, Role, UserStatus } from "@prisma/client";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
+import { addDays, startOfDay, startOfWeek } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
 
 type Account = {
@@ -16,17 +17,37 @@ type Account = {
 /** Settled-bet totals. `net` is what the house made: stakes minus payouts. */
 type Totals = { bets: number; staked: number; paidOut: number; net: number };
 
-export type PlayerResult = Totals & { id: string; username: string; status: UserStatus };
+/** `commission`: what this Player's results earn their Manager (0 without one). */
+export type PlayerResult = Totals & { id: string; username: string; status: UserStatus; commission: number };
+
+/**
+ * Where one commission relationship stands: Super Admin and an Owner
+ * ("owner"), or an Owner and one of their Managers ("manager").
+ *
+ * Losses carry over. Each payment covers everything since the last one, so a
+ * losing week is made up by the next winning weeks before anything is due:
+ * Players win $1,000 in week 1 and lose $1,000 in week 2, and at 10% nothing
+ * is owed for week 2. The first payment starts where the period on screen
+ * starts.
+ */
+export type PayoutStanding = {
+  /** The end of the last payment (not rejected), if any. */
+  paidUpTo: string | null;
+  /** Where a payment now would start: the end of the last one, else the period's start. Null when already paid up to the period's end. */
+  start: string | null;
+  /** The commission from `start` to the period's end; below zero while losses are still being made up. */
+  balance: number;
+  /** What a payment now would be: `balance`, or nothing while it's below zero. */
+  due: number;
+};
+
+type Kind = "owner" | "manager";
 
 const MAX_PERIOD_DAYS = 366;
 const DAY_MS = 86_400_000;
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-function cut(net: number, rate: number): number {
-  return round((net * rate) / 100);
 }
 
 function emptyTotals(): Totals {
@@ -41,16 +62,19 @@ function add(into: Totals, from: Totals): Totals {
   return into;
 }
 
-/** Monday 00:00 UTC of the current week — commissions settle weekly. */
-export function startOfWeek(now: Date): Date {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const daysSinceMonday = (start.getUTCDay() + 6) % 7;
-  start.setUTCDate(start.getUTCDate() - daysSinceMonday);
-  return start;
-}
+/** One group of settlement journal rows: a Player's results under one Owner and Manager. */
+type Group = {
+  ownerId: string | null;
+  managerId: string | null;
+  playerId: string;
+  totals: Totals;
+  /** Unrounded commission: Super Admin's from the Owner, and the Manager's from the Owner. */
+  ownerCut: number;
+  managerCut: number;
+};
 
 /**
- * Commission views over settled bets.
+ * Commission views, from the settlement journal (see SettlementEntry).
  *
  * The money flows up the chain: a Player's losses are the team's net
  * revenue. A Manager earns their rate on their own Players' net revenue,
@@ -59,8 +83,9 @@ export function startOfWeek(now: Date): Date {
  * keeps what is left. Net revenue can be negative when Players win overall,
  * and the commissions then go negative the same way.
  *
- * Rates are read as they are now, so changing a rate re-prices past periods
- * in these views.
+ * Every result counts for the team and at the rates in force when the bet
+ * was placed, and on the day it was settled or corrected. So moving a Player,
+ * changing a rate or correcting an old result never changes a past period.
  */
 @Injectable()
 export class CommissionsService {
@@ -74,21 +99,31 @@ export class CommissionsService {
     if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Only Super Admins can see every Owner's commission");
     const period = this.period(fromInput, toInput);
     const accounts = await this.accounts(null);
-    const results = await this.playerResults(accounts, period);
+    const groups = await this.groups(Prisma.sql`TRUE`, period);
     const children = this.childrenOf(accounts);
 
-    const owners = accounts
-      .filter((account) => account.role === Role.OWNER)
+    const ownerAccounts = accounts.filter((account) => account.role === Role.OWNER);
+    const standings = await this.standings("owner", ownerAccounts.map((owner) => owner.id), period);
+    const owners = ownerAccounts
       .map((owner) => {
-        const team = this.teamOf(owner, children, results);
+        const mine = groups.filter((group) => group.ownerId === owner.id);
+        const totals = mine.reduce((sum, group) => add(sum, group.totals), emptyTotals());
+        const superAdminCut = round(mine.reduce((sum, group) => sum + group.ownerCut, 0));
+        const managerCommission = this.managerCommission(mine);
+        const managers = (children.get(owner.id) ?? []).filter((child) => child.role === Role.MANAGER);
+        const players = [...(children.get(owner.id) ?? []), ...managers.flatMap((manager) => children.get(manager.id) ?? [])].filter((account) => account.role === Role.PLAYER);
         return {
           id: owner.id,
           username: owner.username,
           status: owner.status,
           commissionRate: owner.commissionRate,
-          managers: team.managers.length,
-          players: team.managers.reduce((sum, manager) => sum + manager.players.length, 0) + team.directPlayers.length,
-          ...team.totals,
+          managers: managers.length,
+          players: players.length,
+          ...totals,
+          superAdminCut,
+          managerCommission,
+          ownerKeeps: round(totals.net - superAdminCut - managerCommission),
+          payout: standings.get(owner.id)!,
         };
       })
       .sort((a, b) => b.superAdminCut - a.superAdminCut || a.username.localeCompare(b.username));
@@ -103,7 +138,7 @@ export class CommissionsService {
       { ...emptyTotals(), superAdminCut: 0, managerCommission: 0, ownerKeeps: 0 },
     );
 
-    return { ...period, totals, owners };
+    return { ...this.iso(period), totals, owners };
   }
 
   /**
@@ -127,12 +162,51 @@ export class CommissionsService {
     const owner = accounts.find((account) => account.id === id);
     if (!owner || owner.role !== Role.OWNER) throw new NotFoundException("Owner not found");
 
-    const results = await this.playerResults(accounts, period);
-    const team = this.teamOf(owner, this.childrenOf(accounts), results);
+    const groups = await this.groups(Prisma.sql`owner_id = ${id}`, period);
+    const byId = await this.withNames(accounts, groups);
+
+    // Managers: this Owner's own, plus any whose Players' results are in the team (there shouldn't be others).
+    const managerIds = new Set([
+      ...accounts.filter((account) => account.role === Role.MANAGER && account.parentId === id).map((account) => account.id),
+      ...groups.map((group) => group.managerId).filter((managerId): managerId is string => managerId !== null),
+    ]);
+    const standings = await this.standings("manager", [...managerIds], period);
+    const managers = [...managerIds]
+      .map((managerId) => {
+        const manager = byId.get(managerId)!;
+        const mine = groups.filter((group) => group.managerId === managerId);
+        const players = this.players(accounts.filter((account) => account.parentId === managerId), mine, byId);
+        const totals = players.reduce((sum, player) => add(sum, player), emptyTotals());
+        return {
+          id: manager.id,
+          username: manager.username,
+          status: manager.status,
+          commissionRate: manager.commissionRate,
+          ...totals,
+          commission: round(mine.reduce((sum, group) => sum + group.managerCut, 0)),
+          players,
+          payout: standings.get(managerId)!,
+        };
+      })
+      .sort((a, b) => b.commission - a.commission || a.username.localeCompare(b.username));
+
+    const directPlayers = this.players(
+      accounts.filter((account) => account.parentId === id),
+      groups.filter((group) => group.managerId === null),
+      byId,
+    );
+
+    const totals = groups.reduce((sum, group) => add(sum, group.totals), emptyTotals());
+    const superAdminCut = round(groups.reduce((sum, group) => sum + group.ownerCut, 0));
+    const managerCommission = round(managers.reduce((sum, manager) => sum + manager.commission, 0));
     return {
-      ...period,
+      ...this.iso(period),
       owner: { id: owner.id, username: owner.username, commissionRate: owner.commissionRate },
-      ...team,
+      totals: { ...totals, superAdminCut, managerCommission, ownerKeeps: round(totals.net - superAdminCut - managerCommission) },
+      /** Where the Owner stands with Super Admin. */
+      ownerPayout: (await this.standings("owner", [id], period)).get(id)!,
+      managers,
+      directPlayers,
     };
   }
 
@@ -141,50 +215,39 @@ export class CommissionsService {
     if (actor.role !== Role.MANAGER) throw new ForbiddenException("Only Managers have a personal commission statement");
     const period = this.period(fromInput, toInput);
     const accounts = await this.accounts(actor.id);
-    const results = await this.playerResults(accounts, period);
-    const manager = accounts.find((account) => account.id === actor.id)!;
-    const players = this.playersUnder(manager.id, this.childrenOf(accounts), results);
+    const groups = await this.groups(Prisma.sql`manager_id = ${actor.id}`, period);
+    const byId = await this.withNames(accounts, groups);
+    const manager = byId.get(actor.id)!;
+    const players = this.players(accounts.filter((account) => account.parentId === actor.id), groups, byId);
     const totals = players.reduce((sum, player) => add(sum, player), emptyTotals());
     const parent = actor.parentId
       ? await this.prisma.user.findUnique({ where: { id: actor.parentId }, select: { username: true } })
       : null;
 
     return {
-      ...period,
+      ...this.iso(period),
       manager: { id: manager.id, username: manager.username, commissionRate: manager.commissionRate },
       paidBy: parent?.username ?? null,
-      totals: { ...totals, commission: cut(totals.net, manager.commissionRate) },
+      totals: { ...totals, commission: round(groups.reduce((sum, group) => sum + group.managerCut, 0)) },
+      /** Where this Manager stands with their Owner. */
+      payout: (await this.standings("manager", [actor.id], period)).get(actor.id)!,
       players,
     };
   }
 
   /**
-   * Manager: earnings week by week (Monday to Sunday, UTC), newest first,
-   * so they can see how this week compares with the ones before.
+   * Manager: earnings week by week (Monday to Sunday, Albanian time), newest
+   * first, so they can see how this week compares with the ones before.
    */
   async history(actor: Actor, weeks: number) {
     if (actor.role !== Role.MANAGER) throw new ForbiddenException("Only Managers have a personal commission statement");
-    const accounts = await this.accounts(actor.id);
-    const manager = accounts.find((account) => account.id === actor.id)!;
-    const playerIds = accounts.filter((account) => account.role === Role.PLAYER).map((account) => account.id);
+    const manager = await this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { commissionRate: true } });
 
     const now = new Date();
-    const starts = Array.from({ length: weeks }, (_, index) => {
-      const start = startOfWeek(now);
-      start.setUTCDate(start.getUTCDate() - 7 * index);
-      return start;
-    });
+    const thisWeek = startOfWeek(now);
+    const starts = Array.from({ length: weeks }, (_, index) => addDays(thisWeek, -7 * index));
     const oldest = starts[starts.length - 1];
-    const bets = playerIds.length
-      ? await this.prisma.bet.findMany({
-          where: {
-            playerId: { in: playerIds },
-            status: { in: [BetStatus.WON, BetStatus.LOST] },
-            settledAt: { gte: oldest, lt: now },
-          },
-          select: { stake: true, payout: true, settledAt: true },
-        })
-      : [];
+    const entries = await this.entries({ managerId: actor.id }, oldest, now);
 
     const rows = starts.map((start, index) => ({
       from: start.toISOString(),
@@ -193,112 +256,174 @@ export class CommissionsService {
       ...emptyTotals(),
       commission: 0,
     }));
-    for (const bet of bets) {
-      const settled = bet.settledAt!.getTime();
-      const row = rows.find((candidate) => settled >= new Date(candidate.from).getTime() && settled < new Date(candidate.to).getTime());
-      if (!row) continue;
-      const staked = Number(bet.stake);
-      const paidOut = Number(bet.payout);
-      add(row, { bets: 1, staked, paidOut, net: staked - paidOut });
+    const cuts = rows.map(() => 0);
+    for (const entry of entries) {
+      const at = entry.createdAt.getTime();
+      const index = rows.findIndex((row) => at >= new Date(row.from).getTime() && at < new Date(row.to).getTime());
+      if (index === -1) continue;
+      add(rows[index], entry.totals);
+      cuts[index] += entry.managerCut;
     }
-    for (const row of rows) row.commission = cut(row.net, manager.commissionRate);
+    rows.forEach((row, index) => (row.commission = round(cuts[index])));
 
-    return { commissionRate: manager.commissionRate, weeks: rows };
+    return { commissionRate: Number(manager.commissionRate), weeks: rows };
   }
 
   /**
-   * Settled-bet totals day by day (UTC), oldest first, for the overview chart:
-   * the whole platform for Super Admin, an Owner's team, or a Manager's
-   * Players. Today runs to now.
+   * Settled-bet totals day by day (Albanian time), oldest first, for the
+   * overview chart: the whole platform for Super Admin, an Owner's team, or
+   * a Manager's Players. Today runs to now.
    */
   async daily(actor: Actor, days: number) {
     if (actor.role === Role.PLAYER) throw new ForbiddenException("Players don't have team totals");
-    const accounts = await this.accounts(actor.role === Role.SUPER_ADMIN ? null : actor.id);
-    const playerIds = accounts.filter((account) => account.role === Role.PLAYER).map((account) => account.id);
+    const scope = actor.role === Role.SUPER_ADMIN ? {} : actor.role === Role.OWNER ? { ownerId: actor.id } : { managerId: actor.id };
 
     const now = new Date();
-    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const first = today - (days - 1) * DAY_MS;
-    const rows = Array.from({ length: days }, (_, index) => {
-      const from = first + index * DAY_MS;
-      return {
-        from: new Date(from).toISOString(),
-        to: (index === days - 1 ? now : new Date(from + DAY_MS)).toISOString(),
-        ...emptyTotals(),
-      };
-    });
-    const bets = playerIds.length
-      ? await this.prisma.bet.findMany({
-          where: {
-            playerId: { in: playerIds },
-            status: { in: [BetStatus.WON, BetStatus.LOST] },
-            settledAt: { gte: new Date(first), lt: now },
-          },
-          select: { stake: true, payout: true, settledAt: true },
-        })
-      : [];
-    for (const bet of bets) {
-      const row = rows[Math.floor((bet.settledAt!.getTime() - first) / DAY_MS)];
-      if (!row) continue;
-      const staked = Number(bet.stake);
-      const paidOut = Number(bet.payout);
-      add(row, { bets: 1, staked, paidOut, net: staked - paidOut });
+    const today = startOfDay(now);
+    const starts = Array.from({ length: days }, (_, index) => addDays(today, index - (days - 1)));
+    const rows = starts.map((from, index) => ({
+      from: from.toISOString(),
+      to: (index === days - 1 ? now : starts[index + 1]).toISOString(),
+      ...emptyTotals(),
+    }));
+    for (const entry of await this.entries(scope, starts[0], now)) {
+      // The day the entry falls in: the first one starting after it, less one.
+      const next = starts.findIndex((start) => start > entry.createdAt);
+      const index = next === -1 ? starts.length - 1 : next - 1;
+      if (index >= 0) add(rows[index], entry.totals);
     }
-
     return { days: rows };
   }
 
-  private teamOf(owner: Account, children: Map<string, Account[]>, results: Map<string, PlayerResult>) {
-    const managers = (children.get(owner.id) ?? [])
-      .filter((child) => child.role === Role.MANAGER)
-      .map((manager) => {
-        const players = this.playersUnder(manager.id, children, results);
-        const totals = players.reduce((sum, player) => add(sum, player), emptyTotals());
-        return {
-          id: manager.id,
-          username: manager.username,
-          status: manager.status,
-          commissionRate: manager.commissionRate,
-          ...totals,
-          commission: cut(totals.net, manager.commissionRate),
-          players,
-        };
-      })
-      .sort((a, b) => b.commission - a.commission || a.username.localeCompare(b.username));
+  /**
+   * Where each of these accounts stands for a period [from, to): see
+   * PayoutStanding. `kind` "owner" is Super Admin's cut from an Owner,
+   * "manager" is a Manager's commission from their Owner.
+   */
+  async standings(kind: Kind, userIds: string[], period: { from: Date; to: Date }): Promise<Map<string, PayoutStanding>> {
+    const result = new Map<string, PayoutStanding>();
+    if (userIds.length === 0) return result;
+    const payouts = await this.prisma.commissionPayout.findMany({
+      where: { userId: { in: userIds }, transaction: { status: { not: BalanceTransactionStatus.REJECTED } } },
+      orderBy: { periodTo: "desc" },
+      select: { userId: true, periodTo: true },
+    });
+    const paidUpTo = new Map<string, Date>();
+    for (const payout of payouts) if (!paidUpTo.has(payout.userId)) paidUpTo.set(payout.userId, payout.periodTo);
 
-    const directPlayers = (children.get(owner.id) ?? [])
-      .filter((child) => child.role === Role.PLAYER)
-      .map((player) => results.get(player.id)!)
-      .sort((a, b) => b.net - a.net || a.username.localeCompare(b.username));
-
-    const totals = emptyTotals();
-    for (const manager of managers) add(totals, manager);
-    for (const player of directPlayers) add(totals, player);
-
-    const superAdminCut = cut(totals.net, owner.commissionRate);
-    const managerCommission = round(managers.reduce((sum, manager) => sum + manager.commission, 0));
-    return {
-      totals: {
-        ...totals,
-        superAdminCut,
-        managerCommission,
-        ownerKeeps: round(totals.net - superAdminCut - managerCommission),
-      },
-      managers,
-      directPlayers,
-    };
+    await Promise.all(
+      userIds.map(async (userId) => {
+        const last = paidUpTo.get(userId) ?? null;
+        if (last && last >= period.to) {
+          result.set(userId, { paidUpTo: last.toISOString(), start: null, balance: 0, due: 0 });
+          return;
+        }
+        const start = last ?? period.from;
+        const balance = await this.cutBetween(kind, userId, start, period.to);
+        result.set(userId, { paidUpTo: last?.toISOString() ?? null, start: start.toISOString(), balance, due: Math.max(0, balance) });
+      }),
+    );
+    return result;
   }
 
-  /** Every Player anywhere under this account (normally its direct children). */
-  private playersUnder(rootId: string, children: Map<string, Account[]>, results: Map<string, PlayerResult>): PlayerResult[] {
-    const players: PlayerResult[] = [];
-    const stack = [...(children.get(rootId) ?? [])];
-    while (stack.length) {
-      const account = stack.pop()!;
-      if (account.role === Role.PLAYER) players.push(results.get(account.id)!);
-      stack.push(...(children.get(account.id) ?? []));
+  /** The commission for one relationship over [from, to), rounded to the cent. */
+  private async cutBetween(kind: Kind, userId: string, from: Date, to: Date): Promise<number> {
+    const [rows] = await this.prisma.$queryRaw<Array<{ cut: Prisma.Decimal | null }>>`
+      SELECT SUM((stake - payout) * ${kind === "owner" ? Prisma.raw("owner_rate") : Prisma.raw("manager_rate")} / 100) AS cut
+      FROM settlement_entries
+      WHERE ${kind === "owner" ? Prisma.raw("owner_id") : Prisma.raw("manager_id")} = ${userId}
+        AND created_at >= ${from} AND created_at < ${to}
+    `;
+    return round(Number(rows?.cut ?? 0));
+  }
+
+  /** Journal totals in a period, one group per Player, Owner and Manager. */
+  private async groups(where: Prisma.Sql, period: { from: Date; to: Date }): Promise<Group[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ owner_id: string | null; manager_id: string | null; player_id: string; bets: number; staked: Prisma.Decimal; paid_out: Prisma.Decimal; owner_cut: Prisma.Decimal; manager_cut: Prisma.Decimal }>
+    >`
+      SELECT owner_id, manager_id, player_id,
+             SUM(bets)::int AS bets,
+             SUM(stake) AS staked,
+             SUM(payout) AS paid_out,
+             SUM((stake - payout) * owner_rate / 100) AS owner_cut,
+             SUM((stake - payout) * manager_rate / 100) AS manager_cut
+      FROM settlement_entries
+      WHERE ${where} AND created_at >= ${period.from} AND created_at < ${period.to}
+      GROUP BY owner_id, manager_id, player_id
+    `;
+    return rows.map((row) => {
+      const staked = round(Number(row.staked));
+      const paidOut = round(Number(row.paid_out));
+      return {
+        ownerId: row.owner_id,
+        managerId: row.manager_id,
+        playerId: row.player_id,
+        totals: { bets: Number(row.bets), staked, paidOut, net: round(staked - paidOut) },
+        ownerCut: Number(row.owner_cut),
+        managerCut: Number(row.manager_cut),
+      };
+    });
+  }
+
+  /** Journal rows one by one, for day and week buckets. */
+  private async entries(scope: { ownerId?: string; managerId?: string }, from: Date, to: Date) {
+    const rows = await this.prisma.settlementEntry.findMany({
+      where: { ...scope, createdAt: { gte: from, lt: to } },
+      select: { bets: true, stake: true, payout: true, managerRate: true, createdAt: true },
+    });
+    return rows.map((row) => {
+      const staked = Number(row.stake);
+      const paidOut = Number(row.payout);
+      return {
+        createdAt: row.createdAt,
+        totals: { bets: row.bets, staked, paidOut, net: staked - paidOut },
+        managerCut: ((staked - paidOut) * Number(row.managerRate)) / 100,
+      };
+    });
+  }
+
+  /** What an Owner pays their Managers: each Manager's commission, rounded on its own. */
+  private managerCommission(groups: Group[]): number {
+    const byManager = new Map<string, number>();
+    for (const group of groups) if (group.managerId) byManager.set(group.managerId, (byManager.get(group.managerId) ?? 0) + group.managerCut);
+    return round([...byManager.values()].reduce((sum, cut) => sum + round(cut), 0));
+  }
+
+  /**
+   * Players to list under one Manager (or directly under the Owner): the
+   * ones there now, even with nothing settled, plus anyone whose results in
+   * this period count here because they were here when they bet.
+   */
+  private players(current: Account[], groups: Group[], byId: Map<string, Account>): PlayerResult[] {
+    const ids = new Set([...current.filter((account) => account.role === Role.PLAYER).map((account) => account.id), ...groups.map((group) => group.playerId)]);
+    return [...ids]
+      .map((playerId) => {
+        const player = byId.get(playerId)!;
+        const mine = groups.filter((group) => group.playerId === playerId);
+        return {
+          id: player.id,
+          username: player.username,
+          status: player.status,
+          ...mine.reduce((sum, group) => add(sum, group.totals), emptyTotals()),
+          commission: round(mine.reduce((sum, group) => sum + group.managerCut, 0)),
+        };
+      })
+      .sort((a, b) => b.net - a.net || a.username.localeCompare(b.username));
+  }
+
+  /** `accounts` by id, plus anyone named in the journal groups who has since left this part of the tree. */
+  private async withNames(accounts: Account[], groups: Group[]): Promise<Map<string, Account>> {
+    const byId = new Map(accounts.map((account) => [account.id, account]));
+    const missing = [...new Set(groups.flatMap((group) => [group.playerId, group.managerId]).filter((id): id is string => id !== null && !byId.has(id)))];
+    if (missing.length > 0) {
+      const rows = await this.prisma.user.findMany({
+        where: { id: { in: missing } },
+        select: { id: true, username: true, role: true, parentId: true, status: true, commissionRate: true },
+      });
+      for (const row of rows) byId.set(row.id, { ...row, commissionRate: Number(row.commissionRate) });
     }
-    return players.sort((a, b) => b.net - a.net || a.username.localeCompare(b.username));
+    return byId;
   }
 
   private childrenOf(accounts: Account[]): Map<string, Account[]> {
@@ -312,7 +437,7 @@ export class CommissionsService {
     return children;
   }
 
-  /** The whole platform (rootId null) or one account plus everyone under it. */
+  /** The whole platform (rootId null) or one account plus everyone under it, as it is now. */
   private async accounts(rootId: string | null): Promise<Account[]> {
     const ids = rootId ? [rootId, ...(await this.hierarchy.getDescendantIds(rootId))] : null;
     const rows = await this.prisma.user.findMany({
@@ -322,50 +447,20 @@ export class CommissionsService {
     return rows.map((row) => ({ ...row, commissionRate: Number(row.commissionRate) }));
   }
 
-  private async playerResults(accounts: Account[], period: { from: string; to: string }) {
-    const players = accounts.filter((account) => account.role === Role.PLAYER);
-    const grouped = players.length
-      ? await this.prisma.bet.groupBy({
-          by: ["playerId"],
-          where: {
-            playerId: { in: players.map((player) => player.id) },
-            status: { in: [BetStatus.WON, BetStatus.LOST] },
-            settledAt: { gte: new Date(period.from), lt: new Date(period.to) },
-          },
-          _sum: { stake: true, payout: true },
-          _count: { _all: true },
-        })
-      : [];
-    const byPlayer = new Map(grouped.map((row) => [row.playerId, row]));
-
-    const results = new Map<string, PlayerResult>();
-    for (const player of players) {
-      const row = byPlayer.get(player.id);
-      const staked = round(Number(row?._sum.stake ?? 0));
-      const paidOut = round(Number(row?._sum.payout ?? 0));
-      results.set(player.id, {
-        id: player.id,
-        username: player.username,
-        status: player.status,
-        bets: row?._count._all ?? 0,
-        staked,
-        paidOut,
-        net: round(staked - paidOut),
-      });
-    }
-    return results;
-  }
-
-  /** [from, to) — defaults to this week so far. */
-  private period(fromInput?: string, toInput?: string) {
+  /** [from, to) — defaults to this week so far (from Monday, Albanian time). */
+  period(fromInput?: string, toInput?: string): { from: Date; to: Date } {
     const now = new Date();
     const from = fromInput ? new Date(fromInput) : startOfWeek(now);
     const to = toInput ? new Date(toInput) : now;
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) throw new BadRequestException("Invalid date");
     if (from >= to) throw new BadRequestException("The start date must be before the end date");
-    if (to.getTime() - from.getTime() > MAX_PERIOD_DAYS * 86_400_000) {
+    if (to.getTime() - from.getTime() > MAX_PERIOD_DAYS * DAY_MS) {
       throw new BadRequestException("Choose a period of one year or less");
     }
-    return { from: from.toISOString(), to: to.toISOString() };
+    return { from, to };
+  }
+
+  private iso(period: { from: Date; to: Date }) {
+    return { from: period.from.toISOString(), to: period.to.toISOString() };
   }
 }

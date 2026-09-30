@@ -2,8 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { BetStatus, Role } from "@prisma/client";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
+import { startOfWeek } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
-import { startOfWeek } from "./commissions.service";
 
 const RECENT_LIMIT = 50;
 
@@ -79,18 +79,14 @@ export class PlayerActivityService {
     };
   }
 
+  /** From the settlement journal, like the Commissions page: a correction counts on the day it was made. */
   private async totals(playerId: string, since: Date | null): Promise<Totals> {
-    const row = await this.prisma.bet.aggregate({
-      where: {
-        playerId,
-        status: { in: [BetStatus.WON, BetStatus.LOST] },
-        ...(since ? { settledAt: { gte: since } } : {}),
-      },
-      _sum: { stake: true, payout: true },
-      _count: { _all: true },
+    const row = await this.prisma.settlementEntry.aggregate({
+      where: { playerId, ...(since ? { createdAt: { gte: since } } : {}) },
+      _sum: { bets: true, stake: true, payout: true },
     });
     const staked = round(Number(row._sum.stake ?? 0));
     const paidOut = round(Number(row._sum.payout ?? 0));
-    return { bets: row._count._all, staked, paidOut, net: round(staked - paidOut) };
+    return { bets: row._sum.bets ?? 0, staked, paidOut, net: round(staked - paidOut) };
   }
 }

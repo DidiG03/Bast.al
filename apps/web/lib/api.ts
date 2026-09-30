@@ -401,6 +401,8 @@ export type OddsEvent = {
   provider: string;
   /** Before kick-off, or live with fresh in-play prices. */
   bettable: boolean;
+  /** Live only: why bets are paused right now, if they are. */
+  livePause?: "goal" | "swing" | "reopen" | "late" | "feed" | null;
   /** In play. Prices are the feed's live prices less the team margin. */
   live: boolean;
   markets: Array<{ id: string; key: string; name: string; /** Live only: off the board right now. */ suspended?: boolean; selections: OddsSelection[] }>;

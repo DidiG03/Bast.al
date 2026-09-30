@@ -3,6 +3,7 @@ import { BalanceTransactionType, BetKind, BetStatus, Prisma, Role, UserStatus } 
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { BettingLimitsService } from "../commissions/betting-limits.service";
+import { OddsSyncService } from "../odds/odds-sync.service";
 import { OddsService } from "../odds/odds.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
@@ -122,6 +123,7 @@ export class BetsService {
     private readonly users: UsersService,
     private readonly audit: AuditService,
     private readonly risk: RiskService,
+    private readonly sync: OddsSyncService,
   ) {}
 
   /**
@@ -272,14 +274,24 @@ export class BetsService {
   /**
    * Live picks wait LIVE_BET_DELAY_MS (5 seconds by default) before they're
    * accepted, so nobody can bet on a goal they've seen before the feed has.
-   * If the price, the score or the market changed meanwhile, the slip is
-   * refused and the Player sees the new price.
+   * Then each live match is checked with the feed itself (not our last copy,
+   * which can be a few seconds old): if the bookmaker has it blocked, a goal
+   * went in, or the price moved, the slip is refused and the Player sees the
+   * new price. If the feed can't be reached the slip is refused too.
+   * LIVE_VERIFY=off skips the check with the feed.
    */
-  private async confirmLive(picks: Array<{ selectionId: string; live: boolean; score: string; price: Prisma.Decimal; label: string }>, playerId: string) {
+  private async confirmLive(picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal; label: string }>, playerId: string) {
     const live = picks.filter((pick) => pick.live);
     if (live.length === 0) return;
     const delay = Number(process.env.LIVE_BET_DELAY_MS ?? 5_000);
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    if (process.env.LIVE_VERIFY !== "off") {
+      try {
+        await this.sync.verifyLive(live.map((pick) => pick.eventId));
+      } catch {
+        throw new ConflictException("We couldn't confirm the live price with the bookmaker just now. Try again in a moment.");
+      }
+    }
     for (const pick of live) {
       const now = await this.odds.priceForPlayer(playerId, pick.selectionId);
       if (!now.bettable) throw new ConflictException(`Live betting on ${pick.label} was paused while your bet was being confirmed. Try again in a moment.`);

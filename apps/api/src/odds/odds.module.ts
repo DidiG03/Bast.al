@@ -10,6 +10,6 @@ import { OddsService } from "./odds.service";
   imports: [AuthModule, SecurityModule, AuditModule],
   controllers: [OddsController],
   providers: [OddsService, OddsSyncService],
-  exports: [OddsService],
+  exports: [OddsService, OddsSyncService],
 })
 export class OddsModule {}

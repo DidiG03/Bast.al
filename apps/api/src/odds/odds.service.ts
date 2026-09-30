@@ -4,7 +4,7 @@ import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { OddsSyncService } from "./odds-sync.service";
-import { MAX_MARGIN, MAX_ODDS, MIN_ODDS, applyMargin, eventOpen, selectionQuote, teamMargin } from "./pricing";
+import { MAX_MARGIN, MAX_ODDS, MIN_ODDS, applyMargin, eventOpen, livePause, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
@@ -109,6 +109,9 @@ export class OddsService {
     const overrideBy = new Map(overrides.map((o) => [o.selectionId, Number(o.odds)]));
     const showFeed = actor.role !== Role.PLAYER;
 
+    // Someone is watching live matches: the live prices are fetched more often for a while.
+    if (events.some((event) => event.status === EventStatus.LIVE)) this.sync.noteLiveInterest();
+
     return events.map((event) => {
       const live = event.status === EventStatus.LIVE;
       return {
@@ -128,6 +131,8 @@ export class OddsService {
       provider: event.provider,
       /** Before kick-off, or live with fresh in-play prices. */
       bettable: eventOpen(event, now),
+      /** Live only: why bets are paused right now (a goal, a price jump, the bookmaker, the last minutes). */
+      livePause: livePause(event, now),
       live,
       markets: event.markets.map((market) => {
         const selections = market.selections.map((selection) => {

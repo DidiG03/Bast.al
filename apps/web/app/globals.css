@@ -5025,3 +5025,19 @@ button.is-blocked {
     display: none;
   }
 }
+
+/* Why a live match is paused: a goal gets the accent colour. */
+.bet-page .bet-paused {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.bet-page .bet-paused.is-goal {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}

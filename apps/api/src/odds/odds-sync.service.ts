@@ -2,7 +2,8 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/commo
 import { BetStatus, EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
-import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedMarket, httpFetchJson, parseLiveOdds, parseMarkets } from "./api-football";
+import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseLiveOdds, parseMarkets } from "./api-football";
+import { bigSwing, cooldownFor, laterCooldown } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
 /**
@@ -47,6 +48,19 @@ type SyncSummary = { events: number; markets: number; live: number };
 export type CompetitionChoice = { leagues: number[]; countries: string[] };
 
 const LOCK_KEY = "bastal:odds-sync";
+/** Live updates have a lock of their own, so a long pre-match sync never holds them up. */
+const LIVE_LOCK_KEY = "bastal:odds-sync:live";
+/**
+ * While someone has looked at live matches in the last LIVE_INTEREST_MS, live
+ * prices are fetched every LIVE_FAST_INTERVAL_MS (one request) instead of
+ * every ODDS_LIVE_INTERVAL_MS, as long as the day's quota has room.
+ */
+const LIVE_FAST_INTERVAL_MS = Number(process.env.LIVE_FAST_INTERVAL_MS) || 15_000;
+const LIVE_INTEREST_MS = 2 * 60_000;
+/** A match's score comes from the live odds while they're this fresh; the fixtures list lags behind them. */
+const LIVE_SCORE_SOURCE_MS = 60_000;
+/** Bets placed on the same match within this long share one check with the feed. */
+const VERIFY_SHARE_MS = 2_000;
 /** Markets settled from match statistics rather than the score. */
 const STATS_MARKET_PREFIXES = ["corners_", "home_corners_", "away_corners_", "cards_", "home_cards_", "away_cards_"];
 
@@ -57,8 +71,12 @@ const STATS_MARKET_PREFIXES = ["corners_", "home_corners_", "away_corners_", "ca
  *   odds, for today and the next ODDS_SYNC_DAYS - 1 days;
  * - every ODDS_LIVE_INTERVAL_MS (45 seconds): scores for matches that are
  *   live or should have kicked off, only while there are any, plus in-play
- *   odds for the live ones (one request for all of them).
- * A Redis lock makes sure only one API instance syncs at a time.
+ *   odds for the live ones (one request for all of them);
+ * - every LIVE_FAST_INTERVAL_MS (15 seconds) while someone is watching live
+ *   matches: the in-play odds again (one request);
+ * - on every live bet: that match's odds straight from the feed (verifyLive).
+ * Redis locks make sure only one API instance syncs at a time; pre-match and
+ * live syncs lock separately.
  */
 @Injectable()
 export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
@@ -66,6 +84,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly timers: NodeJS.Timeout[] = [];
   private redis?: Redis;
   private running = false;
+  private liveRunning = false;
+  /** When a Player or admin last looked at live matches. */
+  private liveInterestAt = 0;
+  /** Checks with the feed for one match, shared by bets placed at the same moment. */
+  private readonly verifying = new Map<string, { at: number; done: Promise<void> }>();
   readonly mode: FeedMode;
   private readonly client?: ApiFootballClient;
   private readonly bookmakerId: number;
@@ -117,6 +140,58 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     this.timers.push(setTimeout(() => void this.scheduled("full"), 5_000));
     this.timers.push(setInterval(() => void this.scheduled("full"), fullEvery));
     this.timers.push(setInterval(() => void this.scheduled("live"), liveEvery));
+    this.timers.push(setInterval(() => void this.fastLive(), LIVE_FAST_INTERVAL_MS));
+  }
+
+  /** Someone is looking at live matches: fetch their prices more often for a while. */
+  noteLiveInterest() {
+    this.liveInterestAt = Date.now();
+  }
+
+  /**
+   * The quick in-between live update: in-play prices only (one request),
+   * while someone is watching and today's quota has room to spare.
+   */
+  private async fastLive() {
+    if (Date.now() - this.liveInterestAt > LIVE_INTEREST_MS) return;
+    if (this.quotaLeft !== null && this.quotaLeft < QUOTA_RESERVE * 2) return;
+    try {
+      await this.withLock(() => this.syncLiveOdds(), LIVE_LOCK_KEY);
+    } catch (error) {
+      this.logger.warn(`Quick live odds update failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Checks the given live matches with the feed right now (one request each)
+   * and saves what it says, so a live bet is confirmed against the
+   * bookmaker's current prices, score and blocked flag rather than our last
+   * copy. A match the feed isn't pricing any more is marked stopped. Throws if
+   * the feed can't be reached; the bet is refused then.
+   */
+  async verifyLive(eventIds: string[]): Promise<void> {
+    if (!this.client || eventIds.length === 0) return;
+    const events = await this.prisma.event.findMany({
+      where: { id: { in: [...new Set(eventIds)] }, status: EventStatus.LIVE, externalId: { not: null } },
+      select: { id: true, externalId: true, homeTeam: true, awayTeam: true, name: true },
+    });
+    await Promise.all(
+      events.map((event) => {
+        const shared = this.verifying.get(event.id);
+        if (shared && Date.now() - shared.at < VERIFY_SHARE_MS) return shared.done;
+        const done = (async () => {
+          const raw = await this.client!.liveOddsFor(event.externalId!);
+          if (!raw) {
+            await this.prisma.event.update({ where: { id: event.id }, data: { liveStopped: true } });
+            return;
+          }
+          await this.applyLiveOdds(event.id, parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? ""));
+        })();
+        this.verifying.set(event.id, { at: Date.now(), done });
+        done.catch(() => this.verifying.delete(event.id));
+        return done;
+      }),
+    );
   }
 
   async onModuleDestroy() {
@@ -134,7 +209,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
 
   private async scheduled(kind: "full" | "live") {
     try {
-      await this.withLock<unknown>(() => (kind === "full" ? this.syncFull() : this.syncLive()));
+      await (kind === "full" ? this.withLock(() => this.syncFull()) : this.withLock(() => this.syncLive(), LIVE_LOCK_KEY));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Odds ${kind} sync failed: ${message}`);
@@ -142,23 +217,29 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** Runs `task` unless another sync (here or on another instance) is running. */
-  private async withLock<T>(task: () => Promise<T>): Promise<T | null> {
-    if (this.running) return null;
+  /**
+   * Runs `task` unless the same kind of sync (here or on another instance) is
+   * running. Pre-match and live syncs have separate locks.
+   */
+  private async withLock<T>(task: () => Promise<T>, key: string = LOCK_KEY): Promise<T | null> {
+    const live = key === LIVE_LOCK_KEY;
+    if (live ? this.liveRunning : this.running) return null;
     const token = `${process.pid}-${Date.now()}`;
     let locked = true;
     if (this.redis?.status === "ready") {
-      locked = (await this.redis.set(LOCK_KEY, token, "PX", 5 * 60_000, "NX").catch(() => "OK")) === "OK";
+      locked = (await this.redis.set(key, token, "PX", live ? 60_000 : 5 * 60_000, "NX").catch(() => "OK")) === "OK";
     }
     if (!locked) return null;
-    this.running = true;
+    if (live) this.liveRunning = true;
+    else this.running = true;
     try {
       return await task();
     } finally {
-      this.running = false;
+      if (live) this.liveRunning = false;
+      else this.running = false;
       if (this.redis?.status === "ready") {
-        const current = await this.redis.get(LOCK_KEY).catch(() => null);
-        if (current === token) await this.redis.del(LOCK_KEY).catch(() => undefined);
+        const current = await this.redis.get(key).catch(() => null);
+        if (current === token) await this.redis.del(key).catch(() => undefined);
       }
     }
   }
@@ -309,21 +390,34 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const provider = this.provider();
     const tracked = await this.prisma.event.findMany({
       where: { provider, externalId: { not: null }, OR: [{ status: EventStatus.LIVE }, { status: EventStatus.UPCOMING, startsAt: { lte: new Date() } }] },
-      select: { externalId: true },
+      select: { id: true, externalId: true, homeScore: true, awayScore: true, liveStopped: true, liveOddsAt: true, liveCooldownUntil: true, liveCooldownReason: true },
     });
     if (tracked.length === 0) return 0;
     const live = await client.liveFixtures();
     const seen = new Set(live.map((f) => f.externalId));
     const trackedIds = new Set(tracked.map((e) => e.externalId!));
+    const trackedBy = new Map(tracked.map((e) => [e.externalId!, e]));
     // Matches that dropped off the live list have finished (or been stopped): fetch them by id for the final state.
     const missing = [...trackedIds].filter((id) => !seen.has(id));
     const finished: FeedFixture[] = [];
     for (let i = 0; i < missing.length; i += 20) finished.push(...(await client.fixturesByIds(missing.slice(i, i + 20))));
     let updated = 0;
     for (const fixture of [...live.filter((f) => trackedIds.has(f.externalId)), ...finished]) {
+      const saved = trackedBy.get(fixture.externalId)!;
+      // While the live odds are fresh they carry the newer score; the fixtures list lags and would flip it back and forth.
+      const oddsHaveScore = fixture.status === EventStatus.LIVE && saved.liveOddsAt !== null && Date.now() - saved.liveOddsAt.getTime() < LIVE_SCORE_SOURCE_MS;
+      const score = oddsHaveScore ? {} : { homeScore: fixture.homeScore, awayScore: fixture.awayScore };
+      const cooldown = oddsHaveScore
+        ? null
+        : cooldownFor(
+            { homeScore: saved.homeScore, awayScore: saved.awayScore, stopped: saved.liveStopped },
+            { homeScore: fixture.homeScore, awayScore: fixture.awayScore, stopped: saved.liveStopped },
+            false,
+          );
+      const pause = laterCooldown({ until: saved.liveCooldownUntil, reason: saved.liveCooldownReason }, cooldown);
       await this.prisma.event.update({
         where: { provider_externalId: { provider, externalId: fixture.externalId } },
-        data: { status: fixture.status, elapsed: fixture.elapsed, homeScore: fixture.homeScore, awayScore: fixture.awayScore, syncedAt: new Date() },
+        data: { status: fixture.status, elapsed: fixture.elapsed, ...score, liveCooldownUntil: pause.until, liveCooldownReason: pause.reason, syncedAt: new Date() },
       });
       await this.recordResult(provider, fixture);
       updated++;
@@ -402,12 +496,42 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     for (const raw of feed) {
       const event = byExternal.get(String(raw.fixture.id));
       if (!event) continue;
-      const odds = parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? "");
-      await this.upsertLiveMarkets(event.id, odds.markets);
-      await this.prisma.event.update({ where: { id: event.id }, data: { liveOddsAt: new Date(), liveStopped: odds.stopped } });
+      await this.applyLiveOdds(event.id, parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? ""));
       priced++;
     }
     return priced;
+  }
+
+  /**
+   * Saves one reading of a live match: its prices, whether the bookmaker has
+   * it blocked, the score and minute, and a pause (live-guard.ts) if a goal
+   * went in, the match-result prices jumped, or the bookmaker just reopened it.
+   */
+  private async applyLiveOdds(eventId: string, odds: FeedLiveOdds) {
+    const before = await this.prisma.event.findUniqueOrThrow({
+      where: { id: eventId },
+      select: { homeScore: true, awayScore: true, liveStopped: true, liveCooldownUntil: true, liveCooldownReason: true },
+    });
+    const swing = await this.upsertLiveMarkets(eventId, odds.markets);
+    const scored = odds.homeScore !== null && odds.awayScore !== null;
+    const cooldown = cooldownFor(
+      { homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped },
+      { homeScore: scored ? odds.homeScore : before.homeScore, awayScore: scored ? odds.awayScore : before.awayScore, stopped: odds.stopped },
+      swing,
+    );
+    const pause = laterCooldown({ until: before.liveCooldownUntil, reason: before.liveCooldownReason }, cooldown);
+    if (cooldown && pause.until === cooldown.until) this.logger.log(`Live betting paused on event ${eventId} (${cooldown.reason}) until ${cooldown.until.toISOString()}`);
+    await this.prisma.event.update({
+      where: { id: eventId },
+      data: {
+        liveOddsAt: new Date(),
+        liveStopped: odds.stopped,
+        ...(scored ? { homeScore: odds.homeScore, awayScore: odds.awayScore } : {}),
+        ...(odds.elapsed !== null ? { elapsed: odds.elapsed } : {}),
+        liveCooldownUntil: pause.until,
+        liveCooldownReason: pause.reason,
+      },
+    });
   }
 
   private provider(): string {
@@ -496,9 +620,25 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** Saves in-play prices; markets the feed didn't send this time are suspended. */
-  private async upsertLiveMarkets(eventId: string, markets: FeedLiveMarket[]) {
-    await this.prisma.$transaction(async (tx) => {
+  /**
+   * Saves in-play prices; markets the feed didn't send this time are
+   * suspended. Returns whether the match-result prices jumped (bigSwing).
+   */
+  private async upsertLiveMarkets(eventId: string, markets: FeedLiveMarket[]): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const main = markets.find((m) => m.key === "match_winner");
+      const previous = main
+        ? await tx.selection.findMany({ where: { market: { eventId, key: "match_winner" } }, select: { key: true, liveOdds: true } })
+        : [];
+      const swing = main
+        ? bigSwing(
+            main.selections.map((s) => {
+              const old = previous.find((p) => p.key === s.key)?.liveOdds;
+              return old === null || old === undefined ? null : Number(old);
+            }),
+            main.selections.map((s) => (s.odds > 1 ? s.odds : null)),
+          )
+        : false;
       await tx.market.updateMany({ where: { eventId, key: { notIn: markets.map((m) => m.key) } }, data: { liveSuspended: true } });
       for (const market of markets) {
         const row = await tx.market.upsert({
@@ -519,6 +659,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         // An outcome the feed no longer prices (0–0 once a goal is in) loses its live price, so it can't be bet on.
         await tx.selection.updateMany({ where: { marketId: row.id, key: { notIn: market.selections.map((s) => s.key) } }, data: { liveOdds: null } });
       }
+      return swing;
     });
   }
 

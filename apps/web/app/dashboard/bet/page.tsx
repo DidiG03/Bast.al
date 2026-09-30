@@ -519,7 +519,7 @@ function MatchCard({
           <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
         </span>
       </div>
-      {event.live && !event.bettable ? <p className="muted bet-paused">{t("Live betting is paused for a moment.")}</p> : null}
+      {event.live && !event.bettable ? <p className={`bet-paused${event.livePause === "goal" ? " is-goal" : ""}`}>{t(PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed)}</p> : null}
       {markets.map((market) => (
         <div key={market.id} className="odds-market">
           <div className="odds-market-head">
@@ -572,6 +572,15 @@ function MatchCard({
     </article>
   );
 }
+
+/** Why a live match isn't taking bets, in words a Player understands. */
+const PAUSE_TEXT: Record<string, string> = {
+  goal: msg("⚽ Goal! Live betting reopens in a moment, once the prices catch up."),
+  swing: msg("Something big just happened in this match. Live betting reopens in a moment."),
+  reopen: msg("Live betting is reopening. One moment."),
+  late: msg("Live betting has closed for the last minutes of this match."),
+  feed: msg("Live betting is paused for a moment."),
+};
 
 /** A green up arrow when a price went up, a red down arrow when it went down; nothing when it didn't move. */
 function PriceArrow({ move }: { move: PriceMove | undefined }) {

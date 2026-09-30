@@ -419,4 +419,5 @@ export const server: Record<string, string> = {
   "Top-up requested": "U kërkua rimbushje",
   "{name} is asking for a top-up. Their balance is {balance}.": "{name} po kërkon para. Balanca: {balance}.",
   "You don't have a Manager or Owner yet": "Nuk ke ende Menaxher ose Pronar",
+  "We couldn't confirm the live price with the bookmaker just now. Try again in a moment.": "Nuk arritëm ta konfirmonim koeficientin live me bastoren tani. Provo sërish pas pak.",
 };

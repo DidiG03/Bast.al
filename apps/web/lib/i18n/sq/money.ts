@@ -234,7 +234,7 @@ export const money: Record<string, string> = {
   "Not yet assigned to a Manager or Owner.": "Ende pa u caktuar te një Menaxher ose Pronar.",
   "Top events": "Ngjarjet kryesore",
   "View all": "Shiko të gjitha",
-  "vs": "kundër",
+  "vs": "vs",
   "My bets": "Bastet e mia",
   "Bets still in play": "Baste ende në lojë",
   "Wins and losses": "Fitoret dhe humbjet",

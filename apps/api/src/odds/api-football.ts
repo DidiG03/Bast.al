@@ -316,8 +316,6 @@ export function parseMarkets(raw: RawOdds, homeTeam: string, awayTeam: string, b
 type LiveMarketSpec = {
   key: string;
   name: string;
-  /** Only values with this handicap count, e.g. "2.5" for the goals line. */
-  handicap?: string;
   values: Array<[feedValues: string[], key: string, name: (home: string, away: string) => string]>;
 };
 
@@ -345,15 +343,6 @@ const LIVE_MARKETS: Record<string, LiveMarketSpec> = {
       [["Draw/Away", "X2"], "draw_away", (_home, away) => `Draw or ${away}`],
     ],
   },
-  "over/under line": {
-    key: "goals_2_5",
-    name: "Total goals 2.5",
-    handicap: "2.5",
-    values: [
-      [["Over", "Over 2.5"], "over", () => "Over 2.5"],
-      [["Under", "Under 2.5"], "under", () => "Under 2.5"],
-    ],
-  },
   "both teams to score": {
     key: "btts",
     name: "Both teams score",
@@ -363,8 +352,9 @@ const LIVE_MARKETS: Record<string, LiveMarketSpec> = {
     ],
   },
 };
-LIVE_MARKETS["match goals"] = LIVE_MARKETS["over/under line"];
-const LIVE_ORDER = ["match_winner", "double_chance", "goals_2_5", "btts"];
+/** In-play goals markets: every .5 line in them becomes a `goals_X_5` market, the same ones offered before kick-off. */
+const LIVE_GOAL_LINES = new Set(["over/under line", "match goals"]);
+const LIVE_ORDER = ["match_winner", "double_chance", "goals", "btts"];
 
 /**
  * The in-play prices for one match. A market with any suspended or missing
@@ -373,19 +363,20 @@ const LIVE_ORDER = ["match_winner", "double_chance", "goals_2_5", "btts"];
 export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: string): FeedLiveOdds {
   const markets = new Map<string, FeedLiveMarket>();
   for (const bet of raw.odds ?? []) {
-    const spec = LIVE_MARKETS[bet.name.trim().toLowerCase()];
+    const betName = bet.name.trim().toLowerCase();
+    if (LIVE_GOAL_LINES.has(betName)) {
+      for (const market of liveGoalLines(bet.values)) if (!markets.has(market.key)) markets.set(market.key, market);
+      continue;
+    }
+    const spec = LIVE_MARKETS[betName];
     if (!spec || markets.has(spec.key)) continue;
     let suspended = false;
     const selections = spec.values.map(([feedValues, key, name], sortOrder) => {
-      const value = bet.values.find(
-        (v) => feedValues.includes(String(v.value)) && (spec.handicap === undefined || String(v.handicap ?? "").trim() === spec.handicap || String(v.value).endsWith(spec.handicap)),
-      );
+      const value = bet.values.find((v) => feedValues.includes(String(v.value)));
       const odds = Number(value?.odd);
       if (!value || value.suspended || !Number.isFinite(odds) || odds <= 1) suspended = true;
       return { key, name: name(homeTeam, awayTeam), odds: Number.isFinite(odds) && odds > 1 ? odds : 0, sortOrder };
     });
-    // A goals line the feed isn't offering right now (e.g. only 3.5 is up) is simply absent.
-    if (spec.handicap && selections.every((s) => s.odds === 0)) continue;
     markets.set(spec.key, { key: spec.key, name: spec.name, sortOrder: LIVE_ORDER.indexOf(spec.key) * 10, selections, suspended });
   }
   return {
@@ -393,6 +384,48 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
     stopped: Boolean(raw.status?.stopped || raw.status?.blocked || raw.status?.finished),
     markets: [...markets.values()].sort((a, b) => a.sortOrder - b.sortOrder),
   };
+}
+
+type LiveValue = RawLiveOdds["odds"][number]["values"][number];
+
+/**
+ * The lines in an in-play goals market, one `goals_X_5` market per .5 line.
+ * The line is in `handicap`, or in the value itself ("Over 2.5"); whole and
+ * quarter lines are skipped, so there's never a push. A line the feed isn't
+ * offering right now (1.5 once two goals are in) is simply absent, which
+ * suspends it.
+ */
+function liveGoalLines(values: LiveValue[]): FeedLiveMarket[] {
+  const byLine = new Map<string, { over?: LiveValue; under?: LiveValue }>();
+  for (const value of values) {
+    const [, side, inValue] = /^(over|under)(?:\s+(\d+(?:\.\d+)?))?$/i.exec(String(value.value).trim()) ?? [];
+    const line = String(value.handicap ?? "").trim() || inValue;
+    if (!side || !line || !/^\d+\.5$/.test(line)) continue;
+    const entry = byLine.get(line) ?? {};
+    if (side.toLowerCase() === "over") entry.over ??= value;
+    else entry.under ??= value;
+    byLine.set(line, entry);
+  }
+  const price = (value?: LiveValue) => {
+    const odds = Number(value?.odd);
+    return value && !value.suspended && Number.isFinite(odds) && odds > 1 ? odds : 0;
+  };
+  return [...byLine]
+    .map(([line, { over, under }]) => {
+      const selections = [
+        { key: "over", name: `Over ${line}`, odds: price(over), sortOrder: 0 },
+        { key: "under", name: `Under ${line}`, odds: price(under), sortOrder: 1 },
+      ];
+      return {
+        key: `goals_${line.replace(".", "_")}`,
+        name: `Total goals ${line}`,
+        sortOrder: LIVE_ORDER.indexOf("goals") * 10 + Math.min(9, Math.floor(Number(line))),
+        selections,
+        suspended: selections.some((selection) => selection.odds === 0),
+      };
+    })
+    .filter((market) => market.selections.some((selection) => selection.odds > 0))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 /** One team's numbers from `/fixtures/statistics`. A count the feed has no events for comes back null, meaning 0. */

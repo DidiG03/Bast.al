@@ -93,14 +93,32 @@ test("live odds map onto our markets, and a suspended outcome suspends its marke
   const parsed = parseLiveOdds(liveRaw(), "Tirana", "Partizani");
   assert.equal(parsed.externalId, "7");
   assert.equal(parsed.stopped, false);
-  assert.deepEqual(parsed.markets.map((m) => m.key), ["match_winner", "goals_2_5"]);
+  assert.deepEqual(parsed.markets.map((m) => m.key), ["match_winner", "goals_1_5", "goals_2_5"]);
   const winner = parsed.markets[0];
   assert.equal(winner.suspended, false);
   assert.deepEqual(winner.selections.map((s) => [s.name, s.odds]), [["Tirana", 1.4], ["Draw", 4.2], ["Partizani", 8]]);
-  const goals = parsed.markets[1];
+  const [low, goals] = parsed.markets.slice(1);
+  assert.equal(low.name, "Total goals 1.5");
+  assert.deepEqual(low.selections.map((s) => [s.key, s.odds]), [["over", 1.3], ["under", 0]]);
+  assert.equal(low.suspended, true, "no Under 1.5 price");
   assert.equal(goals.suspended, true, "Under 2.5 is suspended");
-  assert.equal(goals.selections[0].odds, 2.1, "only the 2.5 line counts");
+  assert.equal(goals.selections[0].odds, 2.1, "each line keeps its own price");
   assert.equal(parseLiveOdds(liveRaw({ status: { stopped: false, blocked: true } }), "A", "B").stopped, true);
+});
+
+test("every half-goal line in the live goals market gets its own market", () => {
+  const values = [
+    { value: "Over", odd: "1.05", handicap: "0.5" },
+    { value: "Under", odd: "9.00", handicap: "0.5" },
+    { value: "Over 3.5", odd: "3.40" },
+    { value: "Under 3.5", odd: "1.30" },
+    { value: "Over", odd: "2.00", handicap: "3" },
+    { value: "Under", odd: "1.80", handicap: "3" },
+    { value: "Over", odd: "1.90", handicap: "2.75" },
+  ];
+  const parsed = parseLiveOdds(liveRaw({ odds: [{ id: 25, name: "Match Goals", values }] }), "A", "B");
+  assert.deepEqual(parsed.markets.map((m) => [m.key, m.suspended]), [["goals_0_5", false], ["goals_3_5", false]], "whole and quarter lines are skipped");
+  assert.deepEqual(parsed.markets[1].selections.map((s) => [s.name, s.odds]), [["Over 3.5", 3.4], ["Under 3.5", 1.3]]);
 });
 
 test("the mock feed prices live matches and suspends them just after a goal", async () => {
@@ -112,6 +130,10 @@ test("the mock feed prices live matches and suspends them just after a goal", as
   for (const raw of live) {
     const parsed = parseLiveOdds(raw, "H", "A");
     assert.ok(parsed.markets.some((m) => m.key === "match_winner"));
+    const goals = raw.teams.home.goals + raw.teams.away.goals;
+    const lines = parsed.markets.filter((m) => m.key.startsWith("goals_")).map((m) => Number(m.key.slice(6).replace("_", ".")));
+    assert.ok(lines.length > 0 || goals >= 5, "lines above the score are offered");
+    assert.ok(lines.every((line) => line > goals), "decided lines drop off");
     for (const market of parsed.markets) for (const s of market.selections) assert.ok(s.odds > 1);
   }
 });

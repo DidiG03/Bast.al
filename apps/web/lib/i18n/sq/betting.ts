@@ -209,8 +209,6 @@ export const betting: Record<string, string> = {
   "Loading your money": "Duke ngarkuar paratë e tua",
   "Loading more": "Duke ngarkuar më shumë",
   "Your account is suspended. Ask your Manager or Owner.": "Llogaria jote është pezulluar. Pyet Menaxherin ose Pronarin.",
-  "Can't bet right now": "Nuk mund të vësh baste tani",
-  "Daily loss limit: {used} of {limit} used today": "Limiti ditor i humbjes: {used} nga {limit} të përdorura sot",
   "{amount} on matches not finished yet": "{amount} në ndeshje që s’kanë mbaruar",
   "Last 7 days": "7 ditët e fundit",
   "No finished bets this week": "Asnjë bast i mbyllur këtë javë",

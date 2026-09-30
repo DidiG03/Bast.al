@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { HelpTip } from "../../components/help-tip";
 import { NamedIcon } from "../../components/icons";
 import { ToastOnMount } from "../../components/toast-on-mount";
-import { TopUpRequestButton } from "../../components/top-up-request";
 import {
   ActivityFeed,
   AttentionList,
@@ -656,50 +655,15 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
       ])
     : [[], [], null, null];
   const topEvents = pickTopEvents(live, upcoming, 4);
-  // Why this account can't bet (a suspended Manager, no team yet): a warning toast, and no "Browse matches".
+  // Why this account can't bet (a suspended Manager, no team yet): a warning toast, and no Top events.
   const blocked = me.status === "SUSPENDED" ? t("Your account is suspended. Ask your Manager or Owner.") : slip?.blocked ? ts(slip.blocked) : null;
-  const balance = Number(me.balance);
   const week = bets?.week;
   const weekNet = week ? Math.round((week.returned - week.staked) * 100) / 100 : 0;
 
   return (
     <div className="stack player-home">
       {blocked ? <ToastOnMount kind="warning" message={blocked} /> : null}
-      <section className="player-hero">
-        <span className="player-hero-label">
-          {t("Your balance")}
-          <HelpTip text="The money you can bet with. Your Manager or Owner adds it. When you win, your winnings come back here." />
-        </span>
-        <strong className="player-hero-balance">{formatMoney(balance)}</strong>
-        <div className="player-hero-meta">
-          <span className={`status-pill player-status-${me.status.toLowerCase()}`}>{me.status === "SUSPENDED" ? t("Suspended") : blocked ? t("Can't bet right now") : t("Active")}</span>
-          {me.parent ? (
-            <span className="muted">
-              {me.parent.role === "OWNER" ? t("Your Owner: {name}", { name: me.parent.username }) : t("Your Manager: {name}", { name: me.parent.username })}
-            </span>
-          ) : (
-            <span className="muted">{t("Not yet assigned to a Manager or Owner.")}</span>
-          )}
-        </div>
-        {me.parent ? (
-          <div className="player-hero-actions">
-            {blocked ? null : (
-              <Link href="/dashboard/bet" className="player-hero-cta">
-                {t("Browse matches")} →
-              </Link>
-            )}
-            <TopUpRequestButton className={balance < 5 && !blocked ? "player-hero-cta" : "secondary player-hero-secondary"} />
-            <Link href="/dashboard/money" className="player-hero-link">
-              {t("My money")} →
-            </Link>
-          </div>
-        ) : null}
-        {slip && slip.dailyLossLimit !== null && !blocked ? (
-          <p className="player-hero-limit">
-            {t("Daily loss limit: {used} of {limit} used today", { used: formatMoney(Math.min(slip.dailyLossUsed, slip.dailyLossLimit)), limit: formatMoney(slip.dailyLossLimit) })}
-          </p>
-        ) : null}
-      </section>
+      {me.parent ? null : <ToastOnMount kind="warning" message={t("Not yet assigned to a Manager or Owner.")} />}
 
       {me.parent && !blocked ? (
         <section className="stack">

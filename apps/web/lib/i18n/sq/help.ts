@@ -224,4 +224,7 @@ export const help: Record<string, string> = {
     "Bastet e tua u pranuan. Paratë u morën nga balanca jote. Mund t'i ndjekësh te Baste të hapura.",
   "The picks you tapped. Type how much to bet on each, then press Place. “Singles” are separate bets. “Accumulator” joins them into one bet that pays much more but only wins if every pick wins.":
     "Zgjedhjet që shtype. Shkruaj sa do të vësh në secilën, pastaj shtyp Vendos. “Të thjeshta” janë baste të veçanta. “Kombinim” i bashkon në një bast që paguan shumë më tepër, por fiton vetëm nëse fitojnë të gjitha zgjedhjet.",
+  "The most you can lose today. Money you lost today plus money on bets placed today that are not finished counts. It starts again at midnight (UTC).": "Më së shumti që mund të humbësh sot. Llogariten paratë që humbe sot plus paratë në bastet e vëna sot që s’kanë mbaruar. Rifillon në mesnatë (UTC).",
+  "Green is money that came in: top-ups from your Manager or Owner, and wins. Red is money that went out: your bets, and money your Manager or Owner took back. The newest is at the top.": "E gjelbra janë paratë që hynë: rimbushjet nga Menaxheri ose Pronari dhe fitoret. E kuqja janë paratë që dolën: bastet e tua dhe paratë që Menaxheri ose Pronari morën mbrapsht. Më të rejat janë sipër.",
+  "Matches playing now first, then the matches of the next two days with the most ways to bet. Tap one to go straight to its prices.": "Fillimisht ndeshjet që po luhen tani, pastaj ndeshjet e dy ditëve të ardhshme me më shumë mënyra basti. Prek njërën për të shkuar direkt te koeficientët e saj.",
 };

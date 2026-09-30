@@ -30,7 +30,7 @@ function navGroups(role: UserRole): NavGroup[] {
   if (role === "PLAYER") {
     return [
       { label: msg("Play"), links: [{ href: "/dashboard", label: msg("Overview"), icon: "dashboard" }, { href: "/dashboard/bet", label: msg("Bet"), icon: "bet" }] },
-      { label: msg("Account"), links: [{ href: "/dashboard/security", label: msg("Security"), icon: "security" }] },
+      { label: msg("Account"), links: [{ href: "/dashboard/money", label: msg("My money"), icon: "wallet" }, { href: "/dashboard/security", label: msg("Security"), icon: "security" }] },
     ];
   }
   const betting: NavLink[] = [{ href: "/dashboard/odds", label: msg("Odds"), icon: "odds" }];

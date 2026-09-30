@@ -414,4 +414,9 @@ export const server: Record<string, string> = {
   "user team_settings_update": "cilësimet e skuadrës u ndryshuan",
   "user unsuspend": "përdorues i riaktivizuar",
   "user update": "përdorues i ndryshuar",
+  "Only Players can ask for a top-up": "Vetëm Lojtarët mund të kërkojnë para",
+  "You already asked. You can ask again in {minutes} min.": "E ke kërkuar tashmë. Mund të kërkosh sërish pas {minutes} min.",
+  "Top-up requested": "U kërkua rimbushje",
+  "{name} is asking for a top-up. Their balance is {balance}.": "{name} po kërkon para. Balanca: {balance}.",
+  "You don't have a Manager or Owner yet": "Nuk ke ende Menaxher ose Pronar",
 };

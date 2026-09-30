@@ -144,13 +144,13 @@ export function useRealtime(handler: Listener) {
   }, [listeners]);
 }
 
-/** Re-renders the server-rendered parts of the dashboard when this account's balance moves. */
+/** Re-renders the server-rendered parts of the dashboard when this account's balance or bets change. */
 export function RealtimeRefresh() {
   const router = useRouter();
   const timer = useRef<number>();
   useEffect(() => () => window.clearTimeout(timer.current), []);
   useRealtime((event) => {
-    if (event.type !== "balance.changed" && event.type !== "resync") return;
+    if (event.type !== "balance.changed" && event.type !== "bets.changed" && event.type !== "resync") return;
     // Coalesce a burst of events into one refresh.
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => router.refresh(), 250);

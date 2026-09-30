@@ -296,14 +296,18 @@ export class BetsService {
     const where: Prisma.BetWhereInput = { playerId: actor.id, status: status === "open" ? BetStatus.OPEN : { not: BetStatus.OPEN } };
     const beforeDate = before ? new Date(before) : null;
     if (beforeDate && !Number.isNaN(beforeDate.getTime())) where[status === "open" ? "placedAt" : "settledAt"] = { lt: beforeDate };
-    const [bets, open, player] = await Promise.all([
+    const weekAgo = new Date(Date.now() - 7 * 24 * 3_600_000);
+    const [bets, open, week, player] = await Promise.all([
       this.prisma.bet.findMany({ where, orderBy: status === "open" ? { placedAt: "desc" } : { settledAt: "desc" }, take: PAGE, select: betSelect }),
       this.prisma.bet.aggregate({ where: { playerId: actor.id, status: BetStatus.OPEN }, _sum: { stake: true }, _count: { _all: true } }),
+      this.prisma.bet.aggregate({ where: { playerId: actor.id, status: { not: BetStatus.OPEN }, settledAt: { gte: weekAgo } }, _sum: { stake: true, payout: true }, _count: { _all: true } }),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
     ]);
     return {
       balance: Number(player.balance),
       open: { count: open._count._all, staked: Number(open._sum.stake ?? 0) },
+      // Bets settled in the last 7 days: what went on them and what came back.
+      week: { count: week._count._all, staked: Number(week._sum.stake ?? 0), returned: Number(week._sum.payout ?? 0) },
       bets: bets.map(betView),
       hasMore: bets.length === PAGE,
     };
@@ -324,7 +328,9 @@ export class BetsService {
       blocked = error instanceof Error ? error.message : "Your account can't bet right now";
     }
     const balance = Number((await this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } })).balance);
-    return { balance, maxStake: lower(row?.ownerMaxStake, row?.managerMaxStake), dailyLossLimit: lower(row?.ownerDailyLossLimit, row?.managerDailyLossLimit), blocked };
+    const dailyLossLimit = lower(row?.ownerDailyLossLimit, row?.managerDailyLossLimit);
+    const dailyLossUsed = dailyLossLimit === null ? 0 : await this.limits.usedToday(actor.id);
+    return { balance, maxStake: lower(row?.ownerMaxStake, row?.managerMaxStake), dailyLossLimit, dailyLossUsed, blocked };
   }
 
   /**

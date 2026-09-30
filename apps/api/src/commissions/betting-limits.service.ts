@@ -106,6 +106,15 @@ export class BettingLimitsService {
     }
   }
 
+  /**
+   * How much of today's loss limit is already used: today's net losses plus
+   * stakes placed today that are still open, the same sum assertCanPlace checks.
+   */
+  async usedToday(playerId: string): Promise<number> {
+    const open = await this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfUtcDay(new Date()) } }, _sum: { stake: true } });
+    return Math.round(((await this.lossToday(playerId)) + Number(open._sum.stake ?? 0)) * 100) / 100;
+  }
+
   /** Net amount the Player has lost on bets settled today (UTC); 0 if they're up. */
   private async lossToday(playerId: string): Promise<number> {
     const settled = await this.prisma.bet.aggregate({

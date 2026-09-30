@@ -457,9 +457,23 @@ export type Bet = {
   event: BetEvent | null;
 };
 
-export type MyBets = { balance: number; open: { count: number; staked: number }; bets: Bet[]; hasMore: boolean };
+export type MyBets = {
+  balance: number;
+  open: { count: number; staked: number };
+  /** Bets settled in the last 7 days: what went on them and what came back. */
+  week: { count: number; staked: number; returned: number };
+  bets: Bet[];
+  hasMore: boolean;
+};
 
-export type SlipInfo = { balance: number; maxStake: number | null; dailyLossLimit: number | null; blocked: string | null };
+export type SlipInfo = {
+  balance: number;
+  maxStake: number | null;
+  dailyLossLimit: number | null;
+  /** Today's losses plus today's stakes still open: how much of the daily loss limit is used. */
+  dailyLossUsed: number;
+  blocked: string | null;
+};
 
 export type PlaceBetsResponse = { bets: Bet[]; total: number };
 

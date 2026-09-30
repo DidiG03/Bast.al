@@ -8,6 +8,8 @@ import {
   type MeResponse,
 } from "../../../lib/api";
 import { LoadingSpinner } from "../../../components/loading-spinner";
+import { HelpTip } from "../../../components/help-tip";
+import { useToast } from "../../../components/toaster";
 import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 
@@ -28,7 +30,7 @@ export function AuditLog() {
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   async function load(nextPage = page) {
     const token = await getToken();
@@ -55,9 +57,8 @@ export function AuditLog() {
         ),
       );
       setPage(nextPage);
-      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not load audit log"));
+      toast.error(err instanceof Error ? err.message : t("Could not load audit log"));
     } finally {
       setBusy(false);
     }
@@ -155,20 +156,22 @@ export function AuditLog() {
           </button>
         </div>
       </form>
-      {error ? (
-        <div className="error-toast" role="alert">
-          {error}
-        </div>
-      ) : null}
       <section className="card audit-table-card">
         <div className="tree-header">
-          <span>{result ? t("{count} entries", { count: result.total }) : t("Audit entries")}</span>
+          <span>
+            {result ? t("{count} entries", { count: result.total }) : t("Audit entries")}
+            <HelpTip text="A record of everything that happened: who did it, to whom, and when. Nobody can change or delete it. Use the filters above to find something, then press Apply filters." />
+          </span>
           {busy ? (
             <LoadingSpinner label="Loading audit log" size="small" />
           ) : null}
         </div>
         <div className="audit-list">
-          {result?.items.length ? (
+          {!result && busy ? (
+            <div className="loading-state">
+              <LoadingSpinner label="Loading audit log" />
+            </div>
+          ) : result?.items.length ? (
             result.items.map((entry) => (
               <article className="audit-row" key={entry.id}>
                 <div>
@@ -188,7 +191,7 @@ export function AuditLog() {
             ))
           ) : (
             <p className="muted">
-              {busy ? t("Loading…") : t("No audit entries match these filters.")}
+              {t("No audit entries match these filters.")}
             </p>
           )}
         </div>

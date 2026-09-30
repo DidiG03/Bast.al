@@ -9,6 +9,8 @@ import { PlayerActivityView } from "../../../../components/player-activity-view"
 import { useRealtime } from "../../../../components/realtime-provider";
 import { apiFetch, type PlayerActivity } from "../../../../lib/api";
 import { formatMoney } from "../../../../lib/format";
+import { PageLoading } from "../../../../components/loading-spinner";
+import { useToast } from "../../../../components/toaster";
 import { useI18n } from "../../../../components/i18n-provider";
 
 export default function PlayerActivityPage() {
@@ -16,16 +18,17 @@ export default function PlayerActivityPage() {
   const { getToken } = useAuth();
   const { t } = useI18n();
   const [data, setData] = useState<PlayerActivity | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const toast = useToast();
 
   async function load() {
     try {
       const token = await getToken();
       if (!token) throw new Error(t("You're not signed in"));
       setData(await apiFetch<PlayerActivity>(`/players/${id}/activity`, token));
-      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Unable to load this player's activity"));
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Unable to load this player's activity"));
     }
   }
 
@@ -37,6 +40,8 @@ export default function PlayerActivityPage() {
   useRealtime((event) => {
     if (event.type === "balance.changed" || event.type === "resync") load().catch(() => undefined);
   });
+
+  if (!data) return failed ? null : <PageLoading label="Loading player activity" />;
 
   return (
     <div className="stack">
@@ -52,7 +57,6 @@ export default function PlayerActivityPage() {
         </div>
         <Link href="/dashboard/users" className="back-link">{t("Back to Users")}</Link>
       </div>
-      {error ? <p className="error-text">{error}</p> : null}
       {data ? <BettingLimitsCard playerId={id} /> : null}
       {data ? <PlayerActivityView data={data} /> : null}
     </div>

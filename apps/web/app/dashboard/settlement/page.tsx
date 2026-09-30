@@ -3,12 +3,14 @@
 import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
-import { LoadingSpinner } from "../../../components/loading-spinner";
+import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
+import { useToast } from "../../../components/toaster";
 import { apiFetch, type AdminBet, type BetStatus, type MeResponse, type SettlementEvent } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
+import { HelpTip } from "../../../components/help-tip";
 
 const DATE_TIME: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
 
@@ -42,8 +44,9 @@ export default function SettlementPage() {
   const [status, setStatus] = useState<BetStatus | "">("");
   const [player, setPlayer] = useState("");
   const [eventId, setEventId] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [meLoaded, setMeLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const toast = useToast();
 
   const loadEvents = useCallback(async () => {
     const token = await getToken();
@@ -62,41 +65,62 @@ export default function SettlementPage() {
   }, [getToken, status, player, eventId]);
 
   useEffect(() => {
-    loadEvents().catch((err) => setError(err instanceof Error ? err.message : t("Could not load matches")));
-  }, [loadEvents]);
+    loadEvents().catch((err) => {
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Could not load matches"));
+    });
+  }, [loadEvents, toast, t]);
 
   useEffect(() => {
     void getToken()
       .then((token) => (token ? apiFetch<MeResponse>("/users/me", token) : null))
       .then((me) => setCanSettle(me?.role === "SUPER_ADMIN"))
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setMeLoaded(true));
   }, [getToken]);
 
   useEffect(() => {
-    const timer = setTimeout(() => loadBets().catch((err) => setError(err instanceof Error ? err.message : t("Could not load bets"))), 250);
+    const timer = setTimeout(
+      () =>
+        loadBets().catch((err) => {
+          setFailed(true);
+          toast.error(err instanceof Error ? err.message : t("Could not load bets"));
+        }),
+      250,
+    );
     return () => clearTimeout(timer);
-  }, [loadBets]);
+  }, [loadBets, toast, t]);
 
   const run: Run = async (path, body, success) => {
     const token = await getToken();
     if (!token) return false;
-    setError(null);
-    setNotice(null);
     const json = JSON.stringify(body);
     try {
       await apiFetch(path, token, { method: "POST", body: json, idempotencyKey: idempotency.keyFor(path, json) });
       idempotency.done();
       await Promise.all([loadEvents(), loadBets()]);
-      setNotice(success);
+      toast.success(success);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Something went wrong"));
+      toast.error(err instanceof Error ? err.message : t("Something went wrong"));
       return false;
     }
   };
 
   const attention = (events ?? []).filter((e) => e.needsAttention);
   const rest = (events ?? []).filter((e) => !e.needsAttention);
+
+  // Matches stuck with open bets are a warning: it pops up once each time the count changes.
+  useEffect(() => {
+    if (attention.length === 0) return;
+    toast.warning(
+      `${tn(attention.length, "{count} match started over 3 hours ago and still has open bets.", "{count} matches started over 3 hours ago and still have open bets.")} ${canSettle ? t("Set the result if the feed hasn't.") : t("Super Admin settles these by hand when the feed doesn't.")}`,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attention.length, canSettle]);
+
+  // Nothing shows until the account, the matches and the bets have all loaded.
+  if (!meLoaded || events === null || bets === null) return failed ? null : <PageLoading label="Loading settlement" />;
 
   return (
     <div className="stack">
@@ -109,25 +133,15 @@ export default function SettlementPage() {
         </p>
       </div>
 
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
-      {notice ? <p className="success-text" role="status">{notice}</p> : null}
 
       <section className="stack">
-        <h2 style={{ margin: 0 }}>{t("Matches with bets")}</h2>
-        {events === null ? (
-          <LoadingSpinner label="Loading matches" />
-        ) : events.length === 0 ? (
+        <h2 style={{ margin: 0 }}>{t("Matches with bets")}<HelpTip text="Every match that has bets on it. Bets are paid out by themselves a minute after the final score arrives. Matches that need a hand (no score after 3 hours) are shown first." /></h2>
+        {events.length === 0 ? (
           <div className="card">
             <p className="muted" style={{ margin: 0 }}>{canSettle ? t("No bets have been placed yet.") : t("Your Players haven't placed any bets yet.")}</p>
           </div>
         ) : (
           <>
-            {attention.length > 0 ? (
-              <p className="muted" style={{ margin: 0 }}>
-                {tn(attention.length, "{count} match started over 3 hours ago and still has open bets.", "{count} matches started over 3 hours ago and still have open bets.")}{" "}
-                {canSettle ? t("Set the result if the feed hasn't.") : t("Super Admin settles these by hand when the feed doesn't.")}
-              </p>
-            ) : null}
             <div className="settle-events">
               {[...attention, ...rest].map((event) => (
                 <SettlementEventCard key={event.id} event={event} run={run} canSettle={canSettle} onShowBets={() => setEventId(event.id)} />
@@ -138,7 +152,7 @@ export default function SettlementPage() {
       </section>
 
       <section className="stack">
-        <h2 style={{ margin: 0 }}>{t("Bets")}</h2>
+        <h2 style={{ margin: 0 }}>{t("Bets")}<HelpTip text="Every single bet. Use the search and the status list to find one. Open = not finished, Won/Lost = finished, Void = cancelled and the money given back." /></h2>
         <div className="settle-filters">
           <input type="search" placeholder={t("Player username")} value={player} onChange={(e) => setPlayer(e.target.value)} aria-label={t("Filter by Player")} />
           <select value={status} onChange={(e) => setStatus(e.target.value as BetStatus | "")} aria-label={t("Filter by status")}>
@@ -154,9 +168,7 @@ export default function SettlementPage() {
             </button>
           ) : null}
         </div>
-        {bets === null ? (
-          <LoadingSpinner label="Loading bets" />
-        ) : bets.length === 0 ? (
+        {bets.length === 0 ? (
           <div className="card">
             <p className="muted" style={{ margin: 0 }}>{t("No bets match.")}</p>
           </div>

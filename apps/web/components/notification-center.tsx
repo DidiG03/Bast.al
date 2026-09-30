@@ -7,6 +7,7 @@ import { useRealtime } from "./realtime-provider";
 import { apiFetch, type NotificationItem, type NotificationPreferences, type NotificationResponse } from "../lib/api";
 import { msg } from "../lib/i18n/core";
 import { useI18n } from "./i18n-provider";
+import { useToast } from "./toaster";
 
 const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
   inAppEnabled: msg("In the app"),
@@ -31,10 +32,9 @@ export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const toaster = useToast();
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
-  const [toast, setToast] = useState<NotificationItem | null>(null);
 
   async function load() {
     const token = await getToken();
@@ -45,7 +45,7 @@ export function NotificationCenter() {
   }
 
   useEffect(() => {
-    load().catch(() => setError(t("Notifications aren't available right now")));
+    load().catch(() => toaster.error(t("Notifications aren't available right now")));
     // getToken is stable for the Clerk session and this intentionally runs once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -55,17 +55,13 @@ export function NotificationCenter() {
       const incoming = event.notification;
       setItems((current) => current.some((item) => item.id === incoming.id) ? current : [incoming, ...current].slice(0, 50));
       if (!incoming.readAt) setUnreadCount((count) => count + 1);
-      setToast(incoming);
+      // New notifications pop up like every other message; a click opens the list.
+      const show = incoming.severity === "CRITICAL" ? toaster.error : incoming.severity === "WARNING" ? toaster.warning : incoming.severity === "SUCCESS" ? toaster.success : toaster.info;
+      show(ts(incoming.message), { title: ts(incoming.title), onClick: () => setOpen(true) });
     } else if (event.type === "notifications.changed" || event.type === "resync") {
       load().catch(() => undefined);
     }
   });
-
-  useEffect(() => {
-    if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(null), 5000);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
 
   useEffect(() => {
     if (!open) return;
@@ -78,7 +74,7 @@ export function NotificationCenter() {
     const token = await getToken();
     if (!token) return;
     try { setPreferences(await apiFetch<NotificationPreferences>("/notifications/preferences", token)); setPreferencesOpen(true); }
-    catch { setError(t("Couldn't load notification settings")); }
+    catch { toaster.error(t("Couldn't load notification settings")); }
   }
 
   async function updatePreference(key: keyof NotificationPreferences, value: boolean) {
@@ -87,7 +83,7 @@ export function NotificationCenter() {
     try {
       await apiFetch("/notifications/preferences", token, { method: "PATCH", body: JSON.stringify({ [key]: value }) });
       setPreferences({ ...preferences, [key]: value });
-    } catch { setError(t("Couldn't save notification settings")); }
+    } catch { toaster.error(t("Couldn't save notification settings")); }
   }
 
   async function markRead(id: string) {
@@ -98,7 +94,7 @@ export function NotificationCenter() {
       setItems((current) => current.map((item) => item.id === id ? { ...item, readAt: new Date().toISOString() } : item));
       setUnreadCount((count) => Math.max(0, count - (items.find((item) => item.id === id)?.readAt ? 0 : 1)));
     } catch {
-      setError(t("Couldn't update the notification"));
+      toaster.error(t("Couldn't update the notification"));
     }
   }
 
@@ -110,7 +106,7 @@ export function NotificationCenter() {
       setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })));
       setUnreadCount(0);
     } catch {
-      setError(t("Couldn't update the notifications"));
+      toaster.error(t("Couldn't update the notifications"));
     }
 
   }
@@ -144,12 +140,6 @@ export function NotificationCenter() {
         {unreadCount > 0 ? <span className="notification-badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
         <span className="notification-trigger-label">{t("Notifications")}</span>
       </button>
-      {toast && !open ? (
-        <button type="button" className={`notification-toast card notification-severity-${toast.severity.toLowerCase()}`} role="status" onClick={() => { setToast(null); setOpen(true); }}>
-          <strong>{ts(toast.title)}</strong>
-          <span>{ts(toast.message)}</span>
-        </button>
-      ) : null}
       {open ? <button type="button" className="notification-backdrop" aria-label={t("Close notifications")} tabIndex={-1} onClick={() => setOpen(false)} /> : null}
       {open ? (
         <section className="notification-panel card" aria-label={t("Notifications")}>
@@ -157,7 +147,6 @@ export function NotificationCenter() {
             <strong>{t("Notifications")}</strong>
             <span className="notification-panel-actions"><button type="button" className="text-button" onClick={openPreferences}>{t("Settings")}</button><button type="button" className="text-button" onClick={markAllRead} disabled={unreadCount === 0}>{t("Mark all read")}</button></span>
           </div>
-          {error ? <p className="notification-error">{error}</p> : null}
           <div className="notification-list">
             {items.length === 0 ? <p className="muted notification-empty">{t("You're all caught up.")}</p> : items.map((item) => (
               <div key={item.id} className={`notification-item${item.readAt ? "" : " is-unread"} notification-severity-${item.severity.toLowerCase()}`}>

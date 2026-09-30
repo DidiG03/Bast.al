@@ -6,6 +6,8 @@
   --accent: #d6ff3f;
   --accent-strong: #c3f01a;
   --danger: #ff5c72;
+  --warning: #ffb547;
+  --info: #7cc4ff;
   --border: #262a18;
   --focus: #eaffa0;
   --font: "IBM Plex Sans", "Segoe UI", sans-serif;
@@ -25,6 +27,8 @@
   --accent: #00a91a;
   --accent-strong: #008c16;
   --danger: #c9364a;
+  --warning: #b86e00;
+  --info: #1f6fb2;
   --border: #d6e2da;
   --focus: #007d15;
   color-scheme: light;
@@ -40,6 +44,8 @@
     --accent: #00a91a;
     --accent-strong: #008c16;
     --danger: #c9364a;
+    --warning: #b86e00;
+    --info: #1f6fb2;
     --border: #d6e2da;
     --focus: #007d15;
     color-scheme: light;
@@ -3340,6 +3346,11 @@ button.odds-selection:hover,
   font-size: 1rem;
 }
 
+/* Not ready yet: looks disabled, but a tap still says why (as a toast). */
+.bet-place.is-blocked {
+  opacity: 0.5;
+}
+
 .bet-slip-actions {
   display: flex;
   flex-wrap: wrap;
@@ -4197,4 +4208,183 @@ button.odds-selection:hover,
   font-size: 0.75rem;
   font-weight: 500;
   vertical-align: middle;
+}
+
+/* Toasts: every success, error and warning in the app (components/toaster.tsx) */
+.toast-stack {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 200;
+  display: grid;
+  gap: 0.6rem;
+  width: min(24rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast {
+  --toast-color: var(--accent);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--toast-color) 45%, var(--border));
+  border-left: 0.3rem solid var(--toast-color);
+  border-radius: 0.65rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 22%);
+  pointer-events: auto;
+  animation: toast-in 180ms ease-out;
+}
+
+.toast-error {
+  --toast-color: var(--danger);
+}
+
+.toast-warning {
+  --toast-color: var(--warning);
+}
+
+.toast-info {
+  --toast-color: var(--info);
+}
+
+.toast-icon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background: var(--toast-color);
+  color: var(--bg);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.toast-body {
+  display: grid;
+  gap: 0.15rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.toast-body-button {
+  padding: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.toast-body strong + span {
+  color: var(--muted);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.4rem);
+  }
+}
+
+@media (max-width: 640px) {
+  .toast-stack {
+    top: 0.75rem;
+    right: 0.75rem;
+    width: calc(100vw - 1.5rem);
+  }
+}
+
+/* A whole page loading gets a bigger ring than a card or a button. */
+.loading-state-page .loading-spinner-ring {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-width: 3px;
+}
+
+/* A button that can't be used yet but says why when tapped (as a toast). */
+button.is-blocked {
+  opacity: 0.5;
+}
+
+/* The "!" beside a card's title, with its explanation (components/help-tip.tsx) */
+.help-tip {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 0.4rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.help-tip-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 0;
+  padding: 0;
+  border: 1.5px solid var(--warning);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--warning);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.help-tip-button:hover,
+.help-tip-button[aria-expanded="true"] {
+  background: var(--warning);
+  color: var(--bg);
+}
+
+.help-tip-bubble {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: -0.5rem;
+  z-index: 150;
+  width: max-content;
+  max-width: min(19rem, calc(100vw - 2rem));
+  padding: 0.7rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border-radius: 0.6rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 25%);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+}
+
+.help-tip-bubble.is-right {
+  left: auto;
+  right: -0.5rem;
+}
+
+@media (max-width: 640px) {
+  /* On a phone the bubble spans the screen under the title instead of hanging off the "!". */
+  .help-tip {
+    position: static;
+  }
+
+  .help-tip-bubble,
+  .help-tip-bubble.is-right {
+    left: 1rem;
+    right: 1rem;
+    top: auto;
+    width: auto;
+    max-width: none;
+    margin-top: 0.45rem;
+  }
 }

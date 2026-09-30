@@ -15,7 +15,10 @@ import {
 import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
+import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
+import { useToast } from "../../../components/toaster";
 import { msg } from "../../../lib/i18n/core";
+import { HelpTip } from "../../../components/help-tip";
 
 type Range = "this-week" | "last-week" | "this-month" | "custom";
 
@@ -87,8 +90,8 @@ export default function CommissionsPage() {
   const [mine, setMine] = useState<ManagerCommissions | null>(null);
   const [history, setHistory] = useState<CommissionHistory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const toast = useToast();
   const [collectingId, setCollectingId] = useState<string | null>(null);
   // Commission already paid for periods overlapping the one on screen, stored
   // on the server, so a period can't be paid twice even after a reload.
@@ -99,7 +102,6 @@ export default function CommissionsPage() {
     const dates = rangeDates(range, customFrom, customTo);
     if (!dates) return;
     setLoading(true);
-    setError(null);
     try {
       const token = await getToken();
       if (!token) throw new Error(t("You're not signed in"));
@@ -128,11 +130,12 @@ export default function CommissionsPage() {
         setPayouts(await apiFetch<CommissionPayout[]>(`/commissions/payouts?${period}`, token));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Unable to load commissions"));
+      toast.error(err instanceof Error ? err.message : t("Unable to load commissions"));
     } finally {
       setLoading(false);
+      setLoadedOnce(true);
     }
-  }, [range, customFrom, customTo, ownerId, me, getToken]);
+  }, [range, customFrom, customTo, ownerId, me, getToken, toast, t]);
 
   useEffect(() => {
     load().catch(() => undefined);
@@ -187,8 +190,6 @@ export default function CommissionsPage() {
     const vars = { amount: formatMoney(amount), name: user.username, period: label };
     const question = kind === "collect" ? t("Take {amount} back from {name} for your commission ({period})?", vars) : t("Pay {amount} to {name} for their commission ({period})?", vars);
     if (!window.confirm(question)) return;
-    setError(null);
-    setNotice(null);
     setCollectingId(user.id);
     try {
       const token = await getToken();
@@ -198,7 +199,7 @@ export default function CommissionsPage() {
       const payout = await apiFetch<CommissionPayout>(path, token, { method: "POST", body, idempotencyKey: idempotency.keyFor(path, body) });
       idempotency.done();
       setPayouts((list) => [payout, ...list]);
-      setNotice(
+      toast.success(
         payout.status === "PENDING"
           ? t("Submitted for approval: {amount} to {name}.", { amount: formatMoney(payout.amount), name: user.username })
           : kind === "collect"
@@ -206,7 +207,7 @@ export default function CommissionsPage() {
             : t("Paid {amount} to {name}.", { amount: formatMoney(payout.amount), name: user.username }),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : kind === "collect" ? t("Couldn't collect the commission") : t("Couldn't pay the commission"));
+      toast.error(err instanceof Error ? err.message : kind === "collect" ? t("Couldn't collect the commission") : t("Couldn't pay the commission"));
     } finally {
       setCollectingId(null);
     }
@@ -230,6 +231,9 @@ export default function CommissionsPage() {
         : ownerId
           ? t("What this Owner's team made, your cut, and what the Owner pays each Manager.")
           : t("Your cut from each Owner's team. Open an Owner to see what they owe their Managers.");
+
+  // The first time, only the spinner shows until the numbers are in.
+  if (!loadedOnce) return <PageLoading label="Loading commissions" />;
 
   return (
     <div className="stack">
@@ -267,17 +271,15 @@ export default function CommissionsPage() {
         ) : null}
         <div className="commission-period-footer">
           <span className="muted">
-            {current ? periodLabel(i18n, current.from, current.to) : range === "custom" ? t("Pick a start and end date") : ""}
-            {loading ? ` · ${t("Loading…")}` : ""}
+            {current ? periodLabel(i18n, current.from, current.to) : range === "custom" ? t("Pick a start and end date") : ""}<HelpTip text="Choose which days to count. “This week” is still running, so it can't be paid yet. To pay or collect, choose “Last week” or your own dates that are over. Export CSV saves the numbers as a file." />
           </span>
+          {loading ? <LoadingSpinner label="Loading commissions" size="small" /> : null}
           <button type="button" className="secondary" onClick={exportCsv} disabled={!current || loading}>
             {t("Export CSV")}
           </button>
         </div>
       </div>
 
-      {error ? <p className="error-text">{error}</p> : null}
-      {notice ? <p className="success-text">{notice}</p> : null}
 
       {me?.role === "MANAGER" && mine ? <ManagerView data={mine} /> : null}
       {me?.role === "MANAGER" && history ? <ManagerHistory data={history} /> : null}

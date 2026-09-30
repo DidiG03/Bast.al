@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { formatMoney, formatSignedMoney } from "../lib/format";
 import type { CommissionHistory, CommissionPayout, CommissionTotals, ManagerCommissions, PlayerResult, SuperAdminCommissions, TeamCommissions } from "../lib/api";
+import { LoadingSpinner } from "./loading-spinner";
+import { useToast } from "./toaster";
 import { useI18n, type I18n } from "./i18n-provider";
+import { HelpTip } from "./help-tip";
 
 const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
 
@@ -35,6 +38,7 @@ function PayoutAction({
 }) {
   const i18n = useI18n();
   const { t, date } = i18n;
+  const toast = useToast();
   if (payout) {
     const samePeriod = new Date(payout.periodFrom).getTime() === new Date(period.from).getTime() && new Date(payout.periodTo).getTime() === new Date(period.to).getTime();
     const amount = formatMoney(payout.amount);
@@ -57,31 +61,27 @@ function PayoutAction({
   return (
     <button
       type="button"
-      className="secondary"
-      disabled={busy || !periodEnded}
-      title={periodEnded ? undefined : t("Pick a period that's over, like Last week, to pay it.")}
+      className={`secondary${periodEnded ? "" : " is-blocked"}`}
+      disabled={busy}
+      aria-disabled={!periodEnded}
       onClick={(event) => {
         // Inside a <summary>, a click would also open or close the row.
         event.preventDefault();
         event.stopPropagation();
+        // A running period can't be paid yet: a tap says why instead of doing nothing.
+        if (!periodEnded) {
+          toast.info(
+            kind === "collect"
+              ? t("This period is still running. To collect commission, choose Last week or a custom range that has ended.")
+              : t("This period is still running. To pay commission, choose Last week or a custom range that has ended."),
+          );
+          return;
+        }
         onClick();
       }}
     >
-      {kind === "collect" ? (busy ? t("Collecting…") : t("Mark as collected")) : busy ? t("Paying…") : t("Mark as paid")}
+      {busy ? <LoadingSpinner label={kind === "collect" ? "Collecting" : "Paying"} size="small" /> : kind === "collect" ? t("Mark as collected") : t("Mark as paid")}
     </button>
-  );
-}
-
-/** Why the buttons are greyed out while a running period is on screen. */
-function RunningPeriodHint({ periodEnded, kind }: { periodEnded: boolean; kind: "collect" | "pay" }) {
-  const { t } = useI18n();
-  if (periodEnded) return null;
-  return (
-    <p className="muted" style={{ margin: 0 }}>
-      {kind === "collect"
-        ? t("This period is still running. To collect commission, choose Last week or a custom range that has ended.")
-        : t("This period is still running. To pay commission, choose Last week or a custom range that has ended.")}
-    </p>
   );
 }
 
@@ -97,10 +97,13 @@ function ofResult(t: I18n["t"], rate: number, net: number): string {
   return net < 0 ? t("{rate}% of a {amount} loss", { rate, amount: formatMoney(-net) }) : t("{rate}% of {amount} profit", { rate, amount: formatMoney(net) });
 }
 
-export function Stat({ label, value, hint, highlight }: { label: string; value: string; hint?: string; highlight?: "good" | "bad" }) {
+export function Stat({ label, value, hint, highlight, help }: { label: string; value: string; hint?: string; highlight?: "good" | "bad"; help?: string }) {
   return (
     <div className={`card report-stat commission-stat${highlight ? ` commission-highlight-${highlight}` : ""}`}>
-      <span className="muted">{label}</span>
+      <span className="muted">
+        {label}
+        {help ? <HelpTip text={help} /> : null}
+      </span>
       <strong>{value}</strong>
       {hint ? <span className="muted commission-stat-hint">{hint}</span> : null}
     </div>
@@ -148,17 +151,16 @@ export function SuperAdminView({
   return (
     <>
       <div className="report-grid">
-        <Stat label={t("Your cut")} value={formatSignedMoney(data.totals.superAdminCut)} hint={t("What Owners pay you")} highlight={data.totals.superAdminCut < 0 ? "bad" : "good"} />
-        <Stat label={t("Total team profit")} value={formatSignedMoney(data.totals.net)} hint={t("Player stakes minus payouts")} />
-        <Stat label={t("Paid to Managers")} value={formatSignedMoney(data.totals.managerCommission)} hint={t("Owners pay this")} />
-        <Stat label={t("Owners keep")} value={formatSignedMoney(data.totals.ownerKeeps)} />
+        <Stat label={t("Your cut")} help="Your money from all Owners for this period: each Owner's rate (%) of their team's profit. Collect it with Mark as collected, below." value={formatSignedMoney(data.totals.superAdminCut)} hint={t("What Owners pay you")} highlight={data.totals.superAdminCut < 0 ? "bad" : "good"} />
+        <Stat label={t("Total team profit")} help="What all teams made together: the money Players lost minus the money paid to winners." value={formatSignedMoney(data.totals.net)} hint={t("Player stakes minus payouts")} />
+        <Stat label={t("Paid to Managers")} help="What Owners pay their Managers as commission. Owners pay this, not you." value={formatSignedMoney(data.totals.managerCommission)} hint={t("Owners pay this")} />
+        <Stat label={t("Owners keep")} help="What Owners have left after paying you and their Managers." value={formatSignedMoney(data.totals.ownerKeeps)} />
       </div>
       <section className="card stack">
         <div className="tree-header">
-          <h2 style={{ margin: 0 }}>{t("Your cut by Owner")}</h2>
+          <h2 style={{ margin: 0 }}>{t("Your cut by Owner")}<HelpTip text="One line for each Owner: their team's profit and how much they owe you. When the period is over, press Mark as collected once they have paid you." /></h2>
           <span className="muted">{tn(data.owners.length, "{count} owner", "{count} owners")}</span>
         </div>
-        <RunningPeriodHint periodEnded={periodEnded} kind="collect" />
         {data.owners.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No Owners yet.")}</p>
         ) : (
@@ -218,24 +220,25 @@ export function TeamView({
       <div className="report-grid">
         <Stat
           label={isOwner ? t("Your team's profit") : t("{name}'s team profit", { name: owner.username })}
+          help="What the team made in this period: the money its Players lost, minus the money paid to Players who won. Red means the Players won more."
           value={formatSignedMoney(totals.net)}
           hint={tn(totals.bets, "{amount} turnover · {count} bet", "{amount} turnover · {count} bets", { amount: formatMoney(totals.staked) })}
         />
         <Stat
           label={isOwner ? t("You pay Super Admin") : t("Your cut")}
+          help="Super Admin's share: the Owner's rate (%) of the team's profit, paid before the Managers."
           value={formatSignedMoney(totals.superAdminCut)}
           hint={t("{rate}% of team profit", { rate: owner.commissionRate })}
           highlight={isOwner ? undefined : totals.superAdminCut < 0 ? "bad" : "good"}
         />
-        <Stat label={isOwner ? t("You pay your Managers") : t("Owner pays Managers")} value={formatSignedMoney(totals.managerCommission)} hint={tn(data.managers.length, "{count} manager", "{count} managers")} />
-        <Stat label={isOwner ? t("You keep") : t("Owner keeps")} value={formatSignedMoney(totals.ownerKeeps)} highlight={isOwner ? (totals.ownerKeeps < 0 ? "bad" : "good") : undefined} />
+        <Stat label={isOwner ? t("You pay your Managers") : t("Owner pays Managers")} help="The commission for all Managers together: each Manager's rate (%) of what their own Players lost." value={formatSignedMoney(totals.managerCommission)} hint={tn(data.managers.length, "{count} manager", "{count} managers")} />
+        <Stat label={isOwner ? t("You keep") : t("Owner keeps")} help="What is left for the Owner after paying Super Admin and the Managers." value={formatSignedMoney(totals.ownerKeeps)} highlight={isOwner ? (totals.ownerKeeps < 0 ? "bad" : "good") : undefined} />
       </div>
       <section className="card stack">
         <div className="tree-header">
-          <h2 style={{ margin: 0 }}>{isOwner ? t("What you owe each Manager") : t("Manager payouts")}</h2>
+          <h2 style={{ margin: 0 }}>{isOwner ? t("What you owe each Manager") : t("Manager payouts")}<HelpTip text="One line for each Manager: what their Players lost and the commission they earn from it. Tap a line to see their Players. Press Mark as paid after paying them." /></h2>
           <span className="muted">{tn(data.managers.length, "{count} manager", "{count} managers")}</span>
         </div>
-        {isOwner && onCollect ? <RunningPeriodHint periodEnded={periodEnded} kind="pay" /> : null}
         {data.managers.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No Managers yet.")}</p>
         ) : (
@@ -273,7 +276,7 @@ export function TeamView({
       {data.directPlayers.length > 0 ? (
         <section className="card stack">
           <div className="tree-header">
-            <h2 style={{ margin: 0 }}>{t("Players with no Manager")}</h2>
+            <h2 style={{ margin: 0 }}>{t("Players with no Manager")}<HelpTip text="Players who sit right under the Owner with no Manager. Nobody gets a commission for them, so their profit stays with the Owner." /></h2>
             <span className="muted">{t("No Manager commission")}</span>
           </div>
           <PlayerList players={data.directPlayers} />
@@ -310,7 +313,7 @@ function TeamPerformance({ data }: { data: TeamCommissions }) {
   return (
     <section className="card stack">
       <div className="tree-header">
-        <h2 style={{ margin: 0 }}>{t("Team performance")}</h2>
+        <h2 style={{ margin: 0 }}>{t("Team performance")}<HelpTip text="Every Player in the team: how much they bet, and if they won or lost. Use it to see who brings in the most." /></h2>
         <span className="muted">{tn(rows.length, "{count} player", "{count} players")}</span>
       </div>
       {rows.length === 0 ? (
@@ -362,21 +365,23 @@ export function ManagerView({ data }: { data: ManagerCommissions }) {
       <div className="report-grid">
         <Stat
           label={totals.commission < 0 ? t("You owe") : t("You earned")}
+          help="Your commission for this period. If your Players won more than they lost, it is below zero and you owe it back."
           value={formatMoney(Math.abs(totals.commission))}
           hint={data.paidBy ? t("Settled with {name}", { name: data.paidBy }) : undefined}
           highlight={totals.commission < 0 ? "bad" : "good"}
         />
         <Stat
           label={t("Your players' result")}
+          help="Did your Players win or lose money in this period? When they lose, you earn."
           value={totals.net < 0 ? t("Won {amount}", { amount: formatMoney(-totals.net) }) : t("Lost {amount}", { amount: formatMoney(totals.net) })}
           hint={t("Stakes minus payouts")}
         />
-        <Stat label={t("Your rate")} value={`${manager.commissionRate}%`} hint={t("Set by your Owner")} />
-        <Stat label={t("Settled bets")} value={String(totals.bets)} hint={t("{amount} staked", { amount: formatMoney(totals.staked) })} />
+        <Stat label={t("Your rate")} help="Your percent of what your Players lose. Your Owner sets it. Example: at 10%, if your Players lose $500, you earn $50." value={`${manager.commissionRate}%`} hint={t("Set by your Owner")} />
+        <Stat label={t("Settled bets")} help="How many bets finished in this period, and how much money was on them." value={String(totals.bets)} hint={t("{amount} staked", { amount: formatMoney(totals.staked) })} />
       </div>
       <section className="card stack">
         <div className="tree-header">
-          <h2 style={{ margin: 0 }}>{t("Your players")}</h2>
+          <h2 style={{ margin: 0 }}>{t("Your players")}<HelpTip text="Each of your Players: how much they bet in this period and whether they won or lost." /></h2>
           <span className="muted">{tn(data.players.length, "{count} player", "{count} players")}</span>
         </div>
         <PlayerList players={data.players} />
@@ -393,7 +398,7 @@ export function ManagerHistory({ data }: { data: CommissionHistory }) {
   return (
     <section className="card stack">
       <div className="tree-header">
-        <h2 style={{ margin: 0 }}>{t("Week by week")}</h2>
+        <h2 style={{ margin: 0 }}>{t("Week by week")}<HelpTip text="Your commission in each of the last weeks, so you can compare." /></h2>
         <span className="muted">{tn(data.weeks.length, "Last {count} week", "Last {count} weeks")}</span>
       </div>
       <div className="report-list">

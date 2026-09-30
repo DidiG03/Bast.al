@@ -6,6 +6,7 @@ import type { Lang } from "../lib/i18n/core";
 import { I18nProvider } from "./i18n-provider";
 import { SentryInit } from "./sentry-init";
 import { ThemeProvider, type Theme } from "./theme-provider";
+import { ToastProvider } from "./toaster";
 
 export function Providers({ children, initialTheme, lang }: { children: React.ReactNode; initialTheme: Theme | null; lang: Lang }) {
   // Clerk 6 supports this runtime flag, but its installed types omit it.
@@ -21,7 +22,7 @@ export function Providers({ children, initialTheme, lang }: { children: React.Re
           localization={clerkLocalization(lang)}
           {...{ disableKeyless: true }}
         >
-          {children}
+          <ToastProvider>{children}</ToastProvider>
         </ClerkProvider>
       </ThemeProvider>
     </I18nProvider>

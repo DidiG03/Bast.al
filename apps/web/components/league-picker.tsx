@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import { apiFetch, type LeagueChoice } from "../lib/api";
 import { useI18n } from "./i18n-provider";
 import { LoadingSpinner } from "./loading-spinner";
+import { useToast } from "./toaster";
+import { HelpTip } from "./help-tip";
 
 type League = NonNullable<LeagueChoice["available"]>[number];
 
@@ -23,7 +25,7 @@ export function LeaguePicker({ onSaved }: { onSaved: (message: string) => void }
   const [search, setSearch] = useState("");
   const [onlyChosen, setOnlyChosen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   function apply(next: LeagueChoice) {
     setData(next);
@@ -37,9 +39,11 @@ export function LeaguePicker({ onSaved }: { onSaved: (message: string) => void }
     if (!token) return;
     setBusy(true);
     try {
-      apply(await apiFetch<LeagueChoice>("/odds/leagues", token));
+      const next = await apiFetch<LeagueChoice>("/odds/leagues", token);
+      apply(next);
+      if (next.available === null) toast.error(t("Couldn't load the list of leagues: {error}", { error: ts(next.availableError ?? "") }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Something went wrong"));
+      toast.error(err instanceof Error ? err.message : t("Something went wrong"));
     } finally {
       setBusy(false);
     }
@@ -49,12 +53,11 @@ export function LeaguePicker({ onSaved }: { onSaved: (message: string) => void }
     const token = await getToken();
     if (!token) return;
     setBusy(true);
-    setError(null);
     try {
       apply(await apiFetch<LeagueChoice>("/odds/leagues", token, { method: "PUT", body: JSON.stringify(body) }));
       onSaved(message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Something went wrong"));
+      toast.error(err instanceof Error ? err.message : t("Something went wrong"));
     } finally {
       setBusy(false);
     }
@@ -118,7 +121,7 @@ export function LeaguePicker({ onSaved }: { onSaved: (message: string) => void }
   return (
     <details className="card league-picker" onToggle={(event) => (event.currentTarget.open ? void load() : undefined)}>
       <summary>
-        <strong>{t("Leagues")}</strong>
+        <strong>{t("Leagues")}</strong><HelpTip text="Choose which football leagues and cups come into the site. Only matches from ticked leagues can be bet on. More leagues use more of the daily API-Football requests." />
         <span className="muted">{summary}</span>
         {data ? <span className={`league-picker-badge${data.custom ? " is-custom" : ""}`}>{data.custom ? t("Your pick") : t("Defaults")}</span> : null}
       </summary>
@@ -133,12 +136,13 @@ export function LeaguePicker({ onSaved }: { onSaved: (message: string) => void }
           </p>
         ) : null}
 
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
         {data === null ? (
-          busy ? <LoadingSpinner label="Loading leagues" /> : null
-        ) : data.available === null ? (
-          <p className="error-text" role="alert">{t("Couldn't load the list of leagues: {error}", { error: ts(data.availableError ?? "") })}</p>
-        ) : (
+          busy ? (
+            <div className="loading-state">
+              <LoadingSpinner label="Loading leagues" />
+            </div>
+          ) : null
+        ) : data.available === null ? null : (
           <>
             <div className="row league-picker-tools">
               <input type="search" placeholder={t("Search leagues or countries")} value={search} onChange={(event) => setSearch(event.target.value)} aria-label={t("Search leagues or countries")} />

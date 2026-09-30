@@ -5,6 +5,7 @@ import { useState } from "react";
 import { apiFetch, type PricePoint } from "../lib/api";
 import { LoadingSpinner } from "./loading-spinner";
 import { useI18n } from "./i18n-provider";
+import { useToast } from "./toaster";
 
 
 type MarketSelection = { id: string; name: string };
@@ -19,6 +20,7 @@ export function MarketPriceHistory({ selections }: { selections: MarketSelection
   const { t, ts } = useI18n();
   const [open, setOpen] = useState(false);
   const [byId, setById] = useState<Record<string, PricePoint[] | "error"> | null>(null);
+  const toast = useToast();
 
   async function toggle() {
     if (open) {
@@ -39,6 +41,7 @@ export function MarketPriceHistory({ selections }: { selections: MarketSelection
       }),
     );
     setById(Object.fromEntries(entries));
+    if (entries.some(([, points]) => points === "error")) toast.error(t("Couldn't load the price history. Try again in a moment."));
   }
 
   return (
@@ -61,7 +64,7 @@ export function MarketPriceHistory({ selections }: { selections: MarketSelection
                 <div className="price-history-row" key={selection.id}>
                   <span className="price-history-name">{ts(selection.name)}</span>
                   {points === "error" ? (
-                    <span className="error-text">{t("Couldn't load")}</span>
+                    <span className="muted">–</span>
                   ) : !points || points.length < 2 ? (
                     <span className="muted">{t("No movement recorded yet")}</span>
                   ) : (

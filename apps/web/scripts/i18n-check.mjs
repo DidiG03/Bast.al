@@ -34,7 +34,9 @@ const str = String.raw`"((?:\\.|[^"\\])*)"`;
 const tCall = new RegExp(String.raw`\bt\(\s*${str}`, "g");
 const ternary = new RegExp(String.raw`\bt\([^()"]*?\?\s*${str}\s*:\s*${str}`, "g");
 const msgCall = new RegExp(String.raw`\bmsg\(\s*${str}`, "g");
-const spinnerLabel = new RegExp(String.raw`<LoadingSpinner[^>]*?label=${str}`, "g");
+const spinnerLabel = new RegExp(String.raw`<(?:LoadingSpinner|PageLoading)[^>]*?label=${str}`, "g");
+const helpText = new RegExp(String.raw`(?:<HelpTip[^>]*?text=|\bhelp=|\bhelp:\s*)${str}`, "g");
+const spinnerChoice = new RegExp(String.raw`<(?:LoadingSpinner|PageLoading)[^>]*?label=\{[^}]*?\?\s*${str}\s*:\s*${str}\s*\}`, "g");
 const tnCall = new RegExp(String.raw`\btn\(\s*[^,]+?,\s*${str}\s*,\s*${str}`, "g");
 const unescape = (s) => JSON.parse(`"${s}"`);
 
@@ -48,6 +50,11 @@ for (const file of [...sources(join(root, "app")), ...sources(join(root, "compon
     used.set(unescape(m[2]), file);
   }
   for (const m of text.matchAll(spinnerLabel)) used.set(unescape(m[1]), file);
+  for (const m of text.matchAll(helpText)) used.set(unescape(m[1]), file);
+  for (const m of text.matchAll(spinnerChoice)) {
+    used.set(unescape(m[1]), file);
+    used.set(unescape(m[2]), file);
+  }
   for (const m of text.matchAll(tnCall)) {
     used.set(unescape(m[1]), file);
     used.set(unescape(m[2]), file);

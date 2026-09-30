@@ -7,6 +7,8 @@ import { formatMoney } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
 import { LoadingSpinner } from "./loading-spinner";
 import { useI18n, type I18n } from "./i18n-provider";
+import { useToast } from "./toaster";
+import { HelpTip } from "./help-tip";
 
 
 
@@ -55,21 +57,18 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
   const [amount, setAmount] = useState("");
   const [parentId, setParentId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [failures, setFailures] = useState<Array<{ username: string; error: string }> | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);
+  const toast = useToast();
   const names = users.map((user) => user.username);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setError(null);
     const value = Math.round(Number(amount) * 100) / 100;
     if (action === "delegate" && !(value > 0 && value <= 1000000)) {
-      setError(t("Enter an amount between $0 and $1,000,000"));
+      toast.error(t("Enter an amount between $0 and $1,000,000"));
       return;
     }
     if (action === "reassign" && !parentId) {
-      setError(t("Choose where to move them"));
+      toast.error(t("Choose where to move them"));
       return;
     }
     setBusy(true);
@@ -81,16 +80,15 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
       moneyKey.done();
       const outcome = summarize(i18n, action, users, result, value);
       const failedIds = result.results.filter((r) => !r.ok).map((r) => r.id);
-      if (outcome.failures.length === 0) {
-        onDone(outcome.summary, failedIds);
-        return;
+      if (outcome.failures.length > 0) {
+        // Each account that failed, with why; they stay selected to try again.
+        const shown = outcome.failures.slice(0, 5).map((failure) => `${failure.username}: ${failure.error}`);
+        if (outcome.failures.length > 5) shown.push(t("and {count} more", { count: outcome.failures.length - 5 }));
+        toast.warning(`${shown.join(" · ")}. ${t("The ones that failed are still selected.")}`, { title: outcome.summary, duration: 12000 });
       }
-      // Keep the window open so the reasons can be read.
-      setSummary(outcome.summary);
-      setFailures(outcome.failures);
       onDone(outcome.summary, failedIds);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("That didn't work"));
+      toast.error(err instanceof Error ? err.message : t("That didn't work"));
     } finally {
       setBusy(false);
     }
@@ -109,21 +107,10 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
       <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="bulk-title">
         <div className="modal-header">
-          <h2 id="bulk-title">{failures ? t("Some didn't go through") : `${title}?`}</h2>
+          <h2 id="bulk-title">{`${title}?`}<HelpTip text="Does the same thing to every account you ticked, all at once. If some fail, a message tells you which and why, and those stay ticked so you can try again." /></h2>
           <button type="button" className="modal-close secondary" onClick={onClose} disabled={busy} aria-label={t("Close")}>×</button>
         </div>
-        {failures ? (
-          <div className="stack">
-            <p style={{ margin: 0 }}>{summary}</p>
-            <ul className="bulk-failures">
-              {failures.map((failure) => (
-                <li key={failure.username}><strong>{failure.username}</strong><span className="muted">{failure.error}</span></li>
-              ))}
-            </ul>
-            <p className="muted" style={{ margin: 0 }}>{t("The ones that failed are still selected.")}</p>
-            <div className="modal-actions"><button type="button" onClick={onClose}>{t("Done")}</button></div>
-          </div>
-        ) : (
+        {(
           <form className="stack" onSubmit={submit}>
             <p className="bulk-names">{names.slice(0, 8).join(", ")}{names.length > 8 ? ` ${t("and {count} more", { count: names.length - 8 })}` : ""}</p>
             {action === "suspend" ? <p className="muted" style={{ margin: 0 }}>{t("They can't sign in until reactivated, and anyone under them is locked out too.")}</p> : null}
@@ -146,7 +133,6 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
                 </select>
               </label>
             ) : null}
-            {error ? <p className="error-text" role="alert">{error}</p> : null}
             <div className="modal-actions">
               <button type="button" className="secondary" onClick={onClose} disabled={busy}>{t("Cancel")}</button>
               <button type="submit" disabled={busy}>{busy ? <LoadingSpinner label="Working" size="small" /> : title}</button>

@@ -220,4 +220,6 @@ export const betting: Record<string, string> = {
   "{count} or more": "{count} ose më shumë",
   "None": "Asnjë",
   "{count} or fewer": "{count} ose më pak",
+  "Price went up": "Koeficienti u rrit",
+  "Price went down": "Koeficienti ra",
 };

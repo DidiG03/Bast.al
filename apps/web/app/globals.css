@@ -4567,3 +4567,38 @@ button.is-blocked {
 .money-amount.is-out {
   color: var(--danger);
 }
+
+/* A price that just moved: green ▲ up, red ▼ down (bet page and slip). */
+.price-arrow {
+  display: inline-block;
+  margin-left: 0.25rem;
+  font-size: 0.7em;
+  line-height: 1;
+  vertical-align: 0.1em;
+  animation: price-arrow-in 300ms ease-out;
+}
+
+.price-arrow.is-up {
+  color: #22c55e;
+}
+
+.price-arrow.is-down {
+  color: var(--danger);
+}
+
+.role-player .price-arrow.is-up {
+  color: #4ade80;
+}
+
+@keyframes price-arrow-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.2em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .price-arrow {
+    animation: none;
+  }
+}

@@ -39,6 +39,10 @@ type SlipItem = {
 };
 
 const SLIP_STORAGE = "bastal-bet-slip";
+/** How long a price shows its up or down arrow after it moves. */
+const MOVE_SHOWN_MS = 15_000;
+
+type PriceMove = { up: boolean; until: number };
 const QUICK_STAKES = [5, 10, 20, 50];
 const MAX_SLIP = 10;
 /** Matches the API's cap on an accumulator's combined odds. */
@@ -209,6 +213,39 @@ function BetPage() {
     return () => clearInterval(timer);
   }, [tab, loadEvents, hasLive]);
 
+  // Every price seen so far, to tell which ones moved on the latest refresh.
+  const lastPrices = useRef(new Map<string, number>());
+  const [moves, setMoves] = useState<Map<string, PriceMove>>(new Map());
+  useEffect(() => {
+    if (!events) return;
+    const now = Date.now();
+    const moved = new Map<string, PriceMove>();
+    for (const event of events)
+      for (const market of event.markets)
+        for (const selection of market.selections) {
+          const before = lastPrices.current.get(selection.id);
+          if (before !== undefined && before !== selection.price) moved.set(selection.id, { up: selection.price > before, until: now + MOVE_SHOWN_MS });
+          lastPrices.current.set(selection.id, selection.price);
+        }
+    if (moved.size === 0) return;
+    setMoves((current) => {
+      const next = new Map(Array.from(current).filter(([, move]) => move.until > now));
+      moved.forEach((move, id) => next.set(id, move));
+      return next;
+    });
+  }, [events]);
+
+  // Arrows go away on their own once they've been showing for a while.
+  useEffect(() => {
+    if (moves.size === 0) return;
+    const soonest = Math.min(...Array.from(moves.values(), (move) => move.until));
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      setMoves((current) => new Map(Array.from(current).filter(([, move]) => move.until > now)));
+    }, Math.max(0, soonest - Date.now()) + 50);
+    return () => window.clearTimeout(timer);
+  }, [moves]);
+
   // Keep the slip's prices in step with the latest odds, and close matches that kicked off.
   useEffect(() => {
     if (!events) return;
@@ -356,7 +393,7 @@ function BetPage() {
                 <section key={label} className="stack odds-day">
                   <h2 className={`odds-day-label${label === liveLabel ? " bet-live-label" : ""}`}>{label}<HelpTip text="The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: $10 at 2.50 pays back $25 if it wins." /></h2>
                   {dayEvents.map((event) => (
-                    <MatchCard key={event.id} event={event} selected={selected} onPick={toggle} focused={focused === event.id} />
+                    <MatchCard key={event.id} event={event} selected={selected} onPick={toggle} focused={focused === event.id} moves={moves} />
                   ))}
                 </section>
               ))
@@ -388,7 +425,19 @@ function BetPage() {
   );
 }
 
-function MatchCard({ event, selected, onPick, focused }: { event: OddsEvent; selected: Set<string>; onPick: (event: OddsEvent, market: string, selection: OddsSelection) => void; focused: boolean }) {
+function MatchCard({
+  event,
+  selected,
+  onPick,
+  focused,
+  moves,
+}: {
+  event: OddsEvent;
+  selected: Set<string>;
+  onPick: (event: OddsEvent, market: string, selection: OddsSelection) => void;
+  focused: boolean;
+  moves: Map<string, PriceMove>;
+}) {
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;
   const [showAll, setShowAll] = useState(false);
@@ -452,7 +501,10 @@ function MatchCard({ event, selected, onPick, focused }: { event: OddsEvent; sel
                   aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: pickLabel(selection.name, i18n), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
                 >
                   <span className="odds-selection-name">{pickLabel(selection.name, i18n)}</span>
-                  <strong className="odds-price">{locked ? "–" : selection.price.toFixed(2)}</strong>
+                  <strong className="odds-price">
+                    {locked ? "–" : selection.price.toFixed(2)}
+                    {locked ? null : <PriceArrow move={moves.get(selection.id)} />}
+                  </strong>
                 </button>
               );
             })}
@@ -470,6 +522,17 @@ function MatchCard({ event, selected, onPick, focused }: { event: OddsEvent; sel
         </footer>
       ) : null}
     </article>
+  );
+}
+
+/** A green up arrow when a price went up, a red down arrow when it went down; nothing when it didn't move. */
+function PriceArrow({ move }: { move: PriceMove | undefined }) {
+  const { t } = useI18n();
+  if (!move) return null;
+  return (
+    <span className={`price-arrow ${move.up ? "is-up" : "is-down"}`} role="img" aria-label={move.up ? t("Price went up") : t("Price went down")}>
+      {move.up ? "▲" : "▼"}
+    </span>
   );
 }
 
@@ -698,6 +761,7 @@ function BetSlip({
                         <>
                           {item.previousOdds !== undefined ? <s className="muted">{item.previousOdds.toFixed(2)}</s> : null}
                           <strong>{item.odds.toFixed(2)}</strong>
+                          {item.previousOdds !== undefined ? <PriceArrow move={{ up: item.odds > item.previousOdds, until: Infinity }} /> : null}
                         </>
                       )}
                     </span>

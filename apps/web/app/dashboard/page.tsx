@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { HelpTip } from "../../components/help-tip";
 import { NamedIcon } from "../../components/icons";
 import {
   ActivityFeed,
@@ -180,7 +181,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label={t("Turnover")}
+              label={t("Turnover")} help="All the money Players bet this week, on bets that are already finished. It shows how busy the site is, not how much you earned."
               icon="turnover"
               value={formatMoney(totals?.staked ?? 0)}
               spark={days.map((day) => day.staked)}
@@ -188,7 +189,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
               hint={tn(totals?.bets ?? 0, "{count} settled bet", "{count} settled bets")}
             />
             <KpiCard
-              label={t("Platform profit")}
+              label={t("Platform profit")} help="What all the teams made this week: the money Players lost, minus the money paid to Players who won. Red means Players won more than they lost."
               icon="profit"
               value={formatSignedMoney(totals?.net ?? 0)}
               tone={(totals?.net ?? 0) < 0 ? "bad" : undefined}
@@ -197,7 +198,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
               hint={t("Stakes minus payouts, across every team")}
             />
             <KpiCard
-              label={t("Owed to you")}
+              label={t("Owed to you")} help="Your share of every team's profit this week. Each Owner pays you their rate (%) of what their team made. You collect it on the Commissions page."
               icon="wallet"
               value={formatSignedMoney(totals?.superAdminCut ?? 0)}
               tone={(totals?.superAdminCut ?? 0) < 0 ? "bad" : undefined}
@@ -206,7 +207,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
             />
           </div>
 
-          <Panel title={t("Daily turnover")} icon="chart" action={<Link href="/dashboard/reports" className="panel-link">{t("Reports")}</Link>}>
+          <Panel title={t("Daily turnover")} help="One bar for each of the last 7 days. A taller bar means more money was bet that day. Put your mouse on a bar, or tap it, to see the exact amount." icon="chart" action={<Link href="/dashboard/reports" className="panel-link">{t("Reports")}</Link>}>
             <BarChart
               points={chart}
               summary={
@@ -220,7 +221,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
         </div>
 
         <aside className="overview-rail">
-          <Panel title={t("Needs your attention")} icon="inbox">
+          <Panel title={t("Needs your attention")} help="Things waiting for you. A number means you have something to do: a big transfer to approve, a match with no final score, or a user almost out of money. Tap a line to go there." icon="inbox">
             <AttentionList
               items={[
                 { label: t("Delegations to approve"), count: pending?.length ?? 0, href: "/dashboard/finance" },
@@ -229,7 +230,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
               ]}
             />
           </Panel>
-          <Panel title={t("Platform")} icon="users" action={<Link href="/dashboard/users" className="panel-link">{t("Users")}</Link>}>
+          <Panel title={t("Platform")} help="How many Owners, Managers and Players there are, and all the money sitting in their balances together." icon="users" action={<Link href="/dashboard/users" className="panel-link">{t("Users")}</Link>}>
             <Facts
               rows={[
                 { label: t("Owners"), value: count("OWNER") },
@@ -239,13 +240,13 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
               ]}
             />
           </Panel>
-          <Panel title={t("Latest updates")} icon="bell" flush>
+          <Panel title={t("Latest updates")} help="Your newest notifications: money sent, approvals and alerts. The bell at the top of the page shows all of them." icon="bell" flush>
             <ActivityFeed items={notifications.latest} now={now} />
           </Panel>
         </aside>
       </div>
 
-      <Panel title={t("Owners this week")} icon="commissions" flush action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
+      <Panel title={t("Owners this week")} help="One line for each Owner: how much their team bet and made this week, and how much they owe you. Status shows if you already collected it." icon="commissions" flush action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
         {week && week.owners.length > 0 ? (
           <table className="data-table">
             <thead>
@@ -324,7 +325,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label={t("Team profit")}
+              label={t("Team profit")} help="What your whole team made this week: the money your Players lost, minus the money paid to Players who won. Red means your Players won more than they lost."
               icon="profit"
               value={formatSignedMoney(totals?.net ?? 0)}
               tone={(totals?.net ?? 0) < 0 ? "bad" : undefined}
@@ -333,14 +334,14 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
               hint={tn(totals?.bets ?? 0, "{amount} staked on {count} bet", "{amount} staked on {count} bets", { amount: formatMoney(totals?.staked ?? 0) })}
             />
             <KpiCard
-              label={t("You owe Super Admin")}
+              label={t("You owe Super Admin")} help="Super Admin's share of your team's profit: your rate (%) of it. You pay this to Super Admin for each week."
               icon="wallet"
               value={formatSignedMoney(totals?.superAdminCut ?? 0)}
               goodWhenUp={false}
               hint={t("{rate}% of team profit, before Managers are paid", { rate: Number(me.commissionRate) })}
             />
             <KpiCard
-              label={t("You keep")}
+              label={t("You keep")} help="Your money after paying Super Admin and your Managers. This is what your team earned for you this week."
               icon="money"
               value={formatSignedMoney(totals?.ownerKeeps ?? 0)}
               tone={(totals?.ownerKeeps ?? 0) < 0 ? "bad" : undefined}
@@ -349,7 +350,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
             />
           </div>
 
-          <Panel title={t("Daily team profit")} icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
+          <Panel title={t("Daily team profit")} help="One bar for each day. Above the line: your team made money that day. Below the line: your Players won money. Tap a bar to see the exact amount." icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
             <BarChart
               points={chart}
               summary={
@@ -363,7 +364,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
         </div>
 
         <aside className="overview-rail">
-          <Panel title={t("Risk right now")} icon="risk" action={<Link href="/dashboard/risk" className="panel-link">{t("Risk")}</Link>}>
+          <Panel title={t("Risk right now")} help="Bets that are not finished yet. “Worst case payout” is the most you could have to pay if the Players' picks win. The payout cap stops new bets that could pay more than it." icon="risk" action={<Link href="/dashboard/risk" className="panel-link">{t("Risk")}</Link>}>
             {risk ? (
               <div className="stack-tight">
                 <Facts
@@ -393,7 +394,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
               <p className="panel-empty">{t("No open bets right now.")}</p>
             )}
           </Panel>
-          <Panel title={t("Needs your attention")} icon="inbox">
+          <Panel title={t("Needs your attention")} help="Things waiting for you: big transfers from your Managers that need your OK, and users who are almost out of money. Tap a line to go there." icon="inbox">
             <AttentionList
               items={[
                 { label: t("Delegations to approve"), count: pending?.length ?? 0, href: "/dashboard/finance" },
@@ -401,14 +402,14 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
               ]}
             />
           </Panel>
-          <Panel title={t("Latest updates")} icon="bell" flush>
+          <Panel title={t("Latest updates")} help="Your newest notifications: money sent, approvals and alerts. The bell at the top of the page shows all of them." icon="bell" flush>
             <ActivityFeed items={notifications.latest} now={now} />
           </Panel>
         </aside>
       </div>
 
       <Panel
-        title={t("Managers this week")}
+        title={t("Managers this week")} help="One line for each Manager: how much their Players bet and lost this week, and the commission you pay that Manager."
         icon="users"
         flush
         action={
@@ -508,7 +509,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label={t("Your commission")}
+              label={t("Your commission")} help="What you earned this week. You get your rate (%) of the money your Players lose. Your Owner pays it to you."
               icon="money"
               value={formatSignedMoney(week?.totals.commission ?? 0)}
               tone={(week?.totals.commission ?? 0) < 0 ? "bad" : undefined}
@@ -521,7 +522,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
               }
             />
             <KpiCard
-              label={t("Profit from your Players")}
+              label={t("Profit from your Players")} help="The money your Players lost, minus the money they won, this week. The higher it is, the more you earn. Red means they won more than they lost."
               icon="profit"
               value={formatSignedMoney(week?.totals.net ?? 0)}
               tone={(week?.totals.net ?? 0) < 0 ? "bad" : undefined}
@@ -529,7 +530,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
               hint={tn(week?.totals.bets ?? 0, "{amount} staked on {count} bet", "{amount} staked on {count} bets", { amount: formatMoney(week?.totals.staked ?? 0) })}
             />
             <KpiCard
-              label={t("Your balance")}
+              label={t("Your balance")} help="Money you can give to your Players. Your Owner sends it to you. The bar shows how close you are to your limit."
               icon="wallet"
               value={formatMoney(balance)}
               hint={
@@ -545,7 +546,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
             />
           </div>
 
-          <Panel title={t("Your commission by week")} icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
+          <Panel title={t("Your commission by week")} help="What you earned in each of the last weeks. Tap a bar to see the exact amount." icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
             {chart.length > 0 ? (
               <BarChart
                 points={chart}
@@ -563,7 +564,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
         </div>
 
         <aside className="overview-rail">
-          <Panel title={t("Your team")} icon="users" action={<Link href="/dashboard/users" className="panel-link">{t("Players")}</Link>}>
+          <Panel title={t("Your team")} help="Your Players: how many you have, how many are blocked (suspended), and how much money they hold together." icon="users" action={<Link href="/dashboard/users" className="panel-link">{t("Players")}</Link>}>
             <Facts
               rows={[
                 { label: t("Players"), value: players.length },
@@ -573,16 +574,16 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
               ]}
             />
           </Panel>
-          <Panel title={t("Needs your attention")} icon="inbox">
+          <Panel title={t("Needs your attention")} help="Players who are almost out of money. Tap the line to see them and top them up." icon="inbox">
             <AttentionList items={[{ label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/users" }]} />
           </Panel>
-          <Panel title={t("Latest updates")} icon="bell" flush>
+          <Panel title={t("Latest updates")} help="Your newest notifications: money sent, approvals and alerts. The bell at the top of the page shows all of them." icon="bell" flush>
             <ActivityFeed items={notifications.latest} now={now} />
           </Panel>
         </aside>
       </div>
 
-      <Panel title={t("Players this week")} icon="users" flush action={<Link href="/dashboard/users" className="panel-link">{t("Manage Players")}</Link>}>
+      <Panel title={t("Players this week")} help="One line for each Player: how much they bet this week, and whether they won or lost." icon="users" flush action={<Link href="/dashboard/users" className="panel-link">{t("Manage Players")}</Link>}>
         {sortedPlayers.length > 0 ? (
           <table className="data-table">
             <thead>
@@ -637,7 +638,10 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
   return (
     <div className="stack player-home">
       <section className="player-hero">
-        <span className="player-hero-label">{t("Your balance")}</span>
+        <span className="player-hero-label">
+          {t("Your balance")}
+          <HelpTip text="The money you can bet with. Your Manager or Owner adds it. When you win, your winnings come back here." />
+        </span>
         <strong className="player-hero-balance">{formatMoney(Number(me.balance))}</strong>
         <div className="player-hero-meta">
           <span className={`status-pill player-status-${me.status.toLowerCase()}`}>{me.status === "SUSPENDED" ? t("Suspended") : t("Active")}</span>
@@ -659,7 +663,10 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
       {me.parent ? (
         <section className="stack">
           <div className="page-title-row">
-            <h2 style={{ margin: 0 }}>{t("Top events")}</h2>
+            <h2 style={{ margin: 0 }}>
+              {t("Top events")}
+              <HelpTip text="The biggest matches you can bet on right now. Tap one to see its prices and add a bet." />
+            </h2>
             <Link href="/dashboard/bet">{t("View all")} →</Link>
           </div>
           {topEvents.length === 0 ? (
@@ -693,7 +700,10 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
       ) : null}
 
       <section className="stack">
-        <h2 style={{ margin: 0 }}>{t("My bets")}</h2>
+        <h2 style={{ margin: 0 }}>
+          {t("My bets")}
+          <HelpTip text="Your bets. “Open” means the match is not finished yet. “Settled” means it is finished: you won, lost, or got your money back." />
+        </h2>
         <div className="player-quick-links">
           <Link href="/dashboard/bet?tab=open" className="card player-quick-link">
             <strong>{t("Open")}</strong>

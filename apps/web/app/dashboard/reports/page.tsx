@@ -7,6 +7,7 @@ import { ReportsTabs } from "./reports-tabs";
 import { AuditLog } from "./audit-log";
 import { msg } from "../../../lib/i18n/core";
 import { getT } from "../../../lib/i18n/server";
+import { HelpTip } from "../../../components/help-tip";
 
 function dateLabel(value: string) {
   return getT().date(value, { dateStyle: "medium", timeStyle: "short" });
@@ -34,26 +35,32 @@ export default async function ReportsPage() {
         : tn(report.accounts.length, "{count} player", "{count} players");
   const noAccounts = report.accountRole === "OWNER" ? t("No Owner accounts yet.") : report.accountRole === "MANAGER" ? t("No Manager accounts yet.") : t("No Player accounts yet.");
 
-  const cards = [
-    [t("Total users"), report.totals.users],
-    ...(isOwner || isManager ? [] : [[t("Owners"), report.totals.owners] as const]),
-    ...(isManager ? [] : [[t("Managers"), report.totals.managers] as const]),
-    [t("Players"), report.totals.players],
-    [t("Active"), report.totals.active],
-    [t("Suspended"), report.totals.suspended],
-  ] as const;
+  const cards: Array<{ label: string; value: number; help: string }> = [
+    { label: t("Total users"), value: report.totals.users, help: "Every account you can see, of every kind, counted together." },
+    ...(isOwner || isManager ? [] : [{ label: t("Owners"), value: report.totals.owners, help: "Owners run a team. Each Owner has Managers and Players under them." }]),
+    ...(isManager ? [] : [{ label: t("Managers"), value: report.totals.managers, help: "Managers look after Players: they give them money and see how they bet." }]),
+    { label: t("Players"), value: report.totals.players, help: "Players are the people who place bets." },
+    { label: t("Active"), value: report.totals.active, help: "Accounts that can sign in and use the site right now." },
+    { label: t("Suspended"), value: report.totals.suspended, help: "Blocked accounts. They can't sign in until someone above them reactivates them on the Users page." },
+  ];
 
   const overviewContent = (
     <div className="stack">
       <div className="report-grid">
-        {cards.map(([label, value]) => (
+        {cards.map(({ label, value, help }) => (
           <div className="card report-stat" key={label}>
-            <span className="muted">{label}</span>
+            <span className="muted">
+              {label}
+              <HelpTip text={help} />
+            </span>
             <strong>{value}</strong>
           </div>
         ))}
         <div className="card report-stat">
-          <span className="muted">{isManager ? t("Balance held by your players") : isOwner ? t("Balance held by your team") : t("Total balance in circulation")}</span>
+          <span className="muted">
+            {isManager ? t("Balance held by your players") : isOwner ? t("Balance held by your team") : t("Total balance in circulation")}
+            <HelpTip text="All the money in these accounts' balances added together. It is money given out to them, not profit." />
+          </span>
           <strong>{formatMoney(report.totals.totalBalance)}</strong>
         </div>
       </div>
@@ -61,7 +68,10 @@ export default async function ReportsPage() {
       <div className="reports-columns">
         <section className="card stack">
           <div className="tree-header">
-            <h2>{isManager ? t("Player accounts") : isOwner ? t("Manager accounts") : t("Owner accounts")}</h2>
+            <h2>
+              {isManager ? t("Player accounts") : isOwner ? t("Manager accounts") : t("Owner accounts")}
+              <HelpTip text="The accounts right under you, with their balance on the right. Tap a Player's name to see their bets and money." />
+            </h2>
             <span className="muted">{accountCount}</span>
           </div>
           {report.accounts.length === 0 ? (
@@ -87,7 +97,10 @@ export default async function ReportsPage() {
 
         <section className="card stack">
           <div className="tree-header">
-            <h2>{t("Recent activity")}</h2>
+            <h2>
+              {t("Recent activity")}
+              <HelpTip text="The last 25 things done by you and the people under you: logins, money moves and changes. The Audit log tab has everything, with filters." />
+            </h2>
             <span className="muted">{t("Latest {count}", { count: 25 })}</span>
           </div>
           {report.recentAudit.length === 0 ? (

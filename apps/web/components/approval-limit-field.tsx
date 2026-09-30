@@ -5,6 +5,9 @@ import { FormEvent, useState } from "react";
 import { apiFetch, DEFAULT_APPROVAL_LIMIT } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { useI18n } from "./i18n-provider";
+import { LoadingSpinner } from "./loading-spinner";
+import { useToast } from "./toaster";
+import { HelpTip } from "./help-tip";
 
 type Props = {
   userId: string;
@@ -21,23 +24,20 @@ export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, o
   const { getToken } = useAuth();
   const { t } = useI18n();
   const [limit, setLimit] = useState(String(currentLimit ?? fallback));
-  const [saved, setSaved] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
 
   async function save(value: number | null) {
-    setSaved(null);
-    setError(null);
     const token = await getToken();
     if (!token) return;
     setBusy(true);
     try {
       await apiFetch(`/users/${userId}/approval-limit`, token, { method: "POST", body: JSON.stringify({ limit: value }) });
       setLimit(String(value ?? fallback));
-      setSaved(value === null ? (teamLimit === null ? t("Back to the standard limit.") : t("Back to your team limit.")) : t("Approval limit saved."));
+      toast.success(value === null ? (teamLimit === null ? t("Back to the standard limit.") : t("Back to your team limit.")) : t("Approval limit saved."));
       onSaved?.(value);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not save the approval limit"));
+      toast.error(err instanceof Error ? err.message : t("Could not save the approval limit"));
     } finally {
       setBusy(false);
     }
@@ -47,7 +47,7 @@ export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, o
     event.preventDefault();
     const value = Number(limit);
     if (!Number.isFinite(value) || value < 0 || value > 1000000) {
-      setError(t("Enter an amount between $0 and $1,000,000"));
+      toast.error(t("Enter an amount between $0 and $1,000,000"));
       return;
     }
     save(value).catch(() => undefined);
@@ -56,7 +56,7 @@ export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, o
   return (
     <form className="commission-field" onSubmit={submit}>
       <div>
-        <h2>{t("Approval limit")}</h2>
+        <h2>{t("Approval limit")}<HelpTip text="The most this Manager can send to one Player on their own. A bigger amount waits until you press Approve on the Finance page." /></h2>
         <p className="muted">
           {t("This Manager can send up to this much to a Player without your approval. Anything larger waits for you.")}{" "}
           {teamLimit === null ? t("The standard limit is {amount}.", { amount: formatMoney(DEFAULT_APPROVAL_LIMIT) }) : t("Your team limit is {amount}.", { amount: formatMoney(teamLimit) })}
@@ -78,13 +78,11 @@ export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, o
             required
           />
         </div>
-        <button type="submit" className="secondary" disabled={busy}>{busy ? t("Saving…") : t("Save limit")}</button>
+        <button type="submit" className="secondary" disabled={busy}>{busy ? <LoadingSpinner label="Saving" size="small" /> : t("Save limit")}</button>
       </div>
       {currentLimit !== null ? (
         <button type="button" className="text-button approval-reset" onClick={() => save(null)} disabled={busy}>{teamLimit === null ? t("Use the standard limit") : t("Use your team limit")}</button>
       ) : null}
-      {saved ? <p className="success-text" role="status">{saved}</p> : null}
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
     </form>
   );
 }

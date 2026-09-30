@@ -2,12 +2,14 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { LoadingSpinner } from "../../../components/loading-spinner";
+import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { LeaguePicker } from "../../../components/league-picker";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { apiFetch, type MeResponse, type OddsEvent, type OddsFilter, type OddsSelection, type OddsSettings, type UserRow } from "../../../lib/api";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
+import { useToast } from "../../../components/toaster";
 import { msg } from "../../../lib/i18n/core";
+import { HelpTip } from "../../../components/help-tip";
 
 const FILTERS: Array<[OddsFilter, string]> = [
   ["upcoming", msg("Upcoming")],
@@ -51,9 +53,9 @@ export default function OddsPage() {
   const [filter, setFilter] = useState<OddsFilter>("upcoming");
   const [settings, setSettings] = useState<OddsSettings | null>(null);
   const [events, setEvents] = useState<OddsEvent[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const toast = useToast();
 
   const team = ownerId ? `ownerId=${encodeURIComponent(ownerId)}` : "";
 
@@ -66,7 +68,6 @@ export default function OddsPage() {
     ]);
     setSettings(nextSettings);
     setEvents(nextEvents);
-    setError(null);
   }, [getToken, filter, team]);
 
   useEffect(() => {
@@ -79,14 +80,20 @@ export default function OddsPage() {
         const users = await apiFetch<UserRow[]>("/users", token);
         setOwners(users.filter((user) => user.role === "OWNER"));
       }
-    })().catch((err) => setError(err instanceof Error ? err.message : t("Could not load your account")));
+    })().catch((err) => {
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Could not load your account"));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setEvents(null);
-    load().catch((err) => setError(err instanceof Error ? err.message : t("Could not load odds")));
-  }, [load]);
+    load().catch((err) => {
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Could not load odds"));
+    });
+  }, [load, toast, t]);
 
   // Live scores change every few seconds at the source; refresh the Live tab every 30.
   useEffect(() => {
@@ -99,15 +106,13 @@ export default function OddsPage() {
   async function run(action: (token: string) => Promise<unknown>, success?: string): Promise<boolean> {
     const token = await getToken();
     if (!token) return false;
-    setError(null);
-    setNotice(null);
     try {
       await action(token);
       await load();
-      if (success) setNotice(success);
+      if (success) toast.success(success);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Something went wrong"));
+      toast.error(err instanceof Error ? err.message : t("Something went wrong"));
       return false;
     }
   }
@@ -116,7 +121,7 @@ export default function OddsPage() {
     setSyncing(true);
     await run(async (token) => {
       const result = await apiFetch<{ events: number; markets: number }>("/odds/sync", token, { method: "POST" });
-      setNotice(t("Synced {events} matches and {markets} markets.", { events: result.events, markets: result.markets }));
+      toast.success(t("Synced {events} matches and {markets} markets.", { events: result.events, markets: result.markets }));
     });
     setSyncing(false);
   }
@@ -128,6 +133,9 @@ export default function OddsPage() {
   let subtitle = t("Your Owner's prices for every match. Only Owners can change them.");
   if (isOwner) subtitle = t("Prices come from the feed, less the margin. Tap any price to set your own for your team.");
   if (isAdmin) subtitle = ownerId ? t("This Owner's prices. Changes here apply to their team only.") : t("Feed prices less your base margin, which every team starts from.");
+
+  // The first time, only the spinner shows until your account, the prices and the matches are in.
+  if (!me || !settings) return failed ? null : <PageLoading label="Loading odds" />;
 
   const groups: Array<[string, OddsEvent[]]> = [];
   for (const event of events ?? []) {
@@ -146,7 +154,7 @@ export default function OddsPage() {
         </div>
         {isAdmin && owners.length > 0 ? (
           <label className="odds-team-picker">
-            <span className="muted">{t("Prices for")}</span>
+            <span className="muted">{t("Prices for")}</span><HelpTip text="Pick “Base prices” to see the prices every team starts from, or pick an Owner to see and change that team's own prices." />
             <select id="odds-owner" value={ownerId} onChange={(event) => setOwnerId(event.target.value)}>
               <option value="">{t("Base prices")}</option>
               {owners.map((owner) => (
@@ -163,10 +171,8 @@ export default function OddsPage() {
         <MarginsCard settings={settings} run={run} syncing={syncing} onSync={syncNow} ownerQuery={team} />
       ) : null}
 
-      {settings?.canManageEvents && !ownerId ? <LeaguePicker onSaved={setNotice} /> : null}
+      {settings?.canManageEvents && !ownerId ? <LeaguePicker onSaved={toast.success} /> : null}
 
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
-      {notice ? <p className="success-text" role="status">{notice}</p> : null}
 
       <nav className="tabs-nav" aria-label={t("Match filter")}>
         {FILTERS.map(([key, label]) => (
@@ -183,7 +189,9 @@ export default function OddsPage() {
       </nav>
 
       {events === null ? (
-        <LoadingSpinner label="Loading odds" />
+        <div className="loading-state">
+          <LoadingSpinner label="Loading odds" />
+        </div>
       ) : events.length === 0 ? (
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>
@@ -199,7 +207,7 @@ export default function OddsPage() {
       ) : (
         groups.map(([label, dayEvents]) => (
           <section key={label} className="stack odds-day">
-            <h2 className="odds-day-label">{label}</h2>
+            <h2 className="odds-day-label">{label}</h2><HelpTip text="All matches on this day with their prices. Tap a price to change it for this team. Hide takes a match off the site; Suspend stops new bets on it." />
             {dayEvents.map((event) => (
               <EventCard key={event.id} event={event} canEditPrices={canEditPrices} canManage={Boolean(settings?.canManageEvents)} ownerQuery={team} run={run} />
             ))}
@@ -218,6 +226,13 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
   const { t, ts, date } = useI18n();
 
   useEffect(() => setBase(String(settings.baseMargin)), [settings.baseMargin]);
+  const toast = useToast();
+  const failedStatus = settings.feed?.status?.startsWith("Failed") ? settings.feed.status : null;
+  // A failed feed sync is worth knowing about; it pops up once, not in the page.
+  useEffect(() => {
+    if (failedStatus) toast.warning(ts(failedStatus), { title: t("Odds feed") });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failedStatus]);
   useEffect(() => setTeamMargin(String(settings.team?.margin ?? 0)), [settings.team?.margin, settings.team?.ownerId]);
 
   function saveBase(event: FormEvent) {
@@ -239,22 +254,22 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
     <section className="card odds-settings">
       {feed ? (
         <div className="odds-setting">
-          <span className="muted">{t("Odds feed")}</span>
+          <span className="muted">{t("Odds feed")}</span><HelpTip text="Where the matches and prices come from (API-Football). It updates by itself; press Sync now to update right away." />
           <strong>{feedLabel(feed, t)}</strong>
           <span className="muted odds-setting-note">
             {feed.syncedAt ? t("Last synced {when}", { when: date(feed.syncedAt, { dateStyle: "medium", timeStyle: "short" }) }) : t("Not synced yet")}
-            {feed.status?.startsWith("Failed") ? <span className="error-text"> · {ts(feed.status)}</span> : null}
+
           </span>
           {settings.canManageEvents && feed.mode !== "off" ? (
             <button type="button" className="secondary" onClick={onSync} disabled={syncing}>
-              {syncing ? t("Syncing…") : t("Sync now")}
+              {syncing ? <LoadingSpinner label="Syncing" size="small" /> : t("Sync now")}
             </button>
           ) : null}
         </div>
       ) : null}
 
       <div className="odds-setting">
-        <span className="muted">{t("Base margin")}</span>
+        <span className="muted">{t("Base margin")}</span><HelpTip text="The house's cut on every price, for every team. A bigger margin means slightly lower prices for Players and more profit for you. Example: with 5%, a 2.00 price is shown as 1.90." />
         {settings.canEditBase ? (
           <form className="commission-input" onSubmit={saveBase}>
             <input id="odds-base-margin" type="number" inputMode="decimal" min={0} max={settings.limits.maxMargin} step="0.1" value={base} onChange={(event) => setBase(event.target.value)} aria-label={t("Base margin in percent")} />
@@ -269,7 +284,7 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
 
       {team ? (
         <div className="odds-setting">
-          <span className="muted">{settings.canEditTeam && settings.team?.ownerName && !ownerQuery ? t("Your team's margin") : t("{name}'s team margin", { name: team.ownerName })}</span>
+          <span className="muted">{settings.canEditTeam && settings.team?.ownerName && !ownerQuery ? t("Your team's margin") : t("{name}'s team margin", { name: team.ownerName })}</span><HelpTip text="Extra margin for this team only, added to the base margin. Higher means lower prices for its Players. A minus number gives its Players better prices." />
           {settings.canEditTeam ? (
             <form className="commission-input" onSubmit={saveTeam}>
               <input

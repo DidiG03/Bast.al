@@ -5,6 +5,7 @@ import { formatMoney } from "../lib/format";
 import type { PlayerActivity } from "../lib/api";
 import { playerOutcome, Stat } from "./commission-views";
 import { useI18n } from "./i18n-provider";
+import { HelpTip } from "./help-tip";
 
 const FIRST_RESULTS = 10;
 
@@ -38,17 +39,18 @@ export function PlayerActivityView({ data }: { data: PlayerActivity }) {
           <Stat
             key={label}
             label={label}
+            help="Did this Player win or lose money in this time? “Lost” is good for the team; “Won” means the team paid out more than it took."
             value={totals.bets === 0 ? t("No bets") : playerOutcome(totals, t)}
             hint={tn(totals.bets, "{count} bet · {amount} staked", "{count} bets · {amount} staked", { amount: formatMoney(totals.staked) })}
             highlight={highlightFor(totals.net, totals.bets)}
           />
         ))}
-        <Stat label={t("Open bets")} value={String(open.count)} hint={t("{amount} at stake", { amount: formatMoney(open.staked) })} />
+        <Stat label={t("Open bets")} help="Bets on matches that are not finished yet, and the money on them." value={String(open.count)} hint={t("{amount} at stake", { amount: formatMoney(open.staked) })} />
       </div>
 
       <section className="card stack">
         <div className="tree-header">
-          <h2 style={{ margin: 0 }}>{t("Open bets")}</h2>
+          <h2 style={{ margin: 0 }}>{t("Open bets")}<HelpTip text="This Player's bets that are still waiting for the match to finish." /></h2>
           <span className="muted">{t("{amount} at stake", { amount: formatMoney(open.staked) })}</span>
         </div>
         {open.bets.length === 0 ? (
@@ -73,7 +75,7 @@ export function PlayerActivityView({ data }: { data: PlayerActivity }) {
 
       <section className="card stack">
         <div className="tree-header">
-          <h2 style={{ margin: 0 }}>{t("Recent results")}</h2>
+          <h2 style={{ margin: 0 }}>{t("Recent results")}<HelpTip text="This Player's finished bets, newest first: what they bet, and whether they won or lost." /></h2>
           <span className="muted">{t("Latest {count}", { count: recent.length })}</span>
         </div>
         {recent.length === 0 ? (

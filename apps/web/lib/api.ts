@@ -86,7 +86,18 @@ export type BalanceStatement = {
 };
 
 export type SecurityOverview = {
-  sessions: Array<{ id: string; status: string; lastActiveAt: number; expireAt: number; abandonAt: number | null }>;
+  sessions: Array<{
+    id: string;
+    status: string;
+    lastActiveAt: number;
+    expireAt: number;
+    abandonAt: number | null;
+    /** From this session's sign-in history, when it has one. */
+    device: string | null;
+    browser: string | null;
+    ipAddress: string | null;
+    location: string | null;
+  }>;
   activity: Array<{ id: string; action: string; ipAddress: string | null; metadata: unknown; createdAt: string }>;
   loginHistory: Array<{ id: string; sessionId: string; ipAddress: string | null; device: string | null; browser: string | null; location: string | null; lastSeenAt: string; createdAt: string }>;
 };

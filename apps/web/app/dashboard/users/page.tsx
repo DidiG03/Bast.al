@@ -4,7 +4,8 @@ import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRealtime } from "../../../components/realtime-provider";
 import { apiFetch, type BulkAction, type TeamSettings, transactionLabel, type BalanceEntry, type BalanceStatement, type MeResponse, type ReassignmentPreview, type UserRow } from "../../../lib/api";
-import { LoadingSpinner } from "../../../components/loading-spinner";
+import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
+import { useToast } from "../../../components/toaster";
 import { formatMoney } from "../../../lib/format";
 import { CommissionRateControl } from "../../../components/commission-field";
 import { ApprovalLimitControl } from "../../../components/approval-limit-field";
@@ -16,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
+import { HelpTip } from "../../../components/help-tip";
 
 const ROLE_NAMES: Record<MeResponse["role"], string> = { SUPER_ADMIN: msg("Super Admin"), OWNER: msg("Owner"), MANAGER: msg("Manager"), PLAYER: msg("Player") };
 const STATUS_NAMES: Record<UserRow["status"], string> = { ACTIVE: msg("Active"), SUSPENDED: msg("Suspended") };
@@ -38,8 +40,9 @@ export default function UsersPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"OWNER" | "MANAGER" | "PLAYER">("PLAYER");
   const [parentId, setParentId] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const toast = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [confirmation, setConfirmation] = useState<{ action: "suspend" | "delete"; user: UserRow } | null>(null);
@@ -66,7 +69,6 @@ export default function UsersPage() {
   const [reclaimAmount, setReclaimAmount] = useState("");
   const [reclaimReason, setReclaimReason] = useState("");
   const [topUpUser, setTopUpUser] = useState<UserRow | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkAction | null>(null);
@@ -114,7 +116,10 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    load().catch((err: Error) => setError(err.message));
+    load().catch((err: Error) => {
+      setFailed(true);
+      toast.error(err.message);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -130,21 +135,8 @@ export default function UsersPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [actionMenuId]);
 
-  useEffect(() => {
-    if (!notice) return;
-    const timeout = window.setTimeout(() => setNotice(null), 4000);
-    return () => window.clearTimeout(timeout);
-  }, [notice]);
-
-  useEffect(() => {
-    if (!error) return;
-    const timeout = window.setTimeout(() => setError(null), 6000);
-    return () => window.clearTimeout(timeout);
-  }, [error]);
-
   async function onCreate(e: FormEvent) {
     e.preventDefault();
-    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
@@ -158,15 +150,15 @@ export default function UsersPage() {
       setParentId("");
       setCreateOpen(false);
       await load();
+      toast.success(t("{name} was created. They can sign in now with the password you set.", { name: username }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Create failed"));
+      toast.error(err instanceof Error ? err.message : t("Create failed"));
     } finally {
       setBusy(false);
     }
   }
 
   async function onSuspend(id: string) {
-    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
@@ -174,23 +166,24 @@ export default function UsersPage() {
       await apiFetch(`/users/${id}/suspend`, token, { method: "POST" });
       setConfirmation(null);
       await load();
+      toast.success(t("The account was suspended. It can't sign in until you reactivate it."));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Suspend failed"));
+      toast.error(err instanceof Error ? err.message : t("Suspend failed"));
     } finally {
       setBusy(false);
     }
   }
 
   async function onUnsuspend(id: string) {
-    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
       if (!token) throw new Error(t("You're not signed in"));
       await apiFetch(`/users/${id}/unsuspend`, token, { method: "POST" });
       await load();
+      toast.success(t("The account was reactivated and can sign in again."));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Reactivation failed"));
+      toast.error(err instanceof Error ? err.message : t("Reactivation failed"));
     } finally {
       setBusy(false);
     }
@@ -201,13 +194,11 @@ export default function UsersPage() {
     setEditingUser(user);
     setEditUsername(user.username);
     setEditPassword("");
-    setError(null);
   }
 
   async function onUpdate(e: FormEvent) {
     e.preventDefault();
     if (!editingId) return;
-    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
@@ -222,15 +213,15 @@ export default function UsersPage() {
       setEditingId(null);
       setEditingUser(null);
       await load();
+      toast.success(t("Changes saved."));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Update failed"));
+      toast.error(err instanceof Error ? err.message : t("Update failed"));
     } finally {
       setBusy(false);
     }
   }
 
   async function onDelete(user: UserRow) {
-    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
@@ -238,8 +229,9 @@ export default function UsersPage() {
       await apiFetch(`/users/${user.id}/delete`, token, { method: "POST" });
       setConfirmation(null);
       await load();
+      toast.success(t("{name} was deleted.", { name: user.username }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Delete failed"));
+      toast.error(err instanceof Error ? err.message : t("Delete failed"));
     } finally {
       setBusy(false);
     }
@@ -248,21 +240,25 @@ export default function UsersPage() {
   async function onDelegateCredit(event: FormEvent) {
     event.preventDefault();
     if (!balanceUser) return;
-    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
       if (!token) throw new Error(t("You're not signed in"));
       const path = `/users/${balanceUser.id}/delegate`;
       const body = JSON.stringify({ amount: Number(balanceAmount), reason: balanceReason });
-      await apiFetch(path, token, { method: "POST", body, idempotencyKey: moneyKey.keyFor(path, body) });
+      const result = await apiFetch<{ requiresApproval?: boolean }>(path, token, { method: "POST", body, idempotencyKey: moneyKey.keyFor(path, body) });
       moneyKey.done();
+      toast.success(
+        result?.requiresApproval
+          ? t("{amount} to {name} is waiting for approval.", { amount: formatMoney(Number(balanceAmount)), name: balanceUser.username })
+          : t("Sent {amount} to {name}.", { amount: formatMoney(Number(balanceAmount)), name: balanceUser.username }),
+      );
       setBalanceUser(null);
       setBalanceAmount("");
       setBalanceReason("");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Delegating credit failed"));
+      toast.error(err instanceof Error ? err.message : t("Delegating credit failed"));
     } finally {
       setBusy(false);
     }
@@ -271,7 +267,6 @@ export default function UsersPage() {
   async function onReclaimCredit(event: FormEvent) {
     event.preventDefault();
     if (!balanceUser) return;
-    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
@@ -285,8 +280,9 @@ export default function UsersPage() {
       setReclaimReason("");
       setBalanceLedger(await apiFetch<BalanceEntry[]>(`/users/${balanceUser.id}/balance/ledger`, token));
       await load();
+      toast.success(t("Took back {amount} from {name}.", { amount: formatMoney(Number(reclaimAmount)), name: balanceUser.username }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Reclaiming credit failed"));
+      toast.error(err instanceof Error ? err.message : t("Reclaiming credit failed"));
     } finally {
       setBusy(false);
     }
@@ -295,7 +291,6 @@ export default function UsersPage() {
   async function onAdjustBalance(event: FormEvent) {
     event.preventDefault();
     if (!balanceUser) return;
-    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
@@ -307,8 +302,9 @@ export default function UsersPage() {
       setAdjustAmount("");
       setAdjustReason("");
       await load();
+      toast.success(t("Balance adjusted."));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Adjustment failed"));
+      toast.error(err instanceof Error ? err.message : t("Adjustment failed"));
     } finally {
       setBusy(false);
     }
@@ -317,7 +313,6 @@ export default function UsersPage() {
   async function onSetBalanceLimit(event: FormEvent) {
       event.preventDefault();
       if (!balanceUser) return;
-      setError(null);
       setBusy(true);
       try {
         const token = await getToken();
@@ -328,8 +323,9 @@ export default function UsersPage() {
         });
         setBalanceUser({ ...balanceUser, balanceLimit: Number(balanceLimit) });
         await load();
+        toast.success(t("Balance limit saved."));
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Balance limit update failed"));
+        toast.error(err instanceof Error ? err.message : t("Balance limit update failed"));
       } finally {
         setBusy(false);
       }
@@ -345,15 +341,15 @@ export default function UsersPage() {
           if (!token) throw new Error(t("You're not signed in"));
           await apiFetch(`/users/${balanceUser.id}/manager-capacity`, token, { method: "POST", body: JSON.stringify({ capacity: Number(managerCapacity) }) });
           await load();
+          toast.success(t("Player capacity saved."));
         } catch (err) {
-          setError(err instanceof Error ? err.message : t("Capacity update failed"));
+          toast.error(err instanceof Error ? err.message : t("Capacity update failed"));
         } finally {
           setBusy(false);
       }
   }
 
   async function approveTransaction(id: string, approve: boolean) {
-      setError(null);
       setBusy(true);
       try {
         const token = await getToken();
@@ -366,8 +362,9 @@ export default function UsersPage() {
           setBalanceLedger(await apiFetch<BalanceEntry[]>(`/users/${balanceUser.id}/balance/ledger`, token));
           await load();
         }
+        toast.success(approve ? t("Transfer approved. The money has moved.") : t("Transfer rejected. No money moved."));
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Approval update failed"));
+        toast.error(err instanceof Error ? err.message : t("Approval update failed"));
       } finally {
         setBusy(false);
     }
@@ -376,7 +373,6 @@ export default function UsersPage() {
   async function onReassign(event: FormEvent) {
       event.preventDefault();
       if (!reassignUser || !reassignManagerId) return;
-      setError(null);
       setBusy(true);
       try {
         const token = await getToken();
@@ -388,8 +384,9 @@ export default function UsersPage() {
         setReassignUser(null);
         setReassignManagerId("");
         await load();
+        toast.success(t("Player moved."));
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Reassignment failed"));
+        toast.error(err instanceof Error ? err.message : t("Reassignment failed"));
       } finally {
         setBusy(false);
     }
@@ -403,9 +400,12 @@ export default function UsersPage() {
       try {
         const token = await getToken();
         if (!token) throw new Error(t("You're not signed in"));
-        setReassignmentPreview(await apiFetch<ReassignmentPreview>(`/users/${user.id}/reassignment-preview?managerId=${encodeURIComponent(managerId)}`, token));
+        const preview = await apiFetch<ReassignmentPreview>(`/users/${user.id}/reassignment-preview?managerId=${encodeURIComponent(managerId)}`, token);
+        setReassignmentPreview(preview);
+        // Why this move isn't allowed pops up; the dialog only shows a move that can happen.
+        if (!preview.valid) toast.warning(ts(preview.reason), { title: t("Can't move") });
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Could not preview reassignment"));
+        toast.error(err instanceof Error ? err.message : t("Could not preview reassignment"));
     }
   }
 
@@ -425,7 +425,7 @@ export default function UsersPage() {
         if (!token) throw new Error(t("You're not signed in"));
         setBalanceLedger(await apiFetch<BalanceEntry[]>(`/users/${user.id}/balance/ledger`, token));
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Ledger failed"));
+        toast.error(err instanceof Error ? err.message : t("Ledger failed"));
       }
     }
 
@@ -463,14 +463,7 @@ export default function UsersPage() {
     const link = document.createElement("a"); link.href = url; link.download = `${balanceUser.username}-statement.csv`; link.click(); URL.revokeObjectURL(url);
   }
 
-  if (!me) {
-    return (
-      <>
-        {error ? <ErrorToast message={error} onDismiss={() => setError(null)} /> : null}
-        <div className="loading-state loading-state-page"><LoadingSpinner label="Loading users" /><span className="muted">{t("Loading users…")}</span></div>
-      </>
-    );
-  }
+  if (!me) return failed ? null : <PageLoading label="Loading users" />;
 
   if (creatable.length === 0) {
     return <p className="muted">{t("Your role can't create users.")}</p>;
@@ -694,7 +687,6 @@ export default function UsersPage() {
           type="button"
           className="add-button"
           onClick={() => {
-            setError(null);
             setCreateOpen(true);
           }}
           aria-label={t("Create user")}
@@ -709,7 +701,7 @@ export default function UsersPage() {
 
       <div className="card tree-card">
         <div className="tree-header">
-          <span>{t("Hierarchy")}</span>
+          <span>{t("Hierarchy")}<HelpTip text="Everyone under you, like a family tree: each person is listed under the one who manages them. Tap the ⋯ button on a line to give money, edit, move, block or delete that account." /></span>
           <span className="tree-header-actions">
             <span className="muted">
               {selecting
@@ -757,7 +749,7 @@ export default function UsersPage() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setCreateOpen(false)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
             <div className="modal-header">
-              <h2 id="create-user-title">{t("Create user")}</h2>
+              <h2 id="create-user-title">{t("Create user")}<HelpTip text="Makes a new account under you. Pick the kind (Owner, Manager or Player), a username and a password, then give them the username and password yourself. They can't sign up on their own." /></h2>
               <button type="button" className="modal-close secondary" onClick={() => setCreateOpen(false)} aria-label={t("Close")}>×</button>
             </div>
             <form className="stack" onSubmit={onCreate}>
@@ -788,7 +780,7 @@ export default function UsersPage() {
               ) : null}
               <div className="modal-actions">
                 <button type="button" className="secondary" onClick={() => setCreateOpen(false)} disabled={busy}>{t("Cancel")}</button>
-                <button type="submit" disabled={busy}>{busy ? <><LoadingSpinner label="Creating user" size="small" /> {t("Creating…")}</> : t("Create user")}</button>
+                <button type="submit" disabled={busy}>{busy ? <LoadingSpinner label="Creating user" size="small" /> : t("Create user")}</button>
               </div>
             </form>
           </section>
@@ -797,7 +789,7 @@ export default function UsersPage() {
       {editingUser ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setEditingUser(null)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="edit-user-title">
-            <div className="modal-header"><h2 id="edit-user-title">{t("Edit user")}</h2><button type="button" className="modal-close secondary" onClick={() => setEditingUser(null)} aria-label={t("Close")}>×</button></div>
+            <div className="modal-header"><h2 id="edit-user-title">{t("Edit user")}<HelpTip text="Change this account's username, or give it a new password. Leave the password empty to keep the old one." /></h2><button type="button" className="modal-close secondary" onClick={() => setEditingUser(null)} aria-label={t("Close")}>×</button></div>
             <form className="stack" onSubmit={onUpdate}>
               <label>{t("Username")}<input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" required /></label>
               <label>{t("New password")}<input type="password" placeholder={t("Leave blank to keep the current password")} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} minLength={10} /></label>
@@ -809,16 +801,16 @@ export default function UsersPage() {
       {balanceUser ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setBalanceUser(null)}>
           <section className="modal modal-wide card" role="dialog" aria-modal="true" aria-labelledby="charge-balance-title">
-            <div className="modal-header"><h2 id="charge-balance-title">{t("Balance")}</h2><button type="button" className="modal-close secondary" onClick={() => setBalanceUser(null)} aria-label={t("Close")}>×</button></div>
+            <div className="modal-header"><h2 id="charge-balance-title">{t("Balance")}<HelpTip text="Everything about this account's money: give it money, take money back, set limits, and see every past money move." /></h2><button type="button" className="modal-close secondary" onClick={() => setBalanceUser(null)} aria-label={t("Close")}>×</button></div>
             <p className="muted">{t("Current balance:")} <strong>{formatMoney(balanceUser.balance)}</strong> · {t("Limit:")} <strong>{formatMoney(balanceUser.balanceLimit)}</strong></p>
             <div className="modal-settings">
               <form className="inline-edit-form" onSubmit={onSetBalanceLimit}>
-                <label>{t("Balance limit")}<input type="number" min="0.01" step="0.01" max="100000000" value={balanceLimit} onChange={(event) => setBalanceLimit(event.target.value)} inputMode="decimal" /></label>
+                <label>{t("Balance limit")}<HelpTip text="The most money this account can hold. You can't send more once it reaches this amount." /><input type="number" min="0.01" step="0.01" max="100000000" value={balanceLimit} onChange={(event) => setBalanceLimit(event.target.value)} inputMode="decimal" /></label>
                 <button type="submit" className="secondary" disabled={busy}>{t("Set limit")}</button>
               </form>
               {(balanceUser.role === "OWNER" || balanceUser.role === "MANAGER") && me.role !== "MANAGER" ? (
                 <form className="inline-edit-form" onSubmit={onSetManagerCapacity}>
-                  <label>{t("Player capacity")}<input type="number" min="1" step="1" max="100000" value={managerCapacity} onChange={(event) => setManagerCapacity(event.target.value)} inputMode="numeric" /></label>
+                  <label>{t("Player capacity")}<HelpTip text="How many Players this Manager or Owner can have right under them." /><input type="number" min="1" step="1" max="100000" value={managerCapacity} onChange={(event) => setManagerCapacity(event.target.value)} inputMode="numeric" /></label>
                   <button type="submit" className="secondary" disabled={busy}>{t("Set player capacity")}</button>
                 </form>
               ) : null}
@@ -841,7 +833,7 @@ export default function UsersPage() {
                 onSaved={(rate) => { setBalanceUser({ ...balanceUser, commissionRate: rate }); load().catch(() => undefined); }}
               />
             ) : null}
-            <div className="ledger-header"><h3>{t("Transaction history")}</h3><button type="button" className="secondary" onClick={exportLedger} disabled={balanceLedger.length === 0}>{t("Export CSV")}</button></div>
+            <div className="ledger-header"><h3>{t("Transaction history")}<HelpTip text="Every time money moved in or out of this account, newest first. Export CSV saves it as a file you can open in Excel." /></h3><button type="button" className="secondary" onClick={exportLedger} disabled={balanceLedger.length === 0}>{t("Export CSV")}</button></div>
             <div className="statement-controls">
               <label>{t("From")}<input type="date" value={statementFrom} onChange={(event) => setStatementFrom(event.target.value)} /></label>
               <label>{t("To")}<input type="date" value={statementTo} onChange={(event) => setStatementTo(event.target.value)} /></label>
@@ -858,7 +850,7 @@ export default function UsersPage() {
             </div>
             {balanceUser.parentId === me?.id || me?.role === "SUPER_ADMIN" ? (
               <form className="stack modal-section" onSubmit={onDelegateCredit}>
-                <h3>{t("Give credit")}</h3>
+                <h3>{t("Give credit")}<HelpTip text="Send money from your balance to this account. It leaves your balance straight away. Very big amounts may need your Owner's OK first." /></h3>
                 <label>{t("Amount")}<input type="number" min="0.01" max="1000000" step="0.01" required value={balanceAmount} onChange={(event) => setBalanceAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></label>
                 <label>{t("Reason")}<input type="text" minLength={3} maxLength={240} required value={balanceReason} onChange={(event) => setBalanceReason(event.target.value)} placeholder={t("Why is this credit being given?")} /></label>
                 <div className="modal-actions"><button type="button" className="secondary" onClick={() => setBalanceUser(null)} disabled={busy}>{t("Cancel")}</button><button type="submit" disabled={busy}>{busy ? <LoadingSpinner label="Saving transaction" size="small" /> : t("Give credit")}</button></div>
@@ -866,7 +858,7 @@ export default function UsersPage() {
             ) : null}
             {balanceUser.parentId === me?.id ? (
               <form className="stack modal-section" onSubmit={onReclaimCredit}>
-                <h3>{t("Take back credit")}</h3>
+                <h3>{t("Take back credit")}<HelpTip text="Move money from this account back to your balance, for example when someone stops playing." /></h3>
                 <p className="muted" style={{ margin: 0 }}>{me.role === "SUPER_ADMIN" ? t("Takes credit back out of circulation. Works on suspended accounts too.") : t("Moves credit from this account back into your own balance. Works on suspended accounts too.")}</p>
                 <label>{t("Amount")}<input type="number" min="0.01" max={Number(balanceUser.balance)} step="0.01" required value={reclaimAmount} onChange={(event) => setReclaimAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></label>
                 <label>{t("Reason")}<input type="text" minLength={3} maxLength={240} required value={reclaimReason} onChange={(event) => setReclaimReason(event.target.value)} placeholder={t("Why is this credit being taken back?")} /></label>
@@ -875,7 +867,7 @@ export default function UsersPage() {
             ) : null}
             {me?.role === "SUPER_ADMIN" ? (
               <form className="stack modal-section" onSubmit={onAdjustBalance}>
-                <h3>{t("Admin adjustment")}</h3>
+                <h3>{t("Admin adjustment")}<HelpTip text="Super Admin only: fix a balance by adding or removing money directly, without taking it from anyone. Always write the reason." /></h3>
                 <p className="muted" style={{ margin: 0 }}>{t("A direct correction with no counterparty. Use it for fixing errors, not routine funding.")}</p>
                 <label>{t("Amount (minus to take away)")}<input type="number" min="-1000000" max="1000000" step="0.01" required value={adjustAmount} onChange={(event) => setAdjustAmount(event.target.value)} placeholder="-50.00" inputMode="decimal" /></label>
                 <label>{t("Reason")}<input type="text" minLength={3} maxLength={240} required value={adjustReason} onChange={(event) => setAdjustReason(event.target.value)} placeholder={t("Why is this adjustment being made?")} /></label>
@@ -888,7 +880,7 @@ export default function UsersPage() {
       {commissionUser ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setCommissionUser(null)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="commission-title">
-            <div className="modal-header"><h2 id="commission-title">{t("Owner commission")}</h2><button type="button" className="modal-close secondary" onClick={() => setCommissionUser(null)} aria-label={t("Close")}>×</button></div>
+            <div className="modal-header"><h2 id="commission-title">{t("Owner commission")}<HelpTip text="The percent of this Owner's team profit that they pay you each week. Example: at 10%, if their team makes $1,000, they owe you $100." /></h2><button type="button" className="modal-close secondary" onClick={() => setCommissionUser(null)} aria-label={t("Close")}>×</button></div>
             <CommissionRateControl
               userId={commissionUser.id}
               currentRate={Number(commissionUser.commissionRate)}
@@ -903,14 +895,14 @@ export default function UsersPage() {
       {reassignUser ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setReassignUser(null)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="reassign-title">
-            <div className="modal-header"><h2 id="reassign-title">{t("Move this Player?")}</h2><button type="button" className="modal-close secondary" onClick={() => setReassignUser(null)} aria-label={t("Close")}>×</button></div>
+            <div className="modal-header"><h2 id="reassign-title">{t("Move this Player?")}<HelpTip text="Moves the Player to another Manager or Owner. Their money and bets stay the same; only who looks after them changes." /></h2><button type="button" className="modal-close secondary" onClick={() => setReassignUser(null)} aria-label={t("Close")}>×</button></div>
             <p>{t("Move {name} to a different Manager or Owner? This is recorded and the affected accounts are notified.", { name: reassignUser.username })}</p>
             <form className="stack" onSubmit={onReassign}>
               <label>{t("New Manager or Owner")}<select required value={reassignManagerId} onChange={(event) => loadReassignmentPreview(event.target.value, reassignUser)}>
                 <option value="">{t("Select a Manager or Owner")}</option>
                 {reassignDestinations.filter((manager) => manager.id !== reassignUser.parentId).map((manager) => <option key={manager.id} value={manager.id}>{manager.username}{manager.id === me.id ? ` ${t("(you)")}` : ""} · {t(ROLE_NAMES[manager.role])} · {users.filter((child) => child.parentId === manager.id && child.role === "PLAYER").length}/{manager.managerCapacity}</option>)}
               </select></label>
-              {reassignmentPreview ? <div className={`impact-preview${reassignmentPreview.valid ? "" : " is-invalid"}`}><strong>{reassignmentPreview.valid ? t("Ready to move") : t("Can't move")}</strong><span>{reassignmentPreview.valid ? t("Move {player} to {destination}? Room for {remaining} more Players.", { player: reassignmentPreview.player.username, destination: reassignmentPreview.destination.username, remaining: reassignmentPreview.destination.remaining }) : ts(reassignmentPreview.reason)}</span><span>{tn(reassignmentPreview.impact.movedAccounts, "Impact: {count} Player account affected.", "Impact: {count} Player accounts affected.")}</span></div> : null}
+              {reassignmentPreview?.valid ? <div className="impact-preview"><strong>{t("Ready to move")}</strong><span>{t("Move {player} to {destination}? Room for {remaining} more Players.", { player: reassignmentPreview.player.username, destination: reassignmentPreview.destination.username, remaining: reassignmentPreview.destination.remaining })}</span><span>{tn(reassignmentPreview.impact.movedAccounts, "Impact: {count} Player account affected.", "Impact: {count} Player accounts affected.")}</span></div> : null}
               <div className="modal-actions"><button type="button" className="secondary" onClick={() => setReassignUser(null)} disabled={busy}>{t("Cancel")}</button><button type="submit" disabled={busy || !reassignmentPreview?.valid}>{busy ? <LoadingSpinner label="Reassigning player" size="small" /> : t("Confirm move")}</button></div>
             </form>
           </section>
@@ -919,7 +911,7 @@ export default function UsersPage() {
       {confirmation ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setConfirmation(null)}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-            <div className="modal-header"><h2 id="confirm-title">{confirmation.action === "delete" ? t("Delete user?") : t("Suspend user?")}</h2><button type="button" className="modal-close secondary" onClick={() => setConfirmation(null)} aria-label={t("Close")}>×</button></div>
+            <div className="modal-header"><h2 id="confirm-title">{confirmation.action === "delete" ? t("Delete user?") : t("Suspend user?")}<HelpTip text="Suspend blocks the account, and everyone under it, from signing in. You can undo it later with Reactivate. Delete removes the account for good, and its balance must be $0 first." /></h2><button type="button" className="modal-close secondary" onClick={() => setConfirmation(null)} aria-label={t("Close")}>×</button></div>
             <p>
               {confirmation.action === "delete"
                 ? tn(
@@ -942,7 +934,7 @@ export default function UsersPage() {
           available={Number(me.balance)}
           approvalLimit={me.approvalLimit}
           onClose={() => setTopUpUser(null)}
-          onDone={(message) => { setTopUpUser(null); setNotice(message); load({ keepForm: true }).catch(() => undefined); }}
+          onDone={(message) => { setTopUpUser(null); toast.success(message); load({ keepForm: true }).catch(() => undefined); }}
         />
       ) : null}
       {bulkAction ? (
@@ -953,10 +945,8 @@ export default function UsersPage() {
           onClose={() => setBulkAction(null)}
           onDone={(summary, failedIds) => {
             setSelected(new Set(failedIds));
-            if (failedIds.length === 0) {
-              setBulkAction(null);
-              setNotice(summary);
-            }
+            setBulkAction(null);
+            if (failedIds.length === 0) toast.success(summary);
             load({ keepForm: true }).catch(() => undefined);
           }}
         />
@@ -964,26 +954,10 @@ export default function UsersPage() {
       {teamSettingsOpen ? (
         <TeamSettingsModal
           onClose={() => setTeamSettingsOpen(false)}
-          onSaved={(message) => { setTeamSettingsOpen(false); setNotice(message); load({ keepForm: true }).catch(() => undefined); }}
+          onSaved={(message) => { setTeamSettingsOpen(false); toast.success(message); load({ keepForm: true }).catch(() => undefined); }}
         />
       ) : null}
-      {notice ? (
-        <div className="error-toast success-toast" role="status">
-          <span>{notice}</span>
-          <button type="button" className="toast-close" onClick={() => setNotice(null)} aria-label={t("Dismiss")}>×</button>
-        </div>
-      ) : null}
-      {error ? <ErrorToast message={error} onDismiss={() => setError(null)} /> : null}
     </div>
   );
 }
 
-function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
-  const { t } = useI18n();
-  return (
-    <div className="error-toast" role="alert">
-      <span>{message}</span>
-      <button type="button" className="toast-close" onClick={onDismiss} aria-label={t("Dismiss error")}>×</button>
-    </div>
-  );
-}

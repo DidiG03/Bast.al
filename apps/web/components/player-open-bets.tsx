@@ -7,7 +7,9 @@ import { apiFetch, type AdminBet, type BetLeg } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { BetLegs } from "./bet-legs";
 import { LoadingSpinner } from "./loading-spinner";
+import { useToast } from "./toaster";
 import { useI18n } from "./i18n-provider";
+import { HelpTip } from "./help-tip";
 
 
 /** A single shown the same way as an accumulator's pick: selection, market, match, live score or kick-off. */
@@ -22,7 +24,7 @@ export function PlayerOpenBetsModal({ player, onClose }: { player: { id: string;
   const { getToken } = useAuth();
   const { t, tn, date } = useI18n();
   const [bets, setBets] = useState<AdminBet[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +35,9 @@ export function PlayerOpenBetsModal({ player, onClose }: { player: { id: string;
         const list = await apiFetch<AdminBet[]>(`/bets/admin?status=OPEN&playerId=${encodeURIComponent(player.id)}`, token);
         if (!cancelled) setBets(list);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : t("Couldn't load the bets"));
+        if (cancelled) return;
+        toast.error(err instanceof Error ? err.message : t("Couldn't load the bets"));
+        onClose();
       }
     })();
     return () => {
@@ -56,15 +60,15 @@ export function PlayerOpenBetsModal({ player, onClose }: { player: { id: string;
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="modal modal-wide card" role="dialog" aria-modal="true" aria-labelledby="open-bets-title">
         <div className="modal-header">
-          <h2 id="open-bets-title">{t("{name}'s open bets", { name: player.username })}</h2>
+          <h2 id="open-bets-title">{t("{name}'s open bets", { name: player.username })}<HelpTip text="This Player's bets on matches that are not finished yet, and what they would win if the bets win." /></h2>
           <button type="button" className="modal-close secondary" onClick={onClose} aria-label={t("Close")}>
             ×
           </button>
         </div>
-        {error ? (
-          <p className="error-text" role="alert">{error}</p>
-        ) : bets === null ? (
-          <LoadingSpinner label="Loading open bets" />
+        {bets === null ? (
+          <div className="loading-state">
+            <LoadingSpinner label="Loading open bets" />
+          </div>
         ) : bets.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No open bets right now. They may have just settled.")}</p>
         ) : (

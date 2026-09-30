@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
-import { LoadingSpinner } from "../../../components/loading-spinner";
+import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
+import { useToast } from "../../../components/toaster";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
 import { ApiError, apiFetch, type Bet, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SlipInfo } from "../../../lib/api";
@@ -13,6 +14,7 @@ import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
+import { HelpTip } from "../../../components/help-tip";
 
 type Tab = "matches" | "open" | "settled";
 type SlipMode = "singles" | "accumulator";
@@ -97,7 +99,7 @@ function saveSlip(items: SlipItem[]) {
 
 export default function BetPageRoute() {
   return (
-    <Suspense fallback={<LoadingSpinner label="Loading" />}>
+    <Suspense fallback={<PageLoading label="Loading" />}>
       <BetPage />
     </Suspense>
   );
@@ -114,7 +116,8 @@ function BetPage() {
 
   const [events, setEvents] = useState<OddsEvent[] | null>(null);
   const [info, setInfo] = useState<SlipInfo | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const toast = useToast();
   const [slip, setSlip] = useState<SlipItem[]>([]);
   const [slipLoaded, setSlipLoaded] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -149,15 +152,26 @@ function BetPage() {
   }, [slip, slipLoaded]);
 
   useEffect(() => {
-    loadInfo().catch((err) => setError(err instanceof Error ? err.message : t("Couldn't load your account")));
-  }, [loadInfo]);
+    loadInfo().catch((err) => {
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Couldn't load your account"));
+    });
+  }, [loadInfo, toast, t]);
+
+  // Why this account can't bet right now (a suspended Manager, no team yet) is a warning, shown once.
+  useEffect(() => {
+    if (info?.blocked) toast.warning(ts(info.blocked));
+  }, [info?.blocked, toast, ts]);
 
   const hasLive = (events ?? []).some((event) => event.live);
 
   useEffect(() => {
     if (tab !== "matches") return;
-    loadEvents().catch((err) => setError(err instanceof Error ? err.message : t("Couldn't load the matches")));
-  }, [tab, loadEvents]);
+    loadEvents().catch((err) => {
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Couldn't load the matches"));
+    });
+  }, [tab, loadEvents, toast, t]);
 
   // Prices move and matches kick off: refresh every minute while browsing, every 10 seconds while a match is live.
   useEffect(() => {
@@ -197,13 +211,13 @@ function BetPage() {
   }
 
   function toggle(event: OddsEvent, marketName: string, selection: OddsSelection) {
-    setError(null);
+    if (!slip.some((item) => item.selectionId === selection.id) && slip.length >= MAX_SLIP) {
+      toast.error(t("A slip holds up to {max} bets.", { max: MAX_SLIP }));
+      return;
+    }
     setSlip((items) => {
       if (items.some((item) => item.selectionId === selection.id)) return items.filter((item) => item.selectionId !== selection.id);
-      if (items.length >= MAX_SLIP) {
-        setError(t("A slip holds up to {max} bets.", { max: MAX_SLIP }));
-        return items;
-      }
+      if (items.length >= MAX_SLIP) return items;
       const lastStake = items[items.length - 1]?.stake ?? "";
       return [
         ...items,
@@ -246,6 +260,9 @@ function BetPage() {
   );
   const totalStake = mode === "accumulator" && slip.length >= 2 ? stakeValue(accaStake) : slip.reduce((sum, item) => sum + stakeValue(item.stake), 0);
 
+  // The first time, only the spinner shows until the account and the matches have loaded.
+  if (!info || (tab === "matches" && events === null)) return failed ? null : <PageLoading label="Loading matches" />;
+
   return (
     <div className="stack bet-page">
       <div className="page-title-row">
@@ -261,8 +278,6 @@ function BetPage() {
         ) : null}
       </div>
 
-      {info?.blocked ? <p className="error-text" role="alert">{ts(info.blocked)}</p> : null}
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
 
       <nav className="tabs-nav" aria-label={t("Betting sections")}>
         {(
@@ -298,7 +313,9 @@ function BetPage() {
             </div>
 
             {events === null ? (
-              <LoadingSpinner label="Loading matches" />
+              <div className="loading-state">
+                <LoadingSpinner label="Loading matches" />
+              </div>
             ) : shown.length === 0 ? (
               <div className="card">
                 <p className="muted" style={{ margin: 0 }}>
@@ -308,7 +325,7 @@ function BetPage() {
             ) : (
               groups.map(([label, dayEvents]) => (
                 <section key={label} className="stack odds-day">
-                  <h2 className={`odds-day-label${label === liveLabel ? " bet-live-label" : ""}`}>{label}</h2>
+                  <h2 className={`odds-day-label${label === liveLabel ? " bet-live-label" : ""}`}>{label}<HelpTip text="The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: $10 at 2.50 pays back $25 if it wins." /></h2>
                   {dayEvents.map((event) => (
                     <MatchCard key={event.id} event={event} selected={selected} onPick={toggle} />
                   ))}
@@ -449,7 +466,7 @@ function BetSlip({
   const { t, tn, ts } = useI18n();
   const idempotency = useIdempotencyKey();
   const [placing, setPlacing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
 
   const acca = mode === "accumulator";
@@ -477,18 +494,27 @@ function BetSlip({
   else if (overMax) blocker = t("The most you can stake on one bet is {amount}.", { amount: formatMoney(info!.maxStake!) });
   else if (tooLittle) blocker = t("Your balance is too low for this slip. Ask your Manager for a top-up.");
 
+  // Prices that moved since they were added: say so once, as they change.
+  useEffect(() => {
+    if (moved) toast.info(t("Some prices moved since you added them. The new price is what you get."));
+  }, [moved, toast, t]);
+
   function setStake(id: string, stake: string) {
-    setError(null);
     onChange((list) => list.map((item) => (item.selectionId === id ? { ...item, stake } : item)));
   }
 
   async function place(formEvent: FormEvent) {
     formEvent.preventDefault();
-    if (blocker || placing || items.length === 0) return;
+    if (placing || items.length === 0) return;
+    // Why the slip can't go yet pops up when they try, instead of sitting in the slip.
+    if (blocker) {
+      toast.warning(blocker);
+      return;
+    }
     const token = await getToken();
     if (!token) return;
     setPlacing(true);
-    setError(null);
+    if (hasLive) toast.info(t("Live bets take a few seconds to confirm. If the price or score changes meanwhile, you'll see the new price first."));
     const body = JSON.stringify(
       acca
         ? { accumulator: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), stake: accaStakeValue } }
@@ -498,13 +524,20 @@ function BetSlip({
       const result = await apiFetch<PlaceBetsResponse>("/bets", token, { method: "POST", body, idempotencyKey: idempotency.keyFor("/bets", body) });
       idempotency.done();
       setReceipt(result);
+      toast.success(
+        result.bets.length === 1
+          ? result.bets[0].kind === "ACCUMULATOR"
+            ? t("Your accumulator is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
+            : t("Your bet is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
+          : t("Your {count} bets are on. {amount} was taken from your balance.", { count: result.bets.length, amount: formatMoney(result.total) }),
+      );
       onChange(() => []);
       onAccaStake("");
       onMode("singles");
       onPlaced();
     } catch (err) {
       const message = err instanceof Error ? err.message : t("Couldn't place your bets");
-      setError(message);
+      toast.error(message);
       // A price moved or a match closed: fetch the latest so the slip shows it. The API's English says which.
       if (/odds changed|closed|no longer exists|paused|score changed/i.test(err instanceof ApiError ? err.original : message)) onOddsChanged();
     } finally {
@@ -516,18 +549,11 @@ function BetSlip({
     return (
       <div className="card stack bet-slip">
         <div className="bet-slip-header">
-          <h2>{t("Bets placed")}</h2>
+          <h2>{t("Bets placed")}<HelpTip text="Your bets went through. The money was taken from your balance. You can follow them in Open bets." /></h2>
           <button type="button" className="secondary bet-slip-close" onClick={onClose} aria-label={t("Close bet slip")}>
             ✕
           </button>
         </div>
-        <p className="success-text" role="status" style={{ margin: 0 }}>
-          {receipt.bets.length === 1
-            ? receipt.bets[0].kind === "ACCUMULATOR"
-              ? t("Your accumulator is on. {amount} was taken from your balance.", { amount: formatMoney(receipt.total) })
-              : t("Your bet is on. {amount} was taken from your balance.", { amount: formatMoney(receipt.total) })
-            : t("Your {count} bets are on. {amount} was taken from your balance.", { count: receipt.bets.length, amount: formatMoney(receipt.total) })}
-        </p>
         <ul className="bet-receipt">
           {receipt.bets.map((bet) => (
             <li key={bet.id}>
@@ -554,7 +580,7 @@ function BetSlip({
     <form className="card stack bet-slip" onSubmit={place}>
       <div className="bet-slip-header">
         <h2>
-          {t("Bet slip")} {items.length > 0 ? <span className="muted">({items.length})</span> : null}
+          {t("Bet slip")} {items.length > 0 ? <span className="muted">({items.length})</span> : null}<HelpTip text="The picks you tapped. Type how much to bet on each, then press Place. “Singles” are separate bets. “Accumulator” joins them into one bet that pays much more but only wins if every pick wins." />
         </h2>
         <span className="bet-slip-header-actions">
           {items.length > 0 ? (
@@ -672,10 +698,7 @@ function BetSlip({
                     step="0.01"
                     placeholder={t("Stake")}
                     value={accaStake}
-                    onChange={(e) => {
-                      setError(null);
-                      onAccaStake(e.target.value);
-                    }}
+                    onChange={(e) => onAccaStake(e.target.value)}
                     aria-label={t("Accumulator stake")}
                   />
                 </label>
@@ -705,20 +728,10 @@ function BetSlip({
             ) : null}
           </dl>
 
-          {hasLive && !blocker ? <p className="muted bet-slip-note">{t("Live bets take a few seconds to confirm. If the price or score changes meanwhile, you'll see the new price first.")}</p> : null}
-          {moved && !error ? <p className="muted bet-slip-note">{t("Some prices moved since you added them. The new price is what you get.")}</p> : null}
-          {blocker ? <p className="muted bet-slip-note">{blocker}</p> : null}
-          {error ? (
-            <p className="error-text bet-slip-note" role="alert">
-              {error}
-            </p>
-          ) : null}
 
-          <button type="submit" className="bet-place" disabled={Boolean(blocker) || placing}>
+          <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing} aria-disabled={Boolean(blocker)}>
             {placing
-              ? hasLive
-                ? t("Confirming live bet…")
-                : t("Placing…")
+              ? <LoadingSpinner label={hasLive ? "Confirming live bet" : "Placing"} size="small" />
               : acca
                 ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
                 : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
@@ -749,8 +762,9 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
   const [data, setData] = useState<MyBets | null>(null);
   const [more, setMore] = useState<Bet[]>([]);
   const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -762,12 +776,14 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
       setData(next);
       setMore([]);
       setHasMore(next.hasMore);
-      setError(null);
-    })().catch((err) => setError(err instanceof Error ? err.message : t("Couldn't load your bets")));
+    })().catch((err) => {
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Couldn't load your bets"));
+    });
     return () => {
       cancelled = true;
     };
-  }, [getToken, status, version]);
+  }, [getToken, status, version, toast, t]);
 
   async function loadMore() {
     const all = [...(data?.bets ?? []), ...more];
@@ -782,14 +798,20 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
       setMore((list) => [...list, ...next.bets]);
       setHasMore(next.hasMore);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Couldn't load more bets"));
+      toast.error(err instanceof Error ? err.message : t("Couldn't load more bets"));
     } finally {
       setLoadingMore(false);
     }
   }
 
-  if (error) return <p className="error-text" role="alert">{error}</p>;
-  if (!data) return <LoadingSpinner label="Loading your bets" />;
+  if (!data) {
+    if (failed) return null;
+    return (
+      <div className="loading-state">
+        <LoadingSpinner label="Loading your bets" />
+      </div>
+    );
+  }
   const bets = [...data.bets, ...more];
 
   return (
@@ -819,7 +841,7 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
       )}
       {hasMore ? (
         <button type="button" className="secondary" onClick={loadMore} disabled={loadingMore} style={{ justifySelf: "center" }}>
-          {loadingMore ? t("Loading…") : t("Show more")}
+          {loadingMore ? <LoadingSpinner label="Loading more bets" size="small" /> : t("Show more")}
         </button>
       ) : null}
     </div>

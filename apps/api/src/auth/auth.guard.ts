@@ -9,8 +9,10 @@ import { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
+import { clientContext } from "../security/client-context";
 import { clientIp } from "../security/client-ip";
 import { ThreatIntelService } from "../security/threat-intel.service";
+import { parseUserAgent } from "../security/user-agent";
 import { ClerkService } from "./clerk.service";
 import { Actor, isActive } from "./permissions";
 
@@ -74,15 +76,7 @@ export class AuthGuard implements CanActivate {
     }
 
     await this.threats.clearFailures(ip);
-    if (sessionId) {
-      const userAgent = request.headers["user-agent"] ?? null;
-      const parsed = this.parseUserAgent(typeof userAgent === "string" ? userAgent : null);
-      await this.prisma.loginHistory.upsert({
-        where: { sessionId },
-        create: { sessionId, userId: user.id, ipAddress: ip, userAgent, device: parsed.device, browser: parsed.browser, location: this.location(request), },
-        update: { lastSeenAt: new Date(), ipAddress: ip, userAgent, device: parsed.device, browser: parsed.browser, location: this.location(request) },
-      });
-    }
+    if (sessionId) await this.recordVisit(request, sessionId, user.id, ip);
     request.clerkUserId = clerkUserId;
     request.actor = user;
     return true;
@@ -141,15 +135,31 @@ export class AuthGuard implements CanActivate {
     return header.slice("Bearer ".length).trim() || null;
   }
 
-  private location(request: Request): string | null {
-    const value = request.headers["x-vercel-ip-country"] ?? request.headers["cf-ipcountry"];
-    return typeof value === "string" ? value : null;
+  /**
+   * Keeps the sign-in history for this session current. Only a visit from a
+   * browser (signed through our web app, or a browser calling directly)
+   * updates where and on what it was; our web server's own calls ("node")
+   * just mark the session as seen, so they never overwrite a real visit.
+   */
+  private async recordVisit(request: Request, sessionId: string, userId: string, ip: string) {
+    const context = clientContext(request);
+    const header = request.headers["user-agent"];
+    const userAgent = context?.userAgent ?? (typeof header === "string" ? header : null);
+    const parsed = parseUserAgent(userAgent);
+    const visit = parsed
+      ? { ipAddress: ip, userAgent, device: parsed.device, browser: parsed.browser, ...(context ? { location: location(context) } : {}) }
+      : null;
+    await this.prisma.loginHistory.upsert({
+      where: { sessionId },
+      create: { sessionId, userId, ipAddress: ip, userAgent, ...visit },
+      update: { lastSeenAt: new Date(), ...visit },
+    });
   }
+}
 
-  private parseUserAgent(userAgent: string | null) {
-    if (!userAgent) return { device: "Unknown device", browser: "Unknown browser" };
-    const device = /Mobile|Android|iPhone|iPad/i.test(userAgent) ? "Mobile device" : "Desktop";
-    const browser = /Edg\//i.test(userAgent) ? "Edge" : /Chrome\//i.test(userAgent) ? "Chrome" : /Firefox\//i.test(userAgent) ? "Firefox" : /Safari\//i.test(userAgent) ? "Safari" : "Unknown browser";
-    return { device, browser };
-  }
+/** "Tirana, AL": city and ISO country code, which the web app shows as the country's name in the reader's language. */
+function location(context: { city: string | null; region: string | null; country: string | null }): string | null {
+  const place = context.city ?? context.region;
+  if (place && context.country) return `${place}, ${context.country}`;
+  return context.country ?? place ?? null;
 }

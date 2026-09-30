@@ -1,12 +1,14 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { LoadingSpinner } from "../../../components/loading-spinner";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
+import { useToast } from "../../../components/toaster";
 import { useRealtime } from "../../../components/realtime-provider";
 import { apiFetch, type MeResponse, type RiskEvent, type RiskSelection, type RiskView, type UserRow } from "../../../lib/api";
 import { formatMoney, formatSignedMoney } from "../../../lib/format";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
+import { HelpTip } from "../../../components/help-tip";
 
 function when(event: RiskEvent, { t, date }: I18n): string {
   if (event.status === "LIVE") return event.homeScore !== null && event.awayScore !== null ? t("Live {score}", { score: `${event.homeScore}–${event.awayScore}` }) : t("Live");
@@ -22,8 +24,9 @@ export default function RiskPage() {
   const [owners, setOwners] = useState<UserRow[]>([]);
   const [ownerId, setOwnerId] = useState("");
   const [view, setView] = useState<RiskView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const everLoaded = useRef(false);
+  const toast = useToast();
 
   const isAdmin = me?.role === "SUPER_ADMIN";
   const query = ownerId ? `?ownerId=${encodeURIComponent(ownerId)}` : "";
@@ -39,7 +42,10 @@ export default function RiskPage() {
         setOwners(list);
         setOwnerId((current) => current || list[0]?.id || "");
       }
-    })().catch((err) => setError(err instanceof Error ? err.message : t("Could not load your account")));
+    })().catch((err) => {
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Could not load your account"));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -47,7 +53,6 @@ export default function RiskPage() {
     const token = await getToken();
     if (!token) return;
     setView(await apiFetch<RiskView>(`/risk${query}`, token));
-    setError(null);
   }, [getToken, query]);
 
   const ready = me !== null && (!isAdmin || ownerId !== "");
@@ -55,11 +60,14 @@ export default function RiskPage() {
   useEffect(() => {
     if (!ready) return;
     setView(null);
-    load().catch((err) => setError(err instanceof Error ? err.message : t("Could not load the risk view")));
+    load().catch((err) => {
+      setFailed(true);
+      toast.error(err instanceof Error ? err.message : t("Could not load the risk view"));
+    });
     // Scores and new bets change the picture; refresh every 30 seconds while the page is open.
     const timer = setInterval(() => void load().catch(() => undefined), 30_000);
     return () => clearInterval(timer);
-  }, [ready, load]);
+  }, [ready, load, toast, t]);
 
   useRealtime((event) => {
     if (ready && event.type === "resync") void load().catch(() => undefined);
@@ -68,19 +76,20 @@ export default function RiskPage() {
   async function saveCap(cap: number | null): Promise<boolean> {
     const token = await getToken();
     if (!token) return false;
-    setError(null);
-    setNotice(null);
     try {
       setView(await apiFetch<RiskView>(`/risk/cap${query}`, token, { method: "PUT", body: JSON.stringify({ maxOutcomePayout: cap }) }));
-      setNotice(cap === null ? t("The payout cap is off.") : t("New bets are refused once one outcome would pay out more than {amount}.", { amount: formatMoney(cap) }));
+      toast.success(cap === null ? t("The payout cap is off.") : t("New bets are refused once one outcome would pay out more than {amount}.", { amount: formatMoney(cap) }));
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not save the cap"));
+      toast.error(err instanceof Error ? err.message : t("Could not save the cap"));
       return false;
     }
   }
 
   const noOwners = isAdmin && owners.length === 0;
+  // The first time, show nothing but the spinner until the team's numbers are in.
+  if (!me || (!view && !noOwners && !failed && !everLoaded.current)) return failed ? null : <PageLoading label="Loading risk" />;
+  if (view) everLoaded.current = true;
 
   return (
     <div className="stack">
@@ -103,29 +112,31 @@ export default function RiskPage() {
         ) : null}
       </div>
 
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
-      {notice ? <p className="success-text" role="status">{notice}</p> : null}
 
       {noOwners ? (
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>{t("There are no Owners yet, so there is no team to show.")}</p>
         </div>
       ) : !view ? (
-        !error ? <LoadingSpinner label="Loading risk" /> : null
+        failed ? null : (
+          <div className="loading-state">
+            <LoadingSpinner label="Loading risk" />
+          </div>
+        )
       ) : (
         <>
           <section className="card stack">
             <dl className="bet-card-numbers risk-totals">
               <div>
-                <dt className="muted">{t("Open bets")}</dt>
+                <dt className="muted">{t("Open bets")}</dt><HelpTip text="Bets on matches that are not finished yet." />
                 <dd>{view.totals.openBets}</dd>
               </div>
               <div>
-                <dt className="muted">{t("Staked")}</dt>
+                <dt className="muted">{t("Staked")}</dt><HelpTip text="All the money Players put on those open bets." />
                 <dd>{formatMoney(view.totals.staked)}</dd>
               </div>
               <div>
-                <dt className="muted">{t("Biggest payout")}</dt>
+                <dt className="muted">{t("Biggest payout")}</dt><HelpTip text="The most you would have to pay if the worst result for you happens in one match." />
                 <dd>
                   <strong>{formatMoney(view.totals.worstCase)}</strong>
                 </dd>
@@ -178,7 +189,7 @@ function CapEditor({ cap, onSave }: { cap: number | null; onSave: (cap: number |
     return (
       <div className="risk-cap">
         <div>
-          <strong>{cap === null ? t("Payout cap: off") : t("Payout cap: {amount}", { amount: formatMoney(cap) })}</strong>
+          <strong>{cap === null ? t("Payout cap: off") : t("Payout cap: {amount}", { amount: formatMoney(cap) })}</strong><HelpTip text="A safety limit. When one result of a match would make you pay more than this, new bets on that result are refused. Leave it off for no limit." />
           <p className="muted" style={{ margin: 0 }}>
             {cap === null
               ? t("Set a cap to stop taking bets once one outcome would pay out more than you want to cover.")

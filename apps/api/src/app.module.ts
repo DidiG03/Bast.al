@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
-import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { ThrottlerModule } from "@nestjs/throttler";
 import { AuthModule } from "./auth/auth.module";
 import { CryptoModule } from "./crypto/crypto.module";
 import { EventsController } from "./events.controller";
@@ -17,6 +17,7 @@ import { RealtimeModule } from "./realtime/realtime.module";
 import { OddsModule } from "./odds/odds.module";
 import { BetsModule } from "./bets/bets.module";
 import { MaintenanceModule } from "./maintenance/maintenance.module";
+import { ClientThrottlerGuard } from "./security/client-throttler.guard";
 
 @Module({
   imports: [
@@ -47,6 +48,6 @@ import { MaintenanceModule } from "./maintenance/maintenance.module";
     MaintenanceModule,
   ],
   controllers: [HealthController, RootController, EventsController],
-  providers: [QueueService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [QueueService, { provide: APP_GUARD, useClass: ClientThrottlerGuard }],
 })
 export class AppModule {}

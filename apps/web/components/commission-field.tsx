@@ -4,6 +4,9 @@ import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useI18n } from "./i18n-provider";
+import { LoadingSpinner } from "./loading-spinner";
+import { useToast } from "./toaster";
+import { HelpTip } from "./help-tip";
 
 type Props = {
   userId: string;
@@ -17,17 +20,14 @@ export function CommissionRateControl({ userId, currentRate, label, description,
   const { getToken } = useAuth();
   const { t } = useI18n();
   const [rate, setRate] = useState(String(currentRate));
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    setSaved(false);
-    setError(null);
     const value = Number(rate);
     if (!Number.isFinite(value) || value < 0 || value > 100) {
-      setError(t("Commission must be between 0% and 100%"));
+      toast.error(t("Commission must be between 0% and 100%"));
       return;
     }
     const token = await getToken();
@@ -35,10 +35,10 @@ export function CommissionRateControl({ userId, currentRate, label, description,
     setBusy(true);
     try {
       await apiFetch(`/users/${userId}/commission-rate`, token, { method: "POST", body: JSON.stringify({ rate: value }) });
-      setSaved(true);
+      toast.success(t("Commission rate saved."));
       onSaved?.(value);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not save commission rate"));
+      toast.error(err instanceof Error ? err.message : t("Could not save commission rate"));
     } finally {
       setBusy(false);
     }
@@ -47,7 +47,7 @@ export function CommissionRateControl({ userId, currentRate, label, description,
   return (
     <form className="commission-field" onSubmit={save}>
       <div>
-        <h2>{label ?? t("Commission rate")}</h2>
+        <h2>{label ?? t("Commission rate")}<HelpTip text="The percent of the weekly profit this person gets or pays. Example: at 10%, a $1,000 profit means $100." /></h2>
         {description ? <p className="muted">{description}</p> : null}
       </div>
       <div className="commission-input-row">
@@ -65,10 +65,8 @@ export function CommissionRateControl({ userId, currentRate, label, description,
           />
           <span aria-hidden="true">%</span>
         </div>
-        <button type="submit" className="secondary" disabled={busy}>{busy ? t("Saving…") : t("Save rate")}</button>
+        <button type="submit" className="secondary" disabled={busy}>{busy ? <LoadingSpinner label="Saving" size="small" /> : t("Save rate")}</button>
       </div>
-      {saved ? <p className="success-text" role="status">{t("Commission rate saved.")}</p> : null}
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
     </form>
   );
 }

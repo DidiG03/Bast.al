@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { NotificationItem } from "../lib/api";
+import { HelpTip } from "./help-tip";
 import { NamedIcon, type IconName } from "./icons";
 import { getT } from "../lib/i18n/server";
 
@@ -12,8 +13,11 @@ export function Panel({
   children,
   className = "",
   flush = false,
+  help,
 }: {
   title: string;
+  /** English: what this card shows and how it works, behind the "!" by the title. */
+  help?: string;
   icon?: IconName;
   action?: ReactNode;
   children: ReactNode;
@@ -27,6 +31,7 @@ export function Panel({
         <h2>
           {icon ? <NamedIcon name={icon} className="panel-icon" /> : null}
           {title}
+          {help ? <HelpTip text={help} /> : null}
         </h2>
         {action ? <div className="panel-action">{action}</div> : null}
       </header>
@@ -70,8 +75,11 @@ export function KpiCard({
   hint,
   goodWhenUp,
   tone,
+  help,
 }: {
   label: string;
+  /** English: what this number means, behind the "!" by the label. */
+  help?: string;
   icon: IconName;
   value: string;
   delta?: Delta;
@@ -86,7 +94,10 @@ export function KpiCard({
   return (
     <section className="panel kpi">
       <header className="panel-head">
-        <h2>{label}</h2>
+        <h2>
+          {label}
+          {help ? <HelpTip text={help} /> : null}
+        </h2>
         <NamedIcon name={icon} className="panel-icon" />
       </header>
       <div className="panel-body kpi-body">

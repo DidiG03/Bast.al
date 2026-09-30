@@ -1,12 +1,14 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { apiFetch, type UserRow } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
 import { LoadingSpinner } from "./loading-spinner";
+import { useToast } from "./toaster";
 import { useI18n } from "./i18n-provider";
+import { HelpTip } from "./help-tip";
 
 const PRESETS = [10, 20, 50, 100, 200, 500];
 
@@ -27,11 +29,16 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
   const moneyKey = useIdempotencyKey();
   const [custom, setCustom] = useState("");
   const [sending, setSending] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const headroom = Math.max(0, Number(player.balanceLimit) - Number(player.balance));
 
+  // A Player already at their limit can't take more; say so as the sheet opens.
+  useEffect(() => {
+    if (headroom < PRESETS[0]) toast.warning(t("This Player is at their balance limit."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function send(amount: number) {
-    setError(null);
     setSending(amount);
     try {
       const token = await getToken();
@@ -47,7 +54,7 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
           : t("Sent {amount} to {name}.", { amount: formatMoney(amount), name: player.username }),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Top-up failed"));
+      toast.error(err instanceof Error ? err.message : t("Top-up failed"));
     } finally {
       setSending(null);
     }
@@ -57,7 +64,7 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
     event.preventDefault();
     const amount = Number(custom);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setError(t("Enter an amount above $0"));
+      toast.error(t("Enter an amount above $0"));
       return;
     }
     send(Math.round(amount * 100) / 100).catch(() => undefined);
@@ -67,7 +74,7 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="modal card top-up-sheet" role="dialog" aria-modal="true" aria-labelledby="top-up-title">
         <div className="modal-header">
-          <h2 id="top-up-title">{t("Top up {name}", { name: player.username })}</h2>
+          <h2 id="top-up-title">{t("Top up {name}", { name: player.username })}<HelpTip text="Send money to this Player fast. Tap an amount, or type your own and press Send. It comes out of your balance straight away." /></h2>
           <button type="button" className="modal-close secondary" onClick={onClose} aria-label={t("Close")}>×</button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
@@ -95,9 +102,7 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
         </form>
         <p className="muted top-up-note">
           {t("Sends straight away. Anything over {amount} waits for approval.", { amount: formatMoney(approvalLimit) })}
-          {headroom < PRESETS[0] ? ` ${t("This Player is at their balance limit.")}` : ""}
         </p>
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
       </section>
     </div>
   );

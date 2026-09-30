@@ -141,6 +141,12 @@ export class UsersService {
       this.prisma.loginHistory.findMany({ where: { userId: actor.id }, orderBy: { lastSeenAt: "desc" }, take: 30, select: { id: true, sessionId: true, ipAddress: true, device: true, browser: true, location: true, lastSeenAt: true, createdAt: true } }),
     ]);
 
+    // What each signed-in device is and where it was last seen, from its sign-in history.
+    const seen = await this.prisma.loginHistory.findMany({
+      where: { userId: actor.id, sessionId: { in: sessions.data.map((session) => session.id) } },
+      select: { sessionId: true, ipAddress: true, device: true, browser: true, location: true },
+    });
+    const bySession = new Map(seen.map((row) => [row.sessionId, row]));
     return {
       sessions: sessions.data.map((session) => ({
         id: session.id,
@@ -148,6 +154,10 @@ export class UsersService {
         lastActiveAt: session.lastActiveAt,
         expireAt: session.expireAt,
         abandonAt: session.abandonAt,
+        device: bySession.get(session.id)?.device ?? null,
+        browser: bySession.get(session.id)?.browser ?? null,
+        ipAddress: bySession.get(session.id)?.ipAddress ?? null,
+        location: bySession.get(session.id)?.location ?? null,
       })),
       activity,
       loginHistory,

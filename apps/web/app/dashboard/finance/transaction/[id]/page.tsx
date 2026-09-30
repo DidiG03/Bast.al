@@ -6,7 +6,10 @@ import { useEffect, useState } from "react";
 import { formatMoney } from "../../../../../lib/format";
 import { apiFetch, transactionLabel, type TransactionDetails } from "../../../../../lib/api";
 import { useI18n } from "../../../../../components/i18n-provider";
+import { PageLoading } from "../../../../../components/loading-spinner";
+import { useToast } from "../../../../../components/toaster";
 import { msg } from "../../../../../lib/i18n/core";
+import { HelpTip } from "../../../../../components/help-tip";
 
 const STATUS: Record<string, string> = { APPROVED: msg("Approved"), PENDING: msg("Pending"), REJECTED: msg("Rejected") };
 
@@ -14,24 +17,27 @@ export default function TransactionDetailsPage({ params }: { params: { id: strin
   const { getToken } = useAuth();
   const { t, ts, date } = useI18n();
   const [entry, setEntry] = useState<TransactionDetails | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     getToken().then((token) => token
       ? apiFetch<TransactionDetails>(`/users/balance/transactions/${params.id}`, token).then(setEntry)
       : Promise.reject(new Error(t("You're not signed in"))))
-      .catch((err: Error) => setError(err.message));
+      .catch((err: Error) => {
+        setFailed(true);
+        toast.error(err.message);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getToken, params.id]);
 
-  if (error) return <p className="error-text">{error}</p>;
-  if (!entry) return <p className="muted">{t("Loading transaction…")}</p>;
+  if (!entry) return failed ? null : <PageLoading label="Loading transaction" />;
 
   return (
     <div className="stack">
       <div className="page-title-row"><div><h1 style={{ margin: 0 }}>{t("Transaction receipt")}</h1><p className="muted report-subtitle">{t("Full audit-ready transaction details.")}</p></div><Link href="/dashboard/finance" className="back-link">{t("Back to Finance")}</Link></div>
       <section className="card stack receipt-card">
-        <div className="receipt-title"><strong>{t(transactionLabel(entry.type))}</strong><span className={`status-pill ${entry.status === "APPROVED" ? "is-active" : ""}`}>{t(STATUS[entry.status ?? "APPROVED"] ?? entry.status ?? "APPROVED")}</span></div>
+        <div className="receipt-title"><strong>{t(transactionLabel(entry.type))}</strong><HelpTip text="The full record of one money move: who sent it, who got it, why, and who approved it. You can't change it; it stays as proof." /><span className={`status-pill ${entry.status === "APPROVED" ? "is-active" : ""}`}>{t(STATUS[entry.status ?? "APPROVED"] ?? entry.status ?? "APPROVED")}</span></div>
         <div className="receipt-amount">{formatMoney(Math.abs(entry.amount))}</div>
         <dl className="receipt-details">
           <div><dt>{t("Transaction ID")}</dt><dd>{entry.id}</dd></div>

@@ -4602,3 +4602,22 @@ button.is-blocked {
     animation: none;
   }
 }
+
+/* Top event: league on the left, time or live minute as a chip on the right. */
+.player-top-event-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.player-top-event-head .player-top-event-league {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-top-event-head .status-pill {
+  flex: none;
+}

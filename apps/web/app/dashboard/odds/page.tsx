@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { LoadingSpinner } from "../../../components/loading-spinner";
+import { LeaguePicker } from "../../../components/league-picker";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { apiFetch, type MeResponse, type OddsEvent, type OddsFilter, type OddsSelection, type OddsSettings, type UserRow } from "../../../lib/api";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
@@ -161,6 +162,8 @@ export default function OddsPage() {
       {settings ? (
         <MarginsCard settings={settings} run={run} syncing={syncing} onSync={syncNow} ownerQuery={team} />
       ) : null}
+
+      {settings?.canManageEvents && !ownerId ? <LeaguePicker onSaved={setNotice} /> : null}
 
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       {notice ? <p className="success-text" role="status">{notice}</p> : null}

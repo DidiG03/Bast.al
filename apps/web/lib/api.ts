@@ -323,21 +323,38 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const message =
+    // Form checks come back as a list, one message per problem.
+    const parts: string[] =
       typeof body?.message === "string"
-        ? body.message
+        ? [body.message]
         : Array.isArray(body?.message)
-          ? body.message.join(", ")
-          : `Request failed (${res.status})`;
+          ? body.message.map(String)
+          : [`Request failed (${res.status})`];
+    const message = parts.join(", ");
     // In the browser, show the API's (English) message in the reader's language.
     // Server components keep it as it is: the dashboard layout reads it.
-    throw new ApiError(typeof window === "undefined" ? message : translateServer(currentBrowserLang(), message), message, res.status);
+    const shown = typeof window === "undefined" ? message : parts.map((part) => translateServer(currentBrowserLang(), part)).join(", ");
+    throw new ApiError(shown, message, res.status);
   }
 
   return res.json() as Promise<T>;
 }
 
 export type OddsFilter = "upcoming" | "live" | "finished";
+
+/** Super Admin's league picker (GET /odds/leagues). */
+export type LeagueChoice = {
+  /** False while the defaults apply. */
+  custom: boolean;
+  leagues: number[];
+  countries: string[];
+  defaults: { leagues: number[]; countries: string[] };
+  /** Every competition the feed has a season in progress for; null when it can't be reached. */
+  available: Array<{ id: number; name: string; type: "League" | "Cup"; country: string }> | null;
+  availableError: string | null;
+  /** Requests left on today's API-Football plan, as of its last answer. */
+  requestsLeft: number | null;
+};
 
 export type OddsSelection = {
   id: string;
@@ -350,6 +367,8 @@ export type OddsSelection = {
   /** True when the Owner set this price by hand. */
   custom: boolean;
   result: "WON" | "LOST" | "VOID" | null;
+  /** Live only: the feed isn't pricing this outcome right now. */
+  suspended?: boolean;
 };
 
 export type PricePoint = { price: number; recordedAt: string };

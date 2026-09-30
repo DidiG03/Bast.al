@@ -1,3 +1,4 @@
+import { createServerTranslator } from "./match";
 import { sq } from "./sq";
 
 /**
@@ -43,57 +44,11 @@ export function translatePlural(lang: Lang, count: number, one: string, other: s
   return translate(lang, count === 1 ? one : other, { count, ...vars });
 }
 
-type Pattern = { regex: RegExp; names: string[]; target: string };
-let patterns: Pattern[] | null = null;
-const serverCache = new Map<string, string>();
+const translateSq = createServerTranslator(sq);
 
-function compilePatterns(): Pattern[] {
-  const compiled = Object.entries(sq)
-    .filter(([key]) => /\{\w+\}/.test(key))
-    .map(([key, target]) => {
-      const names: string[] = [];
-      const source = key
-        .split(/(\{\w+\})/)
-        .map((part) => {
-          const name = /^\{(\w+)\}$/.exec(part)?.[1];
-          if (name) {
-            names.push(name);
-            return "(.+?)";
-          }
-          return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        })
-        .join("");
-      // The more fixed text a pattern has, the more specific it is, so it's tried first.
-      const literal = key.replace(/\{\w+\}/g, "").length;
-      return { regex: new RegExp(`^${source}$`, "s"), names, target, literal };
-    })
-    .sort((a, b) => b.literal - a.literal);
-  return compiled.map(({ regex, names, target }) => ({ regex, names, target }));
-}
-
-export function translateServer(lang: Lang, text: string | null | undefined, depth = 0): string {
+export function translateServer(lang: Lang, text: string | null | undefined): string {
   if (!text) return text ?? "";
-  if (lang === "en") return text;
-  const exact = sq[text];
-  if (exact !== undefined) return exact;
-  if (depth === 0 && serverCache.has(text)) return serverCache.get(text)!;
-  let result = text;
-  if (depth < 4) {
-    patterns ??= compilePatterns();
-    for (const pattern of patterns) {
-      const match = pattern.regex.exec(text);
-      if (!match) continue;
-      const vars: Vars = {};
-      pattern.names.forEach((name, index) => (vars[name] = translateServer(lang, match[index + 1], depth + 1)));
-      result = fill(pattern.target, vars);
-      break;
-    }
-  }
-  if (depth === 0) {
-    if (serverCache.size > 5000) serverCache.clear();
-    serverCache.set(text, result);
-  }
-  return result;
+  return lang === "en" ? text : translateSq(text);
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();

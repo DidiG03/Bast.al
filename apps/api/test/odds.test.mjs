@@ -1,6 +1,7 @@
 // Run with `npm test --workspace apps/api` (builds first). Covers the pure
 // odds code: pricing math and API-Football parsing against the mock feed.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
@@ -93,14 +94,92 @@ test("live odds map onto our markets, and a suspended outcome suspends its marke
   const parsed = parseLiveOdds(liveRaw(), "Tirana", "Partizani");
   assert.equal(parsed.externalId, "7");
   assert.equal(parsed.stopped, false);
-  assert.deepEqual(parsed.markets.map((m) => m.key), ["match_winner", "goals_2_5"]);
+  assert.deepEqual(parsed.markets.map((m) => m.key), ["match_winner", "goals_1_5", "goals_2_5"]);
   const winner = parsed.markets[0];
   assert.equal(winner.suspended, false);
   assert.deepEqual(winner.selections.map((s) => [s.name, s.odds]), [["Tirana", 1.4], ["Draw", 4.2], ["Partizani", 8]]);
-  const goals = parsed.markets[1];
+  const [low, goals] = parsed.markets.slice(1);
+  assert.equal(low.name, "Total goals 1.5");
+  assert.deepEqual(low.selections.map((s) => [s.key, s.odds]), [["over", 1.3], ["under", 0]]);
+  assert.equal(low.suspended, true, "no Under 1.5 price");
   assert.equal(goals.suspended, true, "Under 2.5 is suspended");
-  assert.equal(goals.selections[0].odds, 2.1, "only the 2.5 line counts");
+  assert.equal(goals.selections[0].odds, 2.1, "each line keeps its own price");
   assert.equal(parseLiveOdds(liveRaw({ status: { stopped: false, blocked: true } }), "A", "B").stopped, true);
+});
+
+test("every half-goal line in the live goals market gets its own market", () => {
+  const values = [
+    { value: "Over", odd: "1.05", handicap: "0.5" },
+    { value: "Under", odd: "9.00", handicap: "0.5" },
+    { value: "Over 3.5", odd: "3.40" },
+    { value: "Under 3.5", odd: "1.30" },
+    { value: "Over", odd: "2.00", handicap: "3" },
+    { value: "Under", odd: "1.80", handicap: "3" },
+    { value: "Over", odd: "1.90", handicap: "2.75" },
+  ];
+  const parsed = parseLiveOdds(liveRaw({ odds: [{ id: 25, name: "Match Goals", values }] }), "A", "B");
+  assert.deepEqual(parsed.markets.map((m) => [m.key, m.suspended]), [["goals_0_5", false], ["goals_3_5", false]], "whole and quarter lines are skipped");
+  assert.deepEqual(parsed.markets[1].selections.map((s) => [s.name, s.odds]), [["Over 3.5", 3.4], ["Under 3.5", 1.3]]);
+});
+
+test("the wider in-play markets map onto the markets we already settle", () => {
+  const odds = [
+    { id: 48, name: "Draw No Bet", values: [{ value: "Home", odd: "1.50" }, { value: "Away", odd: "2.60" }] },
+    { id: 68, name: "Goals Odd/Even", values: [{ value: "Odd", odd: "1.90" }, { value: "Even", odd: "1.90" }] },
+    { id: 19, name: "1x2 (1st Half)", values: [{ value: "1", odd: "3.00" }, { value: "X", odd: "1.80" }, { value: "2", odd: "5.00" }] },
+    { id: 35, name: "To Win 2nd Half", values: [{ value: "Home", odd: "2.20" }, { value: "Draw", odd: "2.90", suspended: true }, { value: "Away", odd: "3.60" }] },
+    { id: 58, name: "Home Team Goals", values: [{ value: "Over", odd: "1.70", handicap: "1.5" }, { value: "Under", odd: "2.05", handicap: "1.5" }] },
+    { id: 177, name: "Over/Under (2nd Half)", values: [{ value: "Over 0.5", odd: "1.25" }, { value: "Under 0.5", odd: "3.75" }] },
+    { id: 37, name: "Total Corners", values: [{ value: "Over", odd: "1.83", handicap: "9.5" }, { value: "Under", odd: "1.83", handicap: "9.5" }] },
+    { id: 23, name: "Final Score", values: [{ value: "1:0", odd: "4.50" }, { value: "2-1", odd: "9.00" }, { value: "0:0", odd: "7.00", suspended: true }] },
+    { id: 64, name: "Half Time/Full Time", values: [{ value: "Home/Home", odd: "2.50" }, { value: "1/X", odd: "8.00" }] },
+    { id: 29, name: "Result / Both Teams To Score", values: [{ value: "Home & Yes", odd: "4.00" }, { value: "Draw/No", odd: "6.50" }] },
+    { id: 999, name: "Which team will score the 2nd goal?", values: [{ value: "Home", odd: "1.90" }] },
+  ];
+  const parsed = parseLiveOdds(liveRaw({ odds }), "Tirana", "Partizani");
+  const byKey = Object.fromEntries(parsed.markets.map((m) => [m.key, m]));
+  assert.deepEqual(Object.keys(byKey).sort(), ["corners_9_5", "correct_score", "draw_no_bet", "h1_winner", "h2_goals_0_5", "h2_winner", "home_goals_1_5", "ht_ft", "odd_even", "result_btts"]);
+  assert.deepEqual(byKey.h1_winner.selections.map((s) => [s.key, s.odds]), [["home", 3], ["draw", 1.8], ["away", 5]], "1X2 symbols count as Home/Draw/Away");
+  assert.equal(byKey.h2_winner.suspended, true, "a three-way market is off while one outcome is");
+  assert.equal(byKey.home_goals_1_5.name, "Tirana goals 1.5");
+  assert.deepEqual(byKey.correct_score.selections.map((s) => s.key), ["1-0", "2-1"], "a suspended scoreline is left out");
+  assert.equal(byKey.correct_score.suspended, false);
+  assert.deepEqual(byKey.ht_ft.selections.map((s) => [s.key, s.odds]), [["home_home", 2.5], ["home_draw", 8]], "partial markets keep what's priced");
+  assert.equal(byKey.ht_ft.suspended, false);
+  assert.deepEqual(byKey.result_btts.selections.map((s) => s.key), ["home_yes", "draw_no"]);
+  const order = parsed.markets.map((m) => m.key);
+  assert.ok(order.indexOf("draw_no_bet") < order.indexOf("h1_winner") && order.indexOf("h1_winner") < order.indexOf("corners_9_5"), "live markets keep the pre-match order");
+});
+
+test("a real /odds/live answer maps onto our markets", () => {
+  const { response } = JSON.parse(readFileSync(new URL("./fixtures/api-football-live-odds.json", import.meta.url), "utf8"));
+  const stopped = parseLiveOdds(response[0], "Home FC", "Away FC");
+  assert.equal(stopped.stopped, true);
+  assert.deepEqual(
+    stopped.markets.map((m) => m.key),
+    ["match_winner", "double_chance", "draw_no_bet", "odd_even", "h2_btts"],
+  );
+  // Everything in this answer is suspended: fixed markets come back off the board; lines and correct score, with nothing priced, are left out, which suspends them.
+  assert.ok(stopped.markets.every((m) => m.suspended));
+
+  const open = parseLiveOdds(response[1], "Chile", "Switzerland");
+  const byKey = Object.fromEntries(open.markets.map((m) => [m.key, m]));
+  assert.deepEqual(Object.keys(byKey).sort(), ["away_goals_1_5", "away_goals_2_5", "h1_goals_0_5", "h1_goals_1_5", "h1_winner", "ht_ft"], "whole corner lines (Over/Exactly/Under 8) are skipped");
+  assert.deepEqual(byKey.h1_winner.selections.map((s) => [s.name, s.odds]), [["Chile", 3.1], ["Draw", 1.615], ["Switzerland", 7]]);
+  assert.equal(byKey.ht_ft.selections.length, 9, "1/X-style HT/FT values all map");
+  assert.equal(byKey.ht_ft.selections.find((s) => s.key === "draw_away").odds, 8.5);
+  assert.ok(open.markets.every((m) => !m.suspended));
+});
+
+test("live double chance comes as \"Home or Draw\" and \"Away or Draw\"", () => {
+  const values = [
+    { value: "Home or Draw", odd: "1.222" },
+    { value: "Away or Draw", odd: "1.444" },
+    { value: "Home or Away", odd: "1.615" },
+  ];
+  const [market] = parseLiveOdds(liveRaw({ odds: [{ id: 72, name: "Double Chance", values }] }), "A", "B").markets;
+  assert.deepEqual(market.selections.map((s) => [s.key, s.odds]), [["home_draw", 1.222], ["home_away", 1.615], ["draw_away", 1.444]]);
+  assert.equal(market.suspended, false);
 });
 
 test("the mock feed prices live matches and suspends them just after a goal", async () => {
@@ -112,6 +191,10 @@ test("the mock feed prices live matches and suspends them just after a goal", as
   for (const raw of live) {
     const parsed = parseLiveOdds(raw, "H", "A");
     assert.ok(parsed.markets.some((m) => m.key === "match_winner"));
+    const goals = raw.teams.home.goals + raw.teams.away.goals;
+    const lines = parsed.markets.filter((m) => m.key.startsWith("goals_")).map((m) => Number(m.key.slice(6).replace("_", ".")));
+    assert.ok(lines.length > 0 || goals >= 5, "lines above the score are offered");
+    assert.ok(lines.every((line) => line > goals), "decided lines drop off");
     for (const market of parsed.markets) for (const s of market.selections) assert.ok(s.odds > 1);
   }
 });
@@ -164,4 +247,56 @@ test("the extra markets parse from a real API-Football response", async () => {
   assert.match(corners[0].name, /^Total corners \d+\.5$/);
   const cs = markets.find((m) => m.key === "correct_score");
   assert.ok(cs.selections.every((s) => /^\d-\d$/.test(s.key)));
+});
+
+test("Super Admin's league pick decides which new matches are synced; listed ones keep syncing", async () => {
+  const saved = process.env.ODDS_FEED_MOCK;
+  const key = process.env.API_FOOTBALL_KEY;
+  process.env.ODDS_FEED_MOCK = "true";
+  delete process.env.API_FOOTBALL_KEY;
+  try {
+    const { OddsSyncService } = await import("../dist/odds/odds-sync.service.js");
+    let stored = null;
+    const listed = new Set();
+    const upserted = [];
+    const prisma = {
+      platformSettings: {
+        findUnique: async () => ({ oddsCompetitions: stored }),
+        upsert: async ({ update }) => void (stored = update.oddsCompetitions?.leagues ? update.oddsCompetitions : null),
+      },
+      event: { findMany: async ({ where }) => (where.externalId?.in ?? []).filter((id) => listed.has(id)).map((externalId) => ({ externalId })) },
+    };
+    const sync = new OddsSyncService(prisma);
+    sync.upsertEvent = async (fixture) => (upserted.push(fixture.externalId), fixture.externalId);
+    for (const name of ["upsertMarkets", "syncLive", "syncStats", "recordStatus"]) sync[name] = async () => 0;
+    const run = async () => {
+      upserted.length = 0;
+      await sync.syncFull(true);
+      return [...upserted].sort();
+    };
+
+    const everything = await run();
+    assert.ok(everything.length >= 6, "mock mode takes every made-up league until Super Admin picks");
+
+    await sync.saveChoice({ leagues: [9002], countries: [] }); // Premier League only
+    assert.deepEqual(await run(), ["900004", "900005"]);
+
+    listed.add("900006"); // Inter v Juventus is already on the board
+    assert.deepEqual(await run(), ["900004", "900005", "900006"], "a listed match from a league turned off keeps its prices fresh");
+
+    await sync.saveChoice({ leagues: [], countries: ["albania"] });
+    assert.ok((await run()).includes("900003"), "a whole country is matched case-insensitively");
+
+    await sync.saveChoice(null);
+    assert.equal(stored, null);
+    assert.deepEqual((await sync.savedChoice()), null);
+    assert.deepEqual(await run(), everything, "reset goes back to the defaults");
+
+    const leagues = await sync.availableLeagues();
+    assert.ok(leagues.some((l) => l.id === 9002 && l.name === "Premier League" && l.country === "England" && l.type === "League"));
+  } finally {
+    if (saved === undefined) delete process.env.ODDS_FEED_MOCK;
+    else process.env.ODDS_FEED_MOCK = saved;
+    if (key !== undefined) process.env.API_FOOTBALL_KEY = key;
+  }
 });

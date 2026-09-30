@@ -1,0 +1,67 @@
+{
+  "get": "odds/live",
+  "note": "Trimmed from a real /odds/live answer (two matches, the markets we map plus a few we ignore).",
+  "response": [
+    {
+      "fixture": { "id": 1549650, "status": { "long": "Second Half", "elapsed": 62, "seconds": "61:57" } },
+      "league": { "id": 240, "season": 2026 },
+      "teams": { "home": { "id": 1465, "goals": 1 }, "away": { "id": 1459, "goals": 1 } },
+      "status": { "stopped": true, "blocked": false, "finished": false },
+      "update": "2026-09-30T00:22:20+00:00",
+      "odds": [
+        { "id": 15, "name": "Last Corner", "values": [{ "value": "1", "odd": "1.533", "handicap": null, "main": null, "suspended": true }, { "value": "2", "odd": "2.375", "handicap": null, "main": null, "suspended": true }] },
+        { "id": 23, "name": "Final Score", "values": [
+          { "value": "1-0", "odd": "6", "handicap": null, "main": null, "suspended": true },
+          { "value": "2-1", "odd": "4", "handicap": null, "main": null, "suspended": true },
+          { "value": "1-1", "odd": "2.625", "handicap": null, "main": null, "suspended": true },
+          { "value": "1-2", "odd": "5.5", "handicap": null, "main": null, "suspended": true }
+        ] },
+        { "id": 36, "name": "Over/Under Line", "values": [
+          { "value": "Over", "odd": "1.425", "handicap": "2.5", "main": false, "suspended": true },
+          { "value": "Under", "odd": "2.625", "handicap": "2.5", "main": false, "suspended": true },
+          { "value": "Over", "odd": "1.6", "handicap": "2.75", "main": false, "suspended": true },
+          { "value": "Under", "odd": "2.2", "handicap": "2.75", "main": false, "suspended": true },
+          { "value": "Over", "odd": "2", "handicap": "3", "main": true, "suspended": true },
+          { "value": "Under", "odd": "1.8", "handicap": "3", "main": true, "suspended": true }
+        ] },
+        { "id": 37, "name": "Total Corners", "values": [{ "value": "Over", "odd": "1.727", "handicap": "3.5", "main": null, "suspended": true }, { "value": "Under", "odd": "2", "handicap": "3.5", "main": null, "suspended": true }] },
+        { "id": 25, "name": "Match Goals", "values": [
+          { "value": "Over", "odd": "1.444", "handicap": "2.5", "main": null, "suspended": true },
+          { "value": "Under", "odd": "2.625", "handicap": "2.5", "main": null, "suspended": true },
+          { "value": "Over", "odd": "3", "handicap": "3.5", "main": null, "suspended": true },
+          { "value": "Under", "odd": "1.363", "handicap": "3.5", "main": null, "suspended": true }
+        ] },
+        { "id": 43, "name": "Both Teams To Score (2nd Half)", "values": [{ "value": "Yes", "odd": "5", "handicap": null, "main": null, "suspended": true }, { "value": "No", "odd": "1.142", "handicap": null, "main": null, "suspended": true }] },
+        { "id": 48, "name": "Draw No Bet", "values": [{ "value": "Home", "odd": "1.533", "handicap": null, "main": null, "suspended": true }, { "value": "Away", "odd": "2.375", "handicap": null, "main": null, "suspended": true }] },
+        { "id": 58, "name": "Home Team Goals", "values": [{ "value": "Over", "odd": "2", "handicap": "1.5", "main": null, "suspended": true }, { "value": "Under", "odd": "1.727", "handicap": "1.5", "main": null, "suspended": true }] },
+        { "id": 59, "name": "Fulltime Result", "values": [{ "value": "Home", "odd": "2.625", "handicap": null, "main": null, "suspended": true }, { "value": "Draw", "odd": "2.2", "handicap": null, "main": null, "suspended": true }, { "value": "Away", "odd": "4", "handicap": null, "main": null, "suspended": true }] },
+        { "id": 68, "name": "Goals Odd/Even", "values": [{ "value": "Odd", "odd": "2.1", "handicap": null, "main": null, "suspended": true }, { "value": "Even", "odd": "1.666", "handicap": null, "main": null, "suspended": true }] },
+        { "id": 72, "name": "Double Chance", "values": [{ "value": "Home or Draw", "odd": "1.222", "handicap": null, "main": null, "suspended": true }, { "value": "Away or Draw", "odd": "1.444", "handicap": null, "main": null, "suspended": true }, { "value": "Home or Away", "odd": "1.615", "handicap": null, "main": null, "suspended": true }] }
+      ]
+    },
+    {
+      "fixture": { "id": 1629002, "status": { "long": "First Half", "elapsed": 29, "seconds": "29:16" } },
+      "league": { "id": 10, "season": 2026 },
+      "teams": { "home": { "id": 2384, "goals": 0 }, "away": { "id": 2383, "goals": 0 } },
+      "status": { "stopped": false, "blocked": false, "finished": false },
+      "update": "2026-09-30T00:36:58+00:00",
+      "odds": [
+        { "id": 20, "name": "Match Corners", "values": [{ "value": "Over", "odd": "1.615", "handicap": "8", "main": null, "suspended": false }, { "value": "Exactly", "odd": "5.5", "handicap": "8", "main": null, "suspended": false }, { "value": "Under", "odd": "3.4", "handicap": "8", "main": null, "suspended": false }] },
+        { "id": 39, "name": "Away Team Goals", "values": [{ "value": "Over", "odd": "21", "handicap": "2.5", "main": null, "suspended": false }, { "value": "Under", "odd": "1.015", "handicap": "2.5", "main": null, "suspended": false }, { "value": "Over", "odd": "6", "handicap": "1.5", "main": null, "suspended": false }, { "value": "Under", "odd": "1.125", "handicap": "1.5", "main": null, "suspended": false }] },
+        { "id": 19, "name": "1x2 (1st Half)", "values": [{ "value": "Home", "odd": "3.1", "handicap": null, "main": null, "suspended": false }, { "value": "Draw", "odd": "1.615", "handicap": null, "main": null, "suspended": false }, { "value": "Away", "odd": "7", "handicap": null, "main": null, "suspended": false }] },
+        { "id": 49, "name": "Over/Under (1st Half)", "values": [{ "value": "Over", "odd": "2", "handicap": "0.5", "main": true, "suspended": false }, { "value": "Under", "odd": "1.727", "handicap": "0.5", "main": true, "suspended": false }, { "value": "Over", "odd": "6.5", "handicap": "1.5", "main": false, "suspended": false }, { "value": "Under", "odd": "1.111", "handicap": "1.5", "main": false, "suspended": false }] },
+        { "id": 64, "name": "Half Time/Full Time", "values": [
+          { "value": "1/1", "odd": "3.6", "handicap": null, "main": null, "suspended": false },
+          { "value": "1/X", "odd": "19", "handicap": null, "main": null, "suspended": false },
+          { "value": "1/2", "odd": "41", "handicap": null, "main": null, "suspended": false },
+          { "value": "X/1", "odd": "2.875", "handicap": null, "main": null, "suspended": false },
+          { "value": "X/X", "odd": "4.5", "handicap": null, "main": null, "suspended": false },
+          { "value": "X/2", "odd": "8.5", "handicap": null, "main": null, "suspended": false },
+          { "value": "2/1", "odd": "21", "handicap": null, "main": null, "suspended": false },
+          { "value": "2/X", "odd": "19", "handicap": null, "main": null, "suspended": false },
+          { "value": "2/2", "odd": "12", "handicap": null, "main": null, "suspended": false }
+        ] }
+      ]
+    }
+  ]
+}

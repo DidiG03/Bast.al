@@ -101,9 +101,14 @@ function liveOdds(match: MockMatch, raw: RawFixture): RawLiveOdds {
     { id: 59, name: "Fulltime Result", values: [v("Home", ph), v("Draw", pd), v("Away", pa)] },
     { id: 72, name: "Double Chance", values: [v("Home/Draw", ph + pd), v("Home/Away", ph + pa), v("Draw/Away", pd + pa)] },
   ];
-  if (goals < 3) {
-    const over = (1 - t) * [0.7, 0.45, 0.25][goals];
-    odds.push({ id: 36, name: "Over/Under Line", values: [v("Over", over, "2.5"), v("Under", 1 - over, "2.5")] });
+  // Every line still open: the chance of `needed` more goals shrinks as the clock runs down.
+  const lines = ["0.5", "1.5", "2.5", "3.5", "4.5"].filter((line) => Number(line) > goals);
+  if (lines.length > 0) {
+    const values = lines.flatMap((line) => {
+      const over = (1 - t) * [0.7, 0.45, 0.25, 0.12, 0.05][Math.ceil(Number(line) - goals) - 1];
+      return [v("Over", over, line), v("Under", 1 - over, line)];
+    });
+    odds.push({ id: 36, name: "Over/Under Line", values });
   }
   if (home === 0 || away === 0) {
     const yes = (1 - t) * (home + away > 0 ? 0.55 : 0.45);
@@ -143,6 +148,10 @@ export function mockFetchJson(clock: () => number = Date.now, anchor: number = c
     if (path === "/odds") {
       const response = MATCHES.filter((m) => m.league[0] === Number(params.league) && utcDate(anchor + m.kickoff * 60_000) === params.date).map(odds);
       return { paging: { current: 1, total: 1 }, response };
+    }
+    if (path === "/leagues") {
+      const leagues = new Map(MATCHES.map((m) => [m.league[0], m.league]));
+      return { response: [...leagues.values()].map(([id, name, country]) => ({ league: { id, name, type: "League" }, country: { name: country } })) };
     }
     return { response: [] };
   };

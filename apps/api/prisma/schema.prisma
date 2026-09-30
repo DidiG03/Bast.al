@@ -393,6 +393,9 @@ model PlatformSettings {
   /// When the odds feed last finished a sync, and what it reported.
   oddsSyncedAt   DateTime? @map("odds_synced_at")
   oddsSyncStatus String?   @map("odds_sync_status") @db.VarChar(300)
+  /// Super Admin's pick of competitions to sync: { leagues: number[], countries: string[] }.
+  /// Null means the defaults (API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES, or the built-in list).
+  oddsCompetitions Json?   @map("odds_competitions")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   @@map("platform_settings")

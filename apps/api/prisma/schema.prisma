@@ -277,6 +277,10 @@ model Event {
   liveOddsAt   DateTime?   @map("live_odds_at")
   /// The feed has stopped live betting on this match (e.g. a goal or VAR check).
   liveStopped  Boolean     @default(false) @map("live_stopped")
+  /// Live bets pause until then after a goal, a big price jump or a reopen (see odds/live-guard.ts).
+  liveCooldownUntil  DateTime? @map("live_cooldown_until")
+  /// Why: goal, swing or reopen.
+  liveCooldownReason String?   @map("live_cooldown_reason")
   /// The score bets are settled on: 90 minutes plus stoppage time, never
   /// extra time or penalties. Set by the feed when the match ends, or by
   /// Super Admin when correcting a result.

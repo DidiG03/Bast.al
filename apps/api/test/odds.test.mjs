@@ -5,7 +5,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
-import { applyMargin, eventOpen, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
+import { bigSwing, cooldownFor, laterCooldown } from "../dist/odds/live-guard.js";
+import { applyMargin, eventOpen, livePause, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 
 test("a margin comes off the feed price and rounds down to the cent", () => {
   assert.equal(applyMargin(2.0, 5), 1.9);
@@ -211,6 +212,59 @@ test("live matches take bets only with fresh prices the feed hasn't stopped", ()
   assert.equal(eventOpen({ ...base, status: "UPCOMING", startsAt: new Date(now.getTime() - 60_000) }, now), false, "kicked off but not live yet");
 });
 
+test("live betting pauses after a goal, a price jump or a reopen, and in the last minutes", () => {
+  const now = new Date("2026-01-01T12:00:00Z");
+  const base = { status: "LIVE", startsAt: new Date("2026-01-01T11:00:00Z"), suspended: false, hidden: false, liveStopped: false, liveOddsAt: new Date(now.getTime() - 5_000), elapsed: 60 };
+  assert.equal(livePause(base, now), null);
+  assert.equal(livePause({ ...base, liveCooldownUntil: new Date(now.getTime() + 30_000), liveCooldownReason: "goal" }, now), "goal");
+  assert.equal(eventOpen({ ...base, liveCooldownUntil: new Date(now.getTime() + 30_000), liveCooldownReason: "goal" }, now), false);
+  assert.equal(eventOpen({ ...base, liveCooldownUntil: new Date(now.getTime() - 1), liveCooldownReason: "goal" }, now), true, "the pause runs out");
+  assert.equal(livePause({ ...base, elapsed: 89 }, now), "late");
+  assert.equal(livePause({ ...base, elapsed: 88 }, now), null);
+  assert.equal(livePause({ ...base, liveStopped: true }, now), "feed");
+  assert.equal(livePause({ ...base, status: "UPCOMING" }, now), null, "only live matches pause");
+
+  const reading = (homeScore, awayScore, stopped = false) => ({ homeScore, awayScore, stopped });
+  assert.equal(cooldownFor(reading(0, 0), reading(1, 0), false, now).reason, "goal");
+  assert.equal(cooldownFor(reading(0, 0), reading(1, 0), false, now).until.getTime(), now.getTime() + 90_000);
+  assert.equal(cooldownFor(reading(1, 0), reading(0, 0), false, now).reason, "goal", "a goal taken back by VAR");
+  assert.equal(cooldownFor(reading(null, null), reading(0, 0), false, now), null, "the first reading isn't a goal");
+  assert.equal(cooldownFor(reading(0, 0), reading(0, 0), true, now).reason, "swing");
+  assert.equal(cooldownFor(reading(0, 0, true), reading(0, 0, false), false, now).reason, "reopen");
+  assert.equal(cooldownFor(reading(0, 0), reading(0, 0), false, now), null);
+
+  const long = { until: new Date(now.getTime() + 90_000), reason: "goal" };
+  assert.deepEqual(laterCooldown(long, { until: new Date(now.getTime() + 15_000), reason: "reopen" }), long, "a short pause never cuts a goal pause short");
+  assert.equal(laterCooldown({ until: null, reason: null }, long), long);
+
+  assert.equal(bigSwing([2.0, 3.4, 4.0], [2.1, 3.3, 4.2]), false, "normal drift");
+  assert.equal(bigSwing([2.0, 3.4, 4.0], [1.4, 3.8, 7.0]), true, "a red card or a penalty");
+  assert.equal(bigSwing([1.8, 3.6, 26.0], [1.75, 3.7, 34.0]), false, "a long shot drifting isn't a jump");
+  assert.equal(bigSwing([2.0, 3.3, 3.8], [3.2, 3.4, 2.4]), true, "a red card: 50% down to 31%");
+  assert.equal(bigSwing([null, 3.4], [1.2, 3.4]), false, "an outcome coming back isn't a jump");
+});
+
+test("live odds carry the score and minute they were made for, and can be fetched for one match", async () => {
+  const parsed = parseLiveOdds({ ...liveRaw(), teams: { home: { goals: 2 }, away: { goals: 1 } } }, "A", "B");
+  assert.equal(parsed.homeScore, 2);
+  assert.equal(parsed.awayScore, 1);
+  assert.equal(parsed.elapsed, 62);
+  assert.equal(parseLiveOdds(liveRaw(), "A", "B").homeScore, null, "no score sent");
+
+  let now = Date.UTC(2026, 0, 1, 12);
+  const client = new ApiFootballClient(mockFetchJson(() => now, now));
+  now += 3 * 3_600_000;
+  const all = await client.liveOdds();
+  for (let step = 0; step < 48 && all.length === 0; step++) {
+    now += 15 * 60_000;
+    all.push(...(await client.liveOdds()));
+  }
+  assert.ok(all.length > 0, "the mock feed has a live match");
+  const one = await client.liveOddsFor(String(all[0].fixture.id));
+  assert.equal(one.fixture.id, all[0].fixture.id);
+  assert.equal(await client.liveOddsFor("999999"), null);
+});
+
 test("live prices ignore an Owner's fixed price and pause on a suspended market", () => {
   const now = new Date("2026-01-01T12:00:00Z");
   const event = { status: "LIVE", startsAt: new Date("2026-01-01T11:00:00Z"), suspended: false, hidden: false, liveStopped: false, liveOddsAt: now };
@@ -299,4 +353,46 @@ test("Super Admin's league pick decides which new matches are synced; listed one
     else process.env.ODDS_FEED_MOCK = saved;
     if (key !== undefined) process.env.API_FOOTBALL_KEY = key;
   }
+});
+
+test("a live bet's match is checked with the feed itself, and a goal found there pauses it", async () => {
+  const { OddsSyncService } = await import("../dist/odds/odds-sync.service.js");
+  const saved = { id: "e1", externalId: "7", homeTeam: "A", awayTeam: "B", name: "A v B", homeScore: 0, awayScore: 0, liveStopped: false, liveCooldownUntil: null, liveCooldownReason: null };
+  const updates = [];
+  const tx = {
+    selection: { findMany: async () => [], upsert: async () => ({}), updateMany: async () => ({}) },
+    market: { updateMany: async () => ({}), upsert: async () => ({ id: "m1" }) },
+  };
+  const prisma = {
+    event: {
+      findMany: async () => [saved],
+      findUniqueOrThrow: async () => saved,
+      update: async ({ data }) => updates.push(data),
+    },
+    $transaction: async (fn) => fn(tx),
+  };
+  const service = new OddsSyncService(prisma);
+  let calls = 0;
+  let answer = { ...liveRaw(), fixture: { id: 7, status: { elapsed: 63 } }, teams: { home: { goals: 1 }, away: { goals: 0 } } };
+  service.client = new ApiFootballClient(async (path, params) => {
+    calls++;
+    assert.equal(path, "/odds/live");
+    assert.equal(params.fixture, "7", "asks about that one match");
+    return { response: answer ? [answer] : [] };
+  });
+
+  // Two bets at the same moment share one request.
+  await Promise.all([service.verifyLive(["e1"]), service.verifyLive(["e1", "e1"])]);
+  assert.equal(calls, 1);
+  const last = updates.at(-1);
+  assert.equal(last.homeScore, 1);
+  assert.equal(last.elapsed, 63);
+  assert.equal(last.liveCooldownReason, "goal", "the goal the feed knows about pauses the match");
+  assert.ok(last.liveCooldownUntil > new Date());
+
+  // Once the feed stops pricing the match, it's marked stopped.
+  service.verifying.clear();
+  answer = null;
+  await service.verifyLive(["e1"]);
+  assert.equal(updates.at(-1).liveStopped, true);
 });

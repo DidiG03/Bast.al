@@ -143,7 +143,8 @@ export function mockFetchJson(clock: () => number = Date.now, anchor: number = c
     }
     if (path === "/odds/live") {
       const live = MATCHES.map((m) => [m, fixture(m, now, anchor)] as const).filter(([, f]) => ["1H", "HT", "2H"].includes(f.fixture.status.short));
-      return { response: live.map(([m, f]) => liveOdds(m, f)) };
+      const rows = live.map(([m, f]) => liveOdds(m, f));
+      return { response: params.fixture ? rows.filter((row) => String(row.fixture.id) === String(params.fixture)) : rows };
     }
     if (path === "/odds") {
       const response = MATCHES.filter((m) => m.league[0] === Number(params.league) && utcDate(anchor + m.kickoff * 60_000) === params.date).map(odds);

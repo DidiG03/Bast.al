@@ -1,3 +1,5 @@
+import { LIVE_CUTOFF_MINUTE, type LivePause } from "./live-guard";
+
 /** Lowest and highest price anyone can set or be shown. */
 export const MIN_ODDS = 1.01;
 export const MAX_ODDS = 1000;
@@ -39,18 +41,35 @@ type LiveEventState = {
   hidden: boolean;
   liveStopped: boolean;
   liveOddsAt: Date | null;
+  elapsed?: number | null;
+  liveCooldownUntil?: Date | null;
+  liveCooldownReason?: string | null;
 };
 
 /**
+ * Why a live match isn't taking bets right now, or null if it is (or isn't
+ * live). In order: the bookmaker blocked it, our own pause after a goal or a
+ * price jump, the last minutes, or prices that stopped arriving.
+ */
+export function livePause(event: LiveEventState, now: Date = new Date()): LivePause | null {
+  if (event.status !== "LIVE") return null;
+  if (event.liveStopped) return "feed";
+  if (event.liveCooldownUntil && event.liveCooldownUntil > now) return (["goal", "swing", "reopen"].includes(event.liveCooldownReason ?? "") ? event.liveCooldownReason : "feed") as LivePause;
+  if (LIVE_CUTOFF_MINUTE > 0 && (event.elapsed ?? 0) >= LIVE_CUTOFF_MINUTE) return "late";
+  if (event.liveOddsAt === null || now.getTime() - event.liveOddsAt.getTime() > LIVE_ODDS_STALE_MS) return "feed";
+  return null;
+}
+
+/**
  * Whether a match takes bets right now: before kick-off, or while live with
- * fresh in-play prices the feed hasn't stopped. LIVE_BETTING=off turns in-play
- * betting off everywhere.
+ * fresh in-play prices and nothing pausing it (see livePause). LIVE_BETTING=off
+ * turns in-play betting off everywhere.
  */
 export function eventOpen(event: LiveEventState, now: Date = new Date()): boolean {
   if (event.suspended || event.hidden) return false;
   if (event.status === "UPCOMING") return event.startsAt > now;
   if (event.status !== "LIVE" || process.env.LIVE_BETTING === "off") return false;
-  return !event.liveStopped && event.liveOddsAt !== null && now.getTime() - event.liveOddsAt.getTime() <= LIVE_ODDS_STALE_MS;
+  return livePause(event, now) === null;
 }
 
 /**

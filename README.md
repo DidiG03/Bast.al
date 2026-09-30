@@ -155,8 +155,21 @@ Super Admin picks which competitions are synced under **Odds → Leagues**: sing
 | `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS` | Optional tuning: days ahead (5, at most 7), how often to check which days are due (10 min), live interval (45 s). |
 | `API_FOOTBALL_QUOTA_RESERVE` | Requests to keep in hand each day before only today's matches are refreshed. Defaults to `600`. |
 | `ODDS_FEED_MOCK=true` | Local testing only: serves made-up matches in API-Football's format when no key is set. |
+| `LIVE_VERIFY`, `LIVE_GOAL_COOLDOWN_MS`, `LIVE_SWING_COOLDOWN_MS`, `LIVE_REOPEN_COOLDOWN_MS`, `LIVE_SWING_POINTS`, `LIVE_CUTOFF_MINUTE`, `LIVE_FAST_INTERVAL_MS` | Live-betting protection (see below). Defaults: check each live bet with the feed, pause 90 s after a goal, 30 s after a result's chance jumps 12 points in the match-result prices, 15 s after the bookmaker reopens a match, close from minute 89, and fetch live prices every 15 s while someone is watching. |
 
 The API needs outbound access to `v3.football.api-sports.io`.
+
+**Live-betting protection** (`apps/api/src/odds/live-guard.ts`). A live match stops taking bets when:
+- the bookmaker has it blocked (dangerous attack, penalty, VAR);
+- a goal went in, or was taken back, in the last 90 s;
+- the match-result prices just jumped, which usually means a red card or a penalty;
+- the bookmaker reopened it less than 15 s ago;
+- it's the 89th minute or later;
+- no fresh prices have come in for 90 s.
+
+Every live bet also waits 5 s. It is then checked with API-Football for that one match (bets on the same match at the same moment share one request). The bet is refused if the match is blocked, the score changed, the price moved, or the feed can't be reached. Players see why a match is paused ("Goal! Live betting reopens in a moment").
+
+Request use: one extra request per live bet. While someone has the live matches open, there is also one request every 15 s, which stops by itself when fewer than twice `API_FOOTBALL_QUOTA_RESERVE` requests are left for the day.
 
 ## Commands
 

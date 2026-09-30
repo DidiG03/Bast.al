@@ -224,4 +224,8 @@ export const betting: Record<string, string> = {
   "Price went down": "Koeficienti ra",
   "Your slip is empty": "Tiketa jote është bosh",
   "Day": "Dita",
+  "⚽ Goal! Live betting reopens in a moment, once the prices catch up.": "⚽ Gol! Bastet live rihapen pas pak, sapo të përditësohen koeficientët.",
+  "Something big just happened in this match. Live betting reopens in a moment.": "Sapo ndodhi diçka e rëndësishme në këtë ndeshje. Bastet live rihapen pas pak.",
+  "Live betting is reopening. One moment.": "Bastet live po rihapen. Një moment.",
+  "Live betting has closed for the last minutes of this match.": "Bastet live janë mbyllur për minutat e fundit të kësaj ndeshjeje.",
 };

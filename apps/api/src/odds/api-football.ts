@@ -51,6 +51,10 @@ export type FeedLiveOdds = {
   externalId: string;
   /** The feed isn't taking bets on this match at all right now. */
   stopped: boolean;
+  /** The score and minute the prices were made for, when the feed sends them. */
+  homeScore: number | null;
+  awayScore: number | null;
+  elapsed: number | null;
   markets: FeedLiveMarket[];
 };
 
@@ -467,9 +471,14 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
   return {
     externalId: String(raw.fixture.id),
     stopped: Boolean(raw.status?.stopped || raw.status?.blocked || raw.status?.finished),
+    homeScore: goals(raw.teams?.home?.goals),
+    awayScore: goals(raw.teams?.away?.goals),
+    elapsed: goals(raw.fixture.status?.elapsed),
     markets: [...markets.values()].sort((a, b) => a.sortOrder - b.sortOrder),
   };
 }
+
+const goals = (value: number | null | undefined) => (typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null);
 
 /**
  * The lines in an in-play over/under market, one `{prefix}_X_5` market per .5
@@ -581,6 +590,12 @@ export class ApiFootballClient {
   async liveOdds(): Promise<RawLiveOdds[]> {
     const res = (await this.fetchJson("/odds/live", {})) as ApiResponse<RawLiveOdds>;
     return res.response;
+  }
+
+  /** In-play odds for one match right now, or null if the feed isn't pricing it. */
+  async liveOddsFor(fixtureId: string): Promise<RawLiveOdds | null> {
+    const res = (await this.fetchJson("/odds/live", { fixture: fixtureId })) as ApiResponse<RawLiveOdds>;
+    return res.response.find((row) => String(row.fixture.id) === fixtureId) ?? null;
   }
 
   /** Pre-match odds for one league on one day, every page. */

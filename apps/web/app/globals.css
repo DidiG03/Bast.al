@@ -3784,6 +3784,8 @@ button.odds-selection:hover,
      the color-scheme note on :root. */
   color-scheme: dark;
   background: var(--bg);
+  /* body's colour was worked out from the light theme's --text; use the dark one here. */
+  color: var(--text);
   min-height: 100vh;
 }
 

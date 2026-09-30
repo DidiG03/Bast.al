@@ -8,7 +8,7 @@ import { MfaGuard } from "../auth/mfa.guard";
 import type { Actor } from "../auth/permissions";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
-import { BaseMarginDto, EventsQueryDto, OverrideDto, TeamMarginDto, TeamQueryDto, UpdateEventDto } from "./odds.dto";
+import { BaseMarginDto, EventsQueryDto, LeaguesDto, OverrideDto, TeamMarginDto, TeamQueryDto, UpdateEventDto } from "./odds.dto";
 import { OddsService } from "./odds.service";
 
 @ApiTags("odds")
@@ -64,6 +64,18 @@ export class OddsController {
   @Roles(Role.SUPER_ADMIN)
   updateEvent(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() body: UpdateEventDto) {
     return this.odds.updateEvent(actor, id, body);
+  }
+
+  @Get("leagues")
+  @Roles(Role.SUPER_ADMIN)
+  leagues() {
+    return this.odds.leagues();
+  }
+
+  @Put("leagues")
+  @Roles(Role.SUPER_ADMIN)
+  setLeagues(@CurrentActor() actor: Actor, @Body() body: LeaguesDto) {
+    return this.odds.setLeagues(actor, body);
   }
 
   @Post("sync")

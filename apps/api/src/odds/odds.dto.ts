@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Max, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 import { MAX_MARGIN, MAX_ODDS, MIN_ODDS } from "./pricing";
 
 export class TeamQueryDto {
@@ -48,4 +48,25 @@ export class UpdateEventDto {
   @IsOptional()
   @IsBoolean()
   suspended?: boolean;
+}
+
+/** Super Admin's pick of competitions to sync. `reset` goes back to the defaults. */
+export class LeaguesDto {
+  @IsOptional()
+  @IsBoolean()
+  reset?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(400)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  leagues?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(60)
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  countries?: string[];
 }

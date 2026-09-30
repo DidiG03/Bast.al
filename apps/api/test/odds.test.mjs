@@ -248,3 +248,55 @@ test("the extra markets parse from a real API-Football response", async () => {
   const cs = markets.find((m) => m.key === "correct_score");
   assert.ok(cs.selections.every((s) => /^\d-\d$/.test(s.key)));
 });
+
+test("Super Admin's league pick decides which new matches are synced; listed ones keep syncing", async () => {
+  const saved = process.env.ODDS_FEED_MOCK;
+  const key = process.env.API_FOOTBALL_KEY;
+  process.env.ODDS_FEED_MOCK = "true";
+  delete process.env.API_FOOTBALL_KEY;
+  try {
+    const { OddsSyncService } = await import("../dist/odds/odds-sync.service.js");
+    let stored = null;
+    const listed = new Set();
+    const upserted = [];
+    const prisma = {
+      platformSettings: {
+        findUnique: async () => ({ oddsCompetitions: stored }),
+        upsert: async ({ update }) => void (stored = update.oddsCompetitions?.leagues ? update.oddsCompetitions : null),
+      },
+      event: { findMany: async ({ where }) => (where.externalId?.in ?? []).filter((id) => listed.has(id)).map((externalId) => ({ externalId })) },
+    };
+    const sync = new OddsSyncService(prisma);
+    sync.upsertEvent = async (fixture) => (upserted.push(fixture.externalId), fixture.externalId);
+    for (const name of ["upsertMarkets", "syncLive", "syncStats", "recordStatus"]) sync[name] = async () => 0;
+    const run = async () => {
+      upserted.length = 0;
+      await sync.syncFull(true);
+      return [...upserted].sort();
+    };
+
+    const everything = await run();
+    assert.ok(everything.length >= 6, "mock mode takes every made-up league until Super Admin picks");
+
+    await sync.saveChoice({ leagues: [9002], countries: [] }); // Premier League only
+    assert.deepEqual(await run(), ["900004", "900005"]);
+
+    listed.add("900006"); // Inter v Juventus is already on the board
+    assert.deepEqual(await run(), ["900004", "900005", "900006"], "a listed match from a league turned off keeps its prices fresh");
+
+    await sync.saveChoice({ leagues: [], countries: ["albania"] });
+    assert.ok((await run()).includes("900003"), "a whole country is matched case-insensitively");
+
+    await sync.saveChoice(null);
+    assert.equal(stored, null);
+    assert.deepEqual((await sync.savedChoice()), null);
+    assert.deepEqual(await run(), everything, "reset goes back to the defaults");
+
+    const leagues = await sync.availableLeagues();
+    assert.ok(leagues.some((l) => l.id === 9002 && l.name === "Premier League" && l.country === "England" && l.type === "League"));
+  } finally {
+    if (saved === undefined) delete process.env.ODDS_FEED_MOCK;
+    else process.env.ODDS_FEED_MOCK = saved;
+    if (key !== undefined) process.env.API_FOOTBALL_KEY = key;
+  }
+});

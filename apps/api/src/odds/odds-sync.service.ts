@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/commo
 import { BetStatus, EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
-import { ApiFootballClient, FeedFixture, FeedLiveMarket, FeedMarket, httpFetchJson, parseLiveOdds, parseMarkets } from "./api-football";
+import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedMarket, httpFetchJson, parseLiveOdds, parseMarkets } from "./api-football";
 import { mockFetchJson } from "./mock-feed";
 
 /**
@@ -43,6 +43,9 @@ export type FeedMode = "api-football" | "mock" | "off";
 
 type SyncSummary = { events: number; markets: number; live: number };
 
+/** Which competitions are synced: league ids, plus countries whose every league is. */
+export type CompetitionChoice = { leagues: number[]; countries: string[] };
+
 const LOCK_KEY = "bastal:odds-sync";
 /** Markets settled from match statistics rather than the score. */
 const STATS_MARKET_PREFIXES = ["corners_", "home_corners_", "away_corners_", "cards_", "home_cards_", "away_cards_"];
@@ -66,8 +69,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   readonly mode: FeedMode;
   private readonly client?: ApiFootballClient;
   private readonly bookmakerId: number;
-  private readonly leagues: Set<number>;
-  private readonly countries: Set<string>;
+  /** From API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES, or the built-in lists; used until Super Admin picks. */
+  readonly defaults: CompetitionChoice;
+  /** What the running sync uses: Super Admin's pick, or the defaults. Reloaded at the start of every full sync. */
+  private leagues = new Set<number>();
+  private countries = new Set<string>();
+  private custom = false;
+  private leagueList: { at: number; leagues: FeedLeague[] } | null = null;
   private readonly days: number;
   /** Requests left on today's API-Football quota, from its last answer. */
   private quotaLeft: number | null = null;
@@ -87,8 +95,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       this.mode = "off";
     }
     this.bookmakerId = Number(process.env.API_FOOTBALL_BOOKMAKER) || DEFAULT_BOOKMAKER;
-    this.leagues = new Set(listEnv("API_FOOTBALL_LEAGUES")?.map(Number).filter(Number.isInteger) ?? DEFAULT_LEAGUES);
-    this.countries = new Set((listEnv("API_FOOTBALL_COUNTRIES") ?? DEFAULT_COUNTRIES).map((c) => c.toLowerCase()));
+    this.defaults = {
+      leagues: listEnv("API_FOOTBALL_LEAGUES")?.map(Number).filter(Number.isInteger) ?? DEFAULT_LEAGUES,
+      countries: listEnv("API_FOOTBALL_COUNTRIES") ?? DEFAULT_COUNTRIES,
+    };
+    this.useChoice(this.defaults, false);
     this.days = Math.min(7, Math.max(1, Number(process.env.ODDS_SYNC_DAYS) || 5));
   }
 
@@ -152,8 +163,49 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private wanted(fixture: FeedFixture): boolean {
-    return this.mode === "mock" || this.leagues.has(fixture.leagueId) || this.countries.has(fixture.country.toLowerCase());
+  /**
+   * A fixture from a chosen competition, or one already listed: a match from
+   * a league Super Admin turned off keeps fresh prices until it's played, so
+   * nobody bets on it at a stale price. In mock mode every made-up league is
+   * taken until Super Admin picks.
+   */
+  private wanted(fixture: FeedFixture, listed: Set<string>): boolean {
+    if (listed.has(fixture.externalId)) return true;
+    if (this.mode === "mock" && !this.custom) return true;
+    return this.leagues.has(fixture.leagueId) || this.countries.has(fixture.country.toLowerCase());
+  }
+
+  private useChoice(choice: CompetitionChoice, custom: boolean) {
+    this.leagues = new Set(choice.leagues);
+    this.countries = new Set(choice.countries.map((c) => c.toLowerCase()));
+    this.custom = custom;
+  }
+
+  /** Super Admin's pick, or null while the defaults apply. */
+  async savedChoice(): Promise<CompetitionChoice | null> {
+    const row = await this.prisma.platformSettings.findUnique({ where: { id: "default" }, select: { oddsCompetitions: true } });
+    return parseChoice(row?.oddsCompetitions);
+  }
+
+  /** Saves Super Admin's pick (null goes back to the defaults). The next sync uses it; nothing needs a restart. */
+  async saveChoice(choice: CompetitionChoice | null) {
+    const value = choice ?? Prisma.DbNull;
+    await this.prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default", oddsCompetitions: value }, update: { oddsCompetitions: value } });
+    this.useChoice(choice ?? this.defaults, choice !== null);
+  }
+
+  /** Every competition with a season in progress, for the picker. One request, kept for 12 hours. */
+  async availableLeagues(): Promise<FeedLeague[] | null> {
+    if (!this.client) return null;
+    if (this.leagueList && Date.now() - this.leagueList.at < 12 * 3_600_000) return this.leagueList.leagues;
+    const leagues = await this.client.currentLeagues();
+    this.leagueList = { at: Date.now(), leagues };
+    return leagues;
+  }
+
+  /** Requests left on today's API-Football plan, as of its last answer. */
+  get requestsLeft(): number | null {
+    return this.quotaLeft;
   }
 
   /**
@@ -162,6 +214,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    */
   private async syncFull(force = false): Promise<SyncSummary> {
     const client = this.client!;
+    const saved = await this.savedChoice().catch(() => null);
+    this.useChoice(saved ?? this.defaults, saved !== null);
     await this.checkLeagues();
     let events = 0;
     let markets = 0;
@@ -174,7 +228,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
       if (!force && !(await this.isDue(date))) continue;
-      const fixtures = (await client.fixturesByDate(date)).filter((f) => this.wanted(f));
+      const all = await client.fixturesByDate(date);
+      const listed = new Set(
+        (await this.prisma.event.findMany({ where: { provider: this.provider(), externalId: { in: all.map((f) => f.externalId) } }, select: { externalId: true } })).map((e) => e.externalId!),
+      );
+      const fixtures = all.filter((f) => this.wanted(f, listed));
       const ids = new Map<string, string>();
       for (const fixture of fixtures) ids.set(fixture.externalId, await this.upsertEvent(fixture));
       events += fixtures.length;
@@ -236,12 +294,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     this.leaguesChecked = true;
     const known = await this.client!.currentLeagues().catch(() => null);
     if (!known) return;
+    this.leagueList = { at: Date.now(), leagues: known };
     const byId = new Map(known.map((league) => [league.id, league]));
     const missing = [...this.leagues].filter((id) => !byId.has(id));
     const countries = [...this.countries].filter((country) => !known.some((league) => league.country.toLowerCase() === country));
-    this.logger.log(`Syncing ${this.leagues.size - missing.length} leagues and every league in: ${[...this.countries].join(", ")}`);
-    if (missing.length > 0) this.logger.warn(`API-Football has no current season for league ids ${missing.join(", ")}; check API_FOOTBALL_LEAGUES`);
-    if (countries.length > 0) this.logger.warn(`API-Football has no current leagues for ${countries.join(", ")}; check API_FOOTBALL_COUNTRIES`);
+    this.logger.log(`Syncing ${this.leagues.size - missing.length} leagues and every league in: ${[...this.countries].join(", ") || "no countries"}`);
+    if (missing.length > 0) this.logger.warn(`API-Football has no current season for league ids ${missing.join(", ")}; check ${this.custom ? "the Leagues list on the Odds page" : "API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES"}`);
+    if (countries.length > 0) this.logger.warn(`API-Football has no current leagues for ${countries.join(", ")}; check ${this.custom ? "the Leagues list on the Odds page" : "API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES"}`);
   }
 
   /** Updates scores and status for matches that are live or should have started. */
@@ -467,6 +526,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const data = { oddsSyncStatus: status.slice(0, 300), ...(succeeded ? { oddsSyncedAt: new Date() } : {}) };
     await this.prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default", ...data }, update: data }).catch(() => undefined);
   }
+}
+
+function parseChoice(value: unknown): CompetitionChoice | null {
+  if (!value || typeof value !== "object") return null;
+  const { leagues, countries } = value as Record<string, unknown>;
+  if (!Array.isArray(leagues) || !Array.isArray(countries)) return null;
+  return { leagues: leagues.map(Number).filter(Number.isInteger), countries: countries.map(String) };
 }
 
 function listEnv(name: string): string[] | null {

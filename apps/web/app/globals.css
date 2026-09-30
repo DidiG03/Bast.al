@@ -4086,3 +4086,102 @@ button.odds-selection:hover,
   font-size: 0.72rem;
   font-weight: 650;
 }
+
+/* Super Admin's league picker (Odds page) */
+.league-picker > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.league-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.league-picker > summary::after {
+  content: "▾";
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.league-picker[open] > summary::after {
+  content: "▴";
+}
+
+.league-picker-badge {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.league-picker-badge.is-custom {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.league-picker-body {
+  margin-top: 1rem;
+}
+
+.league-picker-tools {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.league-picker-tools input[type="search"] {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.league-picker-list {
+  max-height: 28rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.league-picker-group {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.league-picker-group:last-child {
+  border-bottom: none;
+}
+
+.league-picker-group > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.league-picker-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0 0.3rem 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.league-picker-check input {
+  width: auto;
+  flex: none;
+}
+
+.league-picker-whole {
+  font-weight: 600;
+}
+
+.league-picker-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

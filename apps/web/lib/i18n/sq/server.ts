@@ -301,6 +301,8 @@ export const server: Record<string, string> = {
   "MANAGER": "Menaxher",
   "PLAYER": "Lojtar",
   "Sync failed": "Sinkronizimi dështoi",
+  "Choose at least one league or country": "Zgjidh të paktën një ligë ose shtet",
+  "World": "Ndërkombëtare",
 
   // Why a Player can't be moved (Users page, reassignment preview)
   "Outside your hierarchy": "Jashtë hierarkisë tënde",
@@ -385,6 +387,7 @@ export const server: Record<string, string> = {
   "odds override_set": "koeficient i vendosur me dorë",
   "odds sync": "sinkronizim i koeficientëve",
   "odds team_margin_update": "marzhi i skuadrës u ndryshua",
+  "odds leagues_update": "ligat e sinkronizuara u ndryshuan",
   "risk cap_update": "kufiri i pagesës u ndryshua",
   "security integrity_failure": "kërkesë e pavlefshme",
   "security settings_update": "cilësimet e sigurisë u ndryshuan",

@@ -218,6 +218,54 @@ export class OddsService {
     return updated;
   }
 
+  /**
+   * The league picker: what's synced now, the defaults, and every competition
+   * the feed has a season in progress for.
+   */
+  async leagues() {
+    const saved = await this.sync.savedChoice();
+    let available = null;
+    let availableError: string | null = null;
+    if (this.sync.mode === "off") availableError = "The odds feed isn't connected yet. Add API_FOOTBALL_KEY to the environment settings.";
+    else available = await this.sync.availableLeagues().catch((error) => ((availableError = error instanceof Error ? error.message : "Sync failed"), null));
+    const choice = saved ?? this.sync.defaults;
+    return {
+      custom: saved !== null,
+      leagues: choice.leagues,
+      countries: choice.countries,
+      defaults: this.sync.defaults,
+      available,
+      availableError,
+      requestsLeft: this.sync.requestsLeft,
+    };
+  }
+
+  async setLeagues(actor: Actor, body: { reset?: boolean; leagues?: number[]; countries?: string[] }) {
+    const before = (await this.sync.savedChoice()) ?? this.sync.defaults;
+    let next: { leagues: number[]; countries: string[] } | null = null;
+    if (!body.reset) {
+      const leagues = [...new Set(body.leagues ?? [])].sort((a, b) => a - b);
+      const countries = [...new Set((body.countries ?? []).map((c) => c.trim()).filter(Boolean))].sort();
+      if (leagues.length === 0 && countries.length === 0) throw new BadRequestException("Choose at least one league or country");
+      next = { leagues, countries };
+    }
+    await this.sync.saveChoice(next);
+    const after = next ?? this.sync.defaults;
+    const lower = (list: string[]) => list.map((c) => c.toLowerCase());
+    await this.audit.log({
+      actorId: actor.id,
+      action: "odds.leagues_update",
+      metadata: {
+        reset: Boolean(body.reset),
+        added: after.leagues.filter((id) => !before.leagues.includes(id)),
+        removed: before.leagues.filter((id) => !after.leagues.includes(id)),
+        countriesAdded: after.countries.filter((c) => !lower(before.countries).includes(c.toLowerCase())),
+        countriesRemoved: before.countries.filter((c) => !lower(after.countries).includes(c.toLowerCase())),
+      },
+    });
+    return this.leagues();
+  }
+
   async syncNow(actor: Actor) {
     if (this.sync.mode === "off") throw new BadRequestException("The odds feed isn't connected yet. Add API_FOOTBALL_KEY to the environment settings.");
     try {

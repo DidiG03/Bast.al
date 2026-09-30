@@ -342,6 +342,20 @@ export async function apiFetch<T>(
 
 export type OddsFilter = "upcoming" | "live" | "finished";
 
+/** Super Admin's league picker (GET /odds/leagues). */
+export type LeagueChoice = {
+  /** False while the defaults apply. */
+  custom: boolean;
+  leagues: number[];
+  countries: string[];
+  defaults: { leagues: number[]; countries: string[] };
+  /** Every competition the feed has a season in progress for; null when it can't be reached. */
+  available: Array<{ id: number; name: string; type: "League" | "Cup"; country: string }> | null;
+  availableError: string | null;
+  /** Requests left on today's API-Football plan, as of its last answer. */
+  requestsLeft: number | null;
+};
+
 export type OddsSelection = {
   id: string;
   key: string;

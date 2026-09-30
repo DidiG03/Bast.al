@@ -54,6 +54,9 @@ export type FeedLiveOdds = {
   markets: FeedLiveMarket[];
 };
 
+/** A competition with a season in progress, for Super Admin's league picker. */
+export type FeedLeague = { id: number; name: string; type: "League" | "Cup"; country: string };
+
 export type FeedFixture = {
   externalId: string;
   leagueId: number;
@@ -569,9 +572,9 @@ export class ApiFootballClient {
   }
 
   /** Every league with a season in progress, in one request. */
-  async currentLeagues(): Promise<Array<{ id: number; name: string; country: string }>> {
-    const res = (await this.fetchJson("/leagues", { current: "true" })) as ApiResponse<{ league: { id: number; name: string }; country: { name: string } }>;
-    return res.response.map((row) => ({ id: row.league.id, name: row.league.name, country: row.country.name }));
+  async currentLeagues(): Promise<FeedLeague[]> {
+    const res = (await this.fetchJson("/leagues", { current: "true" })) as ApiResponse<{ league: { id: number; name: string; type?: string }; country: { name: string } }>;
+    return res.response.map((row) => ({ id: row.league.id, name: row.league.name, type: row.league.type === "Cup" ? "Cup" : "League", country: row.country.name }));
   }
 
   /** In-play odds for every match the feed is pricing live, in one request. */

@@ -149,6 +149,10 @@ export function mockFetchJson(clock: () => number = Date.now, anchor: number = c
       const response = MATCHES.filter((m) => m.league[0] === Number(params.league) && utcDate(anchor + m.kickoff * 60_000) === params.date).map(odds);
       return { paging: { current: 1, total: 1 }, response };
     }
+    if (path === "/leagues") {
+      const leagues = new Map(MATCHES.map((m) => [m.league[0], m.league]));
+      return { response: [...leagues.values()].map(([id, name, country]) => ({ league: { id, name, type: "League" }, country: { name: country } })) };
+    }
     return { response: [] };
   };
 }

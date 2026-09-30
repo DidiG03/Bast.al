@@ -1,6 +1,7 @@
 // Run with `npm test --workspace apps/api` (builds first). Covers the pure
 // odds code: pricing math and API-Football parsing against the mock feed.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
@@ -148,6 +149,37 @@ test("the wider in-play markets map onto the markets we already settle", () => {
   assert.deepEqual(byKey.result_btts.selections.map((s) => s.key), ["home_yes", "draw_no"]);
   const order = parsed.markets.map((m) => m.key);
   assert.ok(order.indexOf("draw_no_bet") < order.indexOf("h1_winner") && order.indexOf("h1_winner") < order.indexOf("corners_9_5"), "live markets keep the pre-match order");
+});
+
+test("a real /odds/live answer maps onto our markets", () => {
+  const { response } = JSON.parse(readFileSync(new URL("./fixtures/api-football-live-odds.json", import.meta.url), "utf8"));
+  const stopped = parseLiveOdds(response[0], "Home FC", "Away FC");
+  assert.equal(stopped.stopped, true);
+  assert.deepEqual(
+    stopped.markets.map((m) => m.key),
+    ["match_winner", "double_chance", "draw_no_bet", "odd_even", "h2_btts"],
+  );
+  // Everything in this answer is suspended: fixed markets come back off the board; lines and correct score, with nothing priced, are left out, which suspends them.
+  assert.ok(stopped.markets.every((m) => m.suspended));
+
+  const open = parseLiveOdds(response[1], "Chile", "Switzerland");
+  const byKey = Object.fromEntries(open.markets.map((m) => [m.key, m]));
+  assert.deepEqual(Object.keys(byKey).sort(), ["away_goals_1_5", "away_goals_2_5", "h1_goals_0_5", "h1_goals_1_5", "h1_winner", "ht_ft"], "whole corner lines (Over/Exactly/Under 8) are skipped");
+  assert.deepEqual(byKey.h1_winner.selections.map((s) => [s.name, s.odds]), [["Chile", 3.1], ["Draw", 1.615], ["Switzerland", 7]]);
+  assert.equal(byKey.ht_ft.selections.length, 9, "1/X-style HT/FT values all map");
+  assert.equal(byKey.ht_ft.selections.find((s) => s.key === "draw_away").odds, 8.5);
+  assert.ok(open.markets.every((m) => !m.suspended));
+});
+
+test("live double chance comes as \"Home or Draw\" and \"Away or Draw\"", () => {
+  const values = [
+    { value: "Home or Draw", odd: "1.222" },
+    { value: "Away or Draw", odd: "1.444" },
+    { value: "Home or Away", odd: "1.615" },
+  ];
+  const [market] = parseLiveOdds(liveRaw({ odds: [{ id: 72, name: "Double Chance", values }] }), "A", "B").markets;
+  assert.deepEqual(market.selections.map((s) => [s.key, s.odds]), [["home_draw", 1.222], ["home_away", 1.615], ["draw_away", 1.444]]);
+  assert.equal(market.suspended, false);
 });
 
 test("the mock feed prices live matches and suspends them just after a goal", async () => {

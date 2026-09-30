@@ -343,9 +343,9 @@ const liveEitherTeam: Array<[string[], string, Namer]> = [
   [SIDE_ALIASES.away, "away", (_home, away) => away],
 ];
 const liveDoubleChance: Array<[string[], string, Namer]> = [
-  [["home/draw", "1x", "1/x"], "home_draw", (home) => `${home} or draw`],
-  [["home/away", "12", "1/2"], "home_away", (home, away) => `${home} or ${away}`],
-  [["draw/away", "x2", "x/2"], "draw_away", (_home, away) => `Draw or ${away}`],
+  [["home/draw", "draw/home", "1x", "1/x"], "home_draw", (home) => `${home} or draw`],
+  [["home/away", "away/home", "12", "1/2"], "home_away", (home, away) => `${home} or ${away}`],
+  [["draw/away", "away/draw", "x2", "x/2"], "draw_away", (_home, away) => `Draw or ${away}`],
 ];
 const sides = ["home", "draw", "away"] as const;
 const liveHtFt: Array<[string[], string, Namer]> = sides.flatMap((ht) =>
@@ -410,8 +410,13 @@ const LIVE_MARKETS: Record<string, LiveSpec> = {
   "total cards": { kind: "lines", prefix: "cards", name: (_h, _a, line) => `Total cards ${line}`, order: "Cards Over/Under" },
 };
 
-/** Lower case, no spaces, "&" as "/", so "Home & Yes", "1/Yes" and "home/yes" compare alike. */
-const normalize = (value: string | number) => String(value).toLowerCase().replace(/\s+/g, "").replace(/&/g, "/");
+/** Lower case, no spaces, "&" and " or " as "/", so "Home or Draw", "Home & Yes" and "home/yes" compare alike. */
+const normalize = (value: string | number) =>
+  String(value)
+    .toLowerCase()
+    .replace(/\s+or\s+/g, "/")
+    .replace(/\s+/g, "")
+    .replace(/&/g, "/");
 
 function livePrice(value?: LiveValue): number {
   const odds = Number(value?.odd);

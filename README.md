@@ -23,6 +23,8 @@ npm run dev
 
 The web app is available at `http://localhost:3000` and the API at `http://localhost:4000`.
 
+When the API starts it brings the database up to the Prisma schema (`prisma db push`), so a deploy that adds a table or column needs no manual step. Changes that would lose data are refused and logged, and the API starts anyway; run `npm run db:push` by hand to review them. Set `DB_PUSH_ON_START=false` to turn this off.
+
 If the API reports `Environment variable not found: DATABASE_URL`, the `.env` file has not been created yet. Copy `.env.example` to `.env` before starting the API.
 
 The project database is exposed on host port `5433` so it can run alongside an existing PostgreSQL installation on `5432`. If `npm run db:push` reports `P1010` or a password error, make sure the Compose database is running and that `.env` uses port `5433`. The Compose defaults are user `postgres`, password `postgres`, and database `bastal`.

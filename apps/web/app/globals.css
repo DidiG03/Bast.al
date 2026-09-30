@@ -3784,6 +3784,8 @@ button.odds-selection:hover,
      the color-scheme note on :root. */
   color-scheme: dark;
   background: var(--bg);
+  /* body's colour was worked out from the light theme's --text; use the dark one here. */
+  color: var(--text);
   min-height: 100vh;
 }
 
@@ -4601,4 +4603,65 @@ button.is-blocked {
   .price-arrow {
     animation: none;
   }
+}
+
+/* Top event: league on the left, time or live minute as a chip on the right. */
+.player-top-event-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.player-top-event-head .player-top-event-league {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-top-event-head .status-pill {
+  flex: none;
+}
+
+/* The arrow beside a match's time or live minute: opens and closes its other markets. */
+.odds-event-header-side {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.markets-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.markets-toggle svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 200ms ease;
+}
+
+.markets-toggle.is-open svg {
+  transform: rotate(180deg);
+}
+
+.markets-toggle:hover,
+.markets-toggle.is-open {
+  border-color: var(--accent);
+  color: var(--accent);
 }

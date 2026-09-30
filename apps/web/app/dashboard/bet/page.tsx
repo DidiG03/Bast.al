@@ -453,11 +453,27 @@ function MatchCard({
           {event.league}
           {event.country ? ` · ${event.country}` : ""}
         </span>
-        {event.live ? (
-          <span className="status-pill is-active">{event.elapsed !== null ? t("Live {minute}'", { minute: event.elapsed }) : t("Live")}</span>
-        ) : (
-          <span className="status-pill">{date(event.startsAt, TIME)}</span>
-        )}
+        <span className="odds-event-header-side">
+          {event.live ? (
+            <span className="status-pill is-active">{event.elapsed !== null ? t("Live {minute}'", { minute: event.elapsed }) : t("Live")}</span>
+          ) : (
+            <span className="status-pill">{date(event.startsAt, TIME)}</span>
+          )}
+          {/* Opens or closes the other markets from the top, so there's no scrolling down to close them. */}
+          {event.markets.length > 1 ? (
+            <button
+              type="button"
+              className={`markets-toggle${showAll ? " is-open" : ""}`}
+              onClick={() => setShowAll(!showAll)}
+              aria-expanded={showAll}
+              aria-label={showAll ? t("Fewer markets") : tn(event.markets.length - 1, "{count} more market", "{count} more markets")}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+          ) : null}
+        </span>
       </header>
       <div className="odds-teams">
         <span className="odds-team">

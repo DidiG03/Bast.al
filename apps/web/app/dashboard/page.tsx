@@ -682,7 +682,16 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
             <div className="player-top-events">
               {topEvents.map((event) => (
                 <Link key={event.id} href={`/dashboard/bet?match=${encodeURIComponent(event.id)}`} className="player-top-event">
-                  <span className="player-top-event-league">{event.league}</span>
+                  <div className="player-top-event-head">
+                    <span className="player-top-event-league">{event.league}</span>
+                    <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
+                      {event.status === "LIVE"
+                        ? event.elapsed === null
+                          ? t("Live")
+                          : t("Live {minute}'", { minute: event.elapsed })
+                        : `${topEventDayLabel(event.startsAt)} · ${date(event.startsAt, MATCH_TIME)}`}
+                    </span>
+                  </div>
                   <div className="player-top-event-teams">
                     <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
                     <span>{event.homeTeam ?? event.name}</span>
@@ -696,13 +705,6 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
                     <span>{event.awayTeam ?? ""}</span>
                     <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
                   </div>
-                  <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
-                    {event.status === "LIVE"
-                      ? event.elapsed === null
-                        ? t("Live")
-                        : t("Live {minute}'", { minute: event.elapsed })
-                      : `${topEventDayLabel(event.startsAt)} · ${date(event.startsAt, MATCH_TIME)}`}
-                  </span>
                 </Link>
               ))}
             </div>

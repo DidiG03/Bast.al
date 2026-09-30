@@ -72,7 +72,7 @@ export default async function DashboardLayout({
             </Link>
             {isPlayer ? null : <DashboardTrail />}
             {isPlayer ? (
-              <Link href="/dashboard" className="player-balance-chip" title={t("Your balance, given to you by your Manager or Owner")}>
+              <Link href="/dashboard/money" className="player-balance-chip" title={t("Your balance, given to you by your Manager or Owner")}>
                 <span className="player-balance-chip-icon" aria-hidden="true">$</span>
                 {formatMoney(Number(me.balance))}
               </Link>

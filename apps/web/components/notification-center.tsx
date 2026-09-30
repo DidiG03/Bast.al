@@ -57,7 +57,16 @@ export function NotificationCenter() {
       if (!incoming.readAt) setUnreadCount((count) => count + 1);
       // New notifications pop up like every other message; a click opens the list.
       const show = incoming.severity === "CRITICAL" ? toaster.error : incoming.severity === "WARNING" ? toaster.warning : incoming.severity === "SUCCESS" ? toaster.success : toaster.info;
-      show(ts(incoming.message), { title: ts(incoming.title), onClick: () => setOpen(true) });
+      // A settled bet opens the bet itself; a win gets a bigger, brighter toast that stays up longer.
+      const win = incoming.type === "BET_SETTLED" && incoming.severity === "SUCCESS";
+      show(ts(incoming.message), {
+        title: ts(incoming.title),
+        onClick: () => {
+          if (incoming.type === "BET_SETTLED" && deepLink(incoming)) return;
+          setOpen(true);
+        },
+        ...(win ? { celebrate: true, duration: 10_000 } : {}),
+      });
     } else if (event.type === "notifications.changed" || event.type === "resync") {
       load().catch(() => undefined);
     }

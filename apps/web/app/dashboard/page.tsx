@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { HelpTip } from "../../components/help-tip";
 import { NamedIcon } from "../../components/icons";
+import { ToastOnMount } from "../../components/toast-on-mount";
+import { TopUpRequestButton } from "../../components/top-up-request";
 import {
   ActivityFeed,
   AttentionList,
@@ -21,9 +23,11 @@ import {
   type MeResponse,
   type NotificationResponse,
   type OddsEvent,
+  type MyBets,
   type PendingApproval,
   type RiskView,
   type SettlementEvent,
+  type SlipInfo,
   type SuperAdminCommissions,
   type TeamCommissions,
   type UserRow,
@@ -625,26 +629,50 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
   );
 }
 
+/**
+ * The matches worth showing first: live ones, then the ones starting in the
+ * next two days with the most to bet on (the big leagues have the most
+ * markets), soonest first when that's equal.
+ */
+function pickTopEvents(live: OddsEvent[], upcoming: OddsEvent[], count: number): OddsEvent[] {
+  const soon = Date.now() + 2 * DAY_MS;
+  const open = (event: OddsEvent) => (event.bettable || event.live) && event.markets.length > 0;
+  const liveNow = live.filter(open).sort((a, b) => b.markets.length - a.markets.length);
+  const next = upcoming
+    .filter((event) => open(event) && new Date(event.startsAt).getTime() <= soon)
+    .sort((a, b) => b.markets.length - a.markets.length || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  const later = upcoming.filter((event) => open(event) && new Date(event.startsAt).getTime() > soon);
+  return [...liveNow.slice(0, 2), ...next, ...liveNow.slice(2), ...later].slice(0, count);
+}
+
 async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
-  const { t, date } = getT();
-  const events = me.parent
-    ? await apiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token).catch(() => [])
-    : [];
-  const live = me.parent
-    ? await apiFetch<OddsEvent[]>("/odds/events?filter=live", token).catch(() => [])
-    : [];
-  const topEvents = [...live, ...events].slice(0, 4);
+  const { t, tn, ts, date } = getT();
+  const [live, upcoming, slip, bets] = me.parent
+    ? await Promise.all([
+        apiFetch<OddsEvent[]>("/odds/events?filter=live", token).catch(() => []),
+        apiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token).catch(() => []),
+        apiFetch<SlipInfo>("/bets/slip", token).catch(() => null),
+        apiFetch<MyBets>("/bets/mine?status=open", token).catch(() => null),
+      ])
+    : [[], [], null, null];
+  const topEvents = pickTopEvents(live, upcoming, 4);
+  // Why this account can't bet (a suspended Manager, no team yet): a warning toast, and no "Browse matches".
+  const blocked = me.status === "SUSPENDED" ? t("Your account is suspended. Ask your Manager or Owner.") : slip?.blocked ? ts(slip.blocked) : null;
+  const balance = Number(me.balance);
+  const week = bets?.week;
+  const weekNet = week ? Math.round((week.returned - week.staked) * 100) / 100 : 0;
 
   return (
     <div className="stack player-home">
+      {blocked ? <ToastOnMount kind="warning" message={blocked} /> : null}
       <section className="player-hero">
         <span className="player-hero-label">
           {t("Your balance")}
           <HelpTip text="The money you can bet with. Your Manager or Owner adds it. When you win, your winnings come back here." />
         </span>
-        <strong className="player-hero-balance">{formatMoney(Number(me.balance))}</strong>
+        <strong className="player-hero-balance">{formatMoney(balance)}</strong>
         <div className="player-hero-meta">
-          <span className={`status-pill player-status-${me.status.toLowerCase()}`}>{me.status === "SUSPENDED" ? t("Suspended") : t("Active")}</span>
+          <span className={`status-pill player-status-${me.status.toLowerCase()}`}>{me.status === "SUSPENDED" ? t("Suspended") : blocked ? t("Can't bet right now") : t("Active")}</span>
           {me.parent ? (
             <span className="muted">
               {me.parent.role === "OWNER" ? t("Your Owner: {name}", { name: me.parent.username }) : t("Your Manager: {name}", { name: me.parent.username })}
@@ -654,18 +682,31 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
           )}
         </div>
         {me.parent ? (
-          <Link href="/dashboard/bet" className="player-hero-cta">
-            {t("Browse matches")} →
-          </Link>
+          <div className="player-hero-actions">
+            {blocked ? null : (
+              <Link href="/dashboard/bet" className="player-hero-cta">
+                {t("Browse matches")} →
+              </Link>
+            )}
+            <TopUpRequestButton className={balance < 5 && !blocked ? "player-hero-cta" : "secondary player-hero-secondary"} />
+            <Link href="/dashboard/money" className="player-hero-link">
+              {t("My money")} →
+            </Link>
+          </div>
+        ) : null}
+        {slip && slip.dailyLossLimit !== null && !blocked ? (
+          <p className="player-hero-limit">
+            {t("Daily loss limit: {used} of {limit} used today", { used: formatMoney(Math.min(slip.dailyLossUsed, slip.dailyLossLimit)), limit: formatMoney(slip.dailyLossLimit) })}
+          </p>
         ) : null}
       </section>
 
-      {me.parent ? (
+      {me.parent && !blocked ? (
         <section className="stack">
           <div className="page-title-row">
             <h2 style={{ margin: 0 }}>
               {t("Top events")}
-              <HelpTip text="The biggest matches you can bet on right now. Tap one to see its prices and add a bet." />
+              <HelpTip text="Matches playing now first, then the matches of the next two days with the most ways to bet. Tap one to go straight to its prices." />
             </h2>
             <Link href="/dashboard/bet">{t("View all")} →</Link>
           </div>
@@ -676,12 +717,18 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
           ) : (
             <div className="player-top-events">
               {topEvents.map((event) => (
-                <Link key={event.id} href="/dashboard/bet" className="player-top-event">
+                <Link key={event.id} href={`/dashboard/bet?match=${encodeURIComponent(event.id)}`} className="player-top-event">
                   <span className="player-top-event-league">{event.league}</span>
                   <div className="player-top-event-teams">
                     <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
                     <span>{event.homeTeam ?? event.name}</span>
-                    <span className="muted">{t("vs")}</span>
+                    {event.live && event.homeScore !== null && event.awayScore !== null ? (
+                      <strong className="odds-score">
+                        {event.homeScore} – {event.awayScore}
+                      </strong>
+                    ) : (
+                      <span className="muted">{t("vs")}</span>
+                    )}
                     <span>{event.awayTeam ?? ""}</span>
                     <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
                   </div>
@@ -707,11 +754,24 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
         <div className="player-quick-links">
           <Link href="/dashboard/bet?tab=open" className="card player-quick-link">
             <strong>{t("Open")}</strong>
-            <span className="muted">{t("Bets still in play")}</span>
+            <span className="player-quick-number">{bets ? tn(bets.open.count, "{count} bet", "{count} bets") : "–"}</span>
+            <span className="muted">{bets && bets.open.count > 0 ? t("{amount} on matches not finished yet", { amount: formatMoney(bets.open.staked) }) : t("Bets still in play")}</span>
           </Link>
           <Link href="/dashboard/bet?tab=settled" className="card player-quick-link">
-            <strong>{t("Settled")}</strong>
-            <span className="muted">{t("Wins and losses")}</span>
+            <strong>{t("Last 7 days")}</strong>
+            {week && week.count > 0 ? (
+              <>
+                <span className={`player-quick-number ${weekNet >= 0 ? "is-positive" : "is-negative"}`}>
+                  {weekNet >= 0 ? t("You won {amount}", { amount: `+${formatMoney(weekNet)}` }) : t("You lost {amount}", { amount: `−${formatMoney(-weekNet)}` })}
+                </span>
+                <span className="muted">{tn(week.count, "{count} finished bet, {amount} bet", "{count} finished bets, {amount} bet", { amount: formatMoney(week.staked) })}</span>
+              </>
+            ) : (
+              <>
+                <span className="player-quick-number">–</span>
+                <span className="muted">{t("No finished bets this week")}</span>
+              </>
+            )}
           </Link>
         </div>
       </section>

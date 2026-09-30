@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
@@ -15,6 +15,8 @@ import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { useTopUpRequest } from "../../../components/top-up-request";
+import { pickLabel } from "../../../lib/picks";
 
 type Tab = "matches" | "open" | "settled";
 type SlipMode = "singles" | "accumulator";
@@ -113,6 +115,9 @@ function BetPage() {
   const params = useSearchParams();
   const tabParam = params.get("tab");
   const tab: Tab = tabParam === "open" || tabParam === "settled" ? tabParam : "matches";
+  // Opened from a match on the Overview: scroll to it and light it up.
+  const matchParam = params.get("match");
+  const [focused, setFocused] = useState<string | null>(null);
 
   const [events, setEvents] = useState<OddsEvent[] | null>(null);
   const [info, setInfo] = useState<SlipInfo | null>(null);
@@ -164,6 +169,30 @@ function BetPage() {
   }, [info?.blocked, toast, ts]);
 
   const hasLive = (events ?? []).some((event) => event.live);
+
+  useEffect(() => {
+    if (!matchParam || !events || tab !== "matches") return;
+    const found = events.find((event) => event.id === matchParam && (event.bettable || event.live) && event.markets.length > 0);
+    // The link is used once; a refresh of the page shouldn't jump back to it.
+    router.replace("/dashboard/bet", { scroll: false });
+    if (!found) {
+      toast.info(t("That match isn't open for bets any more."));
+      return;
+    }
+    setLeague("");
+    setSearch("");
+    setFocused(found.id);
+  }, [matchParam, events, tab, router, toast, t]);
+
+  useEffect(() => {
+    if (!focused) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById(`match-${focused}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    const timer = window.setTimeout(() => setFocused(null), 4000);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [focused]);
 
   useEffect(() => {
     if (tab !== "matches") return;
@@ -327,7 +356,7 @@ function BetPage() {
                 <section key={label} className="stack odds-day">
                   <h2 className={`odds-day-label${label === liveLabel ? " bet-live-label" : ""}`}>{label}<HelpTip text="The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: $10 at 2.50 pays back $25 if it wins." /></h2>
                   {dayEvents.map((event) => (
-                    <MatchCard key={event.id} event={event} selected={selected} onPick={toggle} />
+                    <MatchCard key={event.id} event={event} selected={selected} onPick={toggle} focused={focused === event.id} />
                   ))}
                 </section>
               ))
@@ -359,12 +388,17 @@ function BetPage() {
   );
 }
 
-function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Set<string>; onPick: (event: OddsEvent, market: string, selection: OddsSelection) => void }) {
-  const { t, tn, ts, date } = useI18n();
+function MatchCard({ event, selected, onPick, focused }: { event: OddsEvent; selected: Set<string>; onPick: (event: OddsEvent, market: string, selection: OddsSelection) => void; focused: boolean }) {
+  const i18n = useI18n();
+  const { t, tn, ts, date } = i18n;
   const [showAll, setShowAll] = useState(false);
+  // The match someone came here for opens with every market showing.
+  useEffect(() => {
+    if (focused) setShowAll(true);
+  }, [focused]);
   const markets = showAll ? event.markets : event.markets.slice(0, 1);
   return (
-    <article className={`card odds-event bet-match${event.live ? " is-live" : ""}`}>
+    <article id={`match-${event.id}`} className={`card odds-event bet-match${event.live ? " is-live" : ""}${focused ? " is-focused" : ""}`}>
       <header className="odds-event-header">
         <span className="muted odds-league">
           {event.league}
@@ -415,9 +449,9 @@ function MatchCard({ event, selected, onPick }: { event: OddsEvent; selected: Se
                   onClick={() => onPick(event, market.name, selection)}
                   aria-pressed={isSelected}
                   disabled={locked && !isSelected}
-                  aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: ts(selection.name), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
+                  aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: pickLabel(selection.name, i18n), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
                 >
-                  <span className="odds-selection-name">{ts(selection.name)}</span>
+                  <span className="odds-selection-name">{pickLabel(selection.name, i18n)}</span>
                   <strong className="odds-price">{locked ? "–" : selection.price.toFixed(2)}</strong>
                 </button>
               );
@@ -463,8 +497,10 @@ function BetSlip({
   onClose: () => void;
 }) {
   const { getToken } = useAuth();
-  const { t, tn, ts } = useI18n();
+  const i18n = useI18n();
+  const { t, tn, ts } = i18n;
   const idempotency = useIdempotencyKey();
+  const topUp = useTopUpRequest();
   const [placing, setPlacing] = useState(false);
   const toast = useToast();
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
@@ -492,12 +528,18 @@ function BetSlip({
   else if (acca && accaOdds > MAX_ACCUMULATOR_ODDS) blocker = t("Combined odds can be at most {max}. Remove a pick to continue.", { max: MAX_ACCUMULATOR_ODDS });
   else if (missingStake) blocker = acca ? t("Enter a stake of at least $1.") : t("Enter a stake of at least $1 on each bet.");
   else if (overMax) blocker = t("The most you can stake on one bet is {amount}.", { amount: formatMoney(info!.maxStake!) });
-  else if (tooLittle) blocker = t("Your balance is too low for this slip. Ask your Manager for a top-up.");
+  else if (tooLittle) blocker = t("Your balance is too low for this slip. Tap here to ask for a top-up.");
+  const needsMoney = Boolean(blocker) && !info?.blocked && closed.length === 0 && paused.length === 0 && !(acca && (sameMatch || accaOdds > MAX_ACCUMULATOR_ODDS)) && !missingStake && !overMax && tooLittle;
 
-  // Prices that moved since they were added: say so once, as they change.
+  // Prices that moved since they were added: say so once per slip. The slip itself shows which ones.
+  const movedShown = useRef(false);
   useEffect(() => {
-    if (moved) toast.info(t("Some prices moved since you added them. The new price is what you get."));
-  }, [moved, toast, t]);
+    if (items.length === 0) movedShown.current = false;
+    else if (moved && !movedShown.current) {
+      movedShown.current = true;
+      toast.info(t("Some prices moved since you added them. The new price is what you get."));
+    }
+  }, [moved, items.length, toast, t]);
 
   function setStake(id: string, stake: string) {
     onChange((list) => list.map((item) => (item.selectionId === id ? { ...item, stake } : item)));
@@ -508,7 +550,9 @@ function BetSlip({
     if (placing || items.length === 0) return;
     // Why the slip can't go yet pops up when they try, instead of sitting in the slip.
     if (blocker) {
-      toast.warning(blocker);
+      // Too little money: a tap on the message asks their Manager or Owner for more.
+      if (needsMoney) toast.warning(blocker, { onClick: () => void topUp.request() });
+      else toast.warning(blocker);
       return;
     }
     const token = await getToken();
@@ -630,7 +674,7 @@ function BetSlip({
                 <li key={item.selectionId} className={`bet-slip-item${item.closed ? " is-closed" : ""}`}>
                   <div className="bet-slip-item-top">
                     <div className="bet-slip-item-name">
-                      <strong>{ts(item.name)}</strong>
+                      <strong>{pickLabel(item.name, i18n)}</strong>
                       <span className="muted">
                         {ts(item.market)} · {item.eventName}
                       </span>
@@ -639,7 +683,7 @@ function BetSlip({
                       type="button"
                       className="secondary bet-slip-remove"
                       onClick={() => onChange((list) => list.filter((other) => other.selectionId !== item.selectionId))}
-                      aria-label={t("Remove {pick} from the slip", { pick: ts(item.name) })}
+                      aria-label={t("Remove {pick} from the slip", { pick: pickLabel(item.name, i18n) })}
                     >
                       ✕
                     </button>
@@ -670,7 +714,7 @@ function BetSlip({
                         placeholder={t("Stake")}
                         value={item.stake}
                         onChange={(e) => setStake(item.selectionId, e.target.value)}
-                        aria-label={t("Stake on {pick}", { pick: ts(item.name) })}
+                        aria-label={t("Stake on {pick}", { pick: pickLabel(item.name, i18n) })}
                         disabled={item.closed}
                       />
                     </label>
@@ -736,25 +780,70 @@ function BetSlip({
                 ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
                 : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
           </button>
-          {info?.maxStake != null || info?.dailyLossLimit != null ? (
-            <p className="muted bet-slip-note">
-              {t("Your limits: {limits}.", {
-                limits: [
-                  info.maxStake != null ? t("{amount} a bet", { amount: formatMoney(info.maxStake) }) : null,
-                  info.dailyLossLimit != null ? t("{amount} daily losses", { amount: formatMoney(info.dailyLossLimit) }) : null,
-                ]
-                  .filter(Boolean)
-                  .join(", "),
-              })}
-            </p>
-          ) : null}
+          {info ? <SlipLimits info={info} staking={totalStake} /> : null}
         </>
       )}
     </form>
   );
 }
 
-const STATUS_LABEL: Record<Bet["status"], string> = { OPEN: msg("Open"), WON: msg("Won"), LOST: msg("Lost"), VOID: msg("Void") };
+/** The Player's limits: the most per bet, and a bar for how much of today's loss limit is used. */
+function SlipLimits({ info, staking }: { info: SlipInfo; staking: number }) {
+  const { t } = useI18n();
+  if (info.maxStake === null && info.dailyLossLimit === null) return null;
+  const limit = info.dailyLossLimit;
+  const used = limit === null ? 0 : Math.min(info.dailyLossUsed + staking, limit);
+  const share = limit ? Math.min(100, (used / limit) * 100) : 0;
+  return (
+    <div className="bet-limits">
+      {info.maxStake !== null ? <p className="muted bet-slip-note">{t("Most you can bet at once: {amount}", { amount: formatMoney(info.maxStake) })}</p> : null}
+      {limit !== null ? (
+        <div className="bet-limit-meter">
+          <div className="bet-limit-meter-label">
+            <span className="muted">
+              {t("Daily loss limit")}
+              <HelpTip text="The most you can lose today. Money you lost today plus money on bets placed today that are not finished counts. It starts again at midnight (UTC)." />
+            </span>
+            <span>{t(staking > 0 ? "{used} of {limit} with this slip" : "{used} of {limit} used", { used: formatMoney(used), limit: formatMoney(limit) })}</span>
+          </div>
+          <div className={`bet-limit-bar${share >= 100 ? " is-full" : share >= 75 ? " is-high" : ""}`} role="progressbar" aria-valuemin={0} aria-valuemax={limit} aria-valuenow={used} aria-label={t("Daily loss limit")}>
+            <span style={{ width: `${share}%` }} />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const STATUS_LABEL: Record<Bet["status"], string> = { OPEN: msg("Open"), WON: msg("Won"), LOST: msg("Lost"), VOID: msg("Refunded") };
+const STATUS_ICON: Record<Bet["status"], string> = { OPEN: "⏳", WON: "✓", LOST: "✗", VOID: "↺" };
+
+function StatusPill({ status }: { status: Bet["status"] }) {
+  const { t } = useI18n();
+  return (
+    <span className={`status-pill bet-status-${status.toLowerCase()}`}>
+      <span aria-hidden="true">{STATUS_ICON[status]}</span> {t(STATUS_LABEL[status])}
+    </span>
+  );
+}
+
+/** What a finished bet did to the balance, in big green or red: +$15.00, −$10.00, or the stake back. */
+function BetResult({ bet }: { bet: Bet }) {
+  const { t } = useI18n();
+  if (bet.status === "OPEN") return null;
+  const net = Math.round((bet.payout - bet.stake) * 100) / 100;
+  if (bet.status === "VOID") return <p className="bet-result is-void">{t("Your {amount} came back to your balance", { amount: formatMoney(bet.stake) })}</p>;
+  return net >= 0 ? (
+    <p className="bet-result is-won">{t("You won {amount}", { amount: `+${formatMoney(net)}` })}</p>
+  ) : (
+    <p className="bet-result is-lost">{t("You lost {amount}", { amount: `−${formatMoney(-net)}` })}</p>
+  );
+}
+
+/** Why a bet was cancelled. The reason is what the team typed, so it may be in any language. */
+function voidText(reason: string | null, ts: I18n["ts"], t: I18n["t"]) {
+  return reason ? ` · ${t("Cancelled: {reason}", { reason: ts(reason) })}` : "";
+}
 
 function MyBetsList({ status, version }: { status: "open" | "settled"; version: number }) {
   const { getToken } = useAuth();
@@ -849,7 +938,7 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
 }
 
 function AccumulatorCard({ bet }: { bet: Bet }) {
-  const { t, tn, date } = useI18n();
+  const { t, tn, ts, date } = useI18n();
   const decided = bet.legs.filter((leg) => leg.result !== null).length;
   const when =
     bet.status === "OPEN"
@@ -864,7 +953,7 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
           <strong>{t("Accumulator")}</strong>
           <span className="muted">{tn(bet.legs.length, "{count} pick", "{count} picks")}</span>
         </div>
-        <span className={`status-pill bet-status-${bet.status.toLowerCase()}`}>{t(STATUS_LABEL[bet.status])}</span>
+        <StatusPill status={bet.status} />
       </div>
       <BetLegs legs={bet.legs} />
       <dl className="bet-card-numbers">
@@ -883,16 +972,18 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
           </dd>
         </div>
       </dl>
+      <BetResult bet={bet} />
       <p className="muted bet-card-when">
         {when}
-        {bet.voidReason ? ` · ${bet.voidReason}` : ""}
+        {voidText(bet.voidReason, ts, t)}
       </p>
     </li>
   );
 }
 
 function BetCard({ bet }: { bet: Bet }) {
-  const { t, ts, date } = useI18n();
+  const i18n = useI18n();
+  const { t, ts, date } = i18n;
   if (bet.kind === "ACCUMULATOR") return <AccumulatorCard bet={bet} />;
   const event = bet.event;
   const score = event?.result ?? (event && event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING" ? { home: event.homeScore, away: event.awayScore } : null);
@@ -907,10 +998,10 @@ function BetCard({ bet }: { bet: Bet }) {
     <li className={`card bet-card is-${bet.status.toLowerCase()}`}>
       <div className="bet-card-top">
         <div className="bet-card-name">
-          <strong>{ts(bet.selection?.name ?? bet.description)}</strong>
+          <strong>{bet.selection ? pickLabel(bet.selection.name, i18n) : ts(bet.description)}</strong>
           {bet.selection ? <span className="muted">{ts(bet.selection.market)}</span> : null}
         </div>
-        <span className={`status-pill bet-status-${bet.status.toLowerCase()}`}>{t(STATUS_LABEL[bet.status])}</span>
+        <StatusPill status={bet.status} />
       </div>
       {event ? (
         <div className="bet-card-event">
@@ -934,9 +1025,10 @@ function BetCard({ bet }: { bet: Bet }) {
           </dd>
         </div>
       </dl>
+      <BetResult bet={bet} />
       <p className="muted bet-card-when">
         {bet.status === "OPEN" ? when : bet.settledAt ? t("Settled {when}", { when: date(bet.settledAt, DATE_TIME) }) : ""}
-        {bet.voidReason ? ` · ${bet.voidReason}` : ""}
+        {voidText(bet.voidReason, ts, t)}
         {bet.status === "VOID" && !bet.voidReason ? ` · ${t("Match called off, stake refunded")}` : ""}
       </p>
     </li>

@@ -177,8 +177,8 @@ export class UsersController {
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
-  balanceLedger(@CurrentActor() actor: Actor, @Param("id") id: string) {
-    return this.users.balanceLedger(actor, id);
+  balanceLedger(@CurrentActor() actor: Actor, @Param("id") id: string, @Query("before") before?: string, @Query("limit") limit?: string) {
+    return this.users.balanceLedger(actor, id, { before, limit: limit ? Number(limit) || undefined : undefined });
   }
 
   @Post(":id/delegate")
@@ -237,6 +237,14 @@ export class UsersController {
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   managerCapacity(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: ManagerCapacityDto, @Req() req: AuthenticatedRequest) {
     return this.users.setManagerCapacity(actor, id, dto.capacity, clientIp(req));
+  }
+
+  @Post("me/top-up-request")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.PLAYER)
+  requestTopUp(@CurrentActor() actor: Actor) {
+    return this.users.requestTopUp(actor);
   }
 
   @Get("me/team-settings")

@@ -2,13 +2,15 @@
 
 import type { BetLeg } from "../lib/api";
 import { msg } from "../lib/i18n/core";
+import { pickLabel } from "../lib/picks";
 import { useI18n } from "./i18n-provider";
 
 const LEG_MARK: Record<NonNullable<BetLeg["result"]>, string> = { WON: msg("Won"), LOST: msg("Lost"), VOID: msg("Void") };
 
 /** An accumulator's picks with each one's match and result. */
 export function BetLegs({ legs }: { legs: BetLeg[] }) {
-  const { t, ts, date } = useI18n();
+  const i18n = useI18n();
+  const { t, ts, date } = i18n;
   return (
     <ol className="bet-legs">
       {legs.map((leg, index) => {
@@ -24,12 +26,12 @@ export function BetLegs({ legs }: { legs: BetLeg[] }) {
         return (
           <li key={index} className={`bet-leg${leg.result ? ` is-${leg.result.toLowerCase()}` : ""}`}>
             <div className="bet-leg-main">
-              <strong>{ts(leg.name)}</strong>
+              <strong>{pickLabel(leg.name, i18n)}</strong>
               <span className="muted">
                 {ts(leg.market)} · {event.name}
                 {score ? ` · ${score.home}–${score.away}` : ""}
               </span>
-              {leg.voidReason ? <span className="muted">{leg.voidReason}</span> : null}
+              {leg.voidReason ? <span className="muted">{t("Cancelled: {reason}", { reason: ts(leg.voidReason) })}</span> : null}
             </div>
             <div className="bet-leg-side">
               <span>{leg.odds.toFixed(2)}</span>

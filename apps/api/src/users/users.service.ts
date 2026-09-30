@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { BalanceTransactionStatus, BalanceTransactionType, NotificationType, Prisma, Role, UserStatus } from "@prisma/client";
+import { BalanceTransactionStatus, BalanceTransactionType, NotificationSeverity, NotificationType, Prisma, Role, UserStatus } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { ClerkService } from "../auth/clerk.service";
 import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/permissions";
@@ -52,6 +52,8 @@ const APPROVAL_THRESHOLD = 10000;
 
 /** Most accounts a bulk action may touch at once. */
 const BULK_LIMIT = 100;
+/** How long a Player waits between two top-up requests. */
+const TOP_UP_REQUEST_GAP_MS = 30 * 60_000;
 
 function dateRange(from?: string, to?: string) {
   return from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {};
@@ -533,16 +535,20 @@ export class UsersService {
   }
 
   /** Every credit this account has received or given — the full history behind its current balance. */
-  async balanceLedger(actor: Actor, id: string) {
+  /** Newest first. Pass `limit` (and `before`, the last entry's createdAt) to read it a page at a time. */
+  async balanceLedger(actor: Actor, id: string, page: { before?: string; limit?: number } = {}) {
     const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
     if (!target) throw new NotFoundException("User not found");
     if (target.role === Role.SUPER_ADMIN) throw new BadRequestException("Super Admin accounts do not hold a balance");
     if (!(await this.hierarchy.canActOn(actor, id))) {
       throw new ForbiddenException("Target is outside your hierarchy subtree");
     }
+    const before = page.before ? new Date(page.before) : null;
+    const take = page.limit ? Math.min(Math.max(Math.floor(page.limit), 1), 100) : undefined;
     const entries = await this.prisma.balanceTransaction.findMany({
-      where: { OR: [{ toUserId: id }, { fromUserId: id }] },
+      where: { OR: [{ toUserId: id }, { fromUserId: id }], ...(before && !Number.isNaN(before.getTime()) ? { createdAt: { lt: before } } : {}) },
       orderBy: { createdAt: "desc" },
+      take,
       select: {
         id: true,
         type: true,
@@ -1342,6 +1348,33 @@ export class UsersService {
         metadata: { accountId: account.id, balance, threshold },
       });
     }
+  }
+
+  /**
+   * A Player asks whoever looks after them (their Manager, or their Owner)
+   * for more money. At most once every 30 minutes, so it can't be spammed.
+   */
+  async requestTopUp(actor: Actor) {
+    if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players can ask for a top-up");
+    if (!actor.parentId) throw new BadRequestException("You don't have a Manager or Owner yet");
+    const since = new Date(Date.now() - TOP_UP_REQUEST_GAP_MS);
+    const recent = await this.prisma.auditLog.findFirst({ where: { actorId: actor.id, action: "balance.topup_request", createdAt: { gte: since } }, select: { createdAt: true } });
+    if (recent) {
+      const minutes = Math.max(1, Math.ceil((recent.createdAt.getTime() + TOP_UP_REQUEST_GAP_MS - Date.now()) / 60_000));
+      throw new BadRequestException(`You already asked. You can ask again in ${minutes} min.`);
+    }
+    const balance = Number(actor.balance);
+    await this.notifications.create({
+      userId: actor.parentId,
+      type: NotificationType.LOW_BALANCE,
+      severity: NotificationSeverity.WARNING,
+      title: "Top-up requested",
+      message: `${actor.username} is asking for a top-up. Their balance is $${balance.toFixed(2)}.`,
+      deepLink: `/dashboard/players/${actor.id}`,
+      metadata: { accountId: actor.id, balance },
+    });
+    await this.audit.log({ actorId: actor.id, action: "balance.topup_request", targetId: actor.parentId, metadata: { balance } });
+    return { ok: true };
   }
 
   /** An Owner's team-wide settings. */

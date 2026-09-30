@@ -4388,3 +4388,245 @@ button.is-blocked {
     margin-top: 0.45rem;
   }
 }
+
+/* ============================================================
+   Player dashboard, first round: match focus, results, limits, money page
+   ============================================================ */
+
+/* The match a Player came for from the Overview: lit up for a few seconds. */
+.bet-match.is-focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+  transition: box-shadow 300ms ease, border-color 300ms ease;
+}
+
+/* A finished bet, in money: +$15.00 in green, −$10.00 in red. */
+.bet-result {
+  margin: 0.25rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.bet-result.is-won {
+  color: #22c55e;
+}
+
+.bet-result.is-lost {
+  color: var(--danger);
+}
+
+.bet-result.is-void {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.role-player .bet-result.is-won {
+  color: #4ade80;
+}
+
+/* Daily loss limit meter in the slip */
+.bet-limits {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.bet-limit-meter {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.bet-limit-meter-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.bet-limit-bar {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 22%, transparent);
+  overflow: hidden;
+}
+
+.bet-limit-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 200ms ease;
+}
+
+.bet-limit-bar.is-high span {
+  background: var(--warning);
+}
+
+.bet-limit-bar.is-full span {
+  background: var(--danger);
+}
+
+/* Home hero actions */
+.player-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.player-hero-actions .player-hero-cta {
+  margin-top: 0;
+  border: none;
+  cursor: pointer;
+}
+
+.player-hero-secondary {
+  border-radius: 999px;
+  padding: 0.65rem 1.2rem;
+}
+
+.player-hero-link {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.player-hero-limit {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.player-quick-number {
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.player-quick-number.is-positive {
+  color: #4ade80;
+}
+
+.player-quick-number.is-negative {
+  color: var(--danger);
+}
+
+/* A win: a bigger, brighter toast */
+.toast-celebrate {
+  --toast-color: #22c55e;
+  padding: 1rem 1.1rem;
+  background: color-mix(in srgb, #22c55e 14%, var(--bg-elevated));
+  animation: toast-in 180ms ease-out, toast-pop 600ms ease-out 180ms;
+}
+
+.toast-celebrate .toast-icon {
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1.1rem;
+  background: transparent;
+}
+
+.toast-celebrate .toast-body strong {
+  font-size: 1.05rem;
+}
+
+@keyframes toast-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-celebrate {
+    animation: none;
+  }
+}
+
+/* My money */
+.money-hero {
+  justify-items: start;
+}
+
+.money-topup {
+  border-radius: 999px;
+}
+
+.money-day {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.money-day-label {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.money-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.money-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+}
+
+.money-row.is-waiting {
+  opacity: 0.7;
+}
+
+.money-row-text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.money-row-text > span {
+  font-size: 0.8rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.money-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  font-size: 1.05rem;
+}
+
+.money-icon.is-in {
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+}
+
+.money-icon.is-out {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+}
+
+.money-amount {
+  white-space: nowrap;
+}
+
+.money-amount.is-in {
+  color: #4ade80;
+}
+
+.money-amount.is-out {
+  color: var(--danger);
+}

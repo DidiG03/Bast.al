@@ -140,15 +140,16 @@ We use a **recursive CTE** on `parent_id`. Hierarchy is shallow (three levels un
 
 ## Odds feed
 
-Matches, live scores and pre-match odds come from [API-Football](https://www.api-football.com/) (api-sports.io). The API syncs fixtures and odds every 10 minutes for today and the next two days, and live scores every 30 seconds while matches are on. Every team starts from the feed price less Super Admin's base margin; an Owner can add or give back margin for their team and set their own price on any selection (Odds page). Managers and Players see their Owner's prices.
+Matches, live scores and pre-match odds come from [API-Football](https://www.api-football.com/) (api-sports.io). The API syncs fixtures and pre-match odds for today and the next four days: today's every 30 minutes, tomorrow's every 2 hours, and later days every 6 hours. Live scores and in-play odds update every 45 seconds while matches are on. With the default league list this stays around 3,000–6,000 requests a day, inside the Pro plan's 7,500; if fewer than `API_FOOTBALL_QUOTA_RESERVE` (600) are left, only today's matches keep refreshing until the quota resets. Every team starts from the feed price less Super Admin's base margin; an Owner can add or give back margin for their team and set their own price on any selection (Odds page). Managers and Players see their Owner's prices.
 
 | Variable | Purpose |
 | --- | --- |
 | `API_FOOTBALL_KEY` | API key from the API-Football dashboard. Without it the feed is off. |
-| `API_FOOTBALL_LEAGUES` | Optional comma-separated league ids. Defaults to the top five European leagues, UEFA club competitions, World Cup, Euros and Nations League. |
-| `API_FOOTBALL_COUNTRIES` | Optional comma-separated countries whose leagues are all synced. Defaults to `Albania`. |
+| `API_FOOTBALL_LEAGUES` | Optional comma-separated league ids. Defaults to about 60 competitions (list in `apps/api/src/odds/odds-sync.service.ts`): the top two divisions and main cups of England, Spain, Italy, Germany and France, the rest of Europe's top divisions, UEFA club competitions, national-team tournaments, qualifiers and friendlies, and the main leagues of the Americas, Asia and Australia. Unknown ids are logged at startup. |
+| `API_FOOTBALL_COUNTRIES` | Optional comma-separated countries whose leagues are all synced. Defaults to `Albania,Kosovo`. |
 | `API_FOOTBALL_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `8` (Bet365). |
-| `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS` | Optional tuning: days ahead (3), full sync interval (10 min), live interval (30 s). |
+| `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS` | Optional tuning: days ahead (5, at most 7), how often to check which days are due (10 min), live interval (45 s). |
+| `API_FOOTBALL_QUOTA_RESERVE` | Requests to keep in hand each day before only today's matches are refreshed. Defaults to `600`. |
 | `ODDS_FEED_MOCK=true` | Local testing only: serves made-up matches in API-Football's format when no key is set. |
 
 The API needs outbound access to `v3.football.api-sports.io`.

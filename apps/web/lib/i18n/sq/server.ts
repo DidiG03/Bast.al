@@ -71,6 +71,7 @@ export const server: Record<string, string> = {
   // Odds feed status
   "Synced {events} matches and {markets} markets": "U sinkronizuan {events} ndeshje dhe {markets} tregje",
   "Failed: {message}": "Dështoi: {message}",
+  "Only {count} API-Football requests left today, so only today's matches are refreshed": "Kanë mbetur vetëm {count} kërkesa API-Football për sot, prandaj po rifreskohen vetëm ndeshjet e sotme",
   "A sync is already running. Try again in a minute.": "Një sinkronizim është ende në vazhdim. Provo sërish pas një minute.",
   "The odds feed isn't connected": "Burimi i koeficientëve nuk është i lidhur",
 

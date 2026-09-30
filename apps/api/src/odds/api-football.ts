@@ -492,6 +492,12 @@ export class ApiFootballClient {
     return parseStatistics(res.response, homeTeam);
   }
 
+  /** Every league with a season in progress, in one request. */
+  async currentLeagues(): Promise<Array<{ id: number; name: string; country: string }>> {
+    const res = (await this.fetchJson("/leagues", { current: "true" })) as ApiResponse<{ league: { id: number; name: string }; country: { name: string } }>;
+    return res.response.map((row) => ({ id: row.league.id, name: row.league.name, country: row.country.name }));
+  }
+
   /** In-play odds for every match the feed is pricing live, in one request. */
   async liveOdds(): Promise<RawLiveOdds[]> {
     const res = (await this.fetchJson("/odds/live", {})) as ApiResponse<RawLiveOdds>;
@@ -520,7 +526,8 @@ export class ApiFootballClient {
  * Detected from the host string, so switching providers is just an env var
  * change (API_FOOTBALL_HOST) — no other config needed.
  */
-export function httpFetchJson(host: string, apiKey: string): FetchJson {
+/** `onQuota` gets the requests left on today's plan, from each answer's rate-limit header. */
+export function httpFetchJson(host: string, apiKey: string, onQuota?: (left: number) => void): FetchJson {
   const rapidApi = host.includes("rapidapi.com");
   const base = rapidApi ? `${host}/v3` : host;
   return async (path, params) => {
@@ -531,6 +538,8 @@ export function httpFetchJson(host: string, apiKey: string): FetchJson {
         : { "x-apisports-key": apiKey },
       signal: AbortSignal.timeout(15_000),
     });
+    const left = Number(res.headers.get("x-ratelimit-requests-remaining"));
+    if (onQuota && res.headers.has("x-ratelimit-requests-remaining") && Number.isFinite(left)) onQuota(left);
     if (!res.ok) throw new Error(`API-Football answered ${res.status} for ${path}`);
     const body = (await res.json()) as ApiResponse<unknown>;
     const errors = body.errors && typeof body.errors === "object" ? Object.values(body.errors as Record<string, string>) : [];

@@ -13,7 +13,7 @@ import { apiFetch, type BalanceEntry, type MeResponse } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 
 const PAGE = 30;
-type Filter = "all" | "topups" | "bets";
+type Filter = "all" | "topups" | "bets" | "casino";
 
 const DAY: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long" };
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
@@ -70,8 +70,9 @@ export default function MoneyPage() {
 
   if (!me || !entries) return <PageLoading label="Loading your money" />;
 
+  const isBet = (entry: BalanceEntry) => entry.type === "BET_STAKE" || entry.type === "BET_SETTLEMENT";
   const shown = entries.filter((entry) =>
-    filter === "all" ? true : filter === "bets" ? entry.type === "BET_STAKE" || entry.type === "BET_SETTLEMENT" : entry.type !== "BET_STAKE" && entry.type !== "BET_SETTLEMENT",
+    filter === "all" ? true : filter === "bets" ? isBet(entry) : filter === "casino" ? entry.type === "CASINO" : !isBet(entry) && entry.type !== "CASINO",
   );
   const days: Array<[string, BalanceEntry[]]> = [];
   for (const entry of shown) {
@@ -112,6 +113,7 @@ export default function MoneyPage() {
               ["all", t("All")],
               ["topups", t("Top-ups")],
               ["bets", t("Bets")],
+              ...(entries.some((entry) => entry.type === "CASINO") ? [["casino", t("Casino")] as [Filter, string]] : []),
             ] as Array<[Filter, string]>
           ).map(([key, label]) => (
             <button key={key} type="button" className={`bet-chip${filter === key ? " is-active" : ""}`} onClick={() => setFilter(key)} aria-pressed={filter === key}>
@@ -179,6 +181,8 @@ function describe(entry: BalanceEntry, t: (text: string, vars?: Record<string, s
       return entry.amount >= 0 ? { icon: "↺", title: t("Bet money returned") } : { icon: "🎟", title: t("Bet placed") };
     case "BET_SETTLEMENT":
       return entry.amount >= 0 ? { icon: "🏆", title: t("Money from a bet") } : { icon: "↺", title: t("Bet corrected") };
+    case "CASINO":
+      return { icon: "🎰", title: t("Casino") };
     default:
       return { icon: "✎", title: t("Correction") };
   }

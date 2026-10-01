@@ -76,7 +76,7 @@ export default async function DashboardLayout({
     <RealtimeProvider>
       <RealtimeRefresh />
       <div className={`dashboard-shell${isPlayer ? " role-player" : " role-admin"}`}>
-        <DashboardSidebar role={me.role} username={me.username} initialCollapsed={initialCollapsed} />
+        <DashboardSidebar role={me.role} username={me.username} initialCollapsed={initialCollapsed} casinoOpen={me.casinoOpen ?? false} />
         <main className="dashboard-content">
           <header className="dashboard-topbar">
             <Link href="/dashboard" className="topbar-brand">

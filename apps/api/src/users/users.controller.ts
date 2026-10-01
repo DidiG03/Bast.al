@@ -30,7 +30,21 @@ import { ManagerCapacityDto } from "./dto/manager-capacity.dto";
 import { CommissionRateDto } from "./dto/commission.dto";
 import { BulkActionDto, TeamSettingsDto } from "./dto/team.dto";
 import { Idempotent } from "../idempotency/idempotency.interceptor";
+import { DataResetService } from "./data-reset.service";
 import { UsersService } from "./users.service";
+
+class DataResetDto {
+  @ApiProperty({ description: "Super Admin's own username, typed to confirm" })
+  @IsString()
+  @MaxLength(64)
+  username!: string;
+
+  @ApiProperty({ description: "Super Admin's password, checked with Clerk" })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  password!: string;
+}
 
 class BootstrapSuperAdminDto {
   @ApiProperty({ description: "Clerk user id (user_…)" })
@@ -56,6 +70,7 @@ export class UsersController {
   constructor(
     private readonly users: UsersService,
     private readonly config: ConfigService,
+    private readonly dataReset: DataResetService,
   ) {}
 
   /**
@@ -118,6 +133,25 @@ export class UsersController {
   @Roles(Role.SUPER_ADMIN)
   updateSecuritySettings(@CurrentActor() actor: Actor, @Body() body: { failLimit: number; windowMs: number; banMs: number }) {
     return this.users.updateSecuritySettings(actor, body);
+  }
+
+  /** What deleting all data would remove right now (see DataResetService). */
+  @Get("data-reset")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  dataResetPreview(@CurrentActor() actor: Actor) {
+    return this.dataReset.preview(actor);
+  }
+
+  /** Deletes every account but Super Admin's, their sign-ins and all their data. */
+  @Post("data-reset")
+  @ApiBearerAuth()
+  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  resetData(@CurrentActor() actor: Actor, @Body() dto: DataResetDto, @Req() req: AuthenticatedRequest) {
+    return this.dataReset.reset(actor, dto, clientIp(req));
   }
 
   @Get()

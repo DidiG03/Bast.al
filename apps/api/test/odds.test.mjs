@@ -321,6 +321,10 @@ test("Super Admin's league pick decides which new matches are synced; listed one
       event: { findMany: async ({ where }) => (where.externalId?.in ?? []).filter((id) => listed.has(id)).map((externalId) => ({ externalId })) },
     };
     const sync = new OddsSyncService(prisma);
+    // The made-up kick-offs sit around "now"; pinned to midday so just after midnight none falls on yesterday's date.
+    const midday = new Date();
+    midday.setUTCHours(12, 0, 0, 0);
+    sync.client = new ApiFootballClient(mockFetchJson(() => midday.getTime(), midday.getTime()));
     sync.upsertEvent = async (fixture) => (upserted.push(fixture.externalId), fixture.externalId);
     for (const name of ["upsertMarkets", "syncLive", "syncStats", "recordStatus"]) sync[name] = async () => 0;
     const run = async () => {

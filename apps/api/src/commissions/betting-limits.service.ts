@@ -112,13 +112,20 @@ export class BettingLimitsService {
     return Math.round(((await this.lossToday(playerId)) + Number(open._sum.stake ?? 0)) * 100) / 100;
   }
 
-  /** Net amount the Player has lost on bets settled today (since midnight, Albanian time); 0 if they're up. */
+  /**
+   * Net amount the Player has lost today (since midnight, Albanian time) on
+   * bets settled and casino spins played, together; 0 if they're up.
+   */
   private async lossToday(playerId: string): Promise<number> {
-    const settled = await this.prisma.bet.aggregate({
-      where: { playerId, status: { in: [BetStatus.WON, BetStatus.LOST] }, settledAt: { gte: startOfDay(new Date()) } },
-      _sum: { stake: true, payout: true },
-    });
-    const net = Number(settled._sum.stake ?? 0) - Number(settled._sum.payout ?? 0);
+    const today = startOfDay(new Date());
+    const [settled, spins] = await Promise.all([
+      this.prisma.bet.aggregate({
+        where: { playerId, status: { in: [BetStatus.WON, BetStatus.LOST] }, settledAt: { gte: today } },
+        _sum: { stake: true, payout: true },
+      }),
+      this.prisma.casinoSpin.aggregate({ where: { playerId, createdAt: { gte: today } }, _sum: { stake: true, win: true } }),
+    ]);
+    const net = Number(settled._sum.stake ?? 0) - Number(settled._sum.payout ?? 0) + Number(spins._sum.stake ?? 0) - Number(spins._sum.win ?? 0);
     return Math.max(0, Math.round(net * 100) / 100);
   }
 

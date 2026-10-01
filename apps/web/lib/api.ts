@@ -26,6 +26,8 @@ export type MeResponse = {
   mfaRequired: boolean;
   mfaEnabled: boolean;
   mfaSatisfied: boolean;
+  /** Player only: the Casino tab is open to them (the site's switch and their Owner's are on). */
+  casinoOpen?: boolean;
 };
 
 export type UserRow = {
@@ -61,7 +63,8 @@ export type CreateUserRequest = {
 
 export type BalanceEntry = {
   id: string;
-  type: "DELEGATION" | "RECLAIM" | "ADJUSTMENT" | "BET_STAKE" | "BET_SETTLEMENT";
+  /** CASINO: one line per day for all of the day's spins, net. */
+  type: "DELEGATION" | "RECLAIM" | "ADJUSTMENT" | "BET_STAKE" | "BET_SETTLEMENT" | "CASINO";
   status?: "PENDING" | "APPROVED" | "REJECTED";
   approvedAt?: string | null;
   /** Signed from the viewed account's perspective: received = positive, given away = negative. */
@@ -85,6 +88,10 @@ export type BalanceStatement = {
   to: string | null;
   entries: BalanceEntry[];
 };
+
+/** Super Admin: what deleting all test data would remove right now. `enabled` is false when the server has it turned off. */
+export type DataResetPreview = { enabled: boolean; accounts: number; bets: number; ledgerEntries: number; notifications: number; auditEntries: number };
+export type DataResetResult = { accounts: number; bets: number; ledgerEntries: number; commissionPayouts: number; signIns: number };
 
 export type SecurityOverview = {
   sessions: Array<{
@@ -199,6 +206,7 @@ const TRANSACTION_LABELS: Record<BalanceEntry["type"], string> = {
   ADJUSTMENT: msg("Adjustment"),
   BET_STAKE: msg("Bet placed"),
   BET_SETTLEMENT: msg("Bet settled"),
+  CASINO: msg("Casino"),
 };
 
 export function transactionLabel(type: BalanceEntry["type"]): string {
@@ -564,4 +572,67 @@ export type RiskView = {
   canEdit: boolean;
   totals: { openBets: number; staked: number; worstCase: number };
   events: RiskEvent[];
+};
+
+/** The casino slot's symbols, as the API names them. */
+export type SlotSymbol = "SEVEN" | "TROPHY" | "BALL" | "BOOT" | "GLOVES" | "FLAG" | "YELLOW" | "RED" | "WILD" | "GOAL";
+
+/** One spin in a Player's recent list. A free spin has `stake` 0 and plays at `bet`. */
+export type CasinoSpinRow = { id: string; bet: number; stake: number; win: number; free: boolean; freeSpinsWon: number; createdAt: string };
+
+export type CasinoFreeSpins = { remaining: number; bet: number };
+
+/** The Player's Casino: whether they can play (`closed` says why not), the rules, and where they stand. */
+export type CasinoState = {
+  closed: string | null;
+  balance: number;
+  maxStake: number | null;
+  freeSpins: CasinoFreeSpins | null;
+  /** grid[reel][row] the reels rest on before the first spin; null before any spin. */
+  grid: SlotSymbol[][] | null;
+  recent: CasinoSpinRow[];
+  game: {
+    reels: number;
+    rows: number;
+    lines: number;
+    bets: number[];
+    symbols: SlotSymbol[];
+    wild: SlotSymbol;
+    scatter: SlotSymbol;
+    /** For each line, the row it runs through on each reel. */
+    lineShapes: number[][];
+    /** In line bets (a tenth of the bet): [3, 4, 5] in a row. */
+    linePays: Partial<Record<SlotSymbol, [number, number, number]>>;
+    scatterPays: Record<"3" | "4" | "5", number>;
+    freeSpins: Record<"3" | "4" | "5", number>;
+    payoutRate: number;
+  };
+};
+
+/** `cells` are [reel, row]; `win` is in dollars. */
+export type CasinoWinningLine = { line: number; symbol: SlotSymbol; count: number; cells: Array<[number, number]>; win: number };
+
+export type CasinoSpinResult = {
+  spin: CasinoSpinRow;
+  grid: SlotSymbol[][];
+  lines: CasinoWinningLine[];
+  scatter: { count: number; cells: Array<[number, number]>; win: number } | null;
+  win: number;
+  free: boolean;
+  freeSpinsWon: number;
+  freeSpins: CasinoFreeSpins | null;
+  balance: number;
+};
+
+/** Super Admin, Owners and Managers: whether the Casino is open, and how it did in a period, per Player. */
+export type CasinoAdmin = {
+  from: string;
+  to: string;
+  siteOpen: boolean;
+  canSwitchSite: boolean;
+  teams: Array<{ ownerId: string; username: string; open: boolean }>;
+  /** A Manager's team: whether their Owner has the Casino open. Null for others. */
+  teamOpen: boolean | null;
+  totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
+  players: Array<{ id: string; username: string; spins: number; staked: number; won: number; net: number }>;
 };

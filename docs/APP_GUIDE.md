@@ -73,6 +73,16 @@ If Players have already bet enough that a Man City win would cost the team $4,80
 
 ---
 
+## What the Casino is (with a number)
+
+The Casino tab has one slot game, **Golazo**: 5 reels, 10 lines, football symbols. Players spin it with the same balance they bet with, at $0.50 to $10 a spin. It stays hidden until **you** open it for the site and the **Owner** opens it for their team.
+
+Every spin is decided on the server, never on the Player's phone. On average it pays back **$94.80 for every $100** spun (measured over 20 million spins), so the team keeps about 5%. Three goals anywhere give free spins.
+
+**Example:** Maria spins 100 times at $1 and gets $93 back. Her balance is $7 lower, her **My money** page shows one line for the day ("Casino: 100 spins, −$7.00"), and the $7 counts in Alex's team profit, so you and Sam get your commission on it like on bets. Maria's daily loss limit counts sports and casino together.
+
+---
+
 ## The pages, one line each
 
 | Page | Who uses it | What it's for |
@@ -80,6 +90,7 @@ If Players have already bet enough that a Man City win would cost the team $4,80
 | **Overview** | Everyone | Your home screen — balance, quick stats, shortcuts. Looks totally different for Players (it's their "app"). |
 | **Users** | Super Admin, Owner, Manager | Create people under you, give/take credit, suspend/delete, set limits. |
 | **Bet** | Player | Browse matches, place bets, see your bet history. |
+| **Casino** | Everyone (when it's open) | Players spin the Golazo slot with their balance. Super Admin and Owners open or close it; staff see how it's doing per Player. |
 | **Reports** | Super Admin, Owner, Manager | Who's under you, and a searchable history log of every action taken. |
 | **Finance** | Super Admin, Owner | Approve/reject big money transfers; see how much moved where. |
 | **Commissions** | Super Admin, Owner, Manager | Your paycheck — what you've earned from results, this week/month/custom range. |

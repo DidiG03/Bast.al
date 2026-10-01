@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from "@nestjs/common";
-import { BalanceTransactionType, BetKind, BetStatus, Prisma, Role, UserStatus } from "@prisma/client";
+import { BalanceTransactionType, BetKind, BetStatus, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { BettingLimitsService } from "../commissions/betting-limits.service";
@@ -10,7 +10,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { combinedOdds, payoutFor } from "./grading";
 import { RiskService } from "./risk.service";
-import { teamOf, type TeamSnapshot } from "./team";
+import { assertOnTeam, type TeamSnapshot } from "./team";
 
 type SlipBet = { selectionId: string; stake: number; odds: number };
 type SlipAccumulator = { legs: Array<{ selectionId: string; odds: number }>; stake: number };
@@ -350,20 +350,8 @@ export class BetsService {
     return { balance, maxStake: lower(row?.ownerMaxStake, row?.managerMaxStake), dailyLossLimit, dailyLossUsed, blocked };
   }
 
-  /**
-   * A Player can bet only while they sit in a team: under an active Manager
-   * who belongs to an Owner, or directly under an Owner. Player accounts are
-   * only ever made by their Manager or Owner, so this also shuts out any
-   * account that got in some other way.
-   */
-  private async assertOnTeam(actor: Actor): Promise<TeamSnapshot & { ownerId: string }> {
-    const [parent, team] = await Promise.all([
-      actor.parentId ? this.prisma.user.findUnique({ where: { id: actor.parentId }, select: { status: true } }) : null,
-      teamOf(this.prisma, actor.id),
-    ]);
-    const ownerId = team.ownerId;
-    if (!parent || !ownerId) throw new ForbiddenException("Your account isn't on a team yet, so it can't place bets. Your Manager or Owner has to set it up.");
-    if (parent.status !== UserStatus.ACTIVE) throw new ForbiddenException("Your Manager's account is suspended, so betting is paused.");
-    return { ...team, ownerId };
+  /** See assertOnTeam in team.ts. */
+  private assertOnTeam(actor: Actor): Promise<TeamSnapshot & { ownerId: string }> {
+    return assertOnTeam(this.prisma, actor);
   }
 }

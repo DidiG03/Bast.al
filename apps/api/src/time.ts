@@ -56,5 +56,11 @@ export function startOfWeek(at: Date): Date {
   return midnight(clock.year, clock.month, clock.day - ((weekday + 6) % 7));
 }
 
+/** "2026-09-21": the day `at` falls on, for keys that are one per day. */
+export function dayKey(at: Date): string {
+  const clock = wallClock(at);
+  return `${clock.year}-${String(clock.month).padStart(2, "0")}-${String(clock.day).padStart(2, "0")}`;
+}
+
 /** "31 Aug", on TIME_ZONE's calendar, for text the API writes (ledger reasons, errors). */
 export const shortDay = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: TIME_ZONE });

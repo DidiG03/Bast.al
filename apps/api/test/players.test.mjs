@@ -48,13 +48,19 @@ test("the daily loss limit counts today's net losses plus today's open stakes", 
     where.status === "OPEN"
       ? { _sum: { stake: new Prisma.Decimal("15") } }
       : { _sum: { stake: new Prisma.Decimal("40"), payout: new Prisma.Decimal("12.5") } };
-  const limits = new BettingLimitsService({ bet: { aggregate } }, {});
+  const noSpins = { aggregate: async () => ({ _sum: { stake: null, win: null } }) };
+  const limits = new BettingLimitsService({ bet: { aggregate }, casinoSpin: noSpins }, {});
   assert.equal(await limits.usedToday("p1"), 42.5);
 
   // A Player who is up on the day has used only their open stakes.
   const winning = new BettingLimitsService(
-    { bet: { aggregate: async ({ where }) => (where.status === "OPEN" ? { _sum: { stake: new Prisma.Decimal("5") } } : { _sum: { stake: new Prisma.Decimal("10"), payout: new Prisma.Decimal("30") } }) } },
+    { bet: { aggregate: async ({ where }) => (where.status === "OPEN" ? { _sum: { stake: new Prisma.Decimal("5") } } : { _sum: { stake: new Prisma.Decimal("10"), payout: new Prisma.Decimal("30") } }) }, casinoSpin: noSpins },
     {},
   );
   assert.equal(await winning.usedToday("p1"), 5);
+
+  // Casino losses count in the same limit: 27.50 lost on bets, 20 more on spins.
+  const spins = { aggregate: async () => ({ _sum: { stake: new Prisma.Decimal("30"), win: new Prisma.Decimal("10") } }) };
+  const both = new BettingLimitsService({ bet: { aggregate }, casinoSpin: spins }, {});
+  assert.equal(await both.usedToday("p1"), 62.5);
 });

@@ -156,6 +156,15 @@ export const iconPaths = {
     </>
   ),
   check: <path d="m5 12 4 4 10-10" />,
+  // A slot machine: three reels behind glass, and the lever.
+  casino: (
+    <>
+      <rect x="3" y="5" width="14" height="14" rx="2" />
+      <path d="M7.7 9v6M12.3 9v6" />
+      <path d="M20 7v5l-3 2" />
+      <circle cx="20" cy="5.5" r="1.3" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof iconPaths;

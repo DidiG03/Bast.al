@@ -11,6 +11,7 @@ import { ClerkService } from "../auth/clerk.service";
 import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/permissions";
 import { FieldEncryptionService } from "../crypto/field-encryption.service";
 import { PrismaService } from "../prisma.service";
+import { casinoClosedReason } from "../casino/access";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { AdjustBalanceDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -130,6 +131,8 @@ export class UsersService {
       mfaRequired,
       mfaEnabled,
       mfaSatisfied: !mfaRequired || mfaEnabled,
+      /** Player only: the Casino tab is open to them. */
+      casinoOpen: actor.role === Role.PLAYER ? (await casinoClosedReason(this.prisma, actor)) === null : false,
     };
   }
 
@@ -452,9 +455,7 @@ export class UsersService {
         ipAddress,
         metadata: { reason: "clerk_create_failed", username },
       });
-      throw new BadRequestException(
-        `Failed to create Clerk identity: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new BadRequestException(clerkRefusal(error, "create"));
     }
 
     try {
@@ -1226,9 +1227,7 @@ export class UsersService {
         ...(dto.password ? { password: dto.password } : {}),
       });
     } catch (error) {
-      throw new BadRequestException(
-        `Failed to update Clerk identity: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new BadRequestException(clerkRefusal(error, "update"));
     }
 
     const email = username ? privateEmailFor(username) : undefined;
@@ -1314,17 +1313,22 @@ export class UsersService {
     return { id };
   }
 
-  /** Whether an account has any bet (its own, or one its team took), ledger entry (on either side, as initiator or approver) or commission payout. */
+  /**
+   * Whether an account has any bet or casino spin (its own, or one its team
+   * took), ledger entry (on either side, as initiator or approver) or
+   * commission payout.
+   */
   private async hasMoneyHistory(id: string): Promise<boolean> {
-    const [bet, entry, payout] = await Promise.all([
+    const [bet, spin, entry, payout] = await Promise.all([
       this.prisma.bet.findFirst({ where: { OR: [{ playerId: id }, { ownerId: id }, { managerId: id }] }, select: { id: true } }),
+      this.prisma.casinoSpin.findFirst({ where: { OR: [{ playerId: id }, { ownerId: id }, { managerId: id }] }, select: { id: true } }),
       this.prisma.balanceTransaction.findFirst({
         where: { OR: [{ toUserId: id }, { fromUserId: id }, { actorId: id }, { approvedById: id }] },
         select: { id: true },
       }),
       this.prisma.commissionPayout.findFirst({ where: { userId: id }, select: { id: true } }),
     ]);
-    return Boolean(bet || entry || payout);
+    return Boolean(bet || spin || entry || payout);
   }
 
   async reassignmentPreview(actor: Actor, id: string, managerId: string) {
@@ -1599,6 +1603,27 @@ export class UsersService {
 }
 
 /** Why a Player can't be moved yet, or null if they can. */
+/**
+ * Clerk's own error only says "Unprocessable Entity"; the reason is in its
+ * error codes. The common ones get a plain sentence, the rest Clerk's text.
+ */
+function clerkRefusal(error: unknown, action: "create" | "update"): string {
+  const first = (error as { errors?: { code?: string; longMessage?: string; message?: string }[] })?.errors?.[0];
+  switch (first?.code) {
+    case "form_identifier_exists":
+    case "form_username_exists":
+      return "That username is already taken in Clerk. Pick another one.";
+    case "form_password_pwned":
+      return "That password has appeared in a data leak. Pick a different one.";
+    case "form_password_length_too_short":
+    case "form_password_not_strong_enough":
+    case "form_password_size_in_bytes_exceeded":
+      return "That password is too weak. Use at least 8 characters with letters and numbers.";
+  }
+  const reason = first?.longMessage ?? first?.message ?? (error instanceof Error ? error.message : String(error));
+  return action === "create" ? `Failed to create Clerk identity: ${reason}` : `Failed to update Clerk identity: ${reason}`;
+}
+
 function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number): string | null {
   if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;
   if (openBets > 1) return `${username} still has ${openBets} open bets. Move them once they're settled.`;
@@ -1606,7 +1631,8 @@ function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number
   return null;
 }
 
-/** Who a ledger entry with no other account came from: a bet, or a Super Admin adjustment. */
+/** Who a ledger entry with no other account came from: a bet, the Casino, or a Super Admin adjustment. */
 function noCounterparty(type: BalanceTransactionType): string {
+  if (type === BalanceTransactionType.CASINO) return "Casino";
   return type === BalanceTransactionType.BET_STAKE || type === BalanceTransactionType.BET_SETTLEMENT ? "Betting" : "Platform";
 }

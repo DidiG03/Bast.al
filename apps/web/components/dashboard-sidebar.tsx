@@ -13,6 +13,8 @@ type SidebarProps = {
   role: UserRole;
   username: string;
   initialCollapsed: boolean;
+  /** Player only: show the Casino tab (it's open to them). */
+  casinoOpen?: boolean;
 };
 
 type NavLink = { href: string; label: string; icon: IconName };
@@ -26,10 +28,12 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 /** What each role can open, grouped the way people think about the work. */
-function navGroups(role: UserRole): NavGroup[] {
+function navGroups(role: UserRole, casinoOpen: boolean): NavGroup[] {
   if (role === "PLAYER") {
+    const play: NavLink[] = [{ href: "/dashboard", label: msg("Overview"), icon: "dashboard" }, { href: "/dashboard/bet", label: msg("Bet"), icon: "bet" }];
+    if (casinoOpen) play.push({ href: "/dashboard/casino", label: msg("Casino"), icon: "casino" });
     return [
-      { label: msg("Play"), links: [{ href: "/dashboard", label: msg("Overview"), icon: "dashboard" }, { href: "/dashboard/bet", label: msg("Bet"), icon: "bet" }] },
+      { label: msg("Play"), links: play },
       { label: msg("Account"), links: [{ href: "/dashboard/money", label: msg("My money"), icon: "wallet" }, { href: "/dashboard/security", label: msg("Security"), icon: "security" }] },
     ];
   }
@@ -37,6 +41,8 @@ function navGroups(role: UserRole): NavGroup[] {
   if (role === "OWNER" || role === "SUPER_ADMIN") betting.push({ href: "/dashboard/risk", label: msg("Risk"), icon: "risk" });
   // Owners and Managers see it read-only, limited to their own Players' bets.
   betting.push({ href: "/dashboard/settlement", label: msg("Settlement"), icon: "settlement" });
+  // Whether it's open, and how it's doing per Player.
+  betting.push({ href: "/dashboard/casino", label: msg("Casino"), icon: "casino" });
   return [
     {
       label: msg("Workspace"),
@@ -58,7 +64,7 @@ function navGroups(role: UserRole): NavGroup[] {
   ];
 }
 
-export function DashboardSidebar({ role, username, initialCollapsed }: SidebarProps) {
+export function DashboardSidebar({ role, username, initialCollapsed, casinoOpen = false }: SidebarProps) {
   const pathname = usePathname();
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
@@ -102,11 +108,11 @@ export function DashboardSidebar({ role, username, initialCollapsed }: SidebarPr
       setMobileOpen(opening);
   }
 
-  const groups = navGroups(role);
+  const groups = navGroups(role, casinoOpen);
   const links = groups.flatMap((group) => group.links);
-  // The bottom bar fits five tabs; Security, Reports, Settlement, then Odds move to the drawer when a role has more.
+  // The bottom bar fits five tabs; Security, Reports, Settlement, Odds, then the Casino's figures move to the drawer when a role has more.
   let mobileLinks = links;
-  for (const href of ["/dashboard/security", "/dashboard/reports", "/dashboard/settlement", "/dashboard/odds"]) {
+  for (const href of ["/dashboard/security", "/dashboard/reports", "/dashboard/settlement", "/dashboard/odds", "/dashboard/casino"]) {
     if (mobileLinks.length > 5) mobileLinks = mobileLinks.filter((link) => link.href !== href);
   }
   const isActive = (href: string) =>

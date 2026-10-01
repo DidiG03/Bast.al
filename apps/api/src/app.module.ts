@@ -16,6 +16,7 @@ import { CommissionsModule } from "./commissions/commissions.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { OddsModule } from "./odds/odds.module";
 import { BetsModule } from "./bets/bets.module";
+import { CasinoModule } from "./casino/casino.module";
 import { MaintenanceModule } from "./maintenance/maintenance.module";
 import { ClientThrottlerGuard } from "./security/client-throttler.guard";
 
@@ -42,6 +43,7 @@ import { ClientThrottlerGuard } from "./security/client-throttler.guard";
     CommissionsModule,
     OddsModule,
     BetsModule,
+    CasinoModule,
     MaintenanceModule,
   ],
   controllers: [HealthController, RootController, EventsController],

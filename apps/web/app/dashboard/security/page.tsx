@@ -1,11 +1,11 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useEffect, useMemo, useState } from "react";
-import { PageLoading } from "../../../components/loading-spinner";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
 import { UserMenu } from "../../../components/user-menu";
-import { apiFetch, type SecurityOverview } from "../../../lib/api";
+import { apiFetch, type DataResetPreview, type DataResetResult, type MeResponse, type SecurityOverview } from "../../../lib/api";
 import { useI18n } from "../../../components/i18n-provider";
 import { LanguagePicker } from "../../../components/language-toggle";
 import { HelpTip } from "../../../components/help-tip";
@@ -62,11 +62,45 @@ export default function SecurityPage() {
   const [data, setData] = useState<SecurityOverview | null>(null);
   const [failed, setFailed] = useState(false);
   const toast = useToast();
+  // Super Admin only: deleting all test data before real users start.
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [reset, setReset] = useState<DataResetPreview | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetUsername, setResetUsername] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   async function load() {
     const token = await getToken();
     if (!token) throw new Error(t("You're not signed in"));
-    setData(await apiFetch<SecurityOverview>("/users/me/security", token));
+    const [overview, profile] = await Promise.all([apiFetch<SecurityOverview>("/users/me/security", token), apiFetch<MeResponse>("/users/me", token)]);
+    setData(overview);
+    setMe(profile);
+    if (profile.role === "SUPER_ADMIN") setReset(await apiFetch<DataResetPreview>("/users/data-reset", token).catch(() => null));
+  }
+
+  function closeReset() {
+    setResetOpen(false);
+    setResetUsername("");
+    setResetPassword("");
+  }
+
+  async function onReset(event: FormEvent) {
+    event.preventDefault();
+    setResetting(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error(t("You're not signed in"));
+      const done = await apiFetch<DataResetResult>("/users/data-reset", token, { method: "POST", body: JSON.stringify({ username: resetUsername, password: resetPassword }) });
+      closeReset();
+      toast.success(tn(done.accounts, "Deleted {count} account and all the test data. The app is ready for real users.", "Deleted {count} accounts and all the test data. The app is ready for real users."));
+      await load();
+    } catch (err) {
+      setResetPassword("");
+      toast.error(err instanceof Error ? err.message : t("Couldn't delete the data"));
+    } finally {
+      setResetting(false);
+    }
   }
 
   useEffect(() => {
@@ -174,6 +208,63 @@ export default function SecurityPage() {
         <p className="muted" style={{ margin: 0 }}>{t("End your session on this device.")}</p>
         <UserMenu />
       </section>
+      {me?.role === "SUPER_ADMIN" && reset ? (
+        <section className="card stack data-reset">
+          <h2 style={{ margin: 0 }}>{t("Delete all test data")}<HelpTip text="For when you go live. Everything made while testing goes, so real users start from a clean app. Only you can do it, and you confirm it with your username and password." /></h2>
+          <p className="muted" style={{ margin: 0 }}>
+            {t("Deletes every Owner, Manager and Player with their sign-ins, and everything they did: bets, balances, the ledger, commissions, notifications and the audit log. Your Super Admin account, prices, margins, leagues and matches stay. This can't be undone.")}
+          </p>
+          {reset.enabled ? (
+            <p style={{ margin: 0 }}>
+              <strong>{tn(reset.accounts, "Right now: {count} account", "Right now: {count} accounts")}</strong>
+              {" · "}
+              {tn(reset.bets, "{count} bet", "{count} bets")}
+              {" · "}
+              {tn(reset.ledgerEntries, "{count} ledger entry", "{count} ledger entries")}
+            </p>
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>{t("This is turned off on this server.")}</p>
+          )}
+          <div>
+            <button type="button" className="danger-button" onClick={() => setResetOpen(true)} disabled={!reset.enabled}>
+              {t("Delete all test data")}
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {resetOpen && me && reset ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !resetting && closeReset()}>
+          <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+            <div className="modal-header">
+              <h2 id="reset-title">{t("Delete all test data?")}</h2>
+              <button type="button" className="modal-close secondary" onClick={closeReset} disabled={resetting} aria-label={t("Close")}>×</button>
+            </div>
+            <p>
+              {tn(
+                reset.accounts,
+                "{count} account, with its sign-in, bets, balance and history, will be deleted for good. Only your Super Admin account stays.",
+                "{count} accounts, with their sign-ins, bets, balances and history, will be deleted for good. Only your Super Admin account stays.",
+              )}
+            </p>
+            <form className="stack" onSubmit={onReset}>
+              <label>
+                {t("Type your username, {name}, to confirm", { name: me.username })}
+                <input value={resetUsername} onChange={(event) => setResetUsername(event.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} required />
+              </label>
+              <label>
+                {t("Your password")}
+                <input type="password" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} autoComplete="current-password" required />
+              </label>
+              <div className="modal-actions">
+                <button type="button" className="secondary" onClick={closeReset} disabled={resetting}>{t("Cancel")}</button>
+                <button type="submit" className="danger-button" disabled={resetting || resetUsername.trim().toLowerCase() !== me.username.toLowerCase() || !resetPassword}>
+                  {resetting ? <LoadingSpinner label="Deleting all test data" size="small" /> : t("Delete everything")}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

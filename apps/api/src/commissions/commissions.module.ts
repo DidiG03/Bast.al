@@ -13,6 +13,6 @@ import { PlayersController } from "./players.controller";
   imports: [AuthModule, SecurityModule, UsersModule],
   controllers: [CommissionsController, PlayersController],
   providers: [CommissionsService, CommissionPayoutsService, PlayerActivityService, BettingLimitsService],
-  exports: [BettingLimitsService],
+  exports: [BettingLimitsService, CommissionsService],
 })
 export class CommissionsModule {}

@@ -4,6 +4,13 @@ const nextConfig = {
   poweredByHeader: false,
   // Runs instrumentation.ts at server start (error reporting). Built in from Next 15.
   experimental: { instrumentationHook: true },
+  // pixi-reels (the Casino's reels) can play Spine animations through an optional
+  // add-on that needs a paid Spine licence. We don't install or use it, and
+  // pixi-reels copes with it missing; this stops the build looking for it.
+  webpack(config) {
+    config.resolve.alias = { ...config.resolve.alias, "@esotericsoftware/spine-pixi-v8": false };
+    return config;
+  },
   async headers() {
     return [
       {

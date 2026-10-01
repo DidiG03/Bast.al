@@ -121,6 +121,7 @@ function deletion({ history = {}, balance = "0", children = 0 } = {}) {
   const prisma = {
     user: { findUnique: async () => target, count: async () => children },
     bet: { findFirst: found("bet") },
+    casinoSpin: { findFirst: found("spin") },
     balanceTransaction: { findFirst: found("ledger") },
     commissionPayout: { findFirst: found("payout") },
     $transaction: async (fn) => fn(tx),
@@ -133,8 +134,8 @@ function deletion({ history = {}, balance = "0", children = 0 } = {}) {
   return { remove: () => service.deleteUser(manager, "p1"), calls };
 }
 
-test("an account with bets, ledger entries or commission payouts can't be deleted", async () => {
-  for (const kind of ["bet", "ledger", "payout"]) {
+test("an account with bets, casino spins, ledger entries or commission payouts can't be deleted", async () => {
+  for (const kind of ["bet", "spin", "ledger", "payout"]) {
     const { remove, calls } = deletion({ history: { [kind]: true } });
     await assert.rejects(remove(), /has bets or money history.*Suspend it instead/, kind);
     assert.deepEqual(calls, [], `nothing is touched (${kind})`);

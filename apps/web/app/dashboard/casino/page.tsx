@@ -16,6 +16,8 @@ import { addDays, startOfMonth, startOfWeek } from "../../../lib/time";
 
 /** Roulette's payout rate, for its tile: 36/37 (the API's rules say the same). */
 const ROULETTE_RATE = 97.3;
+/** Blackjack's, with perfect play, as measured by the API's scripts/blackjack-rtp.mjs. */
+const BLACKJACK_RATE = 99.6;
 
 /** The Casino: a lobby of games for Players; the switches and the figures for staff. */
 export default function CasinoPage() {
@@ -88,6 +90,21 @@ function CasinoLobby() {
               <strong>{t("Roulette")}</strong>
               <span>{t("European roulette with a single 0. Bet on numbers, colours and more.")}</span>
               <small>{t("Pays back {rate}% on average", { rate: ROULETTE_RATE })}</small>
+            </span>
+          </Link>
+          <Link className="casino-tile is-blackjack" href="/dashboard/casino/blackjack">
+            <span className="casino-tile-art" aria-hidden="true">
+              <span className="casino-tile-card">
+                A<br />♠
+              </span>
+              <span className="casino-tile-card is-red">
+                K<br />♥
+              </span>
+            </span>
+            <span className="casino-tile-body">
+              <strong>{t("Blackjack")}</strong>
+              <span>{t("Beat the dealer to 21. Blackjack pays 3 to 2.")}</span>
+              <small>{t("Pays back about {rate}% played perfectly", { rate: BLACKJACK_RATE })}</small>
             </span>
           </Link>
         </div>
@@ -225,7 +242,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
       </div>
 
       <div className="report-grid">
-        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
+        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
         <Stat label={t("Staked")} value={formatMoney(data.totals.staked)} hint={t("What spins and rounds cost")} />
         <Stat label={t("Paid out")} value={formatMoney(data.totals.won)} hint={data.totals.payoutRate === null ? t("No spins yet") : t("{rate}% of what was staked", { rate: data.totals.payoutRate })} />
         <Stat label={t("Casino profit")} help="What Players lost in the Casino minus what they won. It's part of the team's profit in Commissions." value={formatSignedMoney(data.totals.net)} highlight={data.totals.net < 0 ? "bad" : "good"} />
@@ -238,6 +255,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
             [
               ["slot", t("Fruit slot"), tn(data.games.slot.spins, "{count} spin", "{count} spins")],
               ["roulette", t("Roulette"), tn(data.games.roulette.spins, "{count} round", "{count} rounds")],
+              ["blackjack", t("Blackjack"), tn(data.games.blackjack.spins, "{count} hand", "{count} hands")],
             ] as const
           ).map(([key, name, count]) => {
             const game = data.games[key];
@@ -270,7 +288,8 @@ function CasinoOverview({ me }: { me: MeResponse }) {
                   <strong>{player.username}</strong>
                   <span className="muted">
                     {tn(player.spins, "{count} spin", "{count} spins")}
-                    {player.roulette.spins > 0 ? ` · ${tn(player.roulette.spins, "{count} roulette round", "{count} roulette rounds")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
+                    {player.roulette.spins > 0 ? ` · ${tn(player.roulette.spins, "{count} roulette round", "{count} roulette rounds")}` : ""}
+                    {player.blackjack.hands > 0 ? ` · ${tn(player.blackjack.hands, "{count} blackjack hand", "{count} blackjack hands")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
                   </span>
                 </div>
                 <strong className={player.net < 0 ? "is-bad" : undefined}>{formatSignedMoney(player.net)}</strong>

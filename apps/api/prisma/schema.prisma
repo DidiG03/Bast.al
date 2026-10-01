@@ -147,6 +147,7 @@ model User {
   casinoSpins            CasinoSpin[]
   casinoFreeSpins        CasinoFreeSpins?
   casinoGamble           CasinoGamble?
+  blackjackHand          BlackjackHand?
 
   @@index([parentId])
   @@index([role])
@@ -224,24 +225,24 @@ model NotificationPreference {
 /// every relation to User is Restrict, so an account with any money history
 /// can only be suspended (UsersService.deleteUser refuses it first).
 model BalanceTransaction {
-  id           String                   @id @default(cuid())
-  fromUserId   String?                  @map("from_user_id")
-  fromUser     User?                    @relation("DelegationFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
-  toUserId     String                   @map("to_user_id")
-  toUser       User                     @relation("DelegationTo", fields: [toUserId], references: [id], onDelete: Restrict)
-  actorId      String?                  @map("actor_id")
-  actor        User?                    @relation("DelegationActor", fields: [actorId], references: [id], onDelete: Restrict)
-  approvedById String?                  @map("approved_by_id")
-  approvedBy   User?                    @relation("DelegationApprover", fields: [approvedById], references: [id], onDelete: Restrict)
-  type         BalanceTransactionType
-  amount       Decimal                  @db.Decimal(12, 2)
-  reason       String
-  status       BalanceTransactionStatus @default(APPROVED)
-  approvedAt   DateTime?                @map("approved_at")
+  id               String                   @id @default(cuid())
+  fromUserId       String?                  @map("from_user_id")
+  fromUser         User?                    @relation("DelegationFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUserId         String                   @map("to_user_id")
+  toUser           User                     @relation("DelegationTo", fields: [toUserId], references: [id], onDelete: Restrict)
+  actorId          String?                  @map("actor_id")
+  actor            User?                    @relation("DelegationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  approvedById     String?                  @map("approved_by_id")
+  approvedBy       User?                    @relation("DelegationApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  type             BalanceTransactionType
+  amount           Decimal                  @db.Decimal(12, 2)
+  reason           String
+  status           BalanceTransactionStatus @default(APPROVED)
+  approvedAt       DateTime?                @map("approved_at")
   /// BET_STAKE and BET_SETTLEMENT only: the bet this money moved for.
-  betId        String?                  @map("bet_id")
-  bet          Bet?                     @relation(fields: [betId], references: [id], onDelete: SetNull)
-  createdAt    DateTime                 @default(now()) @map("created_at")
+  betId            String?                  @map("bet_id")
+  bet              Bet?                     @relation(fields: [betId], references: [id], onDelete: SetNull)
+  createdAt        DateTime                 @default(now()) @map("created_at")
   commissionPayout CommissionPayout?
 
   @@index([toUserId, createdAt])
@@ -270,67 +271,67 @@ model AuditLog {
 }
 
 model Event {
-  id           String      @id @default(cuid())
-  name         String
-  league       String
-  status       EventStatus @default(UPCOMING)
-  startsAt     DateTime
-  volume       Decimal     @default(0) @db.Decimal(12, 2)
+  id                 String      @id @default(cuid())
+  name               String
+  league             String
+  status             EventStatus @default(UPCOMING)
+  startsAt           DateTime
+  volume             Decimal     @default(0) @db.Decimal(12, 2)
   /// Where the match came from: "api-football", "mock" or "manual".
-  provider     String      @default("manual")
+  provider           String      @default("manual")
   /// The match's id at the provider. Null for manual events.
-  externalId   String?     @map("external_id")
-  country      String?
-  homeTeam     String?     @map("home_team")
-  awayTeam     String?     @map("away_team")
-  homeScore    Int?        @map("home_score")
-  awayScore    Int?        @map("away_score")
+  externalId         String?     @map("external_id")
+  country            String?
+  homeTeam           String?     @map("home_team")
+  awayTeam           String?     @map("away_team")
+  homeScore          Int?        @map("home_score")
+  awayScore          Int?        @map("away_score")
   /// Minutes played, while live.
-  elapsed      Int?
+  elapsed            Int?
   /// Super Admin: hidden events aren't shown to anyone else.
-  hidden       Boolean     @default(false)
+  hidden             Boolean     @default(false)
   /// Super Admin: suspended events are shown but can't be bet on.
-  suspended    Boolean     @default(false)
+  suspended          Boolean     @default(false)
   /// Last time the provider sent anything for this event.
-  syncedAt     DateTime?   @map("synced_at")
+  syncedAt           DateTime?   @map("synced_at")
   /// Last time live odds arrived for this match. Live bets pause when this goes stale.
-  liveOddsAt   DateTime?   @map("live_odds_at")
+  liveOddsAt         DateTime?   @map("live_odds_at")
   /// The feed has stopped live betting on this match (e.g. a goal or VAR check).
-  liveStopped  Boolean     @default(false) @map("live_stopped")
+  liveStopped        Boolean     @default(false) @map("live_stopped")
   /// Live bets pause until then after a goal, a big price jump or a reopen (see odds/live-guard.ts).
-  liveCooldownUntil  DateTime? @map("live_cooldown_until")
+  liveCooldownUntil  DateTime?   @map("live_cooldown_until")
   /// Why: goal, swing or reopen.
-  liveCooldownReason String?   @map("live_cooldown_reason")
+  liveCooldownReason String?     @map("live_cooldown_reason")
   /// The score bets are settled on: 90 minutes plus stoppage time, never
   /// extra time or penalties. Set by the feed when the match ends, or by
   /// Super Admin when correcting a result.
-  resultHome   Int?        @map("result_home")
-  resultAway   Int?        @map("result_away")
+  resultHome         Int?        @map("result_home")
+  resultAway         Int?        @map("result_away")
   /// The half-time score, for the 1st and 2nd half markets.
-  resultHalfHome Int?      @map("result_half_home")
-  resultHalfAway Int?      @map("result_half_away")
+  resultHalfHome     Int?        @map("result_half_home")
+  resultHalfAway     Int?        @map("result_half_away")
   /// Went to extra time or penalties: match statistics include extra time then, so corner and card bets wait for Super Admin.
-  extraTime    Boolean     @default(false) @map("extra_time")
+  extraTime          Boolean     @default(false) @map("extra_time")
   /// Corners and cards (every yellow and red counts as one) the corner and card markets settle on.
-  resultCornersHome Int?   @map("result_corners_home")
-  resultCornersAway Int?   @map("result_corners_away")
-  resultCardsHome   Int?   @map("result_cards_home")
-  resultCardsAway   Int?   @map("result_cards_away")
+  resultCornersHome  Int?        @map("result_corners_home")
+  resultCornersAway  Int?        @map("result_corners_away")
+  resultCardsHome    Int?        @map("result_cards_home")
+  resultCardsAway    Int?        @map("result_cards_away")
   /// "feed" or "manual". The feed never overwrites numbers Super Admin entered.
-  statsSource  String?     @map("stats_source")
+  statsSource        String?     @map("stats_source")
   /// Last time the feed was asked for this match's statistics.
-  statsCheckedAt DateTime? @map("stats_checked_at")
+  statsCheckedAt     DateTime?   @map("stats_checked_at")
   /// "feed" or "manual". The feed never overwrites a manual result.
-  resultSource String?     @map("result_source")
+  resultSource       String?     @map("result_source")
   /// When the feed last changed a result bets were already settled on. Once
   /// it has stayed the same for a while, settlement re-settles the bets and clears this.
-  resultChangedAt DateTime? @map("result_changed_at")
+  resultChangedAt    DateTime?   @map("result_changed_at")
   /// When the feed moved kick-off more than 48 hours later. Open bets placed
   /// before then are refunded, and this is cleared.
-  rescheduledAt DateTime?  @map("rescheduled_at")
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  markets      Market[]
+  rescheduledAt      DateTime?   @map("rescheduled_at")
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  markets            Market[]
 
   @@unique([provider, externalId])
   @@index([status, startsAt])
@@ -417,18 +418,18 @@ model OddsOverride {
 
 /// Platform-wide settings. There is one row, with id "default".
 model PlatformSettings {
-  id             String    @id @default("default")
+  id               String    @id @default("default")
   /// Super Admin's margin, in percent, taken off every feed price for every team.
-  baseOddsMargin Decimal   @default(0) @map("base_odds_margin") @db.Decimal(5, 2)
+  baseOddsMargin   Decimal   @default(0) @map("base_odds_margin") @db.Decimal(5, 2)
   /// When the odds feed last finished a sync, and what it reported.
-  oddsSyncedAt   DateTime? @map("odds_synced_at")
-  oddsSyncStatus String?   @map("odds_sync_status") @db.VarChar(300)
+  oddsSyncedAt     DateTime? @map("odds_synced_at")
+  oddsSyncStatus   String?   @map("odds_sync_status") @db.VarChar(300)
   /// Super Admin's pick of competitions to sync: { leagues: number[], countries: string[] }.
   /// Null means the defaults (API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES, or the built-in list).
-  oddsCompetitions Json?   @map("odds_competitions")
+  oddsCompetitions Json?     @map("odds_competitions")
   /// Super Admin's switch for the Casino tab on the whole site. Each Owner has their own too.
-  casinoEnabled  Boolean   @default(false) @map("casino_enabled")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  casinoEnabled    Boolean   @default(false) @map("casino_enabled")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   @@map("platform_settings")
 }
@@ -438,27 +439,27 @@ model PlatformSettings {
 /// earns the full stake and a won bet costs the winnings. VOID bets are
 /// refunded and count for nothing.
 model Bet {
-  id          String     @id @default(cuid())
-  playerId    String     @map("player_id")
-  player      User       @relation(fields: [playerId], references: [id], onDelete: Restrict)
-  stake       Decimal    @db.Decimal(12, 2)
+  id          String               @id @default(cuid())
+  playerId    String               @map("player_id")
+  player      User                 @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  stake       Decimal              @db.Decimal(12, 2)
   /// What the Player was paid back, stake included. 0 for a lost bet.
-  payout      Decimal    @default(0) @db.Decimal(12, 2)
-  status      BetStatus  @default(OPEN)
+  payout      Decimal              @default(0) @db.Decimal(12, 2)
+  status      BetStatus            @default(OPEN)
   /// What was bet on, e.g. "Tirana v Partizani · Tirana to win".
-  description String?    @db.VarChar(200)
+  description String?              @db.VarChar(200)
   /// The price the Player got, locked when the bet was placed.
-  odds        Decimal?   @db.Decimal(8, 2)
-  selectionId String?    @map("selection_id")
-  selection   Selection? @relation(fields: [selectionId], references: [id], onDelete: Restrict)
-  placedAt    DateTime   @default(now()) @map("placed_at")
-  settledAt   DateTime?  @map("settled_at")
+  odds        Decimal?             @db.Decimal(8, 2)
+  selectionId String?              @map("selection_id")
+  selection   Selection?           @relation(fields: [selectionId], references: [id], onDelete: Restrict)
+  placedAt    DateTime             @default(now()) @map("placed_at")
+  settledAt   DateTime?            @map("settled_at")
   /// Set when Super Admin voided the bet by hand. Such a bet stays void even
   /// if the match result is corrected later.
-  voidReason  String?    @map("void_reason") @db.VarChar(200)
+  voidReason  String?              @map("void_reason") @db.VarChar(200)
   /// SINGLE bets point at one selection. ACCUMULATOR bets have legs, and
   /// `odds` is the combined price locked when the bet was placed.
-  kind        BetKind    @default(SINGLE)
+  kind        BetKind              @default(SINGLE)
   legs        BetLeg[]
   /// The stake and every settlement move, in the Player's balance ledger.
   ledger      BalanceTransaction[]
@@ -466,15 +467,15 @@ model Bet {
   /// placed. Commission is worked out from these, so moving the Player to
   /// another Manager or changing a rate later never rewrites past results.
   /// Null only on bets placed before this was recorded (filled in on start).
-  ownerId     String?    @map("owner_id")
-  owner       User?      @relation("BetOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  ownerId     String?              @map("owner_id")
+  owner       User?                @relation("BetOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   /// Null when the Player sat directly under the Owner.
-  managerId   String?    @map("manager_id")
-  manager     User?      @relation("BetManager", fields: [managerId], references: [id], onDelete: Restrict)
+  managerId   String?              @map("manager_id")
+  manager     User?                @relation("BetManager", fields: [managerId], references: [id], onDelete: Restrict)
   /// Super Admin's cut of the Owner's profit, in percent.
-  ownerRate   Decimal?   @map("owner_rate") @db.Decimal(5, 2)
+  ownerRate   Decimal?             @map("owner_rate") @db.Decimal(5, 2)
   /// The Manager's cut of their Players' profit, in percent (0 without a Manager).
-  managerRate Decimal?   @map("manager_rate") @db.Decimal(5, 2)
+  managerRate Decimal?             @map("manager_rate") @db.Decimal(5, 2)
   /// What each settlement did to the team's numbers, see SettlementEntry.
   settlements SettlementEntry[]
 
@@ -560,20 +561,20 @@ model SettlementEntry {
   /// The casino spin this row is about; null for a bet. Spins count 0 bets.
   casinoSpinId String?     @map("casino_spin_id")
   casinoSpin   CasinoSpin? @relation(fields: [casinoSpinId], references: [id], onDelete: Restrict)
-  playerId    String   @map("player_id")
-  player      User     @relation("SettlementPlayer", fields: [playerId], references: [id], onDelete: Restrict)
-  ownerId     String?  @map("owner_id")
-  owner       User?    @relation("SettlementOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  managerId   String?  @map("manager_id")
-  manager     User?    @relation("SettlementManager", fields: [managerId], references: [id], onDelete: Restrict)
-  ownerRate   Decimal  @default(0) @map("owner_rate") @db.Decimal(5, 2)
-  managerRate Decimal  @default(0) @map("manager_rate") @db.Decimal(5, 2)
+  playerId     String      @map("player_id")
+  player       User        @relation("SettlementPlayer", fields: [playerId], references: [id], onDelete: Restrict)
+  ownerId      String?     @map("owner_id")
+  owner        User?       @relation("SettlementOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  managerId    String?     @map("manager_id")
+  manager      User?       @relation("SettlementManager", fields: [managerId], references: [id], onDelete: Restrict)
+  ownerRate    Decimal     @default(0) @map("owner_rate") @db.Decimal(5, 2)
+  managerRate  Decimal     @default(0) @map("manager_rate") @db.Decimal(5, 2)
   /// Change in settled bets counted: +1, -1 or 0.
-  bets        Int
+  bets         Int
   /// Change in stakes and payouts counted.
-  stake       Decimal  @db.Decimal(12, 2)
-  payout      Decimal  @db.Decimal(12, 2)
-  createdAt   DateTime @default(now()) @map("created_at")
+  stake        Decimal     @db.Decimal(12, 2)
+  payout       Decimal     @db.Decimal(12, 2)
+  createdAt    DateTime    @default(now()) @map("created_at")
 
   @@index([ownerId, createdAt])
   @@index([managerId, createdAt])
@@ -624,7 +625,8 @@ model CommissionPayout {
 /// landed, so any spin can be checked later. The team and rates are recorded
 /// like a bet's, for the settlement journal and the Casino page's figures.
 /// A spin, one guess at double or nothing (kind GAMBLE: bet and stake are the win at risk),
-/// or a round of roulette (kind ROULETTE: bet and stake are all the chips on the table).
+/// a round of roulette (kind ROULETTE: bet and stake are all the chips on the table),
+/// or a round of blackjack (kind BLACKJACK: bet is the first bet, stake everything put down, doubles, splits and insurance included).
 model CasinoSpin {
   id           String            @id @default(cuid())
   kind         CasinoPlayKind    @default(SPIN)
@@ -649,6 +651,8 @@ model CasinoSpin {
   gamble       Json?
   /// A roulette round: the number and every bet, { number, bets: [{ spot, amount, numbers, win }] }. stops holds the wheel's stop.
   roulette     Json?
+  /// A blackjack round: every card dealt, each hand's moves and result, and the rest of the shoe.
+  blackjack    Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -662,6 +666,28 @@ enum CasinoPlayKind {
   SPIN
   GAMBLE
   ROULETTE
+  BLACKJACK
+}
+
+/// A blackjack round still being played: one per Player at most. The stakes
+/// already left the balance; the round is recorded as a CasinoSpin when it
+/// ends, and this row goes. The shoe is in `state`, so it never leaves the
+/// server. The team and rates are taken when the round is dealt.
+model BlackjackHand {
+  playerId    String   @id @map("player_id")
+  player      User     @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  ownerId     String?  @map("owner_id")
+  managerId   String?  @map("manager_id")
+  ownerRate   Decimal  @default(0) @map("owner_rate") @db.Decimal(5, 2)
+  managerRate Decimal  @default(0) @map("manager_rate") @db.Decimal(5, 2)
+  /// What the round has taken from the balance so far.
+  staked      Decimal  @db.Decimal(12, 2)
+  state       Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("blackjack_hands")
 }
 
 /// A win a Player can still take to double or nothing: how much is at risk, and how many guesses they've made.

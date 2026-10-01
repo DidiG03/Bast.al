@@ -94,9 +94,7 @@ export class BettingLimitsService {
       throw new BadRequestException(`The most this Player can stake on one bet is $${maxStake.toFixed(2)}`);
     }
     if (dailyLossLimit !== null) {
-      const today = startOfDay(new Date());
-      const open = await this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: today } }, _sum: { stake: true } });
-      const worstCase = (await this.lossToday(playerId)) + Number(open._sum.stake ?? 0) + alsoStaking + stake;
+      const worstCase = (await this.lossToday(playerId)) + (await this.openStakes(playerId)) + alsoStaking + stake;
       if (worstCase > dailyLossLimit) {
         throw new BadRequestException(`This bet could take the Player past their $${dailyLossLimit.toFixed(2)} daily loss limit`);
       }
@@ -108,8 +106,16 @@ export class BettingLimitsService {
    * stakes placed today that are still open, the same sum assertCanPlace checks.
    */
   async usedToday(playerId: string): Promise<number> {
-    const open = await this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfDay(new Date()) } }, _sum: { stake: true } });
-    return Math.round(((await this.lossToday(playerId)) + Number(open._sum.stake ?? 0)) * 100) / 100;
+    return Math.round(((await this.lossToday(playerId)) + (await this.openStakes(playerId))) * 100) / 100;
+  }
+
+  /** Money still riding: stakes on bets placed today that are still open, and on a blackjack round still being played. */
+  private async openStakes(playerId: string): Promise<number> {
+    const [open, blackjack] = await Promise.all([
+      this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfDay(new Date()) } }, _sum: { stake: true } }),
+      this.prisma.blackjackHand.findUnique({ where: { playerId }, select: { staked: true } }),
+    ]);
+    return Number(open._sum.stake ?? 0) + Number(blackjack?.staked ?? 0);
   }
 
   /**

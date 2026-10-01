@@ -17,6 +17,7 @@ import { CasinoService } from "./casino.service";
 import { BETS } from "./game";
 import { MAX_SPOTS } from "./roulette";
 import { RouletteService } from "./roulette.service";
+import { BlackjackService } from "./blackjack.service";
 
 class SpinDto {
   @ApiProperty({ enum: BETS, description: "What the spin costs, in dollars. Ignored while the Player has free spins left from the old game." })
@@ -52,6 +53,18 @@ class RouletteSpinDto {
   bets!: RouletteBetDto[];
 }
 
+class BlackjackDealDto {
+  @ApiProperty({ description: "The bet, in dollars, in whole chips" })
+  @IsNumber()
+  bet!: number;
+}
+
+class BlackjackActionDto {
+  @ApiProperty({ enum: ["hit", "stand", "double", "split", "insure", "noInsurance"] })
+  @IsIn(["hit", "stand", "double", "split", "insure", "noInsurance"])
+  action!: "hit" | "stand" | "double" | "split" | "insure" | "noInsurance";
+}
+
 class CasinoOpenDto {
   @ApiProperty()
   @IsBoolean()
@@ -82,6 +95,7 @@ export class CasinoController {
   constructor(
     private readonly casino: CasinoService,
     private readonly roulette: RouletteService,
+    private readonly blackjack: BlackjackService,
   ) {}
 
   /** The Player's Casino: can they play, the rules, free spins, recent spins. */
@@ -130,6 +144,31 @@ export class CasinoController {
   @Idempotent()
   rouletteSpin(@CurrentActor() actor: Actor, @Body() body: RouletteSpinDto, @Req() req: AuthenticatedRequest) {
     return this.roulette.spin(actor, body.bets, clientIp(req));
+  }
+
+  /** The Player's blackjack table: can they play, the rules, the round in play, their last rounds. */
+  @Get("blackjack")
+  @Roles(Role.PLAYER)
+  blackjackState(@CurrentActor() actor: Actor) {
+    return this.blackjack.state(actor);
+  }
+
+  /** Deals a round. A repeated request with the same Idempotency-Key gets the first answer back. */
+  @Post("blackjack/deal")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Idempotent()
+  blackjackDeal(@CurrentActor() actor: Actor, @Body() body: BlackjackDealDto) {
+    return this.blackjack.deal(actor, body.bet);
+  }
+
+  /** One move in the round being played: hit, stand, double, split, or answer insurance. Idempotent like a deal. */
+  @Post("blackjack/action")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 180, ttl: 60_000 } })
+  @Idempotent()
+  blackjackAction(@CurrentActor() actor: Actor, @Body() body: BlackjackActionDto) {
+    return this.blackjack.act(actor, body.action);
   }
 
   /** Whether the Casino is open, and how it did in a period, per Player. */

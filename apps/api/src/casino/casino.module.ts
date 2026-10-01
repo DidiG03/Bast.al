@@ -6,11 +6,12 @@ import { UsersModule } from "../users/users.module";
 import { CasinoController } from "./casino.controller";
 import { CasinoService } from "./casino.service";
 import { RouletteService } from "./roulette.service";
+import { BlackjackService } from "./blackjack.service";
 
 @Module({
   imports: [AuthModule, SecurityModule, UsersModule, CommissionsModule],
   controllers: [CasinoController],
-  providers: [CasinoService, RouletteService],
-  exports: [CasinoService, RouletteService],
+  providers: [CasinoService, RouletteService, BlackjackService],
+  exports: [CasinoService, RouletteService, BlackjackService],
 })
 export class CasinoModule {}

@@ -668,10 +668,80 @@ export type CasinoAdmin = {
   /** A Manager's team: whether their Owner has the Casino open. Null for others. */
   teamOpen: boolean | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
-  /** Each game on its own: the slot (spins and double or nothing) and roulette. */
-  games: Record<"slot" | "roulette", { spins: number; staked: number; won: number; payoutRate: number | null }>;
-  players: Array<{ id: string; username: string; spins: number; roulette: { spins: number; staked: number; won: number }; staked: number; won: number; net: number }>;
+  /** Each game on its own: the slot (spins and double or nothing), roulette and blackjack (`spins` are its hands). */
+  games: Record<"slot" | "roulette" | "blackjack", { spins: number; staked: number; won: number; payoutRate: number | null }>;
+  players: Array<{
+    id: string;
+    username: string;
+    spins: number;
+    roulette: { spins: number; staked: number; won: number };
+    blackjack: { hands: number; staked: number; won: number };
+    staked: number;
+    won: number;
+    net: number;
+  }>;
 };
+
+/** A card: rank (A, 2–9, T, J, Q, K) then suit (S, H, D, C), "AS", "TD". */
+export type PlayingCardCode = string;
+export type BlackjackAction = "hit" | "stand" | "double" | "split" | "insure" | "noInsurance";
+export type BlackjackResultKind = "BLACKJACK" | "WIN" | "PUSH" | "LOSE" | "BUST";
+
+/** A blackjack round as the Player may see it: the dealer's face-down card is null until the round ends. */
+export type BlackjackRoundView = {
+  phase: "INSURANCE" | "PLAYER" | "DONE";
+  dealer: Array<PlayingCardCode | null>;
+  dealerTotal: number;
+  dealerSoft: boolean;
+  hands: Array<{
+    cards: PlayingCardCode[];
+    total: number;
+    soft: boolean;
+    blackjack: boolean;
+    bet: number;
+    doubled: boolean;
+    done: boolean;
+    result: BlackjackResultKind | null;
+    /** What the hand paid back, its bet included. */
+    payout: number;
+  }>;
+  /** The hand being played. */
+  active: number;
+  /** Insurance taken, 0 if declined, null when not asked. */
+  insurance: number | null;
+  insurancePayout: number;
+  /** The moves open now. */
+  allowed: BlackjackAction[];
+  /** Everything put down this round. */
+  staked: number;
+  /** Everything paid back, once the round is over; null before. */
+  payout: number | null;
+};
+
+/** A finished round in the Player's list. */
+export type BlackjackPastRound = {
+  id: string;
+  bet: number;
+  staked: number;
+  win: number;
+  dealer: PlayingCardCode[];
+  dealerTotal: number;
+  hands: Array<{ cards: PlayingCardCode[]; total: number; blackjack: boolean; result: BlackjackResultKind | null }>;
+  createdAt: string;
+};
+
+export type BlackjackState = {
+  closed: string | null;
+  balance: number;
+  /** The most a first bet can be: the Player's max stake, or the table's own limit. */
+  tableMax: number;
+  /** A round still being played, to carry on with. */
+  round: BlackjackRoundView | null;
+  recent: BlackjackPastRound[];
+  game: { name: string; chips: number[]; payoutRate: number };
+};
+
+export type BlackjackMoveResult = { round: BlackjackRoundView; balance: number };
 
 export type RouletteColor = "RED" | "BLACK" | "GREEN";
 

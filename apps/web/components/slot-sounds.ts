@@ -175,6 +175,12 @@ export const slotSound = {
     tone(220, 0.1, 0.45, { type: "sawtooth", gain: 0.12, slideTo: 90 });
   },
 
+  /** Blackjack: a card sliding out of the shoe onto the felt. */
+  cardDeal() {
+    noise(0, 0.09, { filter: "bandpass", freq: 3200, sweepTo: 1200, gain: 0.16 });
+    noise(0.07, 0.03, { filter: "highpass", freq: 2000, gain: 0.08 });
+  },
+
   /** Roulette: a chip put down on the table. */
   chip() {
     noise(0, 0.035, { filter: "bandpass", freq: 3800, gain: 0.22 });

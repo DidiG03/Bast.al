@@ -146,6 +146,7 @@ model User {
   commissionPayouts      CommissionPayout[]
   casinoSpins            CasinoSpin[]
   casinoFreeSpins        CasinoFreeSpins?
+  casinoGamble           CasinoGamble?
 
   @@index([parentId])
   @@index([role])
@@ -622,8 +623,10 @@ model CommissionPayout {
 /// One casino spin: what it cost, what it paid, and exactly how the reels
 /// landed, so any spin can be checked later. The team and rates are recorded
 /// like a bet's, for the settlement journal and the Casino page's figures.
+/// A spin, or one guess at double or nothing (kind GAMBLE: bet and stake are the win at risk).
 model CasinoSpin {
   id           String            @id @default(cuid())
+  kind         CasinoPlayKind    @default(SPIN)
   playerId     String            @map("player_id")
   player       User              @relation(fields: [playerId], references: [id], onDelete: Restrict)
   ownerId      String?           @map("owner_id")
@@ -637,10 +640,12 @@ model CasinoSpin {
   win          Decimal           @db.Decimal(12, 2)
   free         Boolean           @default(false)
   freeSpinsWon Int               @default(0) @map("free_spins_won")
-  /// grid[reel][row], where each reel stopped on its strip, and the winning lines.
+  /// grid[reel][row], where each reel stopped on its strip, and the winning lines. Empty for a guess.
   grid         Json
   stops        Json
   lines        Json
+  /// A guess: the colour picked and the card drawn, { pick, suit }.
+  gamble       Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -648,6 +653,22 @@ model CasinoSpin {
   @@index([ownerId, createdAt])
   @@index([managerId, createdAt])
   @@map("casino_spins")
+}
+
+enum CasinoPlayKind {
+  SPIN
+  GAMBLE
+}
+
+/// A win a Player can still take to double or nothing: how much is at risk, and how many guesses they've made.
+model CasinoGamble {
+  playerId  String   @id @map("player_id")
+  player    User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  amount    Decimal  @db.Decimal(12, 2)
+  steps     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("casino_gambles")
 }
 
 /// Free spins a Player has won and not played yet, and the bet they play at.

@@ -16,10 +16,16 @@ import { CasinoService } from "./casino.service";
 import { BETS } from "./game";
 
 class SpinDto {
-  @ApiProperty({ enum: BETS, description: "What the spin costs, in dollars. Ignored while the Player has free spins." })
+  @ApiProperty({ enum: BETS, description: "What the spin costs, in dollars. Ignored while the Player has free spins left from the old game." })
   @IsNumber()
   @IsIn([...BETS])
   bet!: number;
+}
+
+class GambleDto {
+  @ApiProperty({ enum: ["RED", "BLACK"], description: "The colour the Player thinks the card will be" })
+  @IsIn(["RED", "BLACK"])
+  pick!: "RED" | "BLACK";
 }
 
 class CasinoOpenDto {
@@ -65,6 +71,22 @@ export class CasinoController {
   @Idempotent()
   spin(@CurrentActor() actor: Actor, @Body() body: SpinDto, @Req() req: AuthenticatedRequest) {
     return this.casino.spin(actor, body.bet, clientIp(req));
+  }
+
+  /** Double or nothing on the last win. Like a spin, a repeated request gets the first answer back. */
+  @Post("gamble")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 90, ttl: 60_000 } })
+  @Idempotent()
+  gamble(@CurrentActor() actor: Actor, @Body() body: GambleDto, @Req() req: AuthenticatedRequest) {
+    return this.casino.gamble(actor, body.pick, clientIp(req));
+  }
+
+  /** Takes the win and ends double or nothing. */
+  @Post("collect")
+  @Roles(Role.PLAYER)
+  collect(@CurrentActor() actor: Actor) {
+    return this.casino.collect(actor);
   }
 
   /** Whether the Casino is open, and how it did in a period, per Player. */

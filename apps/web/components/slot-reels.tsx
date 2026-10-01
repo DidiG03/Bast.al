@@ -4,6 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { Application, Graphics } from "pixi.js";
 import type { ReelSet, WinPresenter } from "pixi-reels";
 import type { SlotSymbol } from "../lib/api";
+import { slotSound } from "./slot-sounds";
 import { drawSymbol } from "./slot-symbols";
 
 /**
@@ -15,19 +16,32 @@ import { drawSymbol } from "./slot-symbols";
 export type SlotReelsHandle = {
   /** Starts the reels spinning. Resolves once they've landed on what `land` gives them; null if the reels aren't drawn yet. */
   start(): Promise<void> | null;
-  /** Where to stop: grid[reel][row]. With two goals already showing, the reels after them slow down to build suspense. */
+  /** Where to stop: grid[reel][row]. With two scatters (stars) already showing, the reels after them slow down to build suspense. */
   land(grid: SlotSymbol[][]): void;
   /**
    * Shows the wins one after another, again and again until `clear`: each
-   * win's cells pulse, the rest dim, and a line's path is drawn across the
-   * reels in its colour. `onShow` gets the index of the win now showing.
+   * win's cells pulse, and a line is drawn in its colour from the left edge
+   * to the right one, so it joins the line's numbers at the sides. Nothing
+   * else is dimmed. `onShow` gets the index of the win now showing.
    */
   present(wins: ReelWin[], onShow?: (index: number) => void): void;
   clear(): void;
 };
 
-/** One win to show. `cells` and `path` are [reel, row]; `path` is the whole line, drawn across all reels. */
-export type ReelWin = { cells: Array<[number, number]>; color: string; path?: Array<[number, number]>; paths?: Array<{ path: Array<[number, number]>; color: string }> };
+/**
+ * One win to show. `cells`, `path` and `marks` are [reel, row]. `path` is the
+ * whole line, drawn across all reels; `marks` get an outline (wins with no
+ * line, like stars anywhere).
+ */
+export type ReelWin = {
+  cells: Array<[number, number]>;
+  color: string;
+  path?: Array<[number, number]>;
+  /** Where the line meets each edge: up or down from the row's middle, in cells, so it lands on its number. */
+  ends?: [number, number];
+  paths?: Array<{ path: Array<[number, number]>; color: string; ends?: [number, number] }>;
+  marks?: Array<[number, number]>;
+};
 
 type Props = {
   grid: SlotSymbol[][];
@@ -44,6 +58,7 @@ type Props = {
 };
 
 const CELL = 128;
+/** The bar between reels. Rows on a reel touch, so each reel reads as one strip. */
 const GAP = 10;
 /** Symbol pictures are drawn at this many pixels per cell pixel. */
 const SHARPNESS = 2;
@@ -76,7 +91,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       const app = new Application();
       await app.init({
         width: reels * CELL + (reels - 1) * GAP,
-        height: rows * CELL + (rows - 1) * GAP,
+        height: rows * CELL,
         backgroundAlpha: 0,
         antialias: true,
         resolution: Math.min(window.devicePixelRatio || 1, 2),
@@ -95,7 +110,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         .reels(reels)
         .visibleCells(rows)
         .symbolSize(CELL, CELL)
-        .symbolGap(GAP, GAP)
+        .symbolGap(GAP, 0)
         .symbols((registry) => {
           for (const symbol of symbols) registry.register(symbol, SpriteSymbol, { textures: { [symbol]: textures[symbol] } });
         })
@@ -115,22 +130,25 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       };
       const draw = (win: ReelWin) => {
         overlay.clear();
-        for (const { path, color } of win.paths ?? (win.path ? [{ path: win.path, color: win.color }] : [])) {
-          const points = path.map(centre);
-          // A wide soft stroke under a narrow bright one reads as a glow.
-          for (const [width, alpha] of [[16, 0.25], [6, 1]] as const) {
+        for (const { path, color, ends } of win.paths ?? (win.path ? [{ path: win.path, color: win.color, ends: win.ends }] : [])) {
+          const middle = path.map(centre);
+          // Out to both edges, at the height of the line's numbers.
+          const [left, right] = ends ?? [0, 0];
+          const points = [{ x: 0, y: middle[0].y + left * CELL }, ...middle, { x: app.screen.width, y: middle[middle.length - 1].y + right * CELL }];
+          // A soft stroke under a thin bright one reads as a glow.
+          for (const [width, alpha] of [[7, 0.3], [3, 1]] as const) {
             overlay.moveTo(points[0].x, points[0].y);
             for (const point of points.slice(1)) overlay.lineTo(point.x, point.y);
             overlay.stroke({ color, width, alpha, cap: "round", join: "round" });
           }
         }
-        for (const [reel, row] of win.cells) {
+        for (const [reel, row] of win.marks ?? []) {
           const box = reelSet.getCellBounds(reel, row);
-          overlay.roundRect(box.x + 3, box.y + 3, box.width - 6, box.height - 6, 16).stroke({ color: win.color, width: 5 });
+          overlay.roundRect(box.x + 4, box.y + 4, box.width - 8, box.height - 8, 16).stroke({ color: win.color, width: 3 });
         }
       };
       const presenter = new WinPresenter(reelSet, {
-        dimLosers: { alpha: 0.3 },
+        dimLosers: false,
         cycles: -1,
         sortByValue: false,
         // A sweep from the left reel, so the eye follows the line.
@@ -150,6 +168,12 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         showing.current.onShow?.(index);
       });
       reelSet.events.on("win:end", () => overlay.clear());
+      // A thunk as each reel lands, a chime for a star, and the ticking stops when they're all down.
+      reelSet.events.on("spin:reelLanded", (reel, landed) => {
+        slotSound.reelStop(reel);
+        if (landed.includes(scatter)) slotSound.star(reel);
+      });
+      reelSet.events.on("spin:allLanded", () => slotSound.stopTicking());
       // Drawn at a fixed size and scaled to the page's width. PixiJS sets a fixed pixel size on the canvas; this replaces it.
       app.canvas.classList.add("slot-canvas");
       app.canvas.style.width = "100%";
@@ -188,6 +212,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         if (!current) return null;
         current.presenter.abort();
         current.overlay.clear();
+        slotSound.spinStart();
+        if (!instantRef.current) slotSound.startTicking();
         return current.reelSet.spin().then(() => undefined);
       },
       land(next) {

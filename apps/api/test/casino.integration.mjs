@@ -1,6 +1,6 @@
 // The Casino, end to end against a real Postgres: spins moving Bast.al
-// credit, the day's ledger line, the settlement journal, free spins, limits
-// and switches. Like the other integration tests it empties tables, so it
+// credit, the day's ledger line, the settlement journal, double or nothing,
+// free spins left from the old game, limits and switches. Like the other integration tests it empties tables, so it
 // only runs against a database whose name ends in "_test".
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -12,7 +12,7 @@ const { PrismaClient } = require("@prisma/client");
 const { firstValueFrom, from } = require("rxjs");
 const { SeededRandomNumberGenerator } = require("pokie");
 const { CasinoService } = require("../dist/casino/casino.service.js");
-const { LINES, REEL_STRIPS, playRound } = require("../dist/casino/game.js");
+const { GAMBLE_LIMIT, GAMBLE_STEPS, LINES, REEL_STRIPS, SUITS, playRound } = require("../dist/casino/game.js");
 const { BettingLimitsService } = require("../dist/commissions/betting-limits.service.js");
 const { CommissionsService } = require("../dist/commissions/commissions.service.js");
 const { UsersService } = require("../dist/users/users.service.js");
@@ -52,9 +52,12 @@ function stopsWhere(wanted) {
   }
   throw new Error("no such round");
 }
-const losing = stopsWhere((round) => round.win === 0 && round.freeSpins === 0);
+const losing = stopsWhere((round) => round.win === 0);
 const sevens = REEL_STRIPS.map((strip) => (strip.indexOf("SEVEN") - 1 + strip.length) % strip.length);
-const withFreeSpins = stopsWhere((round) => round.freeSpins > 0);
+/** A small win: 10 line bets, $2 on a $1 spin. */
+const smallWin = stopsWhere((round) => round.win === 10);
+const RED = SUITS.indexOf("HEARTS");
+const BLACK = SUITS.indexOf("SPADES");
 
 let n = 0;
 async function user(role, parentId, extra = {}) {
@@ -72,7 +75,7 @@ const todaysLine = (account) => prisma.balanceTransaction.findUnique({ where: { 
 let sa, owner, otherOwner, manager, cara;
 
 test("setup", async () => {
-  for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "casino_spins", "casino_free_spins", "betting_limits", "bet_legs", "bets", "notifications", "audit_logs", "idempotency_keys", "users"]) {
+  for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "casino_spins", "casino_free_spins", "casino_gambles", "betting_limits", "bet_legs", "bets", "notifications", "audit_logs", "idempotency_keys", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
   await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false } });
@@ -118,7 +121,8 @@ test("a win adds to the balance, and the day's line keeps adding up", async () =
   const result = await casino.spin(cara, 2);
   const paid = result.lines.reduce((sum, line) => sum + line.win, 0) + (result.scatter?.win ?? 0);
   assert.ok(result.lines.some((line) => line.symbol === "SEVEN" && line.count === 5), "five sevens on the middle row");
-  assert.ok(result.win >= 300, "1,500 line bets at 20 cents");
+  assert.ok(result.win >= 2000, "5,000 line bets at 40 cents");
+  assert.equal(result.gamble, null, "too big to double: over the limit");
   assert.equal(result.win, Math.round(paid * 100) / 100);
   assert.equal(await balanceOf(cara), 99 - 2 + result.win);
   const line = await todaysLine(cara);
@@ -127,19 +131,72 @@ test("a win adds to the balance, and the day's line keeps adding up", async () =
   assert.ok((await prisma.auditLog.findMany({ where: { action: "casino.big_win" } })).length >= 1, "a win of 100 times the bet is in the audit log");
 });
 
-test("free spins play at the bet that won them and cost nothing", async () => {
-  casino.rng = stopsAt(withFreeSpins);
-  const won = await casino.spin(cara, 0.5);
-  assert.ok(won.freeSpinsWon > 0);
-  assert.deepEqual(won.freeSpins, { remaining: won.freeSpinsWon, bet: 0.5 });
+test("double or nothing: a right guess doubles the win, a wrong one loses it, and each guess is on the record", async () => {
+  casino.rng = stopsAt(smallWin);
+  const spun = await casino.spin(cara, 1);
+  assert.equal(spun.win, 2);
+  assert.deepEqual(spun.gamble, { amount: 2, steps: 0, stepsLeft: GAMBLE_STEPS });
+  const afterSpin = await balanceOf(cara);
 
+  casino.drawSuit = () => RED;
+  const right = await casino.gamble(cara, "RED");
+  assert.deepEqual([right.won, right.color, right.win, right.balance], [true, "RED", 4, afterSpin + 2]);
+  assert.deepEqual(right.gamble, { amount: 4, steps: 1, stepsLeft: GAMBLE_STEPS - 1 });
+  assert.equal((await casino.state(cara)).gamble.amount, 4, "still open after a reload");
+
+  casino.drawSuit = () => BLACK;
+  const wrong = await casino.gamble(cara, "RED");
+  assert.deepEqual([wrong.won, wrong.color, wrong.win, wrong.gamble], [false, "BLACK", 0, null]);
+  assert.equal(await balanceOf(cara), afterSpin - 2, "the win and the first double are gone");
+  await assert.rejects(casino.gamble(cara, "RED"), /no win to double/);
+
+  const guesses = await prisma.casinoSpin.findMany({ where: { playerId: cara.id, kind: "GAMBLE" }, orderBy: { createdAt: "asc" } });
+  assert.deepEqual(guesses.map((row) => [Number(row.stake), Number(row.win), row.gamble.pick, row.gamble.suit]), [[2, 4, "RED", "HEARTS"], [4, 0, "RED", "SPADES"]]);
+  const journal = await prisma.settlementEntry.findMany({ where: { casinoSpinId: { in: guesses.map((row) => row.id) } } });
+  assert.equal(journal.length, 2, "both guesses count in Commissions");
+  assert.match((await todaysLine(cara)).reason, /^Casino: 3 spins, 2 double or nothing$/);
+  assert.equal(await ledgerTotal(cara), await balanceOf(cara));
+});
+
+test("double or nothing stops at its limits, a new spin or collecting", async () => {
+  casino.rng = stopsAt(smallWin);
+  casino.drawSuit = () => RED;
+  await casino.spin(cara, 1);
+  await casino.collect(cara);
+  await assert.rejects(casino.gamble(cara, "RED"), /no win to double/, "collected");
+
+  await casino.spin(cara, 1);
+  casino.rng = stopsAt(losing);
+  await casino.spin(cara, 1);
+  await assert.rejects(casino.gamble(cara, "RED"), /no win to double/, "a new spin ends it");
+
+  // Doubling stops once the next double would pass the money limit.
+  casino.rng = stopsAt(smallWin);
+  await casino.spin(cara, 1);
+  await prisma.casinoGamble.update({ where: { playerId: cara.id }, data: { amount: GAMBLE_LIMIT / 2 - 1 } });
+  await prisma.user.update({ where: { id: cara.id }, data: { balance: { increment: GAMBLE_LIMIT } } });
+  const capped = await casino.gamble(cara, "RED");
+  assert.equal(capped.won, true);
+  assert.equal(capped.gamble, null, "won, and kept: the next double would pass the limit");
+  await prisma.user.update({ where: { id: cara.id }, data: { balance: { decrement: GAMBLE_LIMIT } } });
+
+  // The max stake applies to the amount at risk.
+  await casino.spin(cara, 1);
+  await prisma.bettingLimit.create({ data: { playerId: cara.id, ownerMaxStake: 1 } });
+  await assert.rejects(casino.gamble(cara, "RED"), /most this Player can stake on one bet/);
+  await prisma.bettingLimit.delete({ where: { playerId: cara.id } });
+  await casino.collect(cara);
+});
+
+test("free spins left from the old game play at the bet that won them and cost nothing", async () => {
+  await prisma.casinoFreeSpins.create({ data: { playerId: cara.id, remaining: 3, bet: 0.5 } });
   const before = await balanceOf(cara);
   casino.rng = stopsAt(losing);
   const free = await casino.spin(cara, 10);
   assert.equal(free.free, true);
   assert.deepEqual([free.spin.stake, free.spin.bet, free.win], [0, 0.5, 0], "played at 50 cents, whatever the Player picked");
   assert.equal(await balanceOf(cara), before, "a free spin costs nothing");
-  assert.equal(free.freeSpins.remaining, won.freeSpinsWon - 1);
+  assert.equal(free.freeSpins.remaining, 2);
 
   await prisma.casinoFreeSpins.update({ where: { playerId: cara.id }, data: { remaining: 1 } });
   const last = await casino.spin(cara, 10);
@@ -174,6 +231,7 @@ test("casino profit counts in commissions, and the Casino page shows it per Play
   const from = startOfDay(new Date()).toISOString();
   const to = new Date(Date.now() + 60_000).toISOString();
   const spins = await prisma.casinoSpin.findMany({ where: { playerId: cara.id } });
+  const spinCount = spins.filter((spin) => spin.kind === "SPIN").length;
   const staked = spins.reduce((sum, spin) => sum + Number(spin.stake), 0);
   const won = spins.reduce((sum, spin) => sum + Number(spin.win), 0);
   const net = Math.round((staked - won) * 100) / 100;
@@ -186,8 +244,8 @@ test("casino profit counts in commissions, and the Casino page shows it per Play
   assert.equal(team.totals.superAdminCut, Math.round(net * 0.1 * 100) / 100);
 
   const page = await casino.admin(owner, from, to);
-  assert.deepEqual(page.players.map((row) => [row.username, row.spins, row.net]), [[cara.username, spins.length, net]]);
-  assert.equal(page.totals.spins, spins.length);
+  assert.deepEqual(page.players.map((row) => [row.username, row.spins, row.net]), [[cara.username, spinCount, net]]);
+  assert.equal(page.totals.spins, spinCount, "guesses count in the money, not as spins");
   assert.deepEqual(page.teams, [{ ownerId: owner.id, username: owner.username, open: true }]);
   assert.equal((await casino.admin(manager, from, to)).teamOpen, true);
   const all = await casino.admin(sa, from, to);
@@ -228,5 +286,5 @@ test("teardown", async () => {
   await prisma.$disconnect();
 });
 
-// Keeps LINES in use: a line bet is a tenth of the bet.
-assert.equal(LINES, 10);
+// Keeps LINES in use: a line bet is a fifth of the bet.
+assert.equal(LINES, 5);

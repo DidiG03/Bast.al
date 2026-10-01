@@ -5065,83 +5065,6 @@ button.is-blocked {
 /* ============================================================
    Casino: the slot machine (Players) and its switches (staff)
    ============================================================ */
-.casino-machine {
-  display: grid;
-  gap: 1rem;
-  padding: 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background:
-    radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
-    color-mix(in srgb, var(--bg-elevated) 94%, #000);
-}
-
-.casino-meters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
-  gap: 0.6rem;
-}
-
-.casino-meters > div {
-  display: grid;
-  gap: 0.15rem;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-}
-
-.casino-meters span {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.casino-meters strong {
-  font-size: 1.35rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.casino-meters .is-win strong {
-  color: var(--accent);
-}
-
-.casino-meters .is-free {
-  border-color: color-mix(in srgb, var(--warning) 60%, var(--border));
-}
-
-.casino-meters .is-free strong {
-  color: var(--warning);
-}
-
-.casino-window {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 10rem;
-  padding: 0.6rem;
-  border-radius: 14px;
-  background: #0c0f0b;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent), inset 0 10px 30px rgba(0, 0, 0, 0.6);
-}
-
-.casino-window > .loading-spinner {
-  position: absolute;
-}
-
-.slot-reels {
-  width: 100%;
-  max-width: 44rem;
-}
-
-.slot-canvas {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
 .casino-plain {
   display: grid;
   gap: 0.4rem;
@@ -5155,11 +5078,573 @@ button.is-blocked {
   height: auto;
 }
 
-.casino-win-line {
-  margin: 0;
-  color: var(--accent);
-  font-weight: 700;
+/* The slot cabinet: red bars top and bottom, purple sides with the line
+   markers, navy reels with silver bars between them, and the control bar. */
+.slot-cabinet {
+  --slot-red: #d81e17;
+  --slot-red-dark: #8f0d09;
+  --slot-gold: #f3c33b;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #4a1059, #6b1f7d 50%, #4a1059);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+.slot-marquee {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0.5rem 3rem;
+  background: linear-gradient(180deg, #f2382e, var(--slot-red) 55%, var(--slot-red-dark));
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25);
+}
+
+.slot-title {
+  overflow: hidden;
+  color: #ffd23f;
+  font-size: clamp(1.4rem, 3.6vw, 2.4rem);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 0 #9b1b00, 0 0 14px rgba(255, 196, 0, 0.6);
+  white-space: nowrap;
+}
+
+/* Only full screen on a phone held sideways: the way back out. */
+.slot-exit {
+  position: absolute;
+  top: 50%;
+  left: 0.6rem;
+  display: none;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  text-decoration: none;
+  transform: translateY(-50%);
+}
+
+.slot-fullscreen {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  min-width: 0;
+  height: 2.4rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  transform: translateY(-50%);
+}
+
+.slot-fullscreen:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Full screen (the browser's, or expanded over the page on an iPhone): the cabinet fills the screen. */
+.slot-cabinet.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.slot-cabinet:fullscreen {
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Filling a screen, the reels are as big as fit: limited by the width or the
+ * height, whichever runs out first. The markers are made exactly as tall,
+ * so their numbers stay level with the rows.
+ */
+.slot-cabinet.is-full .slot-stage {
+  flex: 1;
+  align-items: center;
+  min-height: 0;
+  container-type: size;
+}
+
+/* Measured against the stage (their container), so set on them, not on it. */
+.slot-cabinet.is-full .slot-stage > * {
+  --reels-wide: min(calc(100cqw - 4.8rem), calc((100cqh - 10px) * 680 / 384));
+}
+
+.slot-cabinet.is-full .casino-window {
+  flex: none;
+  width: var(--reels-wide);
+  max-width: none;
+  height: calc(var(--reels-wide) * 384 / 680 + 10px);
+}
+
+.slot-cabinet.is-full .slot-markers {
+  height: calc(var(--reels-wide) * 384 / 680 + 10px);
+}
+
+/* The rules sheet over a full-screen cabinet. */
+.slot-cabinet.is-full .modal-backdrop {
+  z-index: 50;
+}
+
+.slot-stage {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  /* The markers touch the reels, so a winning line runs straight into its numbers. */
+  gap: 0;
+  padding: 0.8rem 0.5rem;
+}
+
+.slot-markers {
+  display: grid;
+  flex: none;
+  grid-template-rows: repeat(3, 1fr);
+  width: 2.4rem;
+  /* Rows line up with the reel rows inside the frame. */
+  padding: 5px 0;
+}
+
+.slot-marker-row {
+  position: relative;
+}
+
+.slot-marker {
+  --marker: #3fa9f5;
+  position: absolute;
+  right: 0;
+  left: 0;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  height: 1.8rem;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--marker) 70%, #fff), var(--marker));
+  color: #1a1a1a;
+  font-weight: 900;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.slot-markers.is-left .slot-marker {
+  border-radius: 0 6px 6px 0;
+}
+
+.slot-markers.is-right .slot-marker {
+  border-radius: 6px 0 0 6px;
+}
+
+.slot-marker.is-lit {
+  box-shadow: 0 0 0 2px #fff, 0 0 14px var(--marker);
+  transform: translateY(-50%) scale(1.08);
+}
+
+/* The reels, in their silver frame; the gaps between the reels show it as bars. */
+.casino-window {
+  position: relative;
+  display: grid;
+  flex: 1;
+  place-items: center;
+  max-width: 50rem;
+  padding: 5px 0;
+  border-radius: 0;
+  background: linear-gradient(180deg, #d9d9e2, #8c8c99);
+  box-shadow: 0 0 0 2px #2b0a35, 0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.casino-window > .loading-spinner {
+  position: absolute;
+}
+
+.slot-reels {
+  width: 100%;
+}
+
+.slot-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Double or nothing, over the reels. */
+.slot-gamble {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: 0.6rem;
+  background: rgba(10, 6, 30, 0.72);
+}
+
+.slot-gamble .casino-gamble {
+  width: min(100%, 30rem);
+  color: var(--text);
+}
+
+.slot-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  background: linear-gradient(180deg, #c71a14, var(--slot-red-dark));
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.12);
+}
+
+.slot-btn {
+  display: grid;
+  flex: none;
+  place-content: center;
+  justify-items: center;
+  gap: 0.1rem;
+  min-width: 4.6rem;
+  min-height: 3.2rem;
+  padding: 0.35rem 0.6rem;
+  border: 2px solid var(--slot-gold);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #4a0c08, #250403);
+  color: var(--slot-gold);
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.slot-btn small {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.slot-btn b {
+  color: var(--slot-gold);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-btn.is-grey {
+  border-color: #9b9ba8;
+}
+
+.slot-btn.is-grey b {
+  color: #fff;
+}
+
+.slot-btn:disabled {
+  opacity: 0.5;
+}
+
+.slot-bet small button {
+  min-width: 0;
+  min-height: 0;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--slot-gold);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.slot-message {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  justify-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.3rem 0.6rem;
+  border: 2px solid #5a1410;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2a0705, #160302);
   text-align: center;
+}
+
+.slot-message span {
+  overflow: hidden;
+  max-width: 100%;
+  color: #e9e3e3;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.slot-message.is-win span {
+  color: var(--slot-gold);
+  font-weight: 900;
+}
+
+.slot-message small {
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+.slot-sound {
+  min-width: 3.2rem;
+  font-size: 1.3rem;
+}
+
+.slot-sound:not(.is-on) {
+  border-color: #9b9ba8;
+}
+
+.slot-auto .slot-switch {
+  position: relative;
+  width: 2.2rem;
+  height: 1.1rem;
+  border: 2px solid var(--slot-gold);
+  border-radius: 999px;
+}
+
+.slot-auto .slot-switch::after {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: var(--slot-gold);
+  content: "";
+  transition: transform 150ms ease;
+}
+
+.slot-auto.is-on .slot-switch {
+  background: color-mix(in srgb, #39d353 55%, transparent);
+}
+
+.slot-auto.is-on .slot-switch::after {
+  transform: translateX(1.05rem);
+}
+
+.slot-start {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 7.5rem;
+  border-color: #39d353;
+  color: #39d353;
+  font-size: 1.15rem;
+}
+
+.slot-start span {
+  font-size: 1.5rem;
+}
+
+/* A phone held upright: the game waits for it to be turned. */
+.slot-rotate {
+  display: none;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2rem 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-elevated);
+  text-align: center;
+}
+
+.slot-rotate-icon {
+  width: 4.5rem;
+  height: 4.5rem;
+  color: var(--accent);
+  animation: slot-rotate-hint 2.4s ease-in-out infinite;
+}
+
+@keyframes slot-rotate-hint {
+  0%,
+  30% {
+    transform: rotate(0);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+/* Narrow but not a phone held upright (a small window, a tablet): the controls wrap, the message on its own row. */
+@media (max-width: 760px) and (min-height: 521px) {
+  .slot-controls {
+    flex-wrap: wrap;
+  }
+
+  .slot-message {
+    flex-basis: 100%;
+    order: -1;
+  }
+
+  .slot-btn {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 600px) {
+  .slot-rotate {
+    display: grid;
+  }
+
+  .slot-cabinet {
+    display: none;
+  }
+
+  /* Turned upright while in full screen: keep the game showing rather than a blank screen. */
+  .slot-cabinet.is-full {
+    display: flex;
+  }
+}
+
+/* A phone held sideways: the cabinet fills the screen. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .slot-cabinet {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    border-radius: 0;
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  .slot-marquee {
+    padding: 0.15rem 3rem;
+  }
+
+  .slot-title {
+    font-size: 1.3rem;
+  }
+
+  .slot-exit {
+    display: grid;
+  }
+
+  .slot-stage {
+    flex: 1;
+    align-items: center;
+    min-height: 0;
+    padding: 0.35rem 0.4rem;
+    container-type: size;
+  }
+
+  .slot-stage > * {
+    --reels-wide: min(calc(100cqw - 4rem), calc((100cqh - 10px) * 680 / 384));
+  }
+
+  .casino-window {
+    flex: none;
+    width: var(--reels-wide);
+    max-width: none;
+    height: calc(var(--reels-wide) * 384 / 680 + 10px);
+  }
+
+  .slot-markers {
+    width: 2rem;
+    height: calc(var(--reels-wide) * 384 / 680 + 10px);
+  }
+
+  .slot-marker {
+    height: 1.35rem;
+    font-size: 0.8rem;
+  }
+
+  .slot-controls {
+    gap: 0.3rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .slot-btn {
+    min-width: 3.6rem;
+    min-height: 2.6rem;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.78rem;
+  }
+
+  .slot-btn b {
+    font-size: 0.95rem;
+  }
+
+  .slot-start {
+    min-width: 5.6rem;
+    font-size: 0.95rem;
+  }
+
+  .slot-message {
+    min-width: 8rem;
+  }
+
+  .slot-message span {
+    font-size: 0.85rem;
+  }
+
+  .slot-message small {
+    white-space: nowrap;
+  }
+}
+
+/* A small phone held sideways: every button a little narrower, so the message keeps its room. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 720px) {
+  .slot-controls {
+    gap: 0.2rem;
+    padding: 0.25rem 0.35rem;
+  }
+
+  .slot-btn {
+    min-width: 2.9rem;
+    padding: 0.2rem 0.3rem;
+    font-size: 0.7rem;
+  }
+
+  .slot-sound {
+    min-width: 2.3rem;
+    font-size: 1rem;
+  }
+
+  .slot-bet small {
+    gap: 0.15rem;
+    font-size: 0.58rem;
+  }
+
+  .slot-start {
+    min-width: 4.4rem;
+    font-size: 0.85rem;
+  }
+
+  .slot-start span {
+    font-size: 1.1rem;
+  }
+
+  .slot-message span {
+    font-size: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot-rotate-icon {
+    animation: none;
+  }
+
+  .slot-marker {
+    transition: none;
+  }
 }
 
 .casino-combos {
@@ -5315,42 +5800,124 @@ button.is-blocked {
   transition: opacity 200ms ease;
 }
 
-.casino-plain > span.is-dim {
-  opacity: 0.3;
-}
-
 .casino-plain > span.is-lit img {
   border-radius: 12px;
   box-shadow: 0 0 0 3px var(--accent);
 }
 
-.casino-controls {
+.casino-gamble {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid color-mix(in srgb, #f5c542 45%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, #f5c542 7%, var(--bg-elevated));
+}
+
+.casino-gamble.is-lost {
+  border-color: color-mix(in srgb, var(--danger, #e0453a) 55%, var(--border));
+  background: color-mix(in srgb, var(--danger, #e0453a) 8%, var(--bg-elevated));
+}
+
+.casino-card {
   display: grid;
-  gap: 0.7rem;
-  justify-items: center;
-}
-
-.casino-controls .bet-chips {
-  max-width: 100%;
-}
-
-.casino-controls .bet-chip:disabled {
-  opacity: 0.4;
-}
-
-.casino-spin {
-  min-width: min(100%, 16rem);
-  min-height: 3.4rem;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #0a1206;
-  font-size: 1.1rem;
+  flex: none;
+  place-items: center;
+  width: 3.6rem;
+  height: 5rem;
+  border: 2px solid #d9d2c0;
+  border-radius: 10px;
+  background: repeating-linear-gradient(45deg, #8a1c14 0 6px, #6d140e 6px 12px);
+  color: #fff;
+  font-size: 1.8rem;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
 }
 
-.casino-spin:disabled {
-  opacity: 0.5;
+.casino-card.is-red,
+.casino-card.is-black {
+  background: #fbf8f1;
+  font-size: 2.6rem;
+  animation: casino-card-flip 360ms ease-out;
+}
+
+.casino-card.is-red {
+  color: #d1242f;
+}
+
+.casino-card.is-black {
+  color: #15191e;
+}
+
+@keyframes casino-card-flip {
+  from {
+    transform: rotateY(90deg);
+  }
+  to {
+    transform: rotateY(0);
+  }
+}
+
+.casino-gamble-body {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.casino-gamble-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+.casino-pick {
+  min-width: 6.5rem;
+  min-height: 2.6rem;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 800;
+}
+
+.casino-pick.is-red {
+  background: #c8232c;
+}
+
+.casino-pick.is-black {
+  border: 1px solid #4a515a;
+  background: #15191e;
+}
+
+.casino-pick:disabled {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .casino-card.is-red,
+  .casino-card.is-black {
+    animation: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .casino-gamble {
+    align-items: flex-start;
+  }
+
+  .casino-gamble-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .casino-pick {
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .casino-gamble-actions .secondary {
+    grid-column: 1 / -1;
+  }
 }
 
 .casino-rules {
@@ -5439,19 +6006,11 @@ button.is-blocked {
 }
 
 @media (max-width: 520px) {
-  .casino-machine {
-    padding: 0.7rem;
-  }
-
   .casino-pay {
     grid-template-columns: 2.4rem minmax(0, 1fr);
   }
 
   .casino-pay-amounts {
     grid-column: 1 / -1;
-  }
-
-  .casino-spin {
-    width: 100%;
   }
 }

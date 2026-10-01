@@ -575,10 +575,26 @@ export type RiskView = {
 };
 
 /** The casino slot's symbols, as the API names them. */
-export type SlotSymbol = "SEVEN" | "TROPHY" | "BALL" | "BOOT" | "GLOVES" | "FLAG" | "YELLOW" | "RED" | "WILD" | "GOAL";
+export type SlotSymbol = "SEVEN" | "MELON" | "GRAPES" | "PLUM" | "ORANGE" | "LEMON" | "CHERRY" | "STAR";
+export type CardColor = "RED" | "BLACK";
+export type CardSuit = "HEARTS" | "DIAMONDS" | "CLUBS" | "SPADES";
 
 /** One spin in a Player's recent list. A free spin has `stake` 0 and plays at `bet`. */
-export type CasinoSpinRow = { id: string; bet: number; stake: number; win: number; free: boolean; freeSpinsWon: number; createdAt: string };
+/** A spin, or one guess at double or nothing (kind GAMBLE: the bet is the win at risk). */
+export type CasinoSpinRow = {
+  id: string;
+  kind: "SPIN" | "GAMBLE";
+  bet: number;
+  stake: number;
+  win: number;
+  free: boolean;
+  freeSpinsWon: number;
+  gamble: { pick: CardColor; suit: CardSuit } | null;
+  createdAt: string;
+};
+
+/** A win the Player can still take to double or nothing. */
+export type CasinoGamble = { amount: number; steps: number; stepsLeft: number };
 
 export type CasinoFreeSpins = { remaining: number; bet: number };
 
@@ -591,21 +607,26 @@ export type CasinoState = {
   /** grid[reel][row] the reels rest on before the first spin; null before any spin. */
   grid: SlotSymbol[][] | null;
   recent: CasinoSpinRow[];
+  /** The last win, if the Player can still take it to double or nothing. */
+  gamble: CasinoGamble | null;
   game: {
+    /** What Players see the game called. */
+    name: string;
     reels: number;
     rows: number;
     lines: number;
     bets: number[];
     symbols: SlotSymbol[];
-    wild: SlotSymbol;
     scatter: SlotSymbol;
     /** For each line, the row it runs through on each reel. */
     lineShapes: number[][];
-    /** In line bets (a tenth of the bet): [3, 4, 5] in a row. */
-    linePays: Partial<Record<SlotSymbol, [number, number, number]>>;
+    /** In line bets (a fifth of the bet): [2, 3, 4, 5] in a row; 0 doesn't pay. */
+    linePays: Partial<Record<SlotSymbol, [number, number, number, number]>>;
     scatterPays: Record<"3" | "4" | "5", number>;
-    freeSpins: Record<"3" | "4" | "5", number>;
     payoutRate: number;
+    /** Double or nothing: at most this many guesses, and never for more than this many dollars. */
+    gambleSteps: number;
+    gambleLimit: number;
   };
 };
 
@@ -621,6 +642,19 @@ export type CasinoSpinResult = {
   free: boolean;
   freeSpinsWon: number;
   freeSpins: CasinoFreeSpins | null;
+  gamble: CasinoGamble | null;
+  balance: number;
+};
+
+export type CasinoGambleResult = {
+  spin: CasinoSpinRow;
+  suit: CardSuit;
+  color: CardColor;
+  won: boolean;
+  /** What the Player now has from this win: double, or nothing. */
+  win: number;
+  /** Null when it's over: lost, or won and at the limit. */
+  gamble: CasinoGamble | null;
   balance: number;
 };
 

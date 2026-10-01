@@ -2,7 +2,8 @@ import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/comm
 import { ApiBearerAuth, ApiProperty, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { Role } from "@prisma/client";
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength } from "class-validator";
+import { Type } from "class-transformer";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
 import { AuthGuard, AuthenticatedRequest } from "../auth/auth.guard";
 import { CurrentActor } from "../auth/current-actor.decorator";
 import { MfaGuard } from "../auth/mfa.guard";
@@ -14,6 +15,8 @@ import { clientIp } from "../security/client-ip";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { CasinoService } from "./casino.service";
 import { BETS } from "./game";
+import { MAX_SPOTS } from "./roulette";
+import { RouletteService } from "./roulette.service";
 
 class SpinDto {
   @ApiProperty({ enum: BETS, description: "What the spin costs, in dollars. Ignored while the Player has free spins left from the old game." })
@@ -26,6 +29,27 @@ class GambleDto {
   @ApiProperty({ enum: ["RED", "BLACK"], description: "The colour the Player thinks the card will be" })
   @IsIn(["RED", "BLACK"])
   pick!: "RED" | "BLACK";
+}
+
+class RouletteBetDto {
+  @ApiProperty({ description: 'A spot on the table: numbers for an inside bet ("17", "0-00", "1-2-4-5"), or a name ("RED", "COL1", "1ST12", "1-18")' })
+  @IsString()
+  @MaxLength(16)
+  spot!: string;
+
+  @ApiProperty({ description: "Dollars on the spot, in whole chips" })
+  @IsNumber()
+  amount!: number;
+}
+
+class RouletteSpinDto {
+  @ApiProperty({ type: [RouletteBetDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_SPOTS)
+  @ValidateNested({ each: true })
+  @Type(() => RouletteBetDto)
+  bets!: RouletteBetDto[];
 }
 
 class CasinoOpenDto {
@@ -55,7 +79,10 @@ class CasinoPeriodDto {
 @UseGuards(AuthGuard, MfaGuard, RolesGuard)
 @Controller("casino")
 export class CasinoController {
-  constructor(private readonly casino: CasinoService) {}
+  constructor(
+    private readonly casino: CasinoService,
+    private readonly roulette: RouletteService,
+  ) {}
 
   /** The Player's Casino: can they play, the rules, free spins, recent spins. */
   @Get()
@@ -87,6 +114,22 @@ export class CasinoController {
   @Roles(Role.PLAYER)
   collect(@CurrentActor() actor: Actor) {
     return this.casino.collect(actor);
+  }
+
+  /** The Player's roulette table: can they play, the rules, their last rounds. */
+  @Get("roulette")
+  @Roles(Role.PLAYER)
+  rouletteState(@CurrentActor() actor: Actor) {
+    return this.roulette.state(actor);
+  }
+
+  /** One round of roulette with the chips on the table. Like a spin, a repeated request gets the first answer back. */
+  @Post("roulette/spin")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Idempotent()
+  rouletteSpin(@CurrentActor() actor: Actor, @Body() body: RouletteSpinDto, @Req() req: AuthenticatedRequest) {
+    return this.roulette.spin(actor, body.bets, clientIp(req));
   }
 
   /** Whether the Casino is open, and how it did in a period, per Player. */

@@ -668,5 +668,54 @@ export type CasinoAdmin = {
   /** A Manager's team: whether their Owner has the Casino open. Null for others. */
   teamOpen: boolean | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
-  players: Array<{ id: string; username: string; spins: number; staked: number; won: number; net: number }>;
+  /** Each game on its own: the slot (spins and double or nothing) and roulette. */
+  games: Record<"slot" | "roulette", { spins: number; staked: number; won: number; payoutRate: number | null }>;
+  players: Array<{ id: string; username: string; spins: number; roulette: { spins: number; staked: number; won: number }; staked: number; won: number; net: number }>;
+};
+
+export type RouletteColor = "RED" | "BLACK" | "GREEN";
+
+/** One round of roulette in the Player's list: the number, and what each spot had on it and paid (its stake included). */
+export type RouletteRound = {
+  id: string;
+  number: number;
+  label: string;
+  color: RouletteColor;
+  staked: number;
+  win: number;
+  bets: Array<{ spot: string; amount: number; win: number }>;
+  createdAt: string;
+};
+
+/** The Player's roulette table: whether they can play (`closed` says why not), the rules and their last rounds. */
+export type RouletteState = {
+  closed: string | null;
+  balance: number;
+  /** The most all the chips on the table can add up to in one spin: the Player's max stake, or the table's own limit. */
+  tableMax: number;
+  recent: RouletteRound[];
+  /** The last numbers, newest first. */
+  history: Array<{ number: number; label: string; color: RouletteColor }>;
+  game: {
+    name: string;
+    /** The pockets in order round the wheel, from 0. */
+    wheel: number[];
+    red: number[];
+    chips: number[];
+    maxSpots: number;
+    payoutRate: number;
+  };
+};
+
+export type RouletteResult = {
+  round: RouletteRound;
+  /** Where the wheel stopped: an index into the wheel. */
+  stop: number;
+  number: number;
+  label: string;
+  color: RouletteColor;
+  staked: number;
+  win: number;
+  winners: Array<{ spot: string; amount: number; win: number }>;
+  balance: number;
 };

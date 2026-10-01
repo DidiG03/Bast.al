@@ -75,13 +75,15 @@ If Players have already bet enough that a Man City win would cost the team $4,80
 
 ## What the Casino is (with a number)
 
-The Casino tab has one slot game, a classic fruit game: 5 reels, 5 lines, fruit and sevens, and a star that pays anywhere. Cherries pay from 2 in a row. Players spin it with the same balance they bet with, at $0.50 to $10 a spin. It stays hidden until **you** open it for the site and the **Owner** opens it for their team. Its name is set in one place, `GAME_NAME` in `apps/api/src/casino/game.ts`.
+The Casino tab opens on a lobby with two games: a fruit slot and roulette. The slot is a classic fruit game: 5 reels, 5 lines, fruit and sevens, and a star that pays anywhere. Cherries pay from 2 in a row. Players spin it with the same balance they bet with, at $0.50 to $10 a spin. It stays hidden until **you** open it for the site and the **Owner** opens it for their team. Its name is set in one place, `GAME_NAME` in `apps/api/src/casino/game.ts`.
 
 Every spin is decided on the server, never on the Player's phone. On average it pays back **$95.70 for every $100** spun (measured over 10 million spins), so the team keeps about 4.3%. About 1 spin in 4 wins something.
 
 After a win, a Player can try **double or nothing**: guess whether a card is red or black. Right doubles the win, wrong loses it. Up to 5 guesses in a row and up to $500. Each guess counts like a spin: in the ledger, in Commissions, and against the Player's max stake and daily loss limit. It's an even 50/50, so it doesn't change the payout rate.
 
 **Example:** Maria spins 100 times at $1 and gets $93 back. Her balance is $7 lower, her **My money** page shows one line for the day ("Casino: 100 spins, −$7.00"), and the $7 counts in Alex's team profit, so you and Sam get your commission on it like on bets. Maria's daily loss limit counts sports and casino together.
+
+**Roulette** is European roulette: 37 pockets, 0 to 36, with a single 0. Players put chips from $0.50 to $25 on the table, then spin. A single number pays 35 to 1, red or black 1 to 1, and everything in between pays the same way, so every bet pays back **$97.30 for every $100** on average (the team keeps about 2.7%). The number is drawn on the server too. All the chips on the table together can be up to the Player's max stake a spin, or $100 if they have none; the daily loss limit and the balance apply as for the slot. Roulette has its own line a day in **My money** ("Roulette: 12 spins") and counts in Commissions the same way. The Casino page shows staff each game's figures separately.
 
 ---
 
@@ -92,7 +94,7 @@ After a win, a Player can try **double or nothing**: guess whether a card is red
 | **Overview** | Everyone | Your home screen — balance, quick stats, shortcuts. Looks totally different for Players (it's their "app"). |
 | **Users** | Super Admin, Owner, Manager | Create people under you, give/take credit, suspend/delete, set limits. |
 | **Bet** | Player | Browse matches, place bets, see your bet history. |
-| **Casino** | Everyone (when it's open) | Players spin the fruit slot with their balance. Super Admin and Owners open or close it; staff see how it's doing per Player. |
+| **Casino** | Everyone (when it's open) | Players play the fruit slot and roulette with their balance. Super Admin and Owners open or close it; staff see how it's doing per Player. |
 | **Reports** | Super Admin, Owner, Manager | Who's under you, and a searchable history log of every action taken. |
 | **Finance** | Super Admin, Owner | Approve/reject big money transfers; see how much moved where. |
 | **Commissions** | Super Admin, Owner, Manager | Your paycheck — what you've earned from results, this week/month/custom range. |

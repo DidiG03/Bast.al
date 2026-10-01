@@ -623,7 +623,8 @@ model CommissionPayout {
 /// One casino spin: what it cost, what it paid, and exactly how the reels
 /// landed, so any spin can be checked later. The team and rates are recorded
 /// like a bet's, for the settlement journal and the Casino page's figures.
-/// A spin, or one guess at double or nothing (kind GAMBLE: bet and stake are the win at risk).
+/// A spin, one guess at double or nothing (kind GAMBLE: bet and stake are the win at risk),
+/// or a round of roulette (kind ROULETTE: bet and stake are all the chips on the table).
 model CasinoSpin {
   id           String            @id @default(cuid())
   kind         CasinoPlayKind    @default(SPIN)
@@ -646,6 +647,8 @@ model CasinoSpin {
   lines        Json
   /// A guess: the colour picked and the card drawn, { pick, suit }.
   gamble       Json?
+  /// A roulette round: the number and every bet, { number, bets: [{ spot, amount, numbers, win }] }. stops holds the wheel's stop.
+  roulette     Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -658,6 +661,7 @@ model CasinoSpin {
 enum CasinoPlayKind {
   SPIN
   GAMBLE
+  ROULETTE
 }
 
 /// A win a Player can still take to double or nothing: how much is at risk, and how many guesses they've made.

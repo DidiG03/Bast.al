@@ -1,5 +1,5 @@
 /**
- * The casino slot's sounds, made in the browser with Web Audio: no sound
+ * The casino's sounds (the slot's and the roulette wheel's), made in the browser with Web Audio: no sound
  * files, so there's nothing to license or download. They play at the
  * phone's own volume (a page can't read or change it), and on an iPhone with
  * the silent switch on, the browser keeps them silent. Players can also turn
@@ -173,5 +173,34 @@ export const slotSound = {
   /** A wrong guess: a low falling tone. */
   gambleLose() {
     tone(220, 0.1, 0.45, { type: "sawtooth", gain: 0.12, slideTo: 90 });
+  },
+
+  /** Roulette: a chip put down on the table. */
+  chip() {
+    noise(0, 0.035, { filter: "bandpass", freq: 3800, gain: 0.22 });
+    tone(2600, 0, 0.05, { type: "triangle", gain: 0.06 });
+  },
+
+  /** Roulette: the ball rolling round the track, a low rumble fading as it slows. */
+  ballRoll(milliseconds: number) {
+    const seconds = milliseconds / 1000;
+    const pieces = Math.max(1, Math.round(seconds / 0.25));
+    for (let i = 0; i < pieces; i += 1) {
+      const fade = 1 - i / pieces;
+      noise(i * 0.25, 0.32, { filter: "bandpass", freq: 500 + 900 * fade, gain: 0.05 + 0.11 * fade });
+    }
+  },
+
+  /** Roulette: the ball hitting a fret between pockets; softer as it settles. */
+  pocketTick(strength: number) {
+    const level = Math.max(0.15, Math.min(1, strength));
+    noise(0, 0.025, { filter: "highpass", freq: 2600, gain: 0.2 * level });
+    tone(1800 + Math.random() * 500, 0, 0.03, { type: "triangle", gain: 0.07 * level });
+  },
+
+  /** Roulette: the ball dropping into its pocket for good. */
+  ballStop() {
+    noise(0, 0.06, { filter: "bandpass", freq: 1400, gain: 0.25 });
+    tone(320, 0, 0.12, { type: "sine", gain: 0.2, slideTo: 160 });
   },
 };

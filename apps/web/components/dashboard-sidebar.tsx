@@ -168,7 +168,7 @@ export function DashboardSidebar({ role, username, initialCollapsed, casinoOpen 
             aria-label={t(collapsed ? "Expand navigation" : "Collapse navigation")}
             title={t(collapsed ? "Expand navigation" : "Collapse navigation")}
           >
-            <NamedIcon name="panel" />
+            <NamedIcon name={collapsed ? "expand" : "collapse"} />
           </button>
           <button
             className="sidebar-mobile-close secondary"

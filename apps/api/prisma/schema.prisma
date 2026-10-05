@@ -272,6 +272,10 @@ model AuditLog {
 
 model Event {
   id                 String      @id @default(cuid())
+  /// "football"; "greyhounds" for a greyhound race (league = the track,
+  /// country = GB, IE or AU); "mma" for a fight (league = the card,
+  /// country = the weight class, home/away team = the fighters).
+  sport              String      @default("football")
   name               String
   league             String
   status             EventStatus @default(UPCOMING)
@@ -288,6 +292,10 @@ model Event {
   awayScore          Int?        @map("away_score")
   /// Minutes played, while live.
   elapsed            Int?
+  /// The feed's phase while live: "1H", "HT" (half-time), "2H", "ET", "BT" (break before extra time), "P", "SUSP", "INT".
+  period             String?
+  /// When the feed first reported the match finished; it stays on the live list for a few minutes after, marked "Full time".
+  finishedAt         DateTime?   @map("finished_at")
   /// Super Admin: hidden events aren't shown to anyone else.
   hidden             Boolean     @default(false)
   /// Super Admin: suspended events are shown but can't be bet on.
@@ -321,6 +329,20 @@ model Event {
   statsSource        String?     @map("stats_source")
   /// Last time the feed was asked for this match's statistics.
   statsCheckedAt     DateTime?   @map("stats_checked_at")
+  /// The goals in the 90 minutes, in order, and who took part (see bets/goals.ts),
+  /// for the first/last team to score, comeback and goalscorer markets.
+  resultGoals        Json?       @map("result_goals")
+  /// Last time the feed was asked for this match's goals.
+  goalsCheckedAt     DateTime?   @map("goals_checked_at")
+  /// Greyhounds: the race's details (number, grade, distance, region) and,
+  /// once it's run, its official result (see odds/greyhounds.ts).
+  race               Json?
+  raceResult         Json?       @map("race_result")
+  /// When bets close, if before the start: an MMA fight closes when its
+  /// card's first fight starts (fights often go on earlier than listed).
+  closesAt           DateTime?   @map("closes_at")
+  /// MMA: who won, how, in which round and at what time (see odds/mma.ts).
+  fightResult        Json?       @map("fight_result")
   /// "feed" or "manual". The feed never overwrites a manual result.
   resultSource       String?     @map("result_source")
   /// When the feed last changed a result bets were already settled on. Once
@@ -335,6 +357,7 @@ model Event {
 
   @@unique([provider, externalId])
   @@index([status, startsAt])
+  @@index([sport, status, startsAt])
 }
 
 /// One bet type on an event, e.g. "Match winner" or "Total goals 2.5".
@@ -352,29 +375,37 @@ model Market {
   selections    Selection[]
 
   @@unique([eventId, key])
+  /// Each match's main market (its first) for the match list.
+  @@index([eventId, sortOrder])
   @@map("markets")
 }
 
 /// One outcome in a market, e.g. "Home" or "Over 2.5".
 model Selection {
-  id        String           @id @default(cuid())
-  marketId  String           @map("market_id")
-  market    Market           @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  id           String           @id @default(cuid())
+  marketId     String           @map("market_id")
+  market       Market           @relation(fields: [marketId], references: [id], onDelete: Cascade)
   /// Stable key such as "home", "draw" or "over".
-  key       String
-  name      String
+  key          String
+  name         String
   /// The price from the feed, before any margin or override.
-  feedOdds  Decimal          @map("feed_odds") @db.Decimal(8, 2)
+  feedOdds     Decimal          @map("feed_odds") @db.Decimal(8, 2)
   /// The in-play price from the feed, while the match is live. Owners' fixed prices don't apply to it.
-  liveOdds  Decimal?         @map("live_odds") @db.Decimal(8, 2)
+  liveOdds     Decimal?         @map("live_odds") @db.Decimal(8, 2)
   /// Set when the market is settled.
-  result    SelectionResult?
-  sortOrder Int              @default(0) @map("sort_order")
-  updatedAt DateTime         @updatedAt @map("updated_at")
-  overrides OddsOverride[]
-  bets      Bet[]
-  legs      BetLeg[]
-  history   OddsSnapshot[]
+  result       SelectionResult?
+  /// "manual" when Super Admin settled this outcome by hand; settlement then keeps it.
+  resultSource String?          @map("result_source")
+  /// The feed stopped pricing this outcome while still pricing the rest of its market (a player left out of the squad, a line taken down). No bets until it's back.
+  withdrawn    Boolean          @default(false)
+  /// Greyhounds: the dog's trap and trainer (Winner), or both dogs' traps (Forecast).
+  info         Json?
+  sortOrder    Int              @default(0) @map("sort_order")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  overrides    OddsOverride[]
+  bets         Bet[]
+  legs         BetLeg[]
+  history      OddsSnapshot[]
 
   @@unique([marketId, key])
   @@map("selections")
@@ -448,8 +479,14 @@ model Bet {
   status      BetStatus            @default(OPEN)
   /// What was bet on, e.g. "Tirana v Partizani · Tirana to win".
   description String?              @db.VarChar(200)
-  /// The price the Player got, locked when the bet was placed.
+  /// The price the Player got, locked when the bet was placed. For a bet
+  /// paid at the starting price (greyhounds) it's set when the bet settles.
   odds        Decimal?             @db.Decimal(8, 2)
+  /// Greyhounds: the bet is paid at the starting price (or the forecast
+  /// dividend), less `spMargin` percent, never above `spCap`. The cap is what
+  /// the team's open payouts count it at until then.
+  spCap       Decimal?             @map("sp_cap") @db.Decimal(8, 2)
+  spMargin    Decimal?             @map("sp_margin") @db.Decimal(5, 2)
   selectionId String?              @map("selection_id")
   selection   Selection?           @relation(fields: [selectionId], references: [id], onDelete: Restrict)
   placedAt    DateTime             @default(now()) @map("placed_at")

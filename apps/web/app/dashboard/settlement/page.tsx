@@ -195,8 +195,10 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
   const [cardsHome, setCardsHome] = useState(event.stats ? String(event.stats.cardsHome) : "");
   const [cardsAway, setCardsAway] = useState(event.stats ? String(event.stats.cardsAway) : "");
   const [reason, setReason] = useState("");
-  const { t, tn, date } = useI18n();
+  const { t, tn, ts, date } = useI18n();
   const started = new Date(event.startsAt).getTime() <= Date.now();
+  /** A basketball or NFL game has only a final score, in points. */
+  const basketball = event.sport === "basketball" || event.sport === "nfl";
 
   function saveResult(formEvent: FormEvent) {
     formEvent.preventDefault();
@@ -263,17 +265,58 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
         {tn(event.bets.total, "{count} bet · {amount} staked", "{count} bets · {amount} staked", { amount: formatMoney(event.bets.staked) })}
         {event.bets.open > 0 ? ` · ${t("{count} open ({amount})", { count: event.bets.open, amount: formatMoney(event.bets.openStaked) })}` : ` · ${t("all settled")}`}
       </p>
+      {canSettle && event.waiting.length > 0 ? (
+        <div className="settle-waiting">
+          <p className="muted odds-note">{t("These picks couldn't be settled from the feed. Check the result and settle each one:")}</p>
+          <ul>
+            {event.waiting.map((pick) => (
+              <li key={pick.selectionId}>
+                <span>
+                  <strong>{pick.name}</strong>
+                  <span className="muted">
+                    {" "}
+                    · {ts(pick.market)} · {tn(pick.bets, "{count} bet", "{count} bets")}
+                  </span>
+                </span>
+                <span className="settle-waiting-actions">
+                  {(
+                    [
+                      ["WON", t("Won")],
+                      ["LOST", t("Lost")],
+                      ["VOID", t("Void")],
+                    ] as const
+                  ).map(([result, label]) => (
+                    <button
+                      key={result}
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        if (!window.confirm(t("Settle \"{pick}\" ({market}) as {result}? Its bets are paid on that.", { pick: pick.name, market: ts(pick.market), result: label }))) return;
+                        void run(`/bets/admin/selections/${pick.selectionId}/result`, { result }, t("\"{pick}\" is settled as {result}.", { pick: pick.name, result: label }));
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {mode === "result" ? (
         <form className="odds-editor" onSubmit={saveResult}>
           <label>
-            <span>{t("Score after 90 minutes")}</span>
+            <span>{basketball ? t("Final score (overtime included)") : t("Score after 90 minutes")}</span>
             <span className="settle-score-inputs">
-              <input type="number" inputMode="numeric" min={0} max={99} value={home} onChange={(e) => setHome(e.target.value)} aria-label={t("Home goals")} required />
+              <input type="number" inputMode="numeric" min={0} max={basketball ? 300 : 99} value={home} onChange={(e) => setHome(e.target.value)} aria-label={basketball ? t("Home points") : t("Home goals")} required />
               <span>–</span>
-              <input type="number" inputMode="numeric" min={0} max={99} value={away} onChange={(e) => setAway(e.target.value)} aria-label={t("Away goals")} required />
+              <input type="number" inputMode="numeric" min={0} max={basketball ? 300 : 99} value={away} onChange={(e) => setAway(e.target.value)} aria-label={basketball ? t("Away points") : t("Away goals")} required />
             </span>
           </label>
+          {basketball ? null : (
+          <>
           <label>
             <span>{t("Half-time score (for 1st and 2nd half bets)")}</span>
             <span className="settle-score-inputs">
@@ -298,6 +341,8 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
               <input type="number" inputMode="numeric" min={0} max={99} value={cardsAway} onChange={(e) => setCardsAway(e.target.value)} aria-label={t("Away cards")} />
             </span>
           </label>
+          </>
+          )}
           <div className="odds-editor-actions">
             <button type="submit">{t("Save result")}</button>
             <button type="button" className="secondary" onClick={() => setMode(null)}>
@@ -329,9 +374,11 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
         </button>
         {canSettle && mode === null ? (
           <span className="odds-admin-actions">
-            <button type="button" className="secondary" onClick={() => setMode("result")} disabled={!started || event.status === "CANCELLED"} title={!started ? t("The match hasn't started") : undefined}>
-              {event.result ? t("Correct result") : t("Set result")}
-            </button>
+            {event.sport === "greyhounds" || event.sport === "mma" ? null : (
+              <button type="button" className="secondary" onClick={() => setMode("result")} disabled={!started || event.status === "CANCELLED"} title={!started ? t("The match hasn't started") : undefined}>
+                {event.result ? t("Correct result") : t("Set result")}
+              </button>
+            )}
             <button type="button" className="secondary" onClick={() => setMode("void")}>
               {t("Void match")}
             </button>

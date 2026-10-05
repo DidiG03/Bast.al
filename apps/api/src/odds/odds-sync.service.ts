@@ -2,7 +2,8 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/commo
 import { BetStatus, EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
-import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseLiveOdds, parseMarkets } from "./api-football";
+import { GOAL_MARKET_KEYS } from "../bets/goals";
+import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLiveOdds, parseMarkets } from "./api-football";
 import { bigSwing, cooldownFor, laterCooldown } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
@@ -16,25 +17,33 @@ import { mockFetchJson } from "./mock-feed";
 const DEFAULT_LEAGUES = [
   // England, Spain, Italy, Germany, France: top two divisions and main cup
   39, 40, 45, 48, 140, 141, 143, 135, 136, 137, 78, 79, 81, 61, 62, 66,
+  // England's League One and Two, Germany's 3. Liga, and the second divisions of the Netherlands, Portugal, Turkey, Scotland and Belgium
+  41, 42, 80, 89, 95, 204, 180, 145,
   // The rest of Europe's top divisions
   88, 94, 203, 144, 179, 197, 207, 218, 119, 113, 103, 106, 210, 286, 283, 345, 333,
+  // Near Albania and Kosovo: North Macedonia, Montenegro, Bosnia, Slovenia, Bulgaria, Hungary, Cyprus, Israel, Slovakia
+  371, 355, 315, 373, 172, 271, 318, 383, 332,
+  // Women: Champions League, England, Germany, France
+  525, 44, 82, 64,
   // UEFA club competitions
   2, 3, 848, 531,
   // National teams: tournaments, qualifiers and friendlies
   1, 4, 5, 6, 9, 10, 32, 34, 29, 30, 31, 960,
   // Americas
-  253, 71, 128, 262, 13, 11,
-  // Asia and Oceania
-  307, 98, 292, 188, 17,
+  253, 71, 72, 128, 262, 239, 265, 13, 11,
+  // Africa, Asia and Oceania
+  233, 200, 307, 98, 292, 169, 188, 17,
 ];
 const DEFAULT_COUNTRIES = ["Albania", "Kosovo"];
 
 /**
- * How often each day's fixtures and pre-match prices are refreshed. Prices a
- * few days out barely move, so they're fetched rarely; that keeps a wide
- * league list inside API-Football's Pro plan (7,500 requests a day).
+ * How often each day's fixtures and pre-match prices are refreshed: today
+ * every 30 minutes, tomorrow every 2 hours, then every 6, and the last two of
+ * the week every 12. Prices a few days out barely move, so they're fetched
+ * rarely; that keeps a wide league list inside API-Football's Pro plan
+ * (7,500 requests a day).
  */
-const PREMATCH_REFRESH_MS = [30 * 60_000, 2 * 3_600_000, 6 * 3_600_000];
+const PREMATCH_REFRESH_MS = [30 * 60_000, 2 * 3_600_000, 6 * 3_600_000, 6 * 3_600_000, 6 * 3_600_000, 12 * 3_600_000];
 /** Below this many requests left today, only today's matches are refreshed. */
 const QUOTA_RESERVE = Number(process.env.API_FOOTBALL_QUOTA_RESERVE) || 600;
 /** API-Football's id for Bet365, the bookmaker whose prices we start from. */
@@ -69,6 +78,9 @@ const STATS_MARKET_PREFIXES = ["corners_", "home_corners_", "away_corners_", "ca
  * refunded; see SettlementService.
  */
 export const UNPLAYED_VOID_MS = (Number(process.env.UNPLAYED_VOID_HOURS) || 48) * 3_600_000;
+
+/** A match moved more than UNPLAYED_VOID_MS later: bets placed for the old date are refunded (see SettlementService.refundUnplayed). */
+export const movedLater = (before: Date | null | undefined, after: Date) => !!before && after.getTime() - before.getTime() > UNPLAYED_VOID_MS;
 /** Finished matches with bets are asked about again for this long after kick-off, in case the feed corrects the score. */
 const RESULT_RECHECK_MS = 48 * 3_600_000;
 /** How often each of those is asked about. */
@@ -133,7 +145,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       countries: listEnv("API_FOOTBALL_COUNTRIES") ?? DEFAULT_COUNTRIES,
     };
     this.useChoice(this.defaults, false);
-    this.days = Math.min(7, Math.max(1, Number(process.env.ODDS_SYNC_DAYS) || 5));
+    this.days = Math.min(7, Math.max(1, Number(process.env.ODDS_SYNC_DAYS) || 7));
   }
 
   onModuleInit() {
@@ -197,8 +209,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           }
           await this.applyLiveOdds(event.id, parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? ""));
         })();
-        this.verifying.set(event.id, { at: Date.now(), done });
-        done.catch(() => this.verifying.delete(event.id));
+        const entry = { at: Date.now(), done };
+        this.verifying.set(event.id, entry);
+        // Shared only for VERIFY_SHARE_MS; drop it after, so the map doesn't keep every live match ever bet on.
+        const forget = () => {
+          if (this.verifying.get(event.id) === entry) this.verifying.delete(event.id);
+        };
+        done.then(() => setTimeout(forget, VERIFY_SHARE_MS).unref(), forget);
         return done;
       }),
     );
@@ -351,6 +368,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     }
     const live = await this.syncLive();
     await this.syncStats();
+    await this.syncGoals();
     await this.recheckResults();
     if (saving) {
       this.logger.warn(`Only ${this.quotaLeft} API-Football requests left today, so only today's matches are refreshed`);
@@ -401,7 +419,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const provider = this.provider();
     const tracked = await this.prisma.event.findMany({
       where: { provider, externalId: { not: null }, OR: [{ status: EventStatus.LIVE }, { status: EventStatus.UPCOMING, startsAt: { lte: new Date() } }] },
-      select: { id: true, externalId: true, homeScore: true, awayScore: true, liveStopped: true, liveOddsAt: true, liveCooldownUntil: true, liveCooldownReason: true },
+      select: { id: true, externalId: true, homeScore: true, awayScore: true, liveStopped: true, liveOddsAt: true, liveCooldownUntil: true, liveCooldownReason: true, period: true, finishedAt: true },
     });
     if (tracked.length === 0) return 0;
     const live = await client.liveFixtures();
@@ -428,13 +446,22 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       const pause = laterCooldown({ until: saved.liveCooldownUntil, reason: saved.liveCooldownReason }, cooldown);
       await this.prisma.event.update({
         where: { provider_externalId: { provider, externalId: fixture.externalId } },
-        data: { status: fixture.status, elapsed: fixture.elapsed, ...score, liveCooldownUntil: pause.until, liveCooldownReason: pause.reason, syncedAt: new Date() },
+        data: {
+          status: fixture.status,
+          elapsed: fixture.elapsed,
+          // The live odds can say full time before the fixtures list catches up; don't flip it back to "2H".
+          period: saved.period === "FT" && fixture.status === EventStatus.LIVE ? "FT" : fixture.period,
+          ...(fixture.status === EventStatus.COMPLETED && !saved.finishedAt ? { finishedAt: new Date() } : {}),
+          ...score, liveCooldownUntil: pause.until, liveCooldownReason: pause.reason, syncedAt: new Date() },
       });
       await this.recordResult(provider, fixture);
       updated++;
     }
     await this.syncLiveOdds();
-    if (finished.length > 0) await this.syncStats();
+    if (finished.length > 0) {
+      await this.syncStats();
+      await this.syncGoals();
+    }
     return updated;
   }
 
@@ -485,6 +512,55 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           : { statsCheckedAt: new Date() },
       });
       if (stats) found++;
+    }
+    return found;
+  }
+
+  /**
+   * The goals in order and who took part, for finished matches with open bets
+   * on the goal-event markets (first/last team to score, win from behind,
+   * goalscorers). The feed sends them with a fixture fetched by id, 20
+   * matches a request. A match is asked about at most every 10 minutes for 3
+   * days after kick-off; goals that don't add up to the score yet (the feed
+   * still correcting them) are asked for again, and after that the bets wait
+   * for Super Admin.
+   */
+  private async syncGoals(): Promise<number> {
+    const provider = this.provider();
+    const now = Date.now();
+    const due = await this.prisma.event.findMany({
+      where: {
+        provider,
+        externalId: { not: null },
+        status: EventStatus.COMPLETED,
+        resultHome: { not: null },
+        resultAway: { not: null },
+        resultGoals: { equals: Prisma.DbNull },
+        startsAt: { gte: new Date(now - 3 * 86_400_000) },
+        OR: [{ goalsCheckedAt: null }, { goalsCheckedAt: { lt: new Date(now - 10 * 60_000) } }],
+        markets: {
+          some: {
+            key: { in: GOAL_MARKET_KEYS },
+            selections: { some: { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null } } }] } },
+          },
+        },
+      },
+      select: { id: true, externalId: true, resultHome: true, resultAway: true },
+      take: 40,
+    });
+    let found = 0;
+    for (let i = 0; i < due.length; i += 20) {
+      const batch = due.slice(i, i + 20);
+      const details = await this.client!.fixtureDetails(batch.map((e) => e.externalId!)).catch(() => []);
+      for (const event of batch) {
+        const raw = details.find((d) => String(d.fixture.id) === event.externalId);
+        const record = raw ? parseGoalRecord(raw, { home: event.resultHome!, away: event.resultAway! }) : null;
+        await this.prisma.event.update({
+          where: { id: event.id },
+          data: record ? { resultGoals: record as unknown as Prisma.InputJsonValue, goalsCheckedAt: new Date() } : { goalsCheckedAt: new Date() },
+        });
+        if (record) found++;
+      }
     }
     return found;
   }
@@ -571,6 +647,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       data: {
         liveOddsAt: new Date(),
         liveStopped: odds.stopped,
+        ...(odds.finished ? { period: "FT" } : {}),
         ...(scored ? { homeScore: odds.homeScore, awayScore: odds.awayScore } : {}),
         ...(odds.elapsed !== null ? { elapsed: odds.elapsed } : {}),
         liveCooldownUntil: pause.until,
@@ -586,8 +663,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   /** `previousStart` is the kick-off already saved for this match, if it's listed. */
   private async upsertEvent(fixture: FeedFixture, previousStart?: Date): Promise<string> {
     // Moved more than UNPLAYED_VOID_MS later: bets placed for the old date are refunded.
-    const rescheduled = previousStart !== undefined && fixture.startsAt.getTime() - previousStart.getTime() > UNPLAYED_VOID_MS;
-    if (rescheduled) this.logger.log(`Match ${fixture.externalId} moved from ${previousStart.toISOString()} to ${fixture.startsAt.toISOString()}`);
+    const rescheduled = movedLater(previousStart, fixture.startsAt);
+    if (rescheduled) this.logger.log(`Match ${fixture.externalId} moved from ${previousStart!.toISOString()} to ${fixture.startsAt.toISOString()}`);
     const data = {
       name: `${fixture.homeTeam} v ${fixture.awayTeam}`,
       league: fixture.league,
@@ -597,6 +674,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       startsAt: fixture.startsAt,
       status: fixture.status,
       elapsed: fixture.elapsed,
+      period: fixture.period,
       homeScore: fixture.homeScore,
       awayScore: fixture.awayScore,
       syncedAt: new Date(),
@@ -637,15 +715,20 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     if (changed) this.logger.warn(`The feed changed match ${fixture.externalId} from ${saved.resultHome}-${saved.resultAway} to ${next.resultHome}-${next.resultAway}`);
     await this.prisma.event.updateMany({
       where,
-      data: { ...next, extraTime: fixture.extraTime, resultSource: "feed", ...(changed ? { resultChangedAt: new Date() } : {}) },
+      // A changed score means the goals saved for it are out of date: they're fetched again.
+      data: { ...next, extraTime: fixture.extraTime, resultSource: "feed", ...(changed ? { resultChangedAt: new Date(), resultGoals: Prisma.DbNull, goalsCheckedAt: null } : {}) },
     });
   }
 
   /**
-   * Saves feed prices. Selections are never deleted, because bets point at
-   * them; one the feed stops pricing simply keeps its last price.
+   * Saves pre-match prices. Selections are never deleted, because bets point at them. Only what changed is written: new outcomes are
+   * added, moved prices updated (with a snapshot for the movement chart), and
+   * outcomes the feed stopped pricing within a market it still sends are
+   * withdrawn, so nobody bets on a stale price (a player left out of the
+   * squad, a line taken down). One that comes back is reopened.
    */
-  private async upsertMarkets(eventId: string, markets: FeedMarket[]) {
+  /** Saves a match's (or fight's) pre-match prices; also used by the MMA sync. */
+  async upsertMarkets(eventId: string, markets: FeedMarket[]) {
     for (const market of markets) {
       await this.prisma.$transaction(async (tx) => {
         const row = await tx.market.upsert({
@@ -654,25 +737,31 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           update: { name: market.name, sortOrder: market.sortOrder },
           select: { id: true },
         });
-        for (const selection of market.selections) {
-          const feedOdds = new Prisma.Decimal(selection.odds.toFixed(2));
-          // Read the prior price first so we only log a snapshot on an actual
-          // change — this is a sparse "change log" for the movement chart, not
-          // a row every 10 minutes regardless of whether the price moved.
-          const existing = await tx.selection.findUnique({
-            where: { marketId_key: { marketId: row.id, key: selection.key } },
-            select: { id: true, feedOdds: true },
+        const existing = new Map(
+          (await tx.selection.findMany({ where: { marketId: row.id }, select: { id: true, key: true, name: true, feedOdds: true, sortOrder: true, withdrawn: true } })).map((s) => [s.key, s]),
+        );
+        const added = market.selections.filter((selection) => !existing.has(selection.key));
+        if (added.length > 0) {
+          await tx.selection.createMany({
+            data: added.map((selection) => ({ marketId: row.id, key: selection.key, name: selection.name, feedOdds: new Prisma.Decimal(selection.odds.toFixed(2)), sortOrder: selection.sortOrder })),
+            skipDuplicates: true,
           });
-          const saved = await tx.selection.upsert({
-            where: { marketId_key: { marketId: row.id, key: selection.key } },
-            create: { marketId: row.id, key: selection.key, name: selection.name, feedOdds, sortOrder: selection.sortOrder },
-            update: { name: selection.name, feedOdds, sortOrder: selection.sortOrder },
-            select: { id: true },
-          });
-          if (!existing || !existing.feedOdds.equals(feedOdds)) {
-            await tx.oddsSnapshot.create({ data: { selectionId: saved.id, price: feedOdds } });
-          }
+          const created = await tx.selection.findMany({ where: { marketId: row.id, key: { in: added.map((s) => s.key) } }, select: { id: true, feedOdds: true } });
+          await tx.oddsSnapshot.createMany({ data: created.map((s) => ({ selectionId: s.id, price: s.feedOdds })) });
         }
+        for (const selection of market.selections) {
+          const before = existing.get(selection.key);
+          if (!before) continue;
+          const feedOdds = new Prisma.Decimal(selection.odds.toFixed(2));
+          const moved = !before.feedOdds.equals(feedOdds);
+          if (!moved && before.name === selection.name && before.sortOrder === selection.sortOrder && !before.withdrawn) continue;
+          await tx.selection.update({ where: { id: before.id }, data: { name: selection.name, feedOdds, sortOrder: selection.sortOrder, withdrawn: false } });
+          // A sparse change log for the movement chart, not a row on every sync.
+          if (moved) await tx.oddsSnapshot.create({ data: { selectionId: before.id, price: feedOdds } });
+        }
+        const sent = new Set(market.selections.map((s) => s.key));
+        const gone = [...existing.values()].filter((s) => !sent.has(s.key) && !s.withdrawn).map((s) => s.id);
+        if (gone.length > 0) await tx.selection.updateMany({ where: { id: { in: gone } }, data: { withdrawn: true } });
       });
     }
   }

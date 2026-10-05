@@ -50,7 +50,14 @@ export function teamPrice(input: { feedOdds: number; baseMargin: number; ownerMa
 /** Live bets pause when the feed hasn't sent in-play prices for this long. */
 export const LIVE_ODDS_STALE_MS = Number(process.env.LIVE_ODDS_STALE_MS) || 90_000;
 
+/** Greyhound races close for bets this long before their scheduled start. */
+export const RACE_CLOSE_MS = 60_000;
+
 type LiveEventState = {
+  /** "greyhounds" closes RACE_CLOSE_MS before the start. */
+  sport?: string;
+  /** Bets close then, if it's before the start (an MMA card's first fight). */
+  closesAt?: Date | null;
   status: string;
   startsAt: Date;
   suspended: boolean;
@@ -83,7 +90,10 @@ export function livePause(event: LiveEventState, now: Date = new Date()): LivePa
  */
 export function eventOpen(event: LiveEventState, now: Date = new Date()): boolean {
   if (event.suspended || event.hidden) return false;
-  if (event.status === "UPCOMING") return event.startsAt > now;
+  if (event.status === "UPCOMING") {
+    const closes = Math.min(event.startsAt.getTime() - (event.sport === "greyhounds" ? RACE_CLOSE_MS : 0), event.closesAt?.getTime() ?? Infinity);
+    return closes > now.getTime();
+  }
   if (event.status !== "LIVE" || process.env.LIVE_BETTING === "off") return false;
   return livePause(event, now) === null;
 }
@@ -96,17 +106,24 @@ export function eventOpen(event: LiveEventState, now: Date = new Date()): boolea
 export function selectionQuote(input: {
   event: LiveEventState;
   market: { liveSuspended: boolean };
-  selection: { feedOdds: number; liveOdds: number | null; result: string | null };
+  /** `withdrawn`: the feed stopped pricing this outcome before kick-off (see Selection.withdrawn). */
+  selection: { feedOdds: number; liveOdds: number | null; result: string | null; withdrawn?: boolean };
   baseMargin: number;
   ownerMargin: number;
   override: number | null;
   now?: Date;
 }): { price: number; bettable: boolean; live: boolean; suspended: boolean } {
   const live = input.event.status === "LIVE";
+  // A greyhound race has no price before the off: its bets are paid at the starting price (price 0 means "SP").
+  if (input.event.sport === "greyhounds") {
+    const withdrawn = input.selection.withdrawn === true;
+    return { price: 0, bettable: eventOpen(input.event, input.now) && input.selection.result === null && !withdrawn, live: false, suspended: withdrawn };
+  }
   const open = eventOpen(input.event, input.now) && input.selection.result === null;
   if (!live) {
     const price = teamPrice({ feedOdds: input.selection.feedOdds, baseMargin: input.baseMargin, ownerMargin: input.ownerMargin, override: input.override });
-    return { price, bettable: open, live, suspended: false };
+    const withdrawn = input.selection.withdrawn === true;
+    return { price, bettable: open && !withdrawn, live, suspended: withdrawn };
   }
   const suspended = input.market.liveSuspended || input.selection.liveOdds === null;
   const price = applyMargin(input.selection.liveOdds ?? input.selection.feedOdds, teamMargin(input.baseMargin, input.ownerMargin));

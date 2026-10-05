@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsNumber, IsString, IsPositive, Max, MaxLength, Min, MinLength, ValidateIf } from "class-validator";
+import { IsBoolean, IsNumber, IsString, IsPositive, Max, MaxLength, Min, MinLength, ValidateIf } from "class-validator";
 
 /** Delegate credit to a direct child (Owner→Manager, Owner→Player, Manager→Player). */
 export class DelegateCreditDto {
@@ -61,4 +61,11 @@ export class ApprovalLimitDto {
   @Min(0)
   @Max(1000000)
   limit!: number | null;
+}
+
+/** Approve (true) or reject (false) a transfer waiting for sign-off. Only a real true approves. */
+export class ApproveTransactionDto {
+  @ApiProperty()
+  @IsBoolean()
+  approve!: boolean;
 }

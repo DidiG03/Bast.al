@@ -198,6 +198,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
     return () => {
       disposed = true;
       engine.current = null;
+      // Leaving mid-spin: the reels' ticking stops with them.
+      slotSound.stopTicking();
       teardown();
     };
     // Built once; later results arrive through land().

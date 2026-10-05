@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from "class-validator";
 import { MAX_MARGIN, MAX_ODDS, MIN_ODDS } from "./pricing";
 
 export class TeamQueryDto {
@@ -13,6 +13,37 @@ export class EventsQueryDto extends TeamQueryDto {
   @IsOptional()
   @IsIn(["upcoming", "live", "finished"])
   filter?: "upcoming" | "live" | "finished";
+
+  /** "list": each match with its main market only, plus how many it has, so a long list stays small. */
+  @IsOptional()
+  @IsIn(["list"])
+  view?: "list";
+
+  /** "greyhounds" for races, "mma" for fights, "basketball", "nfl"; football by default. */
+  @IsOptional()
+  @IsIn(["football", "greyhounds", "mma", "basketball", "nfl"])
+  sport?: "football" | "greyhounds" | "mma" | "basketball" | "nfl";
+}
+
+export class TopEventsQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  count?: number;
+
+  /** "greyhounds": the next races to run. */
+  @IsOptional()
+  @IsIn(["football", "greyhounds"])
+  sport?: "football" | "greyhounds";
+}
+
+export class SelectionsQueryDto extends TeamQueryDto {
+  /** Selection ids, comma-separated: a bet slip's picks. */
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{1,40}(,[A-Za-z0-9_-]{1,40}){0,19}$/, { message: "ids must be up to 20 selection ids, comma-separated" })
+  ids!: string;
 }
 
 export class BaseMarginDto {

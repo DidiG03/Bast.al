@@ -146,6 +146,7 @@ export class ThreatIntelService implements OnModuleDestroy {
       const ok = await this.redis.set(`nonce:${nonce}`, "1", "PX", ttlMs, "NX");
       return ok === "OK";
     }
+    this.prune();
     const key = `nonce:${nonce}`;
     if (this.memory.has(key)) return false;
     this.memory.set(key, { count: 1, resetAt: Date.now() + ttlMs });

@@ -60,7 +60,7 @@ async function bet(player, selection, { stake, placedAt }) {
 let sa, owner, managerA, managerB, cara;
 
 test("setup", async () => {
-  for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "bet_legs", "bets", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
+  for (const table of ["blackjack_hands", "settlement_entries", "commission_payouts", "balance_transactions", "bet_legs", "bets", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
   sa = await user("SUPER_ADMIN", null);
@@ -105,6 +105,45 @@ test("a moved Player's balance goes back to whoever gave it to them", async () =
   assert.equal(sent.find((s) => s.userId === managerA.id).message, `${cara.username} was moved to another manager. Their $70.00 balance came back to you.`);
   assert.equal(sent.find((s) => s.userId === cara.id).message, `Your account was reassigned to manager ${managerB.username}. Your $70.00 balance went back to ${managerA.username}.`);
   assert.equal(sent.find((s) => s.userId === managerB.id).message, `${cara.username} was assigned to your team. Their balance starts at $0.00.`);
+});
+
+test("a Player in the middle of a blackjack hand waits to be moved too", async () => {
+  await prisma.blackjackHand.create({ data: { playerId: cara.id, ownerId: owner.id, managerId: managerB.id, ownerRate: 10, managerRate: 30, staked: 5, state: {} } });
+  await assert.rejects(users.reassignPlayer(owner, cara.id, managerA.id), new RegExp(`${cara.username} is in the middle of a blackjack hand`));
+  assert.match((await users.reassignmentPreview(owner, cara.id, managerA.id)).reason, /blackjack hand/);
+  await prisma.blackjackHand.delete({ where: { playerId: cara.id } });
+});
+
+test("a transfer waiting for approval only goes through if the giver could still make it", async () => {
+  // Asked for by Manager A while Cara was theirs; she's Manager B's now.
+  const stale = await prisma.balanceTransaction.create({
+    data: { fromUserId: managerA.id, toUserId: cara.id, actorId: managerA.id, type: "DELEGATION", amount: 50, reason: "Old top-up", status: "PENDING" },
+  });
+  await assert.rejects(users.approveBalance(owner, stale.id, true), /moved to another team/);
+  // Manager B asks, then is suspended before the Owner approves.
+  const asked = await prisma.balanceTransaction.create({
+    data: { fromUserId: managerB.id, toUserId: cara.id, actorId: managerB.id, type: "DELEGATION", amount: 50, reason: "Top-up", status: "PENDING" },
+  });
+  await prisma.user.update({ where: { id: managerB.id }, data: { status: "SUSPENDED", balance: 500 } });
+  await assert.rejects(users.approveBalance(owner, asked.id, true), /giving this credit is suspended/);
+  assert.equal(Number((await find(cara)).balance), 0, "no money moved");
+  await users.approveBalance(owner, stale.id, false);
+  await users.approveBalance(owner, asked.id, false);
+  await prisma.user.update({ where: { id: managerB.id }, data: { status: "ACTIVE", balance: 0 } });
+});
+
+test("a top-up and a reclaim between the same two accounts at once never deadlock, and the money adds up", async () => {
+  const ownerRow = await find(owner);
+  const [startOwner, startA] = [Number(ownerRow.balance), Number((await find(managerA)).balance)];
+  const moves = [];
+  for (let i = 0; i < 8; i++) {
+    moves.push(users.delegateCredit(ownerRow, managerA.id, { amount: 10, reason: "Float" }));
+    moves.push(users.reclaimCredit(ownerRow, managerA.id, { amount: 5, reason: "Back" }));
+  }
+  const results = await Promise.allSettled(moves);
+  assert.deepEqual(results.filter((r) => r.status === "rejected").map((r) => r.reason.message), []);
+  assert.equal(Number((await find(owner)).balance), startOwner - 40);
+  assert.equal(Number((await find(managerA)).balance), startA + 40);
 });
 
 test("a score the feed corrects settles the bets again, once it has held for 10 minutes", async () => {

@@ -23,8 +23,14 @@ export type AuthenticatedRequest = Request & {
 /** A refused account's attempts are recorded at most this often, not on every request its open tabs make. */
 const REFUSAL_AUDIT_EVERY_MS = 60 * 60_000;
 
+/** A session's "last seen" is written at most this often, unless where or on what it's used changes. */
+const VISIT_WRITE_EVERY_MS = 60_000;
+
 @Injectable()
 export class AuthGuard implements CanActivate {
+  /** Per session: when its visit was last written, and what was written. */
+  private readonly visits = new Map<string, { at: number; visit: string }>();
+
   constructor(
     private readonly clerk: ClerkService,
     private readonly prisma: PrismaService,
@@ -141,11 +147,20 @@ export class AuthGuard implements CanActivate {
     const visit = parsed
       ? { ipAddress: ip, userAgent, device: parsed.device, browser: parsed.browser, ...(context ? { location: location(context) } : {}) }
       : null;
+    // A page makes many requests a minute; the same visit is written once a
+    // minute, a change at once. Our web server's own calls (no visit) only
+    // ever mark the session as seen, so they wait for the minute too.
+    const now = Date.now();
+    const last = this.visits.get(sessionId);
+    const key = visit ? JSON.stringify(visit) : last?.visit ?? "";
+    if (last && last.visit === key && now - last.at < VISIT_WRITE_EVERY_MS) return;
+    if (this.visits.size >= 10_000) for (const [id, seen] of this.visits) if (now - seen.at >= VISIT_WRITE_EVERY_MS) this.visits.delete(id);
     await this.prisma.loginHistory.upsert({
       where: { sessionId },
       create: { sessionId, userId, ipAddress: ip, userAgent, ...visit },
       update: { lastSeenAt: new Date(), ...visit },
     });
+    this.visits.set(sessionId, { at: now, visit: key });
   }
 }
 

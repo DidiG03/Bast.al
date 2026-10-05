@@ -1,0 +1,450 @@
+{
+ "get": "games",
+ "parameters": {
+  "date": "2026-10-04"
+ },
+ "results": 7,
+ "response": [
+  {
+   "game": {
+    "id": 23597,
+    "stage": "FBS (Division I-A)",
+    "week": "5",
+    "date": {
+     "timezone": "UTC",
+     "date": "2026-10-04",
+     "time": "00:00",
+     "timestamp": 1791072000
+    },
+    "venue": {
+     "name": null,
+     "city": null
+    },
+    "status": {
+     "short": "FT",
+     "long": "Finished",
+     "timer": null
+    }
+   },
+   "league": {
+    "id": 2,
+    "name": "NCAA",
+    "season": "2026",
+    "logo": "https://media.api-sports.io/american-football/leagues/2.png",
+    "country": {
+     "name": "USA",
+     "code": "US",
+     "flag": "https://media.api-sports.io/flags/us.svg"
+    }
+   },
+   "teams": {
+    "home": {
+     "id": 143,
+     "name": "Rutgers",
+     "logo": "https://media.api-sports.io/american-football/teams/143.png"
+    },
+    "away": {
+     "id": 103,
+     "name": "Indiana",
+     "logo": "https://media.api-sports.io/american-football/teams/103.png"
+    }
+   },
+   "scores": {
+    "home": {
+     "quarter_1": 0,
+     "quarter_2": 0,
+     "quarter_3": 7,
+     "quarter_4": 8,
+     "overtime": null,
+     "total": 15
+    },
+    "away": {
+     "quarter_1": 10,
+     "quarter_2": 13,
+     "quarter_3": 14,
+     "quarter_4": 10,
+     "overtime": null,
+     "total": 47
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 24147,
+    "stage": "FCS (Division I-AA)",
+    "week": "5",
+    "date": {
+     "timezone": "UTC",
+     "date": "2026-10-04",
+     "time": "00:00",
+     "timestamp": 1791072000
+    },
+    "venue": {
+     "name": null,
+     "city": null
+    },
+    "status": {
+     "short": "AOT",
+     "long": "After Over Time",
+     "timer": null
+    }
+   },
+   "league": {
+    "id": 2,
+    "name": "NCAA",
+    "season": "2026",
+    "logo": "https://media.api-sports.io/american-football/leagues/2.png",
+    "country": {
+     "name": "USA",
+     "code": "US",
+     "flag": "https://media.api-sports.io/flags/us.svg"
+    }
+   },
+   "teams": {
+    "home": {
+     "id": 89,
+     "name": "Cal Poly",
+     "logo": "https://media.api-sports.io/american-football/teams/89.png"
+    },
+    "away": {
+     "id": 227,
+     "name": "Weber State",
+     "logo": "https://media.api-sports.io/american-football/teams/227.png"
+    }
+   },
+   "scores": {
+    "home": {
+     "quarter_1": 3,
+     "quarter_2": 6,
+     "quarter_3": 11,
+     "quarter_4": 7,
+     "overtime": 7,
+     "total": 34
+    },
+    "away": {
+     "quarter_1": 7,
+     "quarter_2": 10,
+     "quarter_3": 7,
+     "quarter_4": 3,
+     "overtime": 7,
+     "total": 42
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 21562,
+    "stage": "Regular Season",
+    "week": "Week 4",
+    "date": {
+     "timezone": "UTC",
+     "date": "2026-10-04",
+     "time": "13:30",
+     "timestamp": 1791120600
+    },
+    "venue": {
+     "name": "Tottenham Hotspur Stadium",
+     "city": "London"
+    },
+    "status": {
+     "short": "FT",
+     "long": "Finished",
+     "timer": null
+    }
+   },
+   "league": {
+    "id": 1,
+    "name": "NFL",
+    "season": "2026",
+    "logo": "https://media.api-sports.io/american-football/leagues/1.png",
+    "country": {
+     "name": "USA",
+     "code": "US",
+     "flag": "https://media.api-sports.io/flags/us.svg"
+    }
+   },
+   "teams": {
+    "home": {
+     "id": 18,
+     "name": "Washington Commanders",
+     "logo": "https://media.api-sports.io/american-football/teams/18.png"
+    },
+    "away": {
+     "id": 21,
+     "name": "Indianapolis Colts",
+     "logo": "https://media.api-sports.io/american-football/teams/21.png"
+    }
+   },
+   "scores": {
+    "home": {
+     "quarter_1": 6,
+     "quarter_2": 0,
+     "quarter_3": 7,
+     "quarter_4": 0,
+     "overtime": null,
+     "total": 13
+    },
+    "away": {
+     "quarter_1": 0,
+     "quarter_2": 10,
+     "quarter_3": 10,
+     "quarter_4": 10,
+     "overtime": null,
+     "total": 30
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 21570,
+    "stage": "Regular Season",
+    "week": "Week 4",
+    "date": {
+     "timezone": "UTC",
+     "date": "2026-10-04",
+     "time": "17:00",
+     "timestamp": 1791133200
+    },
+    "venue": {
+     "name": "Reliant Stadium",
+     "city": "Houston"
+    },
+    "status": {
+     "short": "FT",
+     "long": "Finished",
+     "timer": null
+    }
+   },
+   "league": {
+    "id": 1,
+    "name": "NFL",
+    "season": "2026",
+    "logo": "https://media.api-sports.io/american-football/leagues/1.png",
+    "country": {
+     "name": "USA",
+     "code": "US",
+     "flag": "https://media.api-sports.io/flags/us.svg"
+    }
+   },
+   "teams": {
+    "home": {
+     "id": 26,
+     "name": "Houston Texans",
+     "logo": "https://media.api-sports.io/american-football/teams/26.png"
+    },
+    "away": {
+     "id": 29,
+     "name": "Dallas Cowboys",
+     "logo": "https://media.api-sports.io/american-football/teams/29.png"
+    }
+   },
+   "scores": {
+    "home": {
+     "quarter_1": 10,
+     "quarter_2": 6,
+     "quarter_3": 7,
+     "quarter_4": 7,
+     "overtime": null,
+     "total": 30
+    },
+    "away": {
+     "quarter_1": 3,
+     "quarter_2": 3,
+     "quarter_3": 14,
+     "quarter_4": 14,
+     "overtime": null,
+     "total": 34
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 21572,
+    "stage": "Regular Season",
+    "week": "Week 4",
+    "date": {
+     "timezone": "UTC",
+     "date": "2026-10-04",
+     "time": "20:25",
+     "timestamp": 1791145500
+    },
+    "venue": {
+     "name": "Allegiant Stadium",
+     "city": "Las Vegas"
+    },
+    "status": {
+     "short": "FT",
+     "long": "Finished",
+     "timer": null
+    }
+   },
+   "league": {
+    "id": 1,
+    "name": "NFL",
+    "season": "2026",
+    "logo": "https://media.api-sports.io/american-football/leagues/1.png",
+    "country": {
+     "name": "USA",
+     "code": "US",
+     "flag": "https://media.api-sports.io/flags/us.svg"
+    }
+   },
+   "teams": {
+    "home": {
+     "id": 1,
+     "name": "Las Vegas Raiders",
+     "logo": "https://media.api-sports.io/american-football/teams/1.png"
+    },
+    "away": {
+     "id": 17,
+     "name": "Kansas City Chiefs",
+     "logo": "https://media.api-sports.io/american-football/teams/17.png"
+    }
+   },
+   "scores": {
+    "home": {
+     "quarter_1": 7,
+     "quarter_2": 6,
+     "quarter_3": 0,
+     "quarter_4": 14,
+     "overtime": null,
+     "total": 27
+    },
+    "away": {
+     "quarter_1": 7,
+     "quarter_2": 3,
+     "quarter_3": 0,
+     "quarter_4": 20,
+     "overtime": null,
+     "total": 30
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 21575,
+    "stage": "Regular Season",
+    "week": "Week 4",
+    "date": {
+     "timezone": "UTC",
+     "date": "2026-10-05",
+     "time": "00:20",
+     "timestamp": 1791159600
+    },
+    "venue": {
+     "name": "Bank of America Stadium",
+     "city": "Charlotte"
+    },
+    "status": {
+     "short": "FT",
+     "long": "Finished",
+     "timer": null
+    }
+   },
+   "league": {
+    "id": 1,
+    "name": "NFL",
+    "season": "2026",
+    "logo": "https://media.api-sports.io/american-football/leagues/1.png",
+    "country": {
+     "name": "USA",
+     "code": "US",
+     "flag": "https://media.api-sports.io/flags/us.svg"
+    }
+   },
+   "teams": {
+    "home": {
+     "id": 19,
+     "name": "Carolina Panthers",
+     "logo": "https://media.api-sports.io/american-football/teams/19.png"
+    },
+    "away": {
+     "id": 7,
+     "name": "Detroit Lions",
+     "logo": "https://media.api-sports.io/american-football/teams/7.png"
+    }
+   },
+   "scores": {
+    "home": {
+     "quarter_1": 7,
+     "quarter_2": 9,
+     "quarter_3": 13,
+     "quarter_4": 3,
+     "overtime": null,
+     "total": 32
+    },
+    "away": {
+     "quarter_1": 3,
+     "quarter_2": 13,
+     "quarter_3": 3,
+     "quarter_4": 7,
+     "overtime": null,
+     "total": 26
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 21576,
+    "stage": "Regular Season",
+    "week": "Week 4",
+    "date": {
+     "timezone": "UTC",
+     "date": "2026-10-06",
+     "time": "00:15",
+     "timestamp": 1791245700
+    },
+    "venue": {
+     "name": "Caesars Superdome",
+     "city": "New Orleans"
+    },
+    "status": {
+     "short": "NS",
+     "long": "Not Started",
+     "timer": null
+    }
+   },
+   "league": {
+    "id": 1,
+    "name": "NFL",
+    "season": "2026",
+    "logo": "https://media.api-sports.io/american-football/leagues/1.png",
+    "country": {
+     "name": "USA",
+     "code": "US",
+     "flag": "https://media.api-sports.io/flags/us.svg"
+    }
+   },
+   "teams": {
+    "home": {
+     "id": 27,
+     "name": "New Orleans Saints",
+     "logo": "https://media.api-sports.io/american-football/teams/27.png"
+    },
+    "away": {
+     "id": 8,
+     "name": "Atlanta Falcons",
+     "logo": "https://media.api-sports.io/american-football/teams/8.png"
+    }
+   },
+   "scores": {
+    "home": {
+     "quarter_1": null,
+     "quarter_2": null,
+     "quarter_3": null,
+     "quarter_4": null,
+     "overtime": null,
+     "total": null
+    },
+    "away": {
+     "quarter_1": null,
+     "quarter_2": null,
+     "quarter_3": null,
+     "quarter_4": null,
+     "overtime": null,
+     "total": null
+    }
+   }
+  }
+ ]
+}

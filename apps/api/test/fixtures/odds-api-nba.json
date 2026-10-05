@@ -1,0 +1,30 @@
+[
+  {
+    "id": "e912304de2b2ce35b473ce2ecd3d1502",
+    "sport_key": "basketball_nba",
+    "sport_title": "NBA",
+    "commence_time": "2026-10-05T23:00:00Z",
+    "home_team": "Atlanta Hawks",
+    "away_team": "Memphis Grizzlies",
+    "bookmakers": [
+      {
+        "key": "betonlineag",
+        "title": "BetOnline.ag",
+        "last_update": "2026-10-05T11:30:00Z",
+        "markets": [
+          { "key": "h2h", "last_update": "2026-10-05T11:30:00Z", "outcomes": [{ "name": "Atlanta Hawks", "price": 1.8 }, { "name": "Memphis Grizzlies", "price": 2.05 }] }
+        ]
+      },
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "last_update": "2026-10-05T11:31:00Z",
+        "markets": [
+          { "key": "h2h", "last_update": "2026-10-05T11:31:00Z", "outcomes": [{ "name": "Atlanta Hawks", "price": 1.77 }, { "name": "Memphis Grizzlies", "price": 2.1 }] },
+          { "key": "spreads", "last_update": "2026-10-05T11:31:00Z", "outcomes": [{ "name": "Atlanta Hawks", "price": 1.91, "point": -2.5 }, { "name": "Memphis Grizzlies", "price": 1.91, "point": 2.5 }] },
+          { "key": "totals", "last_update": "2026-10-05T11:31:00Z", "outcomes": [{ "name": "Over", "price": 1.87, "point": 224 }, { "name": "Under", "price": 1.95, "point": 224 }] }
+        ]
+      }
+    ]
+  }
+]

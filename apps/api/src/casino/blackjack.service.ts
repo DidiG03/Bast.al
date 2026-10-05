@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { randomInt } from "crypto";
-import { BalanceTransactionType, Prisma, Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import { Actor } from "../auth/permissions";
 import { assertOnTeam } from "../bets/team";
 import { BettingLimitsService } from "../commissions/betting-limits.service";
@@ -8,7 +8,7 @@ import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
-import { casinoClosedReason } from "./access";
+import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import { CHIPS, GAME_NAME, MoveError, PAYOUT_RATE, TABLE_MAX, act, deal, newShoe, paidOut, publicView, staked, standAll, type Action, type Round } from "./blackjack";
 
 const RECENT = 10;
@@ -77,9 +77,7 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
 
   /** The most a first bet can be: the Player's max stake, or TABLE_MAX without one. */
   private async tableMax(playerId: string): Promise<number> {
-    const limit = await this.prisma.bettingLimit.findUnique({ where: { playerId } });
-    const stakes = [limit?.ownerMaxStake, limit?.managerMaxStake].filter((value): value is Prisma.Decimal => value !== null && value !== undefined).map(Number);
-    return stakes.length ? Math.min(...stakes) : TABLE_MAX;
+    return (await maxStakeOf(this.prisma, playerId)) ?? TABLE_MAX;
   }
 
   /** The Player's table: whether they can play, the rules, the round in play (if any) and their last rounds. */
@@ -232,12 +230,7 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
     const played = await tx.casinoSpin.count({ where: { playerId, kind: "BLACKJACK", createdAt: { gte: startOfDay(now) } } });
     const hands = played + (inPlay ? 1 : 0);
     const reason = hands === 1 ? "Blackjack: 1 hand" : `Blackjack: ${hands} hands`;
-    const amount = dollars(cents);
-    await tx.balanceTransaction.upsert({
-      where: { id: ledgerLineId(playerId, now) },
-      create: { id: ledgerLineId(playerId, now), toUserId: playerId, actorId: playerId, type: BalanceTransactionType.CASINO, amount, reason, createdAt: now },
-      update: { amount: { increment: amount }, reason },
-    });
+    await addToDailyLine(tx, ledgerLineId(playerId, now), playerId, dollars(cents), reason, now);
   }
 
   private async balanceIn(tx: Tx, playerId: string) {

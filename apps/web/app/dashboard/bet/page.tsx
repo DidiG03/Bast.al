@@ -5,17 +5,20 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
+import { GreyhoundRaces } from "../../../components/greyhound-races";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
-import { ApiError, apiFetch, type Bet, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SlipInfo } from "../../../lib/api";
+import { ApiError, apiFetch, type Bet, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
 import { useTopUpRequest } from "../../../components/top-up-request";
+import { breakPause, livePill } from "../../../lib/live";
+import { usePolling } from "../../../lib/use-polling";
 import { pickLabel } from "../../../lib/picks";
 import { isDaysFromToday } from "../../../lib/time";
 
@@ -37,9 +40,12 @@ type SlipItem = {
   /** A live pick whose market is suspended or whose prices went stale for now. */
   paused?: boolean;
   live?: boolean;
+  /** Greyhounds: paid at the starting price (or forecast dividend); `odds` is 0. Singles only. */
+  sp?: boolean;
 };
 
-const SLIP_STORAGE = "bastal-bet-slip";
+/** Each account's slip is kept apart, so a Player on a shared phone never sees another one's picks. */
+const slipStorage = (userId: string) => `bastal-bet-slip:${userId}`;
 /** How long a price shows its up or down arrow after it moves. */
 const MOVE_SHOWN_MS = 15_000;
 
@@ -48,6 +54,8 @@ const QUICK_STAKES = [5, 10, 20, 50];
 const MAX_SLIP = 10;
 /** Matches the API's cap on an accumulator's combined odds. */
 const MAX_ACCUMULATOR_ODDS = 5000;
+/** Matches drawn at first; "Show more matches" adds this many again, so a week of football doesn't slow a phone down. */
+const MATCHES_SHOWN = 60;
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 const DATE_TIME: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
@@ -84,9 +92,11 @@ function stakeValue(stake: string): number {
   return Number.isFinite(value) && value > 0 ? Math.round(value * 100) / 100 : 0;
 }
 
-function readSlip(): SlipItem[] {
+function readSlip(userId: string): SlipItem[] {
   try {
-    const raw = window.localStorage.getItem(SLIP_STORAGE);
+    // The slip used to be kept for whoever signed in last on this browser.
+    window.localStorage.removeItem("bastal-bet-slip");
+    const raw = window.localStorage.getItem(slipStorage(userId));
     const parsed = raw ? (JSON.parse(raw) as SlipItem[]) : [];
     // Live picks stay on the slip for the length of a match; the next odds refresh closes any that ended.
     return Array.isArray(parsed) ? parsed.filter((item) => new Date(item.startsAt).getTime() > Date.now() - 3 * 3_600_000).slice(0, MAX_SLIP) : [];
@@ -95,9 +105,9 @@ function readSlip(): SlipItem[] {
   }
 }
 
-function saveSlip(items: SlipItem[]) {
+function saveSlip(userId: string, items: SlipItem[]) {
   try {
-    window.localStorage.setItem(SLIP_STORAGE, JSON.stringify(items));
+    window.localStorage.setItem(slipStorage(userId), JSON.stringify(items));
   } catch {
     // The slip still works for this visit.
   }
@@ -112,13 +122,17 @@ export default function BetPageRoute() {
 }
 
 function BetPage() {
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
   const i18n = useI18n();
-  const { t, ts } = i18n;
+  const { t, tn, ts } = i18n;
   const router = useRouter();
   const params = useSearchParams();
   const tabParam = params.get("tab");
   const tab: Tab = tabParam === "open" || tabParam === "settled" ? tabParam : "matches";
+  const sportParam = params.get("sport");
+  const sport: Sport = sportParam === "greyhounds" || sportParam === "mma" || sportParam === "basketball" || sportParam === "nfl" ? sportParam : "football";
+  /** Football and MMA share the match list; greyhound races have their own. */
+  const listed = sport !== "greyhounds";
   // Opened from a match on the Overview: scroll to it and light it up.
   const matchParam = params.get("match");
   const [focused, setFocused] = useState<string | null>(null);
@@ -137,15 +151,92 @@ function BetPage() {
   /** "" = every day, "live" = playing now, otherwise a day's label (Today, Tomorrow, …). */
   const [day, setDay] = useState("");
   const [betsVersion, setBetsVersion] = useState(0);
+  const [limit, setLimit] = useState(MATCHES_SHOWN);
+  /** Matches opened to show every market, and those markets once loaded. */
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [details, setDetails] = useState<Record<string, OddsEvent>>({});
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
+  const slipRef = useRef<SlipItem[]>([]);
 
-  const loadEvents = useCallback(async () => {
+  // The list carries each match's main market only; the rest load when a match is opened.
+  // `only: "live"` asks for the live matches again and keeps the rest as they are.
+  const lists = useRef<{ live: OddsEvent[] | null; upcoming: OddsEvent[] | null }>({ live: null, upcoming: null });
+  const sportRef = useRef(sport);
+  sportRef.current = sport;
+  const loadEvents = useCallback(
+    async (only?: "live") => {
+      const token = await getToken();
+      if (!token) return;
+      const list = (filter: "live" | "upcoming") => apiFetch<OddsEvent[]>(`/odds/events?filter=${filter}&view=list&sport=${sport}`, token, { revalidate: true });
+      // Only football is bet on once it starts: the other sports have no live list.
+      const [live, upcoming] = await Promise.all([sport !== "football" ? [] : list("live"), only === "live" && lists.current.upcoming ? lists.current.upcoming : list("upcoming")]);
+      // Nothing changed (the API said so), or the Player switched sport meanwhile: the page keeps what it has.
+      if ((live === lists.current.live && upcoming === lists.current.upcoming) || sportRef.current !== sport) return;
+      lists.current = { live, upcoming };
+      setEvents([...live, ...upcoming]);
+    },
+    [getToken, sport],
+  );
+
+  // Another sport: its own list, from scratch.
+  useEffect(() => {
+    lists.current = { live: null, upcoming: null };
+    setEvents(null);
+    setLeague("");
+    setDay("");
+  }, [sport]);
+
+  const loadDetail = useCallback(
+    async (id: string) => {
+      const token = await getToken();
+      if (!token) return;
+      const full = await apiFetch<OddsEvent>(`/odds/events/${id}`, token, { revalidate: true });
+      setDetails((current) => (current[id] === full ? current : { ...current, [id]: full }));
+    },
+    [getToken],
+  );
+
+  // The slip's picks are priced on their own, so a pick on a market that isn't loaded still moves and closes.
+  const refreshSlip = useCallback(async () => {
+    const ids = slipRef.current.map((item) => item.selectionId);
+    if (ids.length === 0) return;
     const token = await getToken();
     if (!token) return;
-    const [live, upcoming] = await Promise.all([apiFetch<OddsEvent[]>("/odds/events?filter=live", token), apiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token)]);
-    const next = [...live, ...upcoming];
-    setEvents(next);
-    return next;
+    const quotes = await apiFetch<SelectionQuote[]>(`/odds/selections?ids=${ids.map(encodeURIComponent).join(",")}`, token);
+    const byId = new Map(quotes.map((quote) => [quote.id, quote]));
+    setSlip((items) =>
+      items.map((item) => {
+        const quote = byId.get(item.selectionId);
+        if (!quote || !quote.open) return { ...item, closed: true, paused: false };
+        const paused = !quote.bettable;
+        // A race pick has no price to follow; it closes a minute before the start.
+        if (quote.sp) return { ...item, closed: !quote.bettable, paused: false, sp: true };
+        if (quote.price === item.odds) return { ...item, closed: false, paused, live: quote.live };
+        const previous = item.previousOdds ?? item.odds;
+        return { ...item, closed: false, paused, live: quote.live, odds: quote.price, previousOdds: previous === quote.price ? undefined : previous };
+      }),
+    );
   }, [getToken]);
+
+  /** Everything on the page again: the list (or only its live matches), every opened match, and the slip's prices. */
+  const refreshAll = useCallback(
+    async (only?: "live") => {
+      await Promise.all([loadEvents(only), ...Array.from(expandedRef.current, (id) => loadDetail(id).catch(() => undefined)), refreshSlip().catch(() => undefined)]);
+    },
+    [loadEvents, loadDetail, refreshSlip],
+  );
+
+  function toggleExpanded(id: string) {
+    const opening = !expanded.has(id);
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (opening) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    if (opening && !details[id]) void loadDetail(id).catch(() => toast.error(t("Couldn't load the matches")));
+  }
 
   const loadInfo = useCallback(async () => {
     const token = await getToken();
@@ -154,13 +245,20 @@ function BetPage() {
   }, [getToken]);
 
   useEffect(() => {
-    setSlip(readSlip());
+    if (!userId) return;
+    setSlip(readSlip(userId));
     setSlipLoaded(true);
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    if (slipLoaded) saveSlip(slip);
-  }, [slip, slipLoaded]);
+    if (slipLoaded && userId) saveSlip(userId, slip);
+    slipRef.current = slip;
+  }, [slip, slipLoaded, userId]);
+
+  // A slip kept from last time is checked against today's prices once it's loaded.
+  useEffect(() => {
+    if (slipLoaded) void refreshSlip().catch(() => undefined);
+  }, [slipLoaded, refreshSlip]);
 
   useEffect(() => {
     loadInfo().catch((err) => {
@@ -189,7 +287,12 @@ function BetPage() {
     setSearch("");
     setDay("");
     setFocused(found.id);
-  }, [matchParam, events, tab, router, toast, t]);
+    // Far down the list: draw enough matches to reach it.
+    setLimit(Math.max(MATCHES_SHOWN, events.indexOf(found) + 10));
+    // The match someone came here for opens with every market showing.
+    setExpanded((current) => new Set(current).add(found.id));
+    void loadDetail(found.id).catch(() => undefined);
+  }, [matchParam, events, tab, router, toast, t, loadDetail]);
 
   useEffect(() => {
     if (!focused) return;
@@ -202,19 +305,38 @@ function BetPage() {
   }, [focused]);
 
   useEffect(() => {
-    if (tab !== "matches") return;
+    if (tab !== "matches" || !listed) return;
     loadEvents().catch((err) => {
       setFailed(true);
       toast.error(err instanceof Error ? err.message : t("Couldn't load the matches"));
     });
-  }, [tab, loadEvents, toast, t]);
+  }, [tab, listed, loadEvents, toast, t]);
 
-  // Prices move and matches kick off: refresh every minute while browsing, every 10 seconds while a match is live.
+  // Prices move and matches kick off: everything every minute, and the live
+  // matches every 10 seconds while there are any. Not while the page is out of sight.
+  usePolling(() => void refreshAll().catch(() => undefined), 60_000, tab === "matches" && listed);
+  usePolling(() => void refreshAll("live").catch(() => undefined), 10_000, tab === "matches" && listed && hasLive);
+  // Races have no prices to follow, but a race pick on the slip closes a minute before the start.
+  usePolling(() => void refreshSlip().catch(() => undefined), 30_000, tab === "matches" && sport === "greyhounds" && slip.some((item) => item.sp));
+
+  // A match closes for bets at kick-off: the list is asked again right then, not at the next minute.
   useEffect(() => {
-    if (tab !== "matches") return;
-    const timer = setInterval(() => void loadEvents().catch(() => undefined), hasLive ? 10_000 : 60_000);
-    return () => clearInterval(timer);
-  }, [tab, loadEvents, hasLive]);
+    if (tab !== "matches" || !listed || !events) return;
+    const now = Date.now();
+    const next = events.reduce((soonest, event) => {
+      const at = new Date(event.startsAt).getTime();
+      return !event.live && at > now && at < soonest ? at : soonest;
+    }, Infinity);
+    if (next - now > 60_000) return;
+    const timer = window.setTimeout(() => void refreshAll().catch(() => undefined), next - now + 1_000);
+    return () => window.clearTimeout(timer);
+  }, [events, tab, listed, refreshAll]);
+
+  // An opened match shows every market; the others their main one.
+  const merged = useMemo(
+    () => (events ?? []).map((event) => (expanded.has(event.id) && details[event.id] ? { ...event, markets: details[event.id].markets, marketCount: details[event.id].marketCount } : event)),
+    [events, expanded, details],
+  );
 
   // Every price seen so far, to tell which ones moved on the latest refresh.
   const lastPrices = useRef(new Map<string, number>());
@@ -223,7 +345,7 @@ function BetPage() {
     if (!events) return;
     const now = Date.now();
     const moved = new Map<string, PriceMove>();
-    for (const event of events)
+    for (const event of merged)
       for (const market of event.markets)
         for (const selection of market.selections) {
           const before = lastPrices.current.get(selection.id);
@@ -236,7 +358,7 @@ function BetPage() {
       moved.forEach((move, id) => next.set(id, move));
       return next;
     });
-  }, [events]);
+  }, [events, merged]);
 
   // Arrows go away on their own once they've been showing for a while.
   useEffect(() => {
@@ -249,25 +371,6 @@ function BetPage() {
     return () => window.clearTimeout(timer);
   }, [moves]);
 
-  // Keep the slip's prices in step with the latest odds, and close matches that kicked off.
-  useEffect(() => {
-    if (!events) return;
-    const byId = new Map<string, { event: OddsEvent; suspended: boolean; selection: OddsSelection }>();
-    for (const event of events) for (const market of event.markets) for (const selection of market.selections) byId.set(selection.id, { event, suspended: Boolean(market.suspended || selection.suspended), selection });
-    setSlip((items) =>
-      items.map((item) => {
-        const found = byId.get(item.selectionId);
-        if (!found || (!found.event.bettable && !found.event.live)) return { ...item, closed: true, paused: false };
-        const paused = !found.event.bettable || found.suspended;
-        const live = found.event.live;
-        const price = found.selection.price;
-        if (price === item.odds) return { ...item, closed: false, paused, live };
-        const previous = item.previousOdds ?? item.odds;
-        return { ...item, closed: false, paused, live, odds: price, previousOdds: previous === price ? undefined : previous };
-      }),
-    );
-  }, [events]);
-
   useRealtime((event) => {
     if (event.type === "balance.changed" || event.type === "bets.changed" || event.type === "resync") {
       void loadInfo().catch(() => undefined);
@@ -275,8 +378,18 @@ function BetPage() {
     }
   });
 
+  /** A new search, league or day starts again from the top of the list. */
+  function filter(change: () => void) {
+    change();
+    setLimit(MATCHES_SHOWN);
+  }
+
   function setTab(next: Tab) {
-    router.replace(next === "matches" ? "/dashboard/bet" : `/dashboard/bet?tab=${next}`, { scroll: false });
+    router.replace(next === "matches" ? (sport === "football" ? "/dashboard/bet" : `/dashboard/bet?sport=${sport}`) : `/dashboard/bet?tab=${next}`, { scroll: false });
+  }
+
+  function setSport(next: Sport) {
+    router.replace(next === "football" ? "/dashboard/bet" : `/dashboard/bet?sport=${next}`, { scroll: false });
   }
 
   function toggle(event: OddsEvent, marketName: string, selection: OddsSelection) {
@@ -290,20 +403,20 @@ function BetPage() {
       const lastStake = items[items.length - 1]?.stake ?? "";
       return [
         ...items,
-        { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, name: selection.name, odds: selection.price, stake: lastStake, live: event.live },
+        { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, name: selection.name, odds: selection.price, stake: lastStake, live: event.live, sp: selection.sp },
       ];
     });
   }
 
   const leagues = useMemo(() => Array.from(new Set((events ?? []).map((e) => e.league))).sort(), [events]);
   const query = search.trim().toLowerCase();
-  const shown = (events ?? []).filter(
-    (event) => (event.bettable || event.live) && event.markets.length > 0 && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
+  const shown = merged.filter(
+    (event) => (finishedNow(event) || ((event.bettable || event.live) && event.markets.length > 0)) && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
   );
   const allGroups: Array<[string, OddsEvent[]]> = [];
   const liveLabel = t("Live now");
   for (const event of shown) {
-    const label = event.live ? liveLabel : dayLabel(event.startsAt, i18n);
+    const label = event.live || finishedNow(event) ? liveLabel : dayLabel(event.startsAt, i18n);
     const last = allGroups[allGroups.length - 1];
     if (last && last[0] === label) last[1].push(event);
     else allGroups.push([label, [event]]);
@@ -312,6 +425,16 @@ function BetPage() {
   const dayShown = day === "" ? "" : day === "live" ? liveLabel : day;
   const groups = dayShown && allGroups.some(([label]) => label === dayShown) ? allGroups.filter(([label]) => label === dayShown) : allGroups;
   const selected = new Set(slip.map((item) => item.selectionId));
+  // Only the first `limit` matches are drawn, cut across the day groups.
+  let budget = limit;
+  const drawn = groups
+    .map(([label, dayEvents]): [string, OddsEvent[], number] => {
+      const part = dayEvents.slice(0, Math.max(0, budget));
+      budget -= part.length;
+      return [label, part, dayEvents.length];
+    })
+    .filter(([, part]) => part.length > 0);
+  const hidden = groups.reduce((sum, [, dayEvents]) => sum + dayEvents.length, 0) - Math.min(limit, groups.reduce((sum, [, dayEvents]) => sum + dayEvents.length, 0));
 
   const slipPanel = (
     <BetSlip
@@ -326,14 +449,14 @@ function BetPage() {
         setBetsVersion((v) => v + 1);
         void loadInfo().catch(() => undefined);
       }}
-      onOddsChanged={() => void loadEvents().catch(() => undefined)}
+      onOddsChanged={() => void refreshAll().catch(() => undefined)}
       onClose={() => setSheetOpen(false)}
     />
   );
   const totalStake = mode === "accumulator" && slip.length >= 2 ? stakeValue(accaStake) : slip.reduce((sum, item) => sum + stakeValue(item.stake), 0);
 
   // The first time, only the spinner shows until the account and the matches have loaded.
-  if (!info || (tab === "matches" && events === null)) return failed ? null : <PageLoading label="Loading matches" />;
+  if (!info || (tab === "matches" && listed && events === null && sport === "football")) return failed ? null : <PageLoading label="Loading matches" />;
 
   return (
     <div className="stack bet-page">
@@ -360,20 +483,48 @@ function BetPage() {
       </nav>
 
       {tab === "matches" ? (
+        <div className="sport-switch" role="group" aria-label={t("Sport")}>
+          {(
+            [
+              ["football", t("Football")],
+              ["greyhounds", t("Greyhounds")],
+              ["basketball", t("Basketball")],
+              ["nfl", t("NFL")],
+              ["mma", t("MMA")],
+            ] as Array<[Sport, string]>
+          ).map(([key, label]) => (
+            <button key={key} type="button" className={`sport-option${sport === key ? " is-active" : ""}`} aria-pressed={sport === key} onClick={() => setSport(key)}>
+              <SportIcon sport={key} />
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === "matches" && sport === "greyhounds" ? (
+        <div className="bet-layout">
+          <div className="stack bet-matches">
+            <GreyhoundRaces selected={selected} onPick={toggle} active />
+          </div>
+          <aside className="bet-slip-desktop" aria-label={t("Bet slip")}>
+            {slipPanel}
+          </aside>
+        </div>
+      ) : tab === "matches" ? (
         <div className="bet-layout">
           <div className="stack bet-matches">
             <div className="bet-filters">
-              <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => setSearch(e.target.value)} aria-label={t("Search matches")} />
+              <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => filter(() => setSearch(e.target.value))} aria-label={t("Search matches")} />
               {allGroups.length > 1 ? (
                 <div className="bet-chips bet-day-chips" role="group" aria-label={t("Day")}>
-                  <button type="button" className={`bet-chip${groups === allGroups ? " is-active" : ""}`} onClick={() => setDay("")} aria-pressed={groups === allGroups}>
+                  <button type="button" className={`bet-chip${groups === allGroups ? " is-active" : ""}`} onClick={() => filter(() => setDay(""))} aria-pressed={groups === allGroups}>
                     {t("All")}
                   </button>
                   {allGroups.map(([label, list]) => {
                     const key = label === liveLabel ? "live" : label;
                     const active = groups !== allGroups && groups[0][0] === label;
                     return (
-                      <button key={label} type="button" className={`bet-chip${active ? " is-active" : ""}${key === "live" ? " is-live" : ""}`} onClick={() => setDay(active ? "" : key)} aria-pressed={active}>
+                      <button key={label} type="button" className={`bet-chip${active ? " is-active" : ""}${key === "live" ? " is-live" : ""}`} onClick={() => filter(() => setDay(active ? "" : key))} aria-pressed={active}>
                         {key === "live" ? <span className="live-dot" aria-hidden="true" /> : null}
                         {label}
                         <span className="bet-chip-count">{list.length}</span>
@@ -384,11 +535,11 @@ function BetPage() {
               ) : null}
               {leagues.length > 1 ? (
                 <div className="bet-chips" role="group" aria-label={t("League")}>
-                  <button type="button" className={`bet-chip${league === "" ? " is-active" : ""}`} onClick={() => setLeague("")}>
+                  <button type="button" className={`bet-chip${league === "" ? " is-active" : ""}`} onClick={() => filter(() => setLeague(""))}>
                     {t("All")}
                   </button>
                   {leagues.map((name) => (
-                    <button key={name} type="button" className={`bet-chip${league === name ? " is-active" : ""}`} onClick={() => setLeague(league === name ? "" : name)}>
+                    <button key={name} type="button" className={`bet-chip${league === name ? " is-active" : ""}`} onClick={() => filter(() => setLeague(league === name ? "" : name))}>
                       {name}
                     </button>
                   ))}
@@ -403,22 +554,47 @@ function BetPage() {
             ) : shown.length === 0 ? (
               <div className="card">
                 <p className="muted" style={{ margin: 0 }}>
-                  {events.length === 0 ? t("No matches are open for bets right now. Check back soon.") : t("No matches match your search.")}
+                  {events.length === 0
+                    ? sport === "mma"
+                      ? t("No fights are open for bets right now. Check back soon.")
+                      : sport === "basketball"
+                      ? t("No basketball games are open for bets right now. Check back soon.")
+                      : sport === "nfl"
+                      ? t("No NFL games are open for bets right now. Check back soon.")
+                      : t("No matches are open for bets right now. Check back soon.")
+                    : t("No matches match your search.")}
                 </p>
               </div>
             ) : (
-              groups.map(([label, dayEvents]) => (
-                <section key={label} className="stack odds-day">
-                  <h2 className={`odds-day-label${label === liveLabel ? " bet-live-label" : ""}`}>
-                    {label === liveLabel ? <span className="live-dot" aria-hidden="true" /> : null}
-                    {label}
-                    <span className="odds-day-count">{dayEvents.length}</span>
-                  </h2>
-                  {dayEvents.map((event) => (
-                    <MatchCard key={event.id} event={event} selected={selected} onPick={toggle} focused={focused === event.id} moves={moves} />
-                  ))}
-                </section>
-              ))
+              <>
+                {drawn.map(([label, dayEvents, count]) => (
+                  <section key={label} className="stack odds-day">
+                    <h2 className={`odds-day-label${label === liveLabel ? " bet-live-label" : ""}`}>
+                      {label === liveLabel ? <span className="live-dot" aria-hidden="true" /> : null}
+                      {label}
+                      <span className="odds-day-count">{count}</span>
+                    </h2>
+                    {dayEvents.map((event) => (
+                      <MatchCard
+                        key={event.id}
+                        event={event}
+                        selected={selected}
+                        onPick={toggle}
+                        focused={focused === event.id}
+                        moves={moves}
+                        expanded={expanded.has(event.id)}
+                        loading={expanded.has(event.id) && !details[event.id]}
+                        onToggle={() => toggleExpanded(event.id)}
+                      />
+                    ))}
+                  </section>
+                ))}
+                {hidden > 0 ? (
+                  <button type="button" className="secondary bet-show-more" onClick={() => setLimit(limit + MATCHES_SHOWN)}>
+                    {tn(hidden, "Show more matches ({count} more)", "Show more matches ({count} more)")}
+                  </button>
+                ) : null}
+              </>
             )}
           </div>
           <aside className="bet-slip-desktop" aria-label={t("Bet slip")}>
@@ -447,27 +623,71 @@ function BetPage() {
   );
 }
 
+/** The headings an opened match's markets sit under, in this order. */
+const MARKET_GROUPS = [
+  ["main", msg("Main")],
+  ["goals", msg("Goals")],
+  ["teams", msg("Teams")],
+  ["halves", msg("Halves")],
+  ["combos", msg("Combos")],
+  ["scorers", msg("Goalscorers")],
+  ["corners", msg("Corners & cards")],
+  ["rounds", msg("Rounds")],
+  ["handicap", msg("Handicap")],
+  ["points", msg("Total points")],
+] as const;
+type MarketGroup = (typeof MARKET_GROUPS)[number][0];
+
+function marketGroup(key: string): MarketGroup {
+  // Basketball and the NFL: the winner, then handicap and total points lines.
+  if (key === "bb_winner") return "main";
+  if (key.startsWith("bb_handicap_")) return "handicap";
+  if (key.startsWith("bb_total_")) return "points";
+  // MMA: who wins, then the rounds lines.
+  if (key.startsWith("fight_")) return "main";
+  if (/^rounds_\d+_5$/.test(key)) return "rounds";
+  if (["match_winner", "double_chance", "draw_no_bet", "btts"].includes(key)) return "main";
+  if (/^(home_|away_)?(corners|cards)_/.test(key)) return "corners";
+  if (key.startsWith("scorer_")) return "scorers";
+  if (/^(result_goals|goals_btts)_/.test(key) || key === "result_btts") return "combos";
+  if (/^h[12]_/.test(key) || ["ht_ft", "highest_half", "win_both_halves", "win_either_half"].includes(key)) return "halves";
+  if (/^goals_\d/.test(key) || ["exact_goals", "goal_range", "odd_even", "correct_score", "winning_margin"].includes(key)) return "goals";
+  return "teams";
+}
+
+/** Players shown in a goalscorer market before "Show all players". */
+const SCORERS_SHOWN = 12;
+
 function MatchCard({
   event,
   selected,
   onPick,
   focused,
   moves,
+  expanded,
+  loading,
+  onToggle,
 }: {
   event: OddsEvent;
   selected: Set<string>;
   onPick: (event: OddsEvent, market: string, selection: OddsSelection) => void;
   focused: boolean;
   moves: Map<string, PriceMove>;
+  /** Every market showing (they load when the match is opened). */
+  expanded: boolean;
+  loading: boolean;
+  onToggle: () => void;
 }) {
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;
-  const [showAll, setShowAll] = useState(false);
-  // The match someone came here for opens with every market showing.
-  useEffect(() => {
-    if (focused) setShowAll(true);
-  }, [focused]);
-  const markets = showAll ? event.markets : event.markets.slice(0, 1);
+  /** Goalscorer markets showing every player. */
+  const [allPlayers, setAllPlayers] = useState<Set<string>>(new Set());
+  const over = finishedNow(event);
+  // A finished match shows its final score and no prices.
+  const markets = over ? [] : expanded ? event.markets : event.markets.slice(0, 1);
+  const more = over ? 0 : Math.max(0, event.marketCount - 1);
+  const grouped = MARKET_GROUPS.map(([id, label]) => [label, markets.filter((market) => marketGroup(market.key) === id)] as const).filter(([, list]) => list.length > 0);
+  const toggleLabel = expanded ? t("Fewer markets") : tn(more, "{count} more market", "{count} more markets");
   return (
     <article id={`match-${event.id}`} className={`card odds-event bet-match${event.live ? " is-live" : ""}${focused ? " is-focused" : ""}`}>
       <header className="odds-event-header">
@@ -476,23 +696,19 @@ function MatchCard({
           {event.country ? ` · ${event.country}` : ""}
         </span>
         <span className="odds-event-header-side">
-          {event.live ? (
+          {over ? (
+            <span className="status-pill">{livePill(event, t)}</span>
+          ) : event.live ? (
             <span className="status-pill is-active">
               <span className="live-dot" aria-hidden="true" />
-              {event.elapsed !== null ? t("Live {minute}'", { minute: event.elapsed }) : t("Live")}
+              {livePill(event, t)}
             </span>
           ) : (
             <span className="status-pill">{date(event.startsAt, TIME)}</span>
           )}
           {/* Opens or closes the other markets from the top, so there's no scrolling down to close them. */}
-          {event.markets.length > 1 ? (
-            <button
-              type="button"
-              className={`markets-toggle${showAll ? " is-open" : ""}`}
-              onClick={() => setShowAll(!showAll)}
-              aria-expanded={showAll}
-              aria-label={showAll ? t("Fewer markets") : tn(event.markets.length - 1, "{count} more market", "{count} more markets")}
-            >
+          {more > 0 ? (
+            <button type="button" className={`markets-toggle${expanded ? " is-open" : ""}`} onClick={onToggle} aria-expanded={expanded} aria-label={toggleLabel}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m6 9 6 6 6-6" />
               </svg>
@@ -505,7 +721,7 @@ function MatchCard({
           <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
           {event.homeTeam ?? event.name}
         </span>
-        {event.live && event.homeScore !== null && event.awayScore !== null ? (
+        {(event.live || over) && event.homeScore !== null && event.awayScore !== null ? (
           <strong className="odds-score">
             {event.homeScore} – {event.awayScore}
           </strong>
@@ -517,50 +733,83 @@ function MatchCard({
           <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
         </span>
       </div>
-      {event.live && !event.bettable ? <p className={`bet-paused${event.livePause === "goal" ? " is-goal" : ""}`}>{t(PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed)}</p> : null}
-      {markets.map((market) => (
-        <div key={market.id} className="odds-market">
-          <div className="odds-market-head">
-            <span className="odds-market-name">
-              {ts(market.name)}
-              {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
-            </span>
-            <MarketPriceHistory selections={market.selections} compact />
-          </div>
-          <div className="odds-selections">
-            {market.selections
-              // Live, a market with many outcomes (correct score) hides the ones that can't happen any more.
-              .filter((selection) => !(event.live && selection.suspended && !market.suspended && market.selections.length > 3))
-              .map((selection) => {
-              const isSelected = selected.has(selection.id);
-              const locked = !event.bettable || Boolean(market.suspended || selection.suspended);
-              return (
-                <button
-                  key={selection.id}
-                  type="button"
-                  className={`odds-selection bet-pick${isSelected ? " is-selected" : ""}`}
-                  onClick={() => onPick(event, market.name, selection)}
-                  aria-pressed={isSelected}
-                  disabled={locked && !isSelected}
-                  aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: pickLabel(selection.name, i18n), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
-                >
-                  <span className="odds-selection-name">{pickLabel(selection.name, i18n)}</span>
-                  <strong className="odds-price">
-                    {locked ? "–" : selection.price.toFixed(2)}
-                    {locked ? null : <PriceArrow move={moves.get(selection.id)} />}
-                  </strong>
-                </button>
-              );
-            })}
-          </div>
-          {/^(home_|away_)?cards_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes. Every yellow and red card counts as 1.")}</p> : null}
-          {/^(home_|away_)?corners_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes.")}</p> : null}
+      {over ? (
+        <p className="bet-paused is-finished">{t(breakPause(event) ?? "")}</p>
+      ) : event.live && !event.bettable ? (
+        <p className={`bet-paused${event.livePause === "goal" ? " is-goal" : ""}`}>
+          {/* A goal or the last minutes say so; otherwise a break in play explains the pause better than "a moment". */}
+          {t(event.livePause === "goal" || event.livePause === "late" ? PAUSE_TEXT[event.livePause] : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed)}
+        </p>
+      ) : null}
+      {grouped.map(([label, list]) => (
+        <div key={label} className="odds-market-group">
+          {expanded && grouped.length > 1 ? <h3 className="odds-market-group-title">{t(label)}</h3> : null}
+          {list.map((market) => {
+            // A market with many outcomes (correct score, goalscorers) hides the ones off the board, unless they're on the slip.
+            const offered = market.selections.filter((selection) => !(selection.suspended && !market.suspended && market.selections.length > 3 && !selected.has(selection.id)));
+            const scorers = market.key.startsWith("scorer_");
+            const showAll = !scorers || allPlayers.has(market.id) || offered.length <= SCORERS_SHOWN + 2;
+            const visible = showAll ? offered : offered.filter((selection, index) => index < SCORERS_SHOWN || selected.has(selection.id));
+            return (
+              <div key={market.id} className="odds-market">
+                <div className="odds-market-head">
+                  <span className="odds-market-name">
+                    {ts(market.name)}
+                    {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
+                  </span>
+                  {/* A goalscorer list is too long for the chart. */}
+                  {scorers ? null : <MarketPriceHistory selections={market.selections} compact />}
+                </div>
+                <div className={`odds-selections${scorers ? " is-players" : ""}`}>
+                  {visible.map((selection) => {
+                    const isSelected = selected.has(selection.id);
+                    const locked = !event.bettable || Boolean(market.suspended || selection.suspended);
+                    return (
+                      <button
+                        key={selection.id}
+                        type="button"
+                        className={`odds-selection bet-pick${isSelected ? " is-selected" : ""}`}
+                        onClick={() => onPick(event, market.name, selection)}
+                        aria-pressed={isSelected}
+                        disabled={locked && !isSelected}
+                        aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: pickLabel(selection.name, i18n), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
+                      >
+                        <span className="odds-selection-name">{pickLabel(selection.name, i18n)}</span>
+                        <strong className="odds-price">
+                          {locked ? "–" : selection.price.toFixed(2)}
+                          {locked ? null : <PriceArrow move={moves.get(selection.id)} />}
+                        </strong>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!showAll ? (
+                  <button type="button" className="text-button bet-all-players" onClick={() => setAllPlayers((current) => new Set(current).add(market.id))}>
+                    {tn(offered.length, "Show all {count} players", "Show all {count} players")}
+                  </button>
+                ) : null}
+                {/^(home_|away_)?cards_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes. Every yellow and red card counts as 1.")}</p> : null}
+                {/^(home_|away_)?corners_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes.")}</p> : null}
+                {market.key === "scorer_first" ? (
+                  <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, or comes on after the first goal, your stake comes back.")}</p>
+                ) : scorers ? (
+                  <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, your stake comes back.")}</p>
+                ) : null}
+                {market.key === "first_team_score" || market.key === "last_team_score" ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
+              </div>
+            );
+          })}
         </div>
       ))}
-      {event.markets.length > 1 ? (
+      {expanded && loading ? (
+        <div className="loading-state bet-markets-loading">
+          <LoadingSpinner label="Loading markets" />
+        </div>
+      ) : null}
+      {more > 0 ? (
         <footer className="odds-event-footer">
-          <button type="button" className={`bet-more-markets${showAll ? " is-open" : ""}`} onClick={() => setShowAll(!showAll)} aria-expanded={showAll}>
-            {showAll ? t("Fewer markets") : tn(event.markets.length - 1, "{count} more market", "{count} more markets")}
+          <button type="button" className={`bet-more-markets${expanded ? " is-open" : ""}`} onClick={onToggle} aria-expanded={expanded}>
+            {toggleLabel}
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m6 9 6 6 6-6" />
             </svg>
@@ -571,6 +820,11 @@ function MatchCard({
   );
 }
 
+/** Just finished: the live list keeps it a few minutes, marked full time, instead of dropping it. */
+function finishedNow(event: OddsEvent): boolean {
+  return event.status === "COMPLETED" || (event.live && event.period === "FT");
+}
+
 /** Why a live match isn't taking bets, in words a Player understands. */
 const PAUSE_TEXT: Record<string, string> = {
   goal: msg("⚽ Goal! Live betting reopens in a moment, once the prices catch up."),
@@ -579,6 +833,42 @@ const PAUSE_TEXT: Record<string, string> = {
   late: msg("Live betting has closed for the last minutes of this match."),
   feed: msg("Live betting is paused for a moment."),
 };
+
+function SportIcon({ sport }: { sport: Sport }) {
+  if (sport === "nfl")
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4.5 19.5c-1.5-4 .2-9.6 4-12.6S17.4 3 19.5 4.5c1.5 4-.2 9.6-4 12.6s-8.9 3.9-11 2.4z" />
+        <path d="m9 15 6-6M10.5 10.5l1.5 1.5M12 9l1.5 1.5M9 12l1.5 1.5" />
+      </svg>
+    );
+  if (sport === "basketball")
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3v18M5.6 5.6c2.6 2.4 3.4 4.4 3.4 6.4s-.8 4-3.4 6.4M18.4 5.6C15.8 8 15 10 15 12s.8 4 3.4 6.4" />
+      </svg>
+    );
+  if (sport === "mma")
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 10V7a3 3 0 0 1 3-3h4a4 4 0 0 1 4 4v5a5 5 0 0 1-5 5h-2a4 4 0 0 1-4-4z" />
+        <path d="M7 11h6a2 2 0 0 0 0-4h-2M9 18v2h6v-2" />
+      </svg>
+    );
+  return sport === "football" ? (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m12 7.5 4 2.9-1.5 4.7h-5L8 10.4z" />
+      <path d="M12 3v4.5M16 10.4l4.3-1.4M14.5 15.1l2.7 3.7M9.5 15.1l-2.7 3.7M8 10.4 3.7 9" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 13.5c2.2-.3 3.6-1.4 4.6-3.2l1.6-2.8c.5-.9 1.5-1.4 2.6-1.3l2.4.3 1.7-1.8 1 1.6 2.6.9-.4 1.6-2.4.4-1.6 2.4c1.7.8 2.9 2.2 3.4 4.1" />
+      <path d="M8.5 11.5 6.5 19M11 13l1 6M15.5 12.5l2.5 6.5" />
+    </svg>
+  );
+}
 
 /** A green up arrow when a price went up, a red down arrow when it went down; nothing when it didn't move. */
 function PriceArrow({ move }: { move: PriceMove | undefined }) {
@@ -624,12 +914,14 @@ function BetSlip({
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
 
   const acca = mode === "accumulator";
+  const hasSp = items.some((item) => item.sp);
   const accaOdds = combinedOdds(items.map((item) => item.odds));
   const accaStakeValue = stakeValue(accaStake);
   const sameMatch = new Set(items.map((item) => item.eventId)).size < items.length;
 
   const totalStake = acca ? accaStakeValue : items.reduce((sum, item) => sum + stakeValue(item.stake), 0);
-  const totalReturn = acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + returns(stakeValue(item.stake), item.odds), 0);
+  // Race picks pay the starting price, so they add nothing known to the return.
+  const totalReturn = acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + (item.sp ? 0 : returns(stakeValue(item.stake), item.odds)), 0);
   const missingStake = acca ? accaStakeValue < 1 : items.some((item) => stakeValue(item.stake) < 1);
   const closed = items.filter((item) => item.closed);
   const paused = items.filter((item) => item.paused && !item.closed);
@@ -642,12 +934,13 @@ function BetSlip({
   if (info?.blocked) blocker = ts(info.blocked);
   else if (closed.length > 0) blocker = closed.length === 1 ? t("Remove the match that has closed to continue.") : t("Remove the matches that have closed to continue.");
   else if (paused.length > 0) blocker = paused.length === 1 ? t("Live betting is paused on {match}. Wait a moment or remove it.", { match: paused[0].eventName }) : t("Live betting is paused on some of your picks. Wait a moment or remove them.");
+  else if (acca && hasSp) blocker = t("Greyhound picks can only be single bets. Switch to Singles or remove them.");
   else if (acca && sameMatch) blocker = t("An accumulator needs each pick from a different match. Remove one of the picks from the same match.");
   else if (acca && accaOdds > MAX_ACCUMULATOR_ODDS) blocker = t("Combined odds can be at most {max}. Remove a pick to continue.", { max: MAX_ACCUMULATOR_ODDS });
   else if (missingStake) blocker = acca ? t("Enter a stake of at least $1.") : t("Enter a stake of at least $1 on each bet.");
   else if (overMax) blocker = t("The most you can stake on one bet is {amount}.", { amount: formatMoney(info!.maxStake!) });
   else if (tooLittle) blocker = t("Your balance is too low for this slip. Tap here to ask for a top-up.");
-  const needsMoney = Boolean(blocker) && !info?.blocked && closed.length === 0 && paused.length === 0 && !(acca && (sameMatch || accaOdds > MAX_ACCUMULATOR_ODDS)) && !missingStake && !overMax && tooLittle;
+  const needsMoney = Boolean(blocker) && !info?.blocked && closed.length === 0 && paused.length === 0 && !(acca && (hasSp || sameMatch || accaOdds > MAX_ACCUMULATOR_ODDS)) && !missingStake && !overMax && tooLittle;
 
   // Prices that moved since they were added: say so once per slip. The slip itself shows which ones.
   const movedShown = useRef(false);
@@ -721,7 +1014,9 @@ function BetSlip({
             <li key={bet.id}>
               <span>{ts(bet.description)}</span>
               <span className="muted">
-                {t("{stake} at {odds} · returns {amount}", { stake: formatMoney(bet.stake), odds: bet.odds?.toFixed(2) ?? "–", amount: formatMoney(bet.potentialPayout ?? 0) })}
+                {bet.sp
+                  ? t("{stake} at the starting price (SP)", { stake: formatMoney(bet.stake) })
+                  : t("{stake} at {odds} · returns {amount}", { stake: formatMoney(bet.stake), odds: bet.odds?.toFixed(2) ?? "–", amount: formatMoney(bet.potentialPayout ?? 0) })}
               </span>
             </li>
           ))}
@@ -820,7 +1115,7 @@ function BetSlip({
                       ) : (
                         <>
                           {item.previousOdds !== undefined ? <s className="muted">{item.previousOdds.toFixed(2)}</s> : null}
-                          <strong>{item.odds.toFixed(2)}</strong>
+                          <strong>{item.sp ? "SP" : item.odds.toFixed(2)}</strong>
                           {item.previousOdds !== undefined ? <PriceArrow move={{ up: item.odds > item.previousOdds, until: Infinity }} /> : null}
                         </>
                       )}
@@ -843,7 +1138,11 @@ function BetSlip({
                       />
                     </label>
                     )}
-                    {acca ? null : <span className="bet-slip-return muted">{stake > 0 ? t("Returns {amount}", { amount: formatMoney(returns(stake, item.odds)) }) : ""}</span>}
+                    {acca ? null : (
+                      <span className="bet-slip-return muted">
+                        {item.sp ? t("Paid at the starting price") : stake > 0 ? t("Returns {amount}", { amount: formatMoney(returns(stake, item.odds)) }) : ""}
+                      </span>
+                    )}
                   </div>
                 </li>
               );
@@ -886,6 +1185,7 @@ function BetSlip({
               <dt className="muted">{t("Potential return")}</dt>
               <dd>
                 <strong>{formatMoney(totalReturn)}</strong>
+                {hasSp && !acca ? <span className="muted"> {t("+ SP bets")}</span> : null}
               </dd>
             </div>
             {info ? (
@@ -1116,6 +1416,7 @@ function BetCard({ bet }: { bet: Bet }) {
     if (event.status === "LIVE") when = t("Live now");
     else if (event.status === "POSTPONED") when = t("Postponed");
     else if (event.status === "COMPLETED") when = t("Finished, settling soon");
+    else if (bet.sp && new Date(event.startsAt).getTime() < Date.now()) when = t("Race run, waiting for the official result");
     else when = t("Starts {when}", { when: date(event.startsAt, DATE_TIME) });
   }
   return (
@@ -1140,12 +1441,16 @@ function BetCard({ bet }: { bet: Bet }) {
         </div>
         <div>
           <dt className="muted">{t("Odds")}</dt>
-          <dd>{bet.odds?.toFixed(2) ?? "–"}</dd>
+          <dd>{bet.odds?.toFixed(2) ?? (bet.sp ? "SP" : "–")}</dd>
         </div>
         <div>
           <dt className="muted">{bet.status === "OPEN" ? t("To return") : t("Returned")}</dt>
           <dd>
-            <strong>{formatMoney(bet.status === "OPEN" ? bet.potentialPayout ?? 0 : bet.payout)}</strong>
+            {bet.status === "OPEN" && bet.sp ? (
+              <span className="muted">{t("At SP, up to {amount}", { amount: formatMoney(Math.floor(bet.stake * (bet.spCap ?? 0) * 100) / 100) })}</span>
+            ) : (
+              <strong>{formatMoney(bet.status === "OPEN" ? bet.potentialPayout ?? 0 : bet.payout)}</strong>
+            )}
           </dd>
         </div>
       </dl>
@@ -1153,7 +1458,7 @@ function BetCard({ bet }: { bet: Bet }) {
       <p className="muted bet-card-when">
         {bet.status === "OPEN" ? when : bet.settledAt ? t("Settled {when}", { when: date(bet.settledAt, DATE_TIME) }) : ""}
         {voidText(bet.voidReason, ts, t)}
-        {bet.status === "VOID" && !bet.voidReason ? ` · ${t("Match called off, stake refunded")}` : ""}
+        {bet.status === "VOID" && !bet.voidReason ? ` · ${bet.sp ? t("Dog withdrawn or race called off, stake refunded") : t("Match called off, stake refunded")}` : ""}
       </p>
     </li>
   );

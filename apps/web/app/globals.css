@@ -4941,6 +4941,93 @@ button.is-blocked {
   grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
 }
 
+/* Player names are long: two across, the name on the left and the price on the right. */
+.bet-page .odds-selections.is-players {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+}
+
+.bet-page .odds-selections.is-players .odds-selection {
+  grid-template-columns: minmax(0, 1fr) auto;
+  justify-items: start;
+  align-items: center;
+  text-align: left;
+}
+
+.bet-page .odds-selections.is-players .odds-selection-name {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An opened match's markets, under short headings. */
+.odds-market-group {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.odds-market-group-title {
+  margin: 0.4rem 0 -0.3rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The first heading needs no line above it. */
+.odds-teams + .odds-market-group .odds-market-group-title,
+.bet-paused + .odds-market-group .odds-market-group-title {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Settlement: picks the feed couldn't settle, one row each with Won / Lost / Void. */
+.settle-waiting ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settle-waiting li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.8rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.settle-waiting-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.settle-waiting-actions button {
+  min-height: 2rem;
+  padding: 0.25rem 0.7rem;
+}
+
+.bet-all-players {
+  justify-self: start;
+  font-size: 0.8rem;
+}
+
+.bet-markets-loading {
+  min-height: 4rem;
+}
+
+.bet-show-more {
+  justify-self: center;
+  width: min(100%, 22rem);
+}
+
 .bet-page .markets-toggle {
   min-height: 0;
   width: 2rem;
@@ -6088,25 +6175,44 @@ button.is-blocked {
   background: linear-gradient(180deg, #f2382e, #8f0d09);
 }
 
-.casino-tile.is-slot img {
-  width: 5.2rem;
-  height: 5.2rem;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+/* The slot's title picture fills the art area, the logo kept in the middle. */
+.casino-tile.is-slot .casino-tile-art {
+  padding: 0;
+  overflow: hidden;
+}
+
+.casino-tile-cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+  transition: transform 300ms ease;
+}
+
+.casino-tile:hover .casino-tile-cover {
+  transform: scale(1.04);
 }
 
 .casino-tile.is-roulette .casino-tile-art {
-  background: radial-gradient(circle at 50% 40%, #13894a, #064a24);
+  padding: 0.4rem 0.6rem;
+  background: radial-gradient(ellipse at 35% 45%, #1aa158, #0b6b34 55%, #043a1b);
 }
 
-.casino-tile-wheel {
-  width: 8rem;
-  height: 8rem;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+/* The roulette tile's scene fills the art area; only the wheel's rotor turns on hover. */
+.roulette-tile-scene {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.casino-tile:hover .casino-tile-wheel {
-  animation: casino-tile-turn 2.4s linear infinite;
+.roulette-tile-rotor {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.casino-tile:hover .roulette-tile-rotor {
+  animation: casino-tile-turn 3s linear infinite;
 }
 
 @keyframes casino-tile-turn {
@@ -6688,7 +6794,7 @@ button.is-blocked {
 
 @media (prefers-reduced-motion: reduce) {
   .casino-tile,
-  .casino-tile:hover .casino-tile-wheel,
+  .casino-tile:hover .roulette-tile-rotor,
   .roulette-result,
   .roulette-cell.is-winning .roulette-cell-box,
   .roulette-chip {
@@ -7807,4 +7913,264 @@ button.is-blocked {
   .casino-chip {
     animation: none;
   }
+}
+
+/* ---------- Greyhound racing (bet page) ---------- */
+
+.sport-switch {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 0.25rem;
+  justify-self: start;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.sport-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.4rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.sport-option svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sport-option.is-active {
+  background: var(--accent);
+  color: #031208;
+}
+
+.race-intro {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.race-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.race-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.race-card-title {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.race-card-title .muted {
+  font-size: 0.85rem;
+}
+
+.race-runners {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.race-runner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.race-runner.is-withdrawn .race-runner-name strong {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.race-runner-name {
+  display: grid;
+  min-width: 0;
+}
+
+.race-runner-name strong,
+.race-runner-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.race-runner-name span {
+  font-size: 0.8rem;
+}
+
+.race-trap {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.4rem;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+  font-weight: 800;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A striped jacket: the number sits on a small white patch so it stays readable. */
+.race-trap.is-striped span {
+  padding: 0 0.2rem;
+  border-radius: 0.2rem;
+  background: #f4f4f2;
+  line-height: 1.2;
+}
+
+.race-sp.bet-pick {
+  min-height: 2.6rem;
+  justify-content: center;
+}
+
+.race-forecast-toggle {
+  justify-self: start;
+}
+
+.race-forecast {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.race-forecast-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.race-forecast-row > .muted {
+  width: 3.4rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.race-forecast-trap {
+  padding: 0.1rem;
+  border: 2px solid transparent;
+  border-radius: 0.55rem;
+  background: transparent;
+  min-height: 0;
+}
+
+.race-forecast-trap.is-active {
+  border-color: var(--accent);
+}
+
+.race-forecast-trap:disabled {
+  opacity: 0.3;
+}
+
+.race-results {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.race-results-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.race-results-item {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.race-results-item > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.race-result {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.race-result-list {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.race-result-list li {
+  display: grid;
+  grid-template-columns: 2.6rem auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.race-result-place {
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.race-result-dog {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.race-result-note {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.race-result-list .race-trap {
+  width: 1.6rem;
+  height: 1.6rem;
+  font-size: 0.82rem;
+}
+
+.race-runner.is-plain {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.player-next-races {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0.6rem;
+}
+
+.player-next-race {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+  color: var(--text);
+  text-decoration: none;
 }

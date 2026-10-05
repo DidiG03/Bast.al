@@ -1,4 +1,5 @@
 import { BetStatus, Prisma, SelectionResult } from "@prisma/client";
+import { GoalRecord, gradeGoalMarket, isGoalMarket } from "./goals";
 
 type Score = { home: number; away: number };
 /** Corners and cards from the match statistics; every yellow and red counts as one card. */
@@ -7,10 +8,15 @@ type Side = "home" | "draw" | "away";
 
 const sideOf = (score: Score): Side => (score.home > score.away ? "home" : score.home < score.away ? "away" : "draw");
 
+/** What the goal-event markets settle on: the match's goals in order, and the outcome's and its market's names (players, for a goalscorer market). */
+export type GoalsInput = { record: GoalRecord | null; selectionName: string; marketNames: string[] };
+
 /**
  * Whether a selection won, from the 90-minute score, plus the half-time score
- * for the half markets. Returns null for a market we don't know how to grade,
- * or a half market with no half-time score; its bets stay open for Super Admin.
+ * for the half markets, the match statistics for corners and cards, and the
+ * goals in order for the goal-event markets. Returns null for a market we
+ * don't know how to grade, or one whose numbers aren't known yet; its bets
+ * stay open for Super Admin.
  */
 export function gradeSelection(
   marketKey: string,
@@ -19,11 +25,35 @@ export function gradeSelection(
   away: number,
   half: Score | null = null,
   stats: Stats | null = null,
+  goals: GoalsInput | null = null,
 ): SelectionResult | null {
   const full = { home, away };
   const second = half ? { home: home - half.home, away: away - half.away } : null;
   const won = (yes: boolean) => (yes ? SelectionResult.WON : SelectionResult.LOST);
   const total = home + away;
+
+  if (isGoalMarket(marketKey)) return gradeGoalMarket(marketKey, selectionKey, goals?.record ?? null, full, goals?.selectionName, goals?.marketNames);
+
+  // Result and total goals (result_goals_2_5: home_over …), total goals and both teams score (goals_btts_2_5: over_yes …).
+  const combo = /^(result_goals|goals_btts)_(\d+)_5$/.exec(marketKey);
+  if (combo) {
+    const [, kind, whole] = combo;
+    const threshold = Number(whole) + 0.5;
+    const [left, right] = selectionKey.split("_");
+    if (kind === "result_goals") {
+      if (!["home", "draw", "away"].includes(left) || !["over", "under"].includes(right)) return null;
+      return won(sideOf(full) === left && (total > threshold) === (right === "over"));
+    }
+    if (!["over", "under"].includes(left) || !["yes", "no"].includes(right)) return null;
+    return won((total > threshold) === (left === "over") && (home > 0 && away > 0) === (right === "yes"));
+  }
+
+  // Corners: who takes the most, and the total in bands (u6, 6-8, o14).
+  if (marketKey === "corners_1x2" || marketKey === "corners_range") {
+    if (!stats) return null;
+    if (marketKey === "corners_1x2") return result(selectionKey, { home: stats.cornersHome, away: stats.cornersAway });
+    return inRange(selectionKey, stats.cornersHome + stats.cornersAway);
+  }
 
   // Corners and cards: corners_9_5, home_corners_4_5, cards_3_5, away_cards_1_5 …
   const counted = /^(corners|home_corners|away_corners|cards|home_cards|away_cards)_(\d+)_5$/.exec(marketKey);
@@ -66,12 +96,9 @@ export function gradeSelection(
     case "correct_score":
       return correctScore(selectionKey, full);
     case "exact_goals":
-      if (selectionKey === "7+") return won(total >= 7);
-      return /^\d$/.test(selectionKey) ? won(total === Number(selectionKey)) : null;
+      return exactCount(selectionKey, total);
     case "odd_even":
-      if (selectionKey === "odd") return won(total % 2 === 1);
-      if (selectionKey === "even") return won(total % 2 === 0);
-      return null;
+      return oddEven(selectionKey, total);
     case "clean_sheet_home":
       return yesNo(selectionKey, away === 0);
     case "clean_sheet_away":
@@ -80,6 +107,28 @@ export function gradeSelection(
       if (selectionKey === "home") return won(home > away && away === 0);
       if (selectionKey === "away") return won(away > home && home === 0);
       return null;
+    case "home_exact_goals":
+      return exactCount(selectionKey, home);
+    case "away_exact_goals":
+      return exactCount(selectionKey, away);
+    case "home_odd_even":
+      return oddEven(selectionKey, home);
+    case "away_odd_even":
+      return oddEven(selectionKey, away);
+    case "goal_range":
+      if (selectionKey === "0-1") return won(total <= 1);
+      if (selectionKey === "2-3") return won(total === 2 || total === 3);
+      if (selectionKey === "4+") return won(total >= 4);
+      return null;
+    case "winning_margin": {
+      if (selectionKey === "no_goal") return won(total === 0);
+      if (selectionKey === "score_draw") return won(home === away && total > 0);
+      const margin = /^(home|away)_(\d)(\+?)$/.exec(selectionKey);
+      if (!margin) return null;
+      const [, side, by, more] = margin;
+      const actual = side === "home" ? home - away : away - home;
+      return won(more ? actual >= Number(by) : actual === Number(by));
+    }
     case "result_btts": {
       const [side, btts] = selectionKey.split("_");
       if (!["home", "draw", "away"].includes(side) || !["yes", "no"].includes(btts)) return null;
@@ -107,6 +156,23 @@ export function gradeSelection(
       if (!["home", "draw", "away"].includes(ht) || !["home", "draw", "away"].includes(ft)) return null;
       return won(sideOf(half) === ht && sideOf(full) === ft);
     }
+    case "h1_exact_goals":
+      return exactCount(selectionKey, half.home + half.away);
+    case "h2_exact_goals":
+      return exactCount(selectionKey, second.home + second.away);
+    case "h1_odd_even":
+      return oddEven(selectionKey, half.home + half.away);
+    case "h2_odd_even":
+      return oddEven(selectionKey, second.home + second.away);
+    case "score_both_halves":
+      if (selectionKey !== "home" && selectionKey !== "away") return null;
+      return won(half[selectionKey] > 0 && second[selectionKey] > 0);
+    case "home_highest_half":
+    case "away_highest_half": {
+      const side = marketKey === "home_highest_half" ? "home" : "away";
+      const actual = half[side] > second[side] ? "first" : half[side] < second[side] ? "second" : "equal";
+      return ["first", "second", "equal"].includes(selectionKey) ? won(actual === selectionKey) : null;
+    }
     case "highest_half": {
       const first = half.home + half.away;
       const later = second.home + second.away;
@@ -122,6 +188,30 @@ export function gradeSelection(
     default:
       return null;
   }
+}
+
+/** An exact count: "0", "1", … or "N+" for N or more. */
+function exactCount(selectionKey: string, count: number): SelectionResult | null {
+  const match = /^(\d+)(\+?)$/.exec(selectionKey);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return (match[2] ? count >= n : count === n) ? SelectionResult.WON : SelectionResult.LOST;
+}
+
+function oddEven(selectionKey: string, count: number): SelectionResult | null {
+  if (selectionKey === "odd") return count % 2 === 1 ? SelectionResult.WON : SelectionResult.LOST;
+  if (selectionKey === "even") return count % 2 === 0 ? SelectionResult.WON : SelectionResult.LOST;
+  return null;
+}
+
+/** A band of a count: "u6" is under 6, "6-8" from 6 to 8, "o14" over 14. */
+function inRange(selectionKey: string, count: number): SelectionResult | null {
+  const under = /^u(\d+)$/.exec(selectionKey);
+  const over = /^o(\d+)$/.exec(selectionKey);
+  const band = /^(\d+)-(\d+)$/.exec(selectionKey);
+  const hit = under ? count < Number(under[1]) : over ? count > Number(over[1]) : band ? count >= Number(band[1]) && count <= Number(band[2]) : null;
+  if (hit === null) return null;
+  return hit ? SelectionResult.WON : SelectionResult.LOST;
 }
 
 function result(selectionKey: string, score: Score): SelectionResult | null {

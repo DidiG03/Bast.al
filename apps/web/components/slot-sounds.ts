@@ -14,6 +14,8 @@ const STORAGE_KEY = "bastal-slot-sound";
 let audio: AudioContext | null = null;
 let master: GainNode | null = null;
 let ticking: ReturnType<typeof setInterval> | null = null;
+/** Stops the ticking if a landing is missed; cleared with it, so an earlier spin's never cuts a later one short. */
+let tickingLimit: ReturnType<typeof setTimeout> | null = null;
 let on = readSetting();
 
 function readSetting(): boolean {
@@ -125,12 +127,14 @@ export const slotSound = {
     if (!ready()) return;
     ticking = setInterval(() => noise(0, 0.018, { filter: "highpass", freq: 3200, gain: 0.07 }), 62);
     // Never tick forever if a landing is missed.
-    setTimeout(() => this.stopTicking(), 9000);
+    tickingLimit = setTimeout(() => this.stopTicking(), 9000);
   },
 
   stopTicking() {
     if (ticking) clearInterval(ticking);
+    if (tickingLimit) clearTimeout(tickingLimit);
     ticking = null;
+    tickingLimit = null;
   },
 
   /** A reel landing: a low thunk, a little higher for each reel to the right. */

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
-import { apiFetch } from "./api";
+import { cache } from "react";
+import { apiFetch, type MeResponse } from "./api";
 import { signedClientHeaders } from "./client-signature";
 
 /**
@@ -14,3 +15,9 @@ export function serverApiFetch<T>(path: string, token: string, init?: RequestIni
     headers: { ...signedClientHeaders(headers()), ...((init?.headers as Record<string, string> | undefined) ?? {}) },
   });
 }
+
+/**
+ * The signed-in account, asked for once per page load: the dashboard's layout
+ * and its page both need it, and React's `cache` lets them share one call.
+ */
+export const getMe = cache((token: string) => serverApiFetch<MeResponse>("/users/me", token));

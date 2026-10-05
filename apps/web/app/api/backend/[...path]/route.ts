@@ -75,6 +75,11 @@ async function proxy(request: NextRequest, parts: string[]) {
   const idempotencyKey = request.headers.get("idempotency-key");
   if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
 
+  // "Send it only if it changed": the API answers 304 with no body when the
+  // browser already has this exact answer (see apiFetch's `revalidate`).
+  const ifNoneMatch = request.headers.get("if-none-match");
+  if (ifNoneMatch && method === "GET") headers["if-none-match"] = ifNoneMatch;
+
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers["x-forwarded-for"] = forwardedFor;
 
@@ -103,13 +108,15 @@ async function proxy(request: NextRequest, parts: string[]) {
     cache: "no-store",
   });
 
-  const text = await upstream.text();
-  return new NextResponse(text, {
+  // Passed on as it arrives rather than read in full first.
+  const etag = upstream.headers.get("etag");
+  return new NextResponse(upstream.status === 304 ? null : upstream.body, {
     status: upstream.status,
     headers: {
       "content-type": upstream.headers.get("content-type") ?? "application/json",
       "x-request-id": upstream.headers.get("x-request-id") ?? headers["x-request-id"],
       "cache-control": "no-store",
+      ...(etag ? { etag } : {}),
     },
   });
 }

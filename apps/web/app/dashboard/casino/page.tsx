@@ -6,10 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { HelpTip } from "../../../components/help-tip";
 import { useI18n } from "../../../components/i18n-provider";
 import { PageLoading } from "../../../components/loading-spinner";
-import { symbolImage } from "../../../components/slot-symbols";
 import { Stat } from "../../../components/commission-views";
 import { useToast } from "../../../components/toaster";
 import { apiFetch, type CasinoAdmin, type CasinoState, type MeResponse } from "../../../lib/api";
+import { RED, WHEEL } from "../../../lib/roulette";
 import { formatMoney, formatSignedMoney } from "../../../lib/format";
 import { msg } from "../../../lib/i18n/core";
 import { addDays, startOfMonth, startOfWeek } from "../../../lib/time";
@@ -70,15 +70,12 @@ function CasinoLobby() {
         <div className="casino-lobby">
           <Link className="casino-tile is-slot" href="/dashboard/casino/slot">
             <span className="casino-tile-art" aria-hidden="true">
-              {(["SEVEN", "CHERRY", "MELON"] as const).map((symbol) => (
-                // Drawn in the browser, so there's nothing for next/image to optimise.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={symbol} src={symbolImage(symbol)} alt="" />
-              ))}
+              {/* eslint-disable-next-line @next/next/no-img-element -- a small static picture, already sized for the tile */}
+              <img className="casino-tile-cover" src="/casino/sizzling-hot.webp" alt="" />
             </span>
             <span className="casino-tile-body">
               <strong>{state.game.name}</strong>
-              <span>{t("Fruit slot: 5 reels, 5 lines, double or nothing.")}</span>
+              <span>{t("Hot fruits and blazing sevens! The classic fruit slot with 5 reels and 5 lines, where the star pays anywhere on the screen.")}</span>
               <small>{t("Pays back {rate}% on average", { rate: state.game.payoutRate })}</small>
             </span>
           </Link>
@@ -88,7 +85,7 @@ function CasinoLobby() {
             </span>
             <span className="casino-tile-body">
               <strong>{t("Roulette")}</strong>
-              <span>{t("European roulette with a single 0. Bet on numbers, colours and more.")}</span>
+              <span>{t("The classic European roulette with a single zero. Place your chips, spin the wheel and watch where the ball lands.")}</span>
               <small>{t("Pays back {rate}% on average", { rate: ROULETTE_RATE })}</small>
             </span>
           </Link>
@@ -103,7 +100,7 @@ function CasinoLobby() {
             </span>
             <span className="casino-tile-body">
               <strong>{t("Blackjack")}</strong>
-              <span>{t("Beat the dealer to 21. Blackjack pays 3 to 2.")}</span>
+              <span>{t("Get as close to 21 as you can without going over, and beat the dealer's hand. Blackjack pays 3 to 2.")}</span>
               <small>{t("Pays back about {rate}% played perfectly", { rate: BLACKJACK_RATE })}</small>
             </span>
           </Link>
@@ -114,22 +111,141 @@ function CasinoLobby() {
 }
 
 /** A small wheel for the roulette tile. */
+const WHEEL_ORDER: readonly number[] = WHEEL;
+const pocketFill = (n: number) => (n === 0 ? "#0e8a3e" : RED.has(n) ? "#c4161d" : "#141519");
+
+/**
+ * The roulette tile: a European wheel on the tile's green felt (numbers in wheel order,
+ * a wooden rim, the gold turret, a ball resting in a pocket) beside a strip of
+ * the betting layout with a few chips on it. The wheel turns on hover.
+ */
 function RouletteTileArt() {
-  const pockets = 37;
-  const point = (angle: number, radius: number) => `${(Math.cos(angle) * radius).toFixed(2)} ${(Math.sin(angle) * radius).toFixed(2)}`;
+  const cx = 84;
+  const cy = 75;
+  const step = 360 / WHEEL_ORDER.length;
+  const at = (deg: number, r: number) => {
+    const a = ((deg - 90) * Math.PI) / 180;
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r] as const;
+  };
+  const arc = (from: number, to: number, outer: number, inner: number) => {
+    const [x1, y1] = at(from, outer);
+    const [x2, y2] = at(to, outer);
+    const [x3, y3] = at(to, inner);
+    const [x4, y4] = at(from, inner);
+    return `M${x1.toFixed(2)} ${y1.toFixed(2)}A${outer} ${outer} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}L${x3.toFixed(2)} ${y3.toFixed(2)}A${inner} ${inner} 0 0 0 ${x4.toFixed(2)} ${y4.toFixed(2)}Z`;
+  };
+  // The ball sits in 17's pocket.
+  const ballAngle = WHEEL_ORDER.indexOf(17) * step + step / 2;
+  const [bx, by] = at(ballAngle, 38.5);
+  // A strip of the layout: 0, then 1–18 in three rows, the top row 3, 6, 9 …
+  const lx = 184;
+  const ly = 24;
+  const cw = 19;
+  const ch = 26;
+  const chip = (x: number, y: number, color: string, layers: number) => (
+    <g>
+      {Array.from({ length: layers }, (_, i) => (
+        <g key={i} transform={`translate(${x} ${y - i * 2.6})`}>
+          <ellipse rx="8.5" ry="4" cy="1.6" fill="rgba(0,0,0,0.35)" />
+          <ellipse rx="8.5" ry="4" fill={color} stroke="rgba(0,0,0,0.35)" strokeWidth="0.4" />
+          <ellipse rx="8.5" ry="4" fill="none" stroke="#fff" strokeWidth="1.6" strokeDasharray="2.2 3.1" />
+          <ellipse rx="5" ry="2.3" fill="none" stroke="rgba(255,255,255,0.75)" strokeWidth="0.5" />
+        </g>
+      ))}
+    </g>
+  );
   return (
-    <svg viewBox="-50 -50 100 100" className="casino-tile-wheel">
-      <circle r="49" fill="#5c2b10" />
-      <circle r="44" fill="#2a1206" />
-      {Array.from({ length: pockets }, (_, index) => {
-        const from = (index / pockets) * Math.PI * 2;
-        const to = ((index + 1) / pockets) * Math.PI * 2;
-        const fill = index === 0 ? "#0d8a3a" : index % 2 ? "#c3161c" : "#16171b";
-        return <path key={index} d={`M${point(from, 40)} A40 40 0 0 1 ${point(to, 40)} L${point(to, 26)} A26 26 0 0 0 ${point(from, 26)} Z`} fill={fill} stroke="#e2b552" strokeWidth="0.5" />;
-      })}
-      <circle r="25" fill="#7d3e18" stroke="#e2b552" strokeWidth="1" />
-      <circle r="6" fill="#e2b552" />
-      <circle cx="18" cy="-29" r="3.4" fill="#f4f4f6" />
+    <svg viewBox="8 0 304 150" className="roulette-tile-scene">
+      <defs>
+        <radialGradient id="rt-wood" cx="50%" cy="40%" r="60%">
+          <stop offset="0.82" stopColor="#7a3a14" />
+          <stop offset="0.93" stopColor="#4a1f08" />
+          <stop offset="1" stopColor="#2a1003" />
+        </radialGradient>
+        <radialGradient id="rt-cone" cx="45%" cy="38%" r="65%">
+          <stop offset="0" stopColor="#c27a3c" />
+          <stop offset="0.6" stopColor="#7e3d16" />
+          <stop offset="1" stopColor="#4b2109" />
+        </radialGradient>
+        <linearGradient id="rt-gold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fff1b8" />
+          <stop offset="0.45" stopColor="#e2b552" />
+          <stop offset="1" stopColor="#8a6018" />
+        </linearGradient>
+        <radialGradient id="rt-ball" cx="35%" cy="30%" r="70%">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.6" stopColor="#e6e6ea" />
+          <stop offset="1" stopColor="#9a9aa2" />
+        </radialGradient>
+        <radialGradient id="rt-track" cx="50%" cy="50%" r="50%">
+          <stop offset="0.86" stopColor="#1c0d05" />
+          <stop offset="1" stopColor="#5b2b0f" />
+        </radialGradient>
+      </defs>
+      {/* The betting layout, tilted a little as seen from the player's seat. */}
+      <g transform={`translate(0 0) skewX(-6)`} opacity="0.95">
+        <rect x={lx - 18} y={ly} width="18" height={ch * 3} rx="9" fill={pocketFill(0)} stroke="rgba(255,255,255,0.75)" strokeWidth="0.8" />
+        <text x={lx - 9} y={ly + ch * 1.5 + 3.5} textAnchor="middle" fontSize="10" fontWeight="800" fill="#fff">0</text>
+        {Array.from({ length: 18 }, (_, i) => {
+          const n = i + 1;
+          const col = Math.floor(i / 3);
+          const row = 2 - (i % 3);
+          const x = lx + col * cw;
+          const y = ly + row * ch;
+          return (
+            <g key={n}>
+              <rect x={x} y={y} width={cw} height={ch} fill="rgba(0,0,0,0.08)" stroke="rgba(255,255,255,0.75)" strokeWidth="0.8" />
+              <ellipse cx={x + cw / 2} cy={y + ch / 2} rx="7" ry="9" fill={pocketFill(n)} />
+              <text x={x + cw / 2} y={y + ch / 2 + 3.3} textAnchor="middle" fontSize="9" fontWeight="800" fill="#fff">
+                {n}
+              </text>
+            </g>
+          );
+        })}
+        <rect x={lx} y={ly + ch * 3} width={cw * 4} height="17" fill="rgba(0,0,0,0.08)" stroke="rgba(255,255,255,0.75)" strokeWidth="0.8" />
+        <text x={lx + cw * 2} y={ly + ch * 3 + 12} textAnchor="middle" fontSize="8.5" fontWeight="800" fill="#f4e3ad" letterSpacing="0.8">1ST 12</text>
+        <rect x={lx + cw * 4} y={ly + ch * 3} width={cw * 2} height="17" fill="rgba(0,0,0,0.08)" stroke="rgba(255,255,255,0.75)" strokeWidth="0.8" />
+        <path d={`M${lx + cw * 5 - 6} ${ly + ch * 3 + 8.5}l6 -5l6 5l-6 5z`} fill={pocketFill(1)} />
+      </g>
+      {/* Chips sit on the lines, as corner and split bets do; the layout leans 6°, so they shift left the lower they are. */}
+      {chip(lx + cw * 4 - (ly + ch * 2) * 0.105, ly + ch * 2 + 2, "#1f6fe0", 3)}
+      {chip(lx + cw * 3 - (ly + ch * 0.5) * 0.105, ly + ch * 0.5 + 2, "#e63a36", 2)}
+      {chip(lx + cw * 6 - (ly + ch * 3 + 8) * 0.105 + 4, ly + ch * 3 + 12, "#f2c230", 4)}
+      {/* The wheel */}
+      <ellipse cx={cx + 4} cy={cy + 8} rx="66" ry="62" fill="rgba(0,0,0,0.4)" />
+      <circle cx={cx} cy={cy} r="67" fill="url(#rt-wood)" />
+      <circle cx={cx} cy={cy} r="58.5" fill="url(#rt-track)" stroke="url(#rt-gold)" strokeWidth="1" />
+      <g className="roulette-tile-rotor">
+        {WHEEL_ORDER.map((n, i) => {
+          const from = i * step;
+          const to = from + step;
+          const [tx, ty] = at(from + step / 2, 47.5);
+          return (
+            <g key={n}>
+              <path d={arc(from, to, 52.5, 42.5)} fill={pocketFill(n)} stroke="#d9ab4a" strokeWidth="0.45" />
+              <path d={arc(from, to, 42.5, 34)} fill={n === 0 ? "#0a6b30" : RED.has(n) ? "#8f1015" : "#0c0d10"} stroke="#d9ab4a" strokeWidth="0.45" />
+              <text x={tx} y={ty} fontSize="5.4" fontWeight="800" fill="#fff" textAnchor="middle" dominantBaseline="central" transform={`rotate(${from + step / 2} ${tx} ${ty})`}>
+                {n}
+              </text>
+            </g>
+          );
+        })}
+        <circle cx={cx} cy={cy} r="34" fill="url(#rt-cone)" stroke="url(#rt-gold)" strokeWidth="1.2" />
+        <circle cx={cx} cy={cy} r="24" fill="none" stroke="rgba(255,220,160,0.25)" strokeWidth="0.8" />
+        {[0, 90, 180, 270].map((deg) => {
+          const [ex, ey] = at(deg, 20);
+          return (
+            <g key={deg}>
+              <line x1={cx} y1={cy} x2={ex} y2={ey} stroke="url(#rt-gold)" strokeWidth="3" strokeLinecap="round" />
+              <circle cx={ex} cy={ey} r="3" fill="url(#rt-gold)" />
+            </g>
+          );
+        })}
+        <circle cx={cx} cy={cy} r="7.5" fill="url(#rt-gold)" stroke="#7a5212" strokeWidth="0.6" />
+        <circle cx={cx - 2} cy={cy - 2.5} r="2.4" fill="rgba(255,255,255,0.7)" />
+      </g>
+      <circle cx={bx + 0.8} cy={by + 1.2} r="3.6" fill="rgba(0,0,0,0.45)" />
+      <circle cx={bx} cy={by} r="3.6" fill="url(#rt-ball)" />
     </svg>
   );
 }

@@ -1,0 +1,667 @@
+{
+ "meta": {
+  "count": 4,
+  "next_page": null
+ },
+ "data": [
+  {
+   "race_id": 326326058,
+   "meeting_id": 936093340,
+   "region": "GB",
+   "track": {
+    "track_id": 253396982,
+    "name": "Yarmouth",
+    "region": "GB",
+    "timezone": "Europe/London"
+   },
+   "race_number": 10,
+   "grade": "A7",
+   "class_letter": "A",
+   "class_number": 7,
+   "distance_m": 462,
+   "race_type": "Flat",
+   "is_handicap": false,
+   "going": "",
+   "field_size": 6,
+   "scheduled_start": {
+    "utc": "2026-10-04T12:33:00Z",
+    "local": "2026-10-04T13:33:00+01:00"
+   },
+   "status": "scheduled",
+   "off": null,
+   "freshness": {
+    "first_seen": "2026-09-30T13:05:00Z",
+    "results_received": null,
+    "results_delay_s": null
+   },
+   "runners": [
+    {
+     "trap": 1,
+     "dog_id": 1566160094,
+     "dog_name": "Zoo Da Man",
+     "sex": "d",
+     "colour": "bk",
+     "born": "2022-04-01",
+     "age_months": 54,
+     "sire": "Broadstrand Bono",
+     "dam": "Zoos Sophie",
+     "trainer": {
+      "trainer_id": 2797569053,
+      "name": "I J Barnard"
+     },
+     "owner": {
+      "owner_id": 2955004147,
+      "name": "Westend Boys"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 2,
+     "dog_id": 1933445037,
+     "dog_name": "Rathorpe Ogie",
+     "sex": "b",
+     "colour": "bk",
+     "born": "2023-09-01",
+     "age_months": 37,
+     "sire": "Ballyhimikin Jet",
+     "dam": "Rathorpe Honey",
+     "trainer": {
+      "trainer_id": 3099171157,
+      "name": "E G Samuels"
+     },
+     "owner": {
+      "owner_id": 2677880972,
+      "name": "Trotters Independent"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 3,
+     "dog_id": 3352651107,
+     "dog_name": "Swift Airy",
+     "sex": "b",
+     "colour": "bk",
+     "born": "2021-07-01",
+     "age_months": 63,
+     "sire": "Droopys Sydney",
+     "dam": "Swift Zana",
+     "trainer": {
+      "trainer_id": 1300312645,
+      "name": "G S Hamilton"
+     },
+     "owner": {
+      "owner_id": 1306773350,
+      "name": "Mr G S Hamilton"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 4,
+     "dog_id": 2928292190,
+     "dog_name": "Murrow Tambora",
+     "sex": "b",
+     "colour": "be",
+     "born": "2023-06-01",
+     "age_months": 40,
+     "sire": "Malachi",
+     "dam": "Prime Time",
+     "trainer": {
+      "trainer_id": 1208250492,
+      "name": "R Fitch"
+     },
+     "owner": {
+      "owner_id": 2074476710,
+      "name": "Mrs E A Miller,mrs A A White"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 5,
+     "dog_id": 2151616051,
+     "dog_name": "Isla Bonita",
+     "sex": "b",
+     "colour": "bk",
+     "born": "2024-02-01",
+     "age_months": 32,
+     "sire": "Newinn Taylor",
+     "dam": "Great Intention",
+     "trainer": {
+      "trainer_id": 3099171157,
+      "name": "E G Samuels"
+     },
+     "owner": {
+      "owner_id": 1361280510,
+      "name": "Samuels Racing"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 6,
+     "dog_id": 3923307614,
+     "dog_name": "Swift Engine",
+     "sex": "d",
+     "colour": "bk",
+     "born": "2023-05-01",
+     "age_months": 41,
+     "sire": "Coolavanny Hoffa",
+     "dam": "Swift Causeway",
+     "trainer": {
+      "trainer_id": 2797569053,
+      "name": "I J Barnard"
+     },
+     "owner": {
+      "owner_id": 2624125991,
+      "name": "Mrs I J Barnard"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    }
+   ]
+  },
+  {
+   "race_id": 1595500090,
+   "meeting_id": 1228103509,
+   "region": "GB",
+   "track": {
+    "track_id": 559293075,
+    "name": "Sunderland",
+    "region": "GB",
+    "timezone": "Europe/London"
+   },
+   "race_number": 10,
+   "grade": "A8",
+   "class_letter": "A",
+   "class_number": 8,
+   "distance_m": 450,
+   "race_type": "Flat",
+   "is_handicap": false,
+   "going": "",
+   "field_size": 6,
+   "scheduled_start": {
+    "utc": "2026-10-04T12:42:00Z",
+    "local": "2026-10-04T13:42:00+01:00"
+   },
+   "status": "scheduled",
+   "off": null,
+   "freshness": {
+    "first_seen": "2026-09-30T16:05:01Z",
+    "results_received": null,
+    "results_delay_s": null
+   },
+   "runners": [
+    {
+     "trap": 1,
+     "dog_id": 959797644,
+     "dog_name": "Crokers Derek",
+     "sex": "d",
+     "colour": "bk",
+     "born": "2023-10-01",
+     "age_months": 36,
+     "sire": "Pat C Sabbath",
+     "dam": "Nushkas Jetspray",
+     "trainer": {
+      "trainer_id": 4071229044,
+      "name": "S Linley"
+     },
+     "owner": {
+      "owner_id": 3846190584,
+      "name": "Mrs S Linley"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 2,
+     "dog_id": 3457072623,
+     "dog_name": "Zari Wild",
+     "sex": "b",
+     "colour": "bk",
+     "born": "2025-03-01",
+     "age_months": 19,
+     "sire": "Dorotas Wildcat",
+     "dam": "Zari Cleopatra",
+     "trainer": {
+      "trainer_id": 1541939413,
+      "name": "E Y Bell"
+     },
+     "owner": {
+      "owner_id": 936363814,
+      "name": "Abby Race Syndicate"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 3,
+     "dog_id": 2124967853,
+     "dog_name": "Donegal Cashout",
+     "sex": "d",
+     "colour": "bk",
+     "born": "2024-10-01",
+     "age_months": 24,
+     "sire": "Ballymac Cashout",
+     "dam": "Ballymac Tiara",
+     "trainer": {
+      "trainer_id": 3039325314,
+      "name": "C Mcnicholas"
+     },
+     "owner": {
+      "owner_id": 545082345,
+      "name": "Jess Mac Syndicate"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 4,
+     "dog_id": 973891956,
+     "dog_name": "Abbeyside Jasmin",
+     "sex": "b",
+     "colour": "bk",
+     "born": "2024-09-01",
+     "age_months": 25,
+     "sire": "Ballyhimikin Jet",
+     "dam": "Hollyhill Jasmin",
+     "trainer": {
+      "trainer_id": 3039325314,
+      "name": "C Mcnicholas"
+     },
+     "owner": {
+      "owner_id": 3582764429,
+      "name": "Miss C Mcnicholas"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 5,
+     "dog_id": 944065185,
+     "dog_name": "Jacktavern Nicky",
+     "sex": "b",
+     "colour": "bebd",
+     "born": "2024-08-01",
+     "age_months": 26,
+     "sire": "Pestana",
+     "dam": "Jacktavern Bella",
+     "trainer": {
+      "trainer_id": 672884163,
+      "name": "D Blackbird"
+     },
+     "owner": {
+      "owner_id": 1455851858,
+      "name": "Mr D Blackbird"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 6,
+     "dog_id": 4024416635,
+     "dog_name": "Belle Midnight",
+     "sex": "b",
+     "colour": "bk",
+     "born": "2024-06-01",
+     "age_months": 28,
+     "sire": "Orchestrate",
+     "dam": "Knockbann Sandy",
+     "trainer": {
+      "trainer_id": 672884163,
+      "name": "D Blackbird"
+     },
+     "owner": {
+      "owner_id": 2391242863,
+      "name": "Mr P S Hooper,mrs S J Taylor"
+     },
+     "weight_kg": null,
+     "handicap_metres": 0,
+     "sp": null,
+     "position": null,
+     "runner_status": "runner"
+    }
+   ]
+  },
+  {
+   "race_id": 3363462108,
+   "meeting_id": 195905933,
+   "region": "AU",
+   "track": {
+    "track_id": 3474454234,
+    "name": "Shepparton",
+    "region": "AU",
+    "timezone": "Australia/Melbourne"
+   },
+   "race_number": 1,
+   "grade": "M",
+   "class_letter": "M",
+   "class_number": 0,
+   "distance_m": 390,
+   "race_type": "Flat",
+   "is_handicap": false,
+   "going": null,
+   "field_size": 10,
+   "scheduled_start": {
+    "utc": "2026-10-04T23:17:00Z",
+    "local": "2026-10-05T10:17:00+11:00"
+   },
+   "status": "scheduled",
+   "off": null,
+   "freshness": {
+    "first_seen": "2026-10-01T05:15:01Z",
+    "results_received": null,
+    "results_delay_s": null
+   },
+   "runners": [
+    {
+     "trap": 1,
+     "dog_id": 1030897806,
+     "dog_name": "East Weymss",
+     "sex": "b",
+     "colour": null,
+     "born": "2025-04-03",
+     "age_months": 18,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 700269421,
+      "name": "John Caulfield"
+     },
+     "owner": {
+      "owner_id": 2652162309,
+      "name": "Garry Comans"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 2,
+     "dog_id": 2149583965,
+     "dog_name": "Flying Boo",
+     "sex": "b",
+     "colour": null,
+     "born": "2025-03-12",
+     "age_months": 18,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 3737907362,
+      "name": "Jason Sharp"
+     },
+     "owner": {
+      "owner_id": 3652649779,
+      "name": "Jack Oddy"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 3,
+     "dog_id": 2629012519,
+     "dog_name": "Marzelle Maisie",
+     "sex": "b",
+     "colour": null,
+     "born": "2025-04-03",
+     "age_months": 18,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 901347837,
+      "name": "Judith Condo"
+     },
+     "owner": {
+      "owner_id": 1432543898,
+      "name": "Judith Condo"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 4,
+     "dog_id": 2802297137,
+     "dog_name": "Spanish Star",
+     "sex": "b",
+     "colour": null,
+     "born": "2025-02-26",
+     "age_months": 19,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 1805981875,
+      "name": "Arron Rocke"
+     },
+     "owner": {
+      "owner_id": 3496957113,
+      "name": "Arron Rocke"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 5,
+     "dog_id": 977296373,
+     "dog_name": "Let's Go Thomas",
+     "sex": "d",
+     "colour": null,
+     "born": "2025-02-06",
+     "age_months": 19,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 1137372686,
+      "name": "Paul Galea"
+     },
+     "owner": {
+      "owner_id": 2660401355,
+      "name": "Paul Galea"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 6,
+     "dog_id": 3392198509,
+     "dog_name": "Regal Girl",
+     "sex": "b",
+     "colour": null,
+     "born": "2024-10-31",
+     "age_months": 23,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 4049105016,
+      "name": "Daniel Pell"
+     },
+     "owner": {
+      "owner_id": 2881772248,
+      "name": "Bev And Daniel (Syn)"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 7,
+     "dog_id": 1737807438,
+     "dog_name": "Ferlin",
+     "sex": "d",
+     "colour": null,
+     "born": "2024-12-21",
+     "age_months": 21,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 322358373,
+      "name": "Clayton King"
+     },
+     "owner": {
+      "owner_id": 2352774226,
+      "name": "Clayton King"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 8,
+     "dog_id": 1530969635,
+     "dog_name": "Cloud City",
+     "sex": "d",
+     "colour": null,
+     "born": "2025-01-23",
+     "age_months": 20,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 3176388957,
+      "name": "Dylan Sharp"
+     },
+     "owner": {
+      "owner_id": 1894437972,
+      "name": "Allan Lie"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 9,
+     "dog_id": 3377493444,
+     "dog_name": "Breaking Curfew",
+     "sex": "b",
+     "colour": null,
+     "born": "2024-10-31",
+     "age_months": 23,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 3301564266,
+      "name": "Jordan Formosa"
+     },
+     "owner": {
+      "owner_id": 708312773,
+      "name": "Bdb Associates (Syn)"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    },
+    {
+     "trap": 10,
+     "dog_id": 2261696601,
+     "dog_name": "El Rojo Rock",
+     "sex": "d",
+     "colour": null,
+     "born": "2025-01-12",
+     "age_months": 20,
+     "sire": null,
+     "dam": null,
+     "trainer": {
+      "trainer_id": 1805981875,
+      "name": "Arron Rocke"
+     },
+     "owner": {
+      "owner_id": 3496957113,
+      "name": "Arron Rocke"
+     },
+     "weight_kg": null,
+     "handicap_metres": null,
+     "sp": null,
+     "position": 0,
+     "runner_status": "runner"
+    }
+   ]
+  },
+  {
+   "race_id": 2807211909,
+   "meeting_id": 1613400793,
+   "region": "GB",
+   "track": {
+    "track_id": 1585787696,
+    "name": "Monmore",
+    "region": "GB",
+    "timezone": "Europe/London"
+   },
+   "race_number": 1,
+   "grade": "A5",
+   "class_letter": "A",
+   "class_number": 5,
+   "distance_m": 480,
+   "race_type": "Flat",
+   "is_handicap": false,
+   "going": null,
+   "field_size": null,
+   "scheduled_start": {
+    "utc": "2026-10-05T13:23:00Z",
+    "local": "2026-10-05T14:23:00+01:00"
+   },
+   "status": "scheduled",
+   "off": null,
+   "freshness": {
+    "first_seen": "2026-10-02T14:05:01Z",
+    "results_received": null,
+    "results_delay_s": null
+   },
+   "runners": []
+  }
+ ]
+}

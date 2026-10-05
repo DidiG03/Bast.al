@@ -1,0 +1,364 @@
+{
+ "meta": {
+  "count": 3
+ },
+ "data": [
+  {
+   "race_id": 2956135293,
+   "meeting_id": 936093340,
+   "region": "GB",
+   "track": {
+    "track_id": 253396982,
+    "name": "Yarmouth",
+    "region": "GB",
+    "timezone": "Europe/London"
+   },
+   "race_number": 9,
+   "grade": "A9",
+   "class_letter": "A",
+   "class_number": 9,
+   "distance_m": 462,
+   "race_type": "Flat",
+   "is_handicap": false,
+   "going": "",
+   "field_size": 6,
+   "scheduled_start": {
+    "utc": "2026-10-04T12:17:00Z",
+    "local": "2026-10-04T13:17:00+01:00"
+   },
+   "status": "complete",
+   "off": {
+    "utc": "2026-10-04T12:17:00Z",
+    "delay_s": null
+   },
+   "freshness": {
+    "first_seen": "2026-09-30T13:05:00Z",
+    "results_received": "2026-10-04T12:25:00Z",
+    "results_delay_s": 480
+   },
+   "result": {
+    "result_status": "final",
+    "positions": [
+     {
+      "position": 1,
+      "trap": 4,
+      "dog_id": 760391936,
+      "dog_name": "Perpendicular",
+      "trainer": {
+       "trainer_id": 1329284595,
+       "name": "P I Cross"
+      },
+      "sp": null,
+      "sectional_s": null,
+      "run_time_s": null,
+      "adjusted_time_s": null,
+      "weight_kg": null
+     },
+     {
+      "position": 2,
+      "trap": 3,
+      "dog_id": 1150400948,
+      "dog_name": "Cheery Girl",
+      "trainer": {
+       "trainer_id": 3099171157,
+       "name": "E G Samuels"
+      },
+      "sp": null,
+      "sectional_s": null,
+      "run_time_s": null,
+      "adjusted_time_s": null,
+      "weight_kg": null
+     },
+     {
+      "position": 3,
+      "trap": 2,
+      "dog_id": 3847256607,
+      "dog_name": "Angel Delight",
+      "trainer": {
+       "trainer_id": 3099171157,
+       "name": "E G Samuels"
+      },
+      "sp": null,
+      "sectional_s": null,
+      "run_time_s": null,
+      "adjusted_time_s": null,
+      "weight_kg": null
+     }
+    ],
+    "forecast_dividend": null,
+    "tricast_dividend": null,
+    "off": {
+     "utc": "2026-10-04T12:17:00Z",
+     "delay_s": null
+    },
+    "received": {
+     "utc": "2026-10-04T12:25:00Z",
+     "delay_s": 480
+    }
+   }
+  },
+  {
+   "race_id": 2191122132,
+   "meeting_id": 1228103509,
+   "region": "GB",
+   "track": {
+    "track_id": 559293075,
+    "name": "Sunderland",
+    "region": "GB",
+    "timezone": "Europe/London"
+   },
+   "race_number": 8,
+   "grade": "HP",
+   "class_letter": "HP",
+   "class_number": 0,
+   "distance_m": 450,
+   "race_type": "Flat",
+   "is_handicap": false,
+   "going": "20",
+   "field_size": 5,
+   "scheduled_start": {
+    "utc": "2026-10-04T12:08:00Z",
+    "local": "2026-10-04T13:08:00+01:00"
+   },
+   "status": "complete",
+   "off": {
+    "utc": "2026-10-04T12:08:00Z",
+    "delay_s": null
+   },
+   "freshness": {
+    "first_seen": "2026-09-30T16:05:01Z",
+    "results_received": "2026-10-04T12:15:01Z",
+    "results_delay_s": 421
+   },
+   "result": {
+    "result_status": "final",
+    "positions": [
+     {
+      "position": 1,
+      "trap": 1,
+      "dog_id": 4056412518,
+      "dog_name": "Daring Cooper",
+      "trainer": {
+       "trainer_id": 808025894,
+       "name": "P Miller"
+      },
+      "sp": null,
+      "sectional_s": null,
+      "run_time_s": 27.77,
+      "adjusted_time_s": 28.77,
+      "weight_kg": null
+     },
+     {
+      "position": 2,
+      "trap": 6,
+      "dog_id": 3008896423,
+      "dog_name": "Kittys The Boss",
+      "trainer": {
+       "trainer_id": 3605607305,
+       "name": "G Strike"
+      },
+      "sp": null,
+      "sectional_s": null,
+      "run_time_s": 27.81,
+      "adjusted_time_s": 28.01,
+      "weight_kg": null
+     },
+     {
+      "position": 3,
+      "trap": 5,
+      "dog_id": 2213538816,
+      "dog_name": "Mustang Poppy",
+      "trainer": {
+       "trainer_id": 672884163,
+       "name": "D Blackbird"
+      },
+      "sp": null,
+      "sectional_s": null,
+      "run_time_s": 27.9,
+      "adjusted_time_s": 28.26,
+      "weight_kg": null
+     },
+     {
+      "position": 4,
+      "trap": 2,
+      "dog_id": 762205342,
+      "dog_name": "Balmoral Hollie",
+      "trainer": {
+       "trainer_id": 672884163,
+       "name": "D Blackbird"
+      },
+      "sp": null,
+      "sectional_s": null,
+      "run_time_s": 28.15,
+      "adjusted_time_s": 29.15,
+      "weight_kg": null
+     },
+     {
+      "position": 5,
+      "trap": 4,
+      "dog_id": 3698987636,
+      "dog_name": "Watermill Wendy",
+      "trainer": {
+       "trainer_id": 4071229044,
+       "name": "S Linley"
+      },
+      "sp": null,
+      "sectional_s": null,
+      "run_time_s": 28.18,
+      "adjusted_time_s": 29.18,
+      "weight_kg": null
+     }
+    ],
+    "forecast_dividend": null,
+    "tricast_dividend": null,
+    "off": {
+     "utc": "2026-10-04T12:08:00Z",
+     "delay_s": null
+    },
+    "received": {
+     "utc": "2026-10-04T12:15:01Z",
+     "delay_s": 421
+    }
+   }
+  },
+  {
+   "race_id": 3538295545,
+   "meeting_id": 2826738434,
+   "region": "GB",
+   "track": {
+    "track_id": 1561848222,
+    "name": "Doncaster",
+    "region": "GB",
+    "timezone": "Europe/London"
+   },
+   "race_number": 14,
+   "grade": "OR",
+   "class_letter": "OR",
+   "class_number": 0,
+   "distance_m": 483,
+   "race_type": "Flat",
+   "is_handicap": false,
+   "going": "0",
+   "field_size": 6,
+   "scheduled_start": {
+    "utc": "2026-10-03T20:26:00Z",
+    "local": "2026-10-03T21:26:00+01:00"
+   },
+   "status": "complete",
+   "off": {
+    "utc": "2026-10-03T20:26:00Z",
+    "delay_s": null
+   },
+   "freshness": {
+    "first_seen": "2026-10-01T08:05:01Z",
+    "results_received": "2026-10-03T21:00:03Z",
+    "results_delay_s": 2043
+   },
+   "result": {
+    "result_status": "final",
+    "positions": [
+     {
+      "position": 1,
+      "trap": 4,
+      "dog_id": 4041228865,
+      "dog_name": "Ballycian Boy",
+      "trainer": {
+       "trainer_id": 175918100,
+       "name": "J Flaherty"
+      },
+      "sp": null,
+      "sectional_s": 4.29,
+      "run_time_s": 29.77,
+      "adjusted_time_s": 29.77,
+      "weight_kg": null
+     },
+     {
+      "position": 2,
+      "trap": 5,
+      "dog_id": 2948947743,
+      "dog_name": "Speedy Teddy Mac",
+      "trainer": {
+       "trainer_id": 3564965073,
+       "name": "M P Brown"
+      },
+      "sp": null,
+      "sectional_s": 4.19,
+      "run_time_s": 30.18,
+      "adjusted_time_s": 30.18,
+      "weight_kg": null
+     },
+     {
+      "position": 3,
+      "trap": 3,
+      "dog_id": 331731831,
+      "dog_name": "Aghaburren Ben",
+      "trainer": {
+       "trainer_id": 912412755,
+       "name": "B Denby"
+      },
+      "sp": null,
+      "sectional_s": 4.24,
+      "run_time_s": 30.2,
+      "adjusted_time_s": 30.2,
+      "weight_kg": null
+     },
+     {
+      "position": 3,
+      "trap": 1,
+      "dog_id": 152074315,
+      "dog_name": "Montana Tiger",
+      "trainer": {
+       "trainer_id": 317366874,
+       "name": "C R Morris"
+      },
+      "sp": null,
+      "sectional_s": 4.35,
+      "run_time_s": 30.2,
+      "adjusted_time_s": 30.2,
+      "weight_kg": null
+     },
+     {
+      "position": 5,
+      "trap": 6,
+      "dog_id": 15303250,
+      "dog_name": "Magical Harper",
+      "trainer": {
+       "trainer_id": 1107793332,
+       "name": "S R Parker"
+      },
+      "sp": null,
+      "sectional_s": 4.2,
+      "run_time_s": 30.36,
+      "adjusted_time_s": 30.36,
+      "weight_kg": null
+     },
+     {
+      "position": 6,
+      "trap": 2,
+      "dog_id": 3952857396,
+      "dog_name": "Keefill Mo",
+      "trainer": {
+       "trainer_id": 1802531914,
+       "name": "P Milner"
+      },
+      "sp": null,
+      "sectional_s": 4.31,
+      "run_time_s": 30.45,
+      "adjusted_time_s": 30.45,
+      "weight_kg": null
+     }
+    ],
+    "forecast_dividend": null,
+    "tricast_dividend": null,
+    "off": {
+     "utc": "2026-10-03T20:26:00Z",
+     "delay_s": null
+    },
+    "received": {
+     "utc": "2026-10-03T21:00:03Z",
+     "delay_s": 2043
+    }
+   }
+  }
+ ]
+}

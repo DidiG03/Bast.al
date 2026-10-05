@@ -344,23 +344,37 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Browser only: the last answer to each GET fetched with `revalidate`, and
+ * its ETag. Asked again, the API answers 304 with no body when nothing
+ * changed, and the very same object comes back, so a page can tell nothing
+ * moved without comparing anything.
+ */
+const revalidated = new Map<string, { etag: string; body: unknown }>();
+const REVALIDATED_KEPT = 40;
+
 export async function apiFetch<T>(
   path: string,
   token: string,
-  init?: RequestInit & { idempotencyKey?: string },
+  init?: RequestInit & { idempotencyKey?: string; revalidate?: boolean },
 ): Promise<T> {
   const normalized = path.startsWith("/") ? path.slice(1) : path;
-  const { idempotencyKey, ...rest } = init ?? {};
-  const res = await fetch(`${apiBase()}/${normalized}`, {
+  const { idempotencyKey, revalidate, ...rest } = init ?? {};
+  const url = `${apiBase()}/${normalized}`;
+  const cached = revalidate && typeof window !== "undefined" && (rest.method ?? "GET") === "GET" ? revalidated.get(url) : undefined;
+  const res = await fetch(url, {
     ...rest,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
       ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      ...(cached ? { "If-None-Match": cached.etag } : {}),
       ...(rest.headers ?? {}),
     },
     cache: "no-store",
   });
+
+  if (res.status === 304 && cached) return cached.body as T;
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -378,7 +392,14 @@ export async function apiFetch<T>(
     throw new ApiError(shown, message, res.status);
   }
 
-  return res.json() as Promise<T>;
+  const body = (await res.json()) as T;
+  const etag = res.headers.get("etag");
+  if (revalidate && typeof window !== "undefined" && etag) {
+    revalidated.delete(url);
+    revalidated.set(url, { etag, body });
+    if (revalidated.size > REVALIDATED_KEPT) revalidated.delete(revalidated.keys().next().value!);
+  }
+  return body;
 }
 
 export type OddsFilter = "upcoming" | "live" | "finished";
@@ -410,14 +431,29 @@ export type OddsSelection = {
   /** True when the Owner set this price by hand. */
   custom: boolean;
   result: "WON" | "LOST" | "VOID" | null;
-  /** Live only: the feed isn't pricing this outcome right now. */
+  /** Live: the feed isn't pricing this outcome right now. Before kick-off: the feed took it down (a player left out, a line removed). */
   suspended?: boolean;
+  /** Greyhounds: paid at the starting price (Winner) or the forecast dividend (Forecast); `price` is 0. */
+  sp?: boolean;
+  /** Greyhounds: the dog's trap and trainer (Winner), or the pair's traps (Forecast). */
+  info?: { trap?: number; trainer?: string | null; traps?: [number, number] } | null;
 };
 
 export type PricePoint = { price: number; recordedAt: string };
 
+export type Sport = "football" | "greyhounds" | "mma" | "basketball" | "nfl";
+
+/** Greyhounds: the race's details. A withdrawn dog shows as a suspended pick. */
+export type RaceInfo = { raceNumber: number | null; grade: string | null; distance: number | null; region: string | null };
+/** Greyhounds: the official result, once it's in. */
+export type RaceResult = { final: boolean; positions: Array<{ dogId: number; position: number; sp: number | null }>; forecastDividend: number | null };
+
 export type OddsEvent = {
   id: string;
+  sport?: Sport;
+  /** Greyhounds only. */
+  race?: RaceInfo | null;
+  raceResult?: RaceResult | null;
   name: string;
   league: string;
   country: string | null;
@@ -426,6 +462,8 @@ export type OddsEvent = {
   startsAt: string;
   status: "UPCOMING" | "LIVE" | "COMPLETED" | "POSTPONED" | "CANCELLED";
   elapsed: number | null;
+  /** While live, the feed's phase: "FT" once it's over (also for a match that just finished), "HT" at half-time, "BT" before extra time, "SUSP"/"INT" when interrupted. */
+  period?: string | null;
   homeScore: number | null;
   awayScore: number | null;
   hidden: boolean;
@@ -437,7 +475,25 @@ export type OddsEvent = {
   livePause?: "goal" | "swing" | "reopen" | "late" | "feed" | null;
   /** In play. Prices are the feed's live prices less the team margin. */
   live: boolean;
+  /** Every market the match has. The list view (`view=list`) sends only the first; `/odds/events/:id` sends them all. */
+  marketCount: number;
   markets: Array<{ id: string; key: string; name: string; /** Live only: off the board right now. */ suspended?: boolean; selections: OddsSelection[] }>;
+};
+
+/** A bet slip pick's price right now, from `/odds/selections`. */
+export type SelectionQuote = {
+  id: string;
+  eventId: string;
+  price: number;
+  /** Can be bet on right now. */
+  bettable: boolean;
+  /** Live: off the board for now. Before kick-off: the feed took it down. */
+  suspended: boolean;
+  live: boolean;
+  /** Before kick-off or in play; false once the match is over. */
+  open: boolean;
+  /** Greyhounds: paid at the starting price; `price` is 0. */
+  sp?: boolean;
 };
 
 export type OddsSettings = {
@@ -483,6 +539,9 @@ export type Bet = {
   odds: number | null;
   /** What a win pays back, stake included. */
   potentialPayout: number | null;
+  /** Greyhounds: paid at the starting price (or forecast dividend), up to `spCap`; `odds` is set when it settles. */
+  sp?: boolean;
+  spCap?: number | null;
   payout: number;
   status: BetStatus;
   placedAt: string;
@@ -516,6 +575,8 @@ export type AdminBet = Bet & { player: { id: string; username: string } };
 
 export type SettlementEvent = {
   id: string;
+  /** "greyhounds": a race, which has no score to set; its picks are settled one by one. */
+  sport?: Sport;
   name: string;
   league: string;
   startsAt: string;
@@ -534,6 +595,8 @@ export type SettlementEvent = {
   suspended: boolean;
   bets: { open: number; total: number; staked: number; openStaked: number };
   needsAttention: boolean;
+  /** Super Admin only: picks of a finished match the feed couldn't settle (e.g. a goalscorer whose name matches no one for sure). */
+  waiting: Array<{ selectionId: string; market: string; name: string; bets: number }>;
 };
 
 export type RiskExposure = { bets: number; staked: number; payout: number };

@@ -4,7 +4,6 @@ import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { AuthModule } from "./auth/auth.module";
 import { CryptoModule } from "./crypto/crypto.module";
-import { EventsController } from "./events.controller";
 import { HealthController, RootController } from "./health.controller";
 import { PrismaModule } from "./prisma.module";
 import { QueueService } from "./queue.service";
@@ -46,7 +45,7 @@ import { ClientThrottlerGuard } from "./security/client-throttler.guard";
     CasinoModule,
     MaintenanceModule,
   ],
-  controllers: [HealthController, RootController, EventsController],
+  controllers: [HealthController, RootController],
   providers: [QueueService, { provide: APP_GUARD, useClass: ClientThrottlerGuard }],
 })
 export class AppModule {}

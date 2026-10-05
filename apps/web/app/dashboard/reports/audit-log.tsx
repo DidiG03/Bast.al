@@ -66,9 +66,9 @@ export function AuditLog() {
   }
 
   // The loader intentionally uses the current filter state and runs once on mount.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     load(1).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (me?.role === "PLAYER")

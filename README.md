@@ -152,12 +152,71 @@ Super Admin picks which competitions are synced under **Odds → Leagues**: sing
 | `API_FOOTBALL_LEAGUES` | Optional comma-separated league ids, used until Super Admin picks leagues on the Odds page. Defaults to about 60 competitions (list in `apps/api/src/odds/odds-sync.service.ts`): the top two divisions and main cups of England, Spain, Italy, Germany and France, the rest of Europe's top divisions, UEFA club competitions, national-team tournaments, qualifiers and friendlies, and the main leagues of the Americas, Asia and Australia. Unknown ids are logged at startup. |
 | `API_FOOTBALL_COUNTRIES` | Optional comma-separated countries whose leagues are all synced. Defaults to `Albania,Kosovo`. |
 | `API_FOOTBALL_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `8` (Bet365). |
-| `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS` | Optional tuning: days ahead (5, at most 7), how often to check which days are due (10 min), live interval (45 s). |
+| `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS` | Optional tuning: days ahead (7, at most 7), how often to check which days are due (10 min), live interval (45 s). |
 | `API_FOOTBALL_QUOTA_RESERVE` | Requests to keep in hand each day before only today's matches are refreshed. Defaults to `600`. |
 | `ODDS_FEED_MOCK=true` | Local testing only: serves made-up matches in API-Football's format when no key is set. |
 | `LIVE_VERIFY`, `LIVE_GOAL_COOLDOWN_MS`, `LIVE_SWING_COOLDOWN_MS`, `LIVE_REOPEN_COOLDOWN_MS`, `LIVE_SWING_POINTS`, `LIVE_CUTOFF_MINUTE`, `LIVE_FAST_INTERVAL_MS` | Live-betting protection (see below). Defaults: check each live bet with the feed, pause 90 s after a goal, 30 s after a result's chance jumps 12 points in the match-result prices, 15 s after the bookmaker reopens a match, close from minute 89, and fetch live prices every 15 s while someone is watching. |
 
 The API needs outbound access to `v3.football.api-sports.io`.
+
+### Basketball
+
+Games and results come from [API-Sports' basketball API](https://api-sports.io/documentation/basketball/v1) (same account, its own daily quota). The default leagues (`BASKETBALL_LEAGUES`) are the NBA, Euroleague, ABA League and the top leagues of Italy, Spain, Turkey, Greece, France, Germany and Kosovo. Prices for the European leagues come from API-Sports (bet365 first); API-Sports has none for the NBA on any plan, so NBA prices come from [The Odds API](https://the-odds-api.com) (DraftKings first, then FanDuel, BetMGM), matched to API-Sports' games by team names and tip-off. Without `ODDS_API_KEY`, NBA games are listed without prices and can't be bet on.
+
+Players bet at fixed prices on **Winner**, **Handicap** and **Total points**, all including overtime. European games offer the five half-point lines nearest the even one, so a bet never lands on the line; the NBA has the bookmaker's main line, and landing on a whole-number line gives the stake back. Bets close at tip-off. Bets settle on the final score, and Super Admin can correct a score on the Settlement page like a football one.
+
+On the free plans: today's and tomorrow's games every 3 hours (2 requests), each European game's prices when it first appears and once more in its last 4 hours (never into the last 12 requests of the day), NBA prices every 6 hours (3 credits, about 360 a month), and results every 30 minutes only while a started game has none.
+
+| Variable | Purpose |
+| --- | --- |
+| `ODDS_API_KEY` | The Odds API key, for NBA prices. |
+| `NBA_ODDS_SPORTS` | The Odds API's lists to look in. Defaults to `basketball_nba,basketball_nba_preseason`: each list's games are checked for free, and prices (3 credits) are fetched only from a list with one of our coming games. |
+| `BASKETBALL_API_KEY` | API-Sports key for basketball. Defaults to `API_FOOTBALL_KEY` (when that's a direct API-Sports key). `BASKETBALL_FEED=off` turns basketball off. |
+| `BASKETBALL_LEAGUES` | API-Sports league ids, comma-separated. Defaults to the list above (`12,120,198,52,117,104,45,2,40,59`). |
+| `BASKETBALL_SYNC_INTERVAL_MS`, `BASKETBALL_RESULTS_INTERVAL_MS`, `NBA_ODDS_INTERVAL_MS` | Defaults 3 hours, 30 minutes and 6 hours. |
+| `BASKETBALL_DAYS`, `BASKETBALL_BOOKMAKER` | Days fetched from today (2, the free plan's limit) and the bookmaker for European prices (4, bet365). |
+
+### NFL
+
+Games, results and prices come from [API-Sports' American football API](https://api-sports.io/documentation/american-football/v1) (same account, its own daily quota), bet365 first. Bets are the same as basketball's: **Winner** (a tie is void), **Handicap** (the spread) and **Total points**, all including overtime, with the five half-point lines nearest the even one. Bets close at kick-off and settle on the final score; Super Admin can correct a score on the Settlement page.
+
+On the free plan (yesterday to tomorrow only, so a game is listed from the day before): today's and tomorrow's games every 3 hours (2 requests), each game's prices when it first appears and once more in its last 4 hours (never into the last 12 requests of the day), and results every 30 minutes only while a game that started over 2½ hours ago has none. A full Sunday stays near 70 requests.
+
+| Variable | Purpose |
+| --- | --- |
+| `NFL_API_KEY` | API-Sports key for American football. Defaults to `API_FOOTBALL_KEY` (when that's a direct API-Sports key). `NFL_FEED=off` turns the NFL off. |
+| `NFL_LEAGUES` | API-Sports league ids, comma-separated. Defaults to `1` (NFL); `2` is college football, which has many more games (each costs requests for its prices). |
+| `NFL_SYNC_INTERVAL_MS`, `NFL_RESULTS_INTERVAL_MS`, `NFL_BOOKMAKER` | Defaults 3 hours, 30 minutes, and 4 (bet365). |
+
+### MMA
+
+Fights come from [API-Sports' MMA API](https://api-sports.io/documentation/mma/v1), the same account as API-Football with its own daily quota. Players bet at fixed prices (bet365's, less the team margin, like football) on **Fight winner** (a draw or no contest is void), **Fight result** (with the draw), **Total rounds over/under** ("Over 1.5" means past 2:30 of round 2) and, when priced, **Fight goes the distance**. Bets on every fight of a card close when the card's first fight starts. A no contest voids everything. Results settle once the feed has the method, round and time; if those haven't come six hours after the fight, the winner markets settle and the round bets wait on the Settlement page.
+
+The free plan (100 requests a day) only sees yesterday to tomorrow, so fights appear the day before. The default schedule fits it: today's and tomorrow's fights and odds every 2 hours (4 requests), and results every 30 minutes only while a started fight has none (2 requests).
+
+| Variable | Purpose |
+| --- | --- |
+| `MMA_API_KEY` | API-Sports key for MMA. Defaults to `API_FOOTBALL_KEY` (when that's a direct API-Sports key). `MMA_FEED=off` turns MMA off. |
+| `MMA_SYNC_INTERVAL_MS`, `MMA_RESULTS_INTERVAL_MS` | Defaults 2 hours and 30 minutes. A paid MMA plan can run them faster. |
+| `MMA_DAYS` | Days of fights fetched, from today. Defaults to `2` (the free plan's limit). |
+| `MMA_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `5` (bet365 in the MMA list). |
+
+### Greyhound racing
+
+Races come from [GreyhoundAPI](https://greyhoundapi.com) (GB, Irish and Australian tracks; the Race Day plan, $49/month, is enough). There are no prices before a race, so race bets are paid the way UK bookmakers take them: **Winner** at the dog's starting price (SP) and **Forecast** (1st and 2nd in order) at the official forecast dividend, both less the team's margin. Race picks are singles only. Bets close a minute before the scheduled start and settle when the final result arrives, usually 12–18 minutes after the race.
+
+To protect the house, a Winner bet is paid at most `GREYHOUND_MAX_SP` (51.00, i.e. 50/1) and a Forecast at most `GREYHOUND_MAX_FORECAST` (500.00); the Owner's payout cap and the Risk page count open race bets at those ceilings. A withdrawn dog's bets (and Forecasts naming it) are void, a void or abandoned race refunds everything, and a dead heat for 1st pays a Winner bet on half its stake (a Forecast touched by one waits on the Settlement page).
+
+| Variable | Purpose |
+| --- | --- |
+| `GREYHOUND_API_KEY` | API key from GreyhoundAPI. Without it racing is off. A sandbox key (`gapi_test_…`, 50 requests a day) has cards and results but no SPs or dividends, so won bets wait. |
+| `GREYHOUND_REGIONS` | Countries to list, comma-separated. Defaults to `GB,IE,AU`. |
+| `GREYHOUND_HOURS` | How far ahead race cards are fetched. Defaults to `24` (up to 48). |
+| `GREYHOUND_CARDS_INTERVAL_MS`, `GREYHOUND_RESULTS_INTERVAL_MS` | Defaults: race cards, today's results and the status of races awaiting one every 15 minutes (about 6 requests); new results every 2 minutes while a run race has open bets (1 request). Up to about 1,300 requests a day. A sandbox key uses 4 hours and 2 hours. |
+| `GREYHOUND_MAX_SP`, `GREYHOUND_MAX_FORECAST` | The ceilings above. |
+| `RACE_UNPLAYED_HOURS` | A race with no official result this long after its start has its bets refunded. Defaults to `6`. |
+
+The API needs outbound access to `api.greyhoundapi.com`.
 
 **Live-betting protection** (`apps/api/src/odds/live-guard.ts`). A live match stops taking bets when:
 - the bookmaker has it blocked (dangerous attack, penalty, VAR);

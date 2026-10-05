@@ -9,7 +9,7 @@ import { RealtimeProvider, RealtimeRefresh } from "../../components/realtime-pro
 import { ThemeToggle } from "../../components/theme-toggle";
 import { UserMenu } from "../../components/user-menu";
 import { ApiError, type MeResponse } from "../../lib/api";
-import { serverApiFetch } from "../../lib/api-server";
+import { getMe } from "../../lib/api-server";
 import { formatMoney } from "../../lib/format";
 import { LanguageToggle } from "../../components/language-toggle";
 import { getT } from "../../lib/i18n/server";
@@ -26,7 +26,7 @@ export default async function DashboardLayout({
 
   let me: MeResponse;
   try {
-    me = await serverApiFetch<MeResponse>("/users/me", token);
+    me = await getMe(token);
   } catch (err) {
     // Only the API's own answer says why this account can't come in. Anything
     // else (the API unreachable, busy, or failing) is the server's problem,

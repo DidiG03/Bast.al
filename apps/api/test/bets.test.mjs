@@ -89,6 +89,59 @@ test("corner and card markets settle on match stats, and wait without them", () 
   assert.equal(gradeSelection("cards_3_5", "over", 1, 1, { home: 0, away: 0 }), null);
 });
 
+test("combo markets: result and goals, goals and both teams score", () => {
+  assert.equal(gradeSelection("result_goals_2_5", "home_over", 3, 1), "WON");
+  assert.equal(gradeSelection("result_goals_2_5", "home_over", 2, 0), "LOST", "a home win, but under 2.5");
+  assert.equal(gradeSelection("result_goals_2_5", "draw_under", 1, 1), "WON");
+  assert.equal(gradeSelection("result_goals_2_5", "away_under", 1, 1), "LOST");
+  assert.equal(gradeSelection("goals_btts_2_5", "over_yes", 2, 1), "WON");
+  assert.equal(gradeSelection("goals_btts_2_5", "over_no", 3, 0), "WON");
+  assert.equal(gradeSelection("goals_btts_2_5", "under_yes", 1, 1), "WON");
+  assert.equal(gradeSelection("goals_btts_2_5", "under_no", 1, 1), "LOST");
+  assert.equal(gradeSelection("goals_btts_2_5", "sideways", 1, 1), null);
+});
+
+test("team exact goals, goal ranges, winning margin and odd/even per team", () => {
+  assert.equal(gradeSelection("home_exact_goals", "2", 2, 0), "WON");
+  assert.equal(gradeSelection("home_exact_goals", "3+", 4, 0), "WON");
+  assert.equal(gradeSelection("away_exact_goals", "0", 2, 1), "LOST");
+  assert.equal(gradeSelection("goal_range", "0-1", 1, 0), "WON");
+  assert.equal(gradeSelection("goal_range", "2-3", 2, 1), "WON");
+  assert.equal(gradeSelection("goal_range", "4+", 2, 1), "LOST");
+  assert.equal(gradeSelection("winning_margin", "home_1", 2, 1), "WON");
+  assert.equal(gradeSelection("winning_margin", "away_4+", 0, 5), "WON");
+  assert.equal(gradeSelection("winning_margin", "away_2", 0, 3), "LOST");
+  assert.equal(gradeSelection("winning_margin", "score_draw", 1, 1), "WON");
+  assert.equal(gradeSelection("winning_margin", "score_draw", 0, 0), "LOST");
+  assert.equal(gradeSelection("winning_margin", "no_goal", 0, 0), "WON");
+  assert.equal(gradeSelection("home_odd_even", "odd", 3, 0), "WON");
+  assert.equal(gradeSelection("away_odd_even", "even", 3, 0), "WON", "0 is even");
+});
+
+test("half extras: exact goals and odd/even per half, scoring in both halves, each team's best half", () => {
+  const half = { home: 1, away: 0 };
+  assert.equal(gradeSelection("h1_exact_goals", "1", 2, 1, half), "WON");
+  assert.equal(gradeSelection("h2_exact_goals", "2", 2, 1, half), "WON");
+  assert.equal(gradeSelection("h2_exact_goals", "5+", 2, 1, half), "LOST");
+  assert.equal(gradeSelection("h1_odd_even", "odd", 2, 1, half), "WON");
+  assert.equal(gradeSelection("h2_odd_even", "even", 2, 1, half), "WON");
+  assert.equal(gradeSelection("score_both_halves", "home", 2, 1, half), "WON");
+  assert.equal(gradeSelection("score_both_halves", "away", 2, 1, half), "LOST");
+  assert.equal(gradeSelection("home_highest_half", "equal", 2, 1, half), "WON");
+  assert.equal(gradeSelection("away_highest_half", "second", 2, 1, half), "WON");
+  assert.equal(gradeSelection("h1_exact_goals", "1", 2, 1), null, "waits for the half-time score");
+});
+
+test("most corners and corner ranges settle on the match stats", () => {
+  const stats = { cornersHome: 6, cornersAway: 3, cardsHome: 1, cardsAway: 2 };
+  assert.equal(gradeSelection("corners_1x2", "home", 0, 0, null, stats), "WON");
+  assert.equal(gradeSelection("corners_1x2", "draw", 0, 0, null, stats), "LOST");
+  assert.equal(gradeSelection("corners_range", "9-11", 0, 0, null, stats), "WON");
+  assert.equal(gradeSelection("corners_range", "u6", 0, 0, null, stats), "LOST");
+  assert.equal(gradeSelection("corners_range", "o14", 0, 0, null, { ...stats, cornersHome: 12 }), "WON");
+  assert.equal(gradeSelection("corners_range", "9-11", 0, 0), null, "waits for the stats");
+});
+
 test("an unknown market is left for Super Admin", () => {
   assert.equal(gradeSelection("corners", "over", 1, 0), null);
   assert.equal(gradeSelection("match_winner", "nobody", 1, 0), null);

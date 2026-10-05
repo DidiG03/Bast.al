@@ -61,6 +61,8 @@ Say Alex sets a rule: "Any Manager sending more than $1,000 to a Player at once 
 
 If Sam tries to give Maria $1,500, it doesn't go through instantly — it sits as **pending** until Alex approves it on the **Finance** page. If Sam gives Maria $500, it goes through immediately since it's under the limit.
 
+A pending transfer only goes through if Sam could still make it when Alex approves: Maria must still be Sam's Player, and Sam's account must still be active. Otherwise Alex rejects it.
+
 This exists so a Manager can't accidentally (or on purpose) hand out huge amounts without the Owner noticing.
 
 ---
@@ -70,6 +72,80 @@ This exists so a Manager can't accidentally (or on purpose) hand out huge amount
 Say a match is Man City vs Real Madrid, and Alex sets a payout cap of $5,000 on it — meaning "I never want to owe more than $5,000 if one specific result happens."
 
 If Players have already bet enough that a Man City win would cost the team $4,800, and a new bet comes in that would push that number past $5,000, the app **refuses that new bet automatically**. It's a safety limit so one popular outcome can't bankrupt the team if it hits.
+
+---
+
+## What Players can bet on in football
+
+The **Bet** page shows every match for the next 7 days from about 90 competitions: Europe's top leagues and their second divisions, England's League One and Two, the Balkans (Albania, Kosovo, North Macedonia, Montenegro, Bosnia, Slovenia, Bulgaria, and more), UEFA and national-team competitions, women's football (Champions League, WSL, Frauen-Bundesliga, Division 1), and the bigger leagues of the Americas, Africa and Asia. You can change the list on the **Odds** page.
+
+A match opens to around 60 bet types under short headings:
+- **Main:** result, double chance, draw no bet, both teams score.
+- **Goals:** total goals lines, exact goals, goal ranges (0–1, 2–3, 4+), odd/even, correct score, winning margin.
+- **Teams:** each team's goals and exact goals, clean sheets, win to nil, first and last team to score, win from behind.
+- **Halves:** half-time result and goals, half-time/full-time, each half's exact goals, scoring in both halves.
+- **Combos:** result + total goals, total goals + both teams score, result + both teams score.
+- **Goalscorers:** anytime, first and last goalscorer.
+- **Corners & cards:** totals, most corners and corner ranges.
+
+Everything settles on the 90 minutes, never extra time. Goalscorer bets follow the usual rules: own goals don't count, a player who doesn't play gets the stake back, and so does a first-goalscorer pick on a player who came on after the first goal.
+
+**Example:** Maria bets $10 on "Anytime goalscorer: Hulk" at 2.50. Hulk scores in the 27th minute, so she gets $25 back. Her friend's $10 on a player who stayed on the bench all match comes back as $10.
+
+The feed spells players' names differently in different places ("Memphis Depay" and "M. Depay"). When the app can't tell for sure which player a bet means, it doesn't guess: the pick waits on the **Settlement** page, where you mark it Won, Lost or Void.
+
+## Basketball (with a number)
+
+The **Basketball** switch on the Bet page lists NBA games and the main European leagues (Euroleague, ABA, Italy, Spain, Turkey, Greece, France, Germany, Kosovo). Players bet on:
+- **Winner:** either team, overtime included.
+- **Handicap:** a team with points added or taken away, like "Olimpia Milano −8.5": Milano have to win by 9 or more.
+- **Total points:** over or under a line, like 170.5, overtime included.
+
+Bets close at tip-off and settle on the final score. Basketball picks can go in an accumulator with football and MMA.
+
+**Example:** Maria bets $10 on "Verona +8.5" at 1.77. Milano win 87–80, but with the 8.5 points Verona finish ahead (88.5 to 87), so she gets $17.70 back.
+
+For now the free plan shows games from the day before they're played. NBA prices need a free key from The Odds API; without it NBA games show without prices.
+
+## NFL
+
+The **NFL** switch on the Bet page lists NFL games, with the same three bets as basketball: **Winner**, **Handicap** (the spread, like "Detroit Lions −3.5": the Lions have to win by 4 or more) and **Total points**, all overtime included. If a game ends in a tie, Winner bets are void and the stake comes back.
+
+Bets close at kick-off and settle on the final score. NFL picks can go in an accumulator with the other sports (not greyhounds). Like basketball, the free plan shows games from the day before they're played, so Sunday's games appear on Saturday.
+
+## MMA (with a number)
+
+On the **Bet** page there's also an **MMA** switch: UFC and other cards, each fight with both fighters, its weight class and bet365's prices less the team margin. Players can bet:
+- **Fight winner:** either fighter. A draw gives the stake back.
+- **Fight result:** either fighter, or a draw.
+- **Total rounds:** over or under a line, like 1.5 rounds (over means the fight is still going at 2:30 of round 2).
+- **Fight goes the distance**, when it's offered: yes if it ends with the judges.
+
+Fight picks can go in an accumulator with football. Every fight on a card stops taking bets when the card's first fight starts, so nobody can bet on a fight after seeing how the night is going. A no contest gives every stake back.
+
+**Example:** Maria bets $10 on Natalia Silva to beat Wang Cong at 1.40. Silva wins on the judges' scorecards after five rounds, so Maria gets $14 back. A friend's $5 on "Under 1.5 rounds" loses, because the fight went the full 25 minutes.
+
+For now the MMA feed is on the free plan, so fights appear the day before they happen. A paid MMA plan would show the whole schedule.
+
+## Greyhound racing (with a number)
+
+On the **Bet** page, Players switch between **Football** and **Greyhounds**. Greyhounds lists the next races at British, Irish and Australian tracks, with each dog's trap colour and trainer.
+
+There's no price before a greyhound race, so bets are paid the way British bookmakers take them:
+- **Winner:** tap **SP** next to a dog. If it wins, the bet pays the dog's *starting price* (the price when the race starts), less the team's margin.
+- **Forecast:** pick the 1st and 2nd dog in order. It pays the official *forecast dividend*, less the margin.
+
+Race picks are single bets only, never in an accumulator. Bets close a minute before the start and settle about 15 minutes after the race, when the official result comes in.
+
+The next three races also show on a Player's home page. **Latest results** on the Greyhounds tab lists the races of the last six hours with their finishing order. On the **Odds** page, the Greyhounds switch shows each race's dogs, or its result once run, and you can hide a race or suspend its bets like a match. A race with no official result six hours after its start has its bets refunded.
+
+**Example:** Maria bets $10 on Swift Airy to win. Swift Airy wins at a starting price of 7/2 (4.50). With a 5% margin she's paid at 4.27, so she gets $42.70 back.
+
+**The rules:**
+- A dog withdrawn before the race: the stake comes back, and the same for a Forecast that names it.
+- A race called off: everything comes back.
+- Two dogs dead-heat for 1st: a Winner bet is paid on half its stake. A Forecast caught by a dead heat waits on the **Settlement** page for you.
+- Nothing pays more than 50/1 on a Winner or 500 on a Forecast. Until a race is run, the team's payout cap counts each race bet at that most, so a big outsider can't catch an Owner out.
 
 ---
 
@@ -102,7 +178,7 @@ After a win, a Player can try **double or nothing**: guess whether a card is red
 | **Commissions** | Super Admin, Owner, Manager | Your paycheck — what you've earned from results, this week/month/custom range. |
 | **Odds** | Super Admin, Owner | Set the profit margin baked into every price Players see. |
 | **Risk** | Super Admin, Owner | "If this result happens, how much would we owe?" — worst case first. |
-| **Settlement** | Super Admin | Manually fix a match result or refund a bet if the automatic system missed it. |
+| **Settlement** | Super Admin | Manually fix a match result, settle a pick the feed couldn't (like an unclear goalscorer name), or refund a bet if the automatic system missed it. |
 | **Security** | Everyone | Your own login history, devices, and password — nothing to do with the business. |
 
 ---

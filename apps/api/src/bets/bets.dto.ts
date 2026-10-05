@@ -111,17 +111,23 @@ export class VoidDto {
   reason!: string;
 }
 
+/** Super Admin's own result for one outcome the feed can't settle (e.g. a goalscorer whose name matches no one for sure). */
+export class SelectionResultDto {
+  @IsIn(["WON", "LOST", "VOID"])
+  result!: "WON" | "LOST" | "VOID";
+}
+
 export class ResultDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  @Max(99)
+  @Max(300)
   home!: number;
 
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  @Max(99)
+  @Max(300)
   away!: number;
 
   /** The half-time score, for the half markets. Send both or neither. */

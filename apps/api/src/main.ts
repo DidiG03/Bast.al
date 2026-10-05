@@ -1,6 +1,7 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import * as compression from "compression";
 import { json, urlencoded } from "express";
 import type { IncomingMessage } from "http";
 import helmet from "helmet";
@@ -31,6 +32,15 @@ async function bootstrap() {
   app.use("/api/webhooks/clerk", json({ limit: "256kb", verify: rawBodySaver }));
   app.use(json({ limit: "64kb", verify: rawBodySaver }));
   app.use(urlencoded({ extended: true, limit: "64kb" }));
+
+  // Answers go out gzipped: the week's match list is around a tenth of its size.
+  // The live stream is left alone, so each update reaches the browser at once.
+  app.use(
+    compression({
+      threshold: 1024,
+      filter: (req, res) => !String(res.getHeader("content-type") ?? "").includes("text/event-stream") && compression.filter(req, res),
+    }),
+  );
 
   app.use(
     helmet({

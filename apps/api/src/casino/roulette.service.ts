@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
 import { randomInt } from "crypto";
-import { BalanceTransactionType, Prisma, Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { assertOnTeam } from "../bets/team";
@@ -9,7 +9,7 @@ import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
-import { casinoClosedReason } from "./access";
+import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import { CHIPS, GAME_NAME, MAX_SPOTS, PAYOUT_RATE, RED_NUMBERS, TABLE_MAX, WHEEL, colorOf, invalidBets, label, settle, spinWheel, type PlacedBet } from "./roulette";
 
 /** Rounds in the Player's recent list, and numbers in the strip of past results. */
@@ -62,9 +62,7 @@ export class RouletteService {
 
   /** The most this Player can have on the table in one round: their max stake, or TABLE_MAX without one. */
   private async tableMax(playerId: string): Promise<number> {
-    const limit = await this.prisma.bettingLimit.findUnique({ where: { playerId } });
-    const stakes = [limit?.ownerMaxStake, limit?.managerMaxStake].filter((value): value is Prisma.Decimal => value !== null && value !== undefined).map(Number);
-    return stakes.length ? Math.min(...stakes) : TABLE_MAX;
+    return (await maxStakeOf(this.prisma, playerId)) ?? TABLE_MAX;
   }
 
   /** The Player's roulette table: whether they can play, the rules, their last rounds and the last numbers. */
@@ -177,10 +175,6 @@ export class RouletteService {
   private async addToLedger(tx: Prisma.TransactionClient, playerId: string, net: Prisma.Decimal, now: Date) {
     const rounds = await tx.casinoSpin.count({ where: { playerId, kind: "ROULETTE", createdAt: { gte: startOfDay(now) } } });
     const reason = rounds === 1 ? "Roulette: 1 spin" : `Roulette: ${rounds} spins`;
-    await tx.balanceTransaction.upsert({
-      where: { id: ledgerLineId(playerId, now) },
-      create: { id: ledgerLineId(playerId, now), toUserId: playerId, actorId: playerId, type: BalanceTransactionType.CASINO, amount: net, reason, createdAt: now },
-      update: { amount: { increment: net }, reason },
-    });
+    await addToDailyLine(tx, ledgerLineId(playerId, now), playerId, net, reason, now);
   }
 }

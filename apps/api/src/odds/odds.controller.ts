@@ -8,7 +8,7 @@ import { MfaGuard } from "../auth/mfa.guard";
 import type { Actor } from "../auth/permissions";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
-import { BaseMarginDto, EventsQueryDto, LeaguesDto, OverrideDto, TeamMarginDto, TeamQueryDto, UpdateEventDto } from "./odds.dto";
+import { BaseMarginDto, EventsQueryDto, LeaguesDto, OverrideDto, SelectionsQueryDto, TeamMarginDto, TopEventsQueryDto, TeamQueryDto, UpdateEventDto } from "./odds.dto";
 import { OddsService } from "./odds.service";
 
 @ApiTags("odds")
@@ -27,7 +27,27 @@ export class OddsController {
   @Get("events")
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
   events(@CurrentActor() actor: Actor, @Query() query: EventsQueryDto) {
-    return this.odds.events(actor, query.filter, query.ownerId);
+    return this.odds.events(actor, query.filter, query.ownerId, query.view, query.sport);
+  }
+
+  /** A Player's home page: the few matches worth showing first. */
+  @Get("top-events")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  topEvents(@CurrentActor() actor: Actor, @Query() query: TopEventsQueryDto) {
+    return this.odds.topEvents(actor, query.count, query.sport);
+  }
+
+  @Get("events/:id")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  event(@CurrentActor() actor: Actor, @Param("id") id: string, @Query() query: TeamQueryDto) {
+    return this.odds.event(actor, id, query.ownerId);
+  }
+
+  /** A bet slip's picks: current price and whether each can still be bet on. */
+  @Get("selections")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  selections(@CurrentActor() actor: Actor, @Query() query: SelectionsQueryDto) {
+    return this.odds.selections(actor, query.ids.split(","), query.ownerId);
   }
 
   @Get("selections/:id/history")

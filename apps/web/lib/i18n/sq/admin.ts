@@ -56,6 +56,9 @@ export const admin: Record<string, string> = {
   "Correct result": "Korrigjo rezultatin",
   "Set result": "Vendos rezultatin",
   "Void match": "Anulo ndeshjen",
+  "These picks couldn't be settled from the feed. Check the result and settle each one:": "Këto zgjedhje nuk u mbyllën dot nga burimi. Kontrollo rezultatin dhe mbylli një nga një:",
+  "Settle \"{pick}\" ({market}) as {result}? Its bets are paid on that.": "Ta mbyllësh \"{pick}\" ({market}) si {result}? Bastet e saj paguhen sipas kësaj.",
+  "\"{pick}\" is settled as {result}.": "\"{pick}\" u mbyll si {result}.",
   "{amount} goes back to {name}.": "{amount} i kthehen {name}.",
   "{amount} is taken back from {name}.": "{amount} merren mbrapsht nga {name}.",
   "Void this bet and refund the {amount} stake?": "Të anulohet ky bast dhe të rimbursohet shuma prej {amount}?",
@@ -325,4 +328,7 @@ export const admin: Record<string, string> = {
   "Back to the default leagues.": "U kthyen ligat e parazgjedhura.",
   "Leagues saved. The next sync uses them; press Sync now to load them straight away.": "Ligat u ruajtën. Sinkronizimi i radhës i përdor; shtyp Sinkronizo tani për t'i ngarkuar menjëherë.",
   "Loading leagues": "Duke ngarkuar ligat",
+  "Final score (overtime included)": "Rezultati përfundimtar (me shtesat)",
+  "Home points": "Pikët e vendasve",
+  "Away points": "Pikët e mysafirëve",
 };

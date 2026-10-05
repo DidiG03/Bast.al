@@ -157,10 +157,10 @@ export const casino: Record<string, string> = {
 
   // The lobby and roulette
   "Pick a game. Every game plays with your balance, {amount} right now.": "Zgjidh një lojë. Çdo lojë luhet me balancën tënde, tani {amount}.",
-  "Fruit slot: 5 reels, 5 lines, double or nothing.": "Slot me fruta: 5 rrotulla, 5 linja, dyfisho ose humb.",
+  "Hot fruits and blazing sevens! The classic fruit slot with 5 reels and 5 lines, where the star pays anywhere on the screen.": "Fruta të nxehta dhe shtatëshe të zjarrta! Sloti klasik me fruta, me 5 rrotulla dhe 5 linja, ku ylli paguan kudo që të dalë në ekran.",
   "Pays back {rate}% on average": "Kthen mesatarisht {rate}%",
   "Roulette": "Ruletë",
-  "European roulette with a single 0. Bet on numbers, colours and more.": "Ruletë evropiane me një 0. Vë baste te numrat, ngjyrat e më shumë.",
+  "The classic European roulette with a single zero. Place your chips, spin the wheel and watch where the ball lands.": "Ruleta klasike evropiane me një zero të vetme. Vendos fishat, rrotullo rrotën dhe shiko ku ndalon topi.",
   "Spins and rounds": "Rrotullime dhe raunde",
   "What spins and rounds cost": "Sa kushtuan rrotullimet dhe raundet",
   "Each game": "Çdo lojë",
@@ -236,7 +236,7 @@ export const casino: Record<string, string> = {
 
   // Blackjack
   "Blackjack": "Blackjack",
-  "Beat the dealer to 21. Blackjack pays 3 to 2.": "Mund dilerin deri në 21. Blackjack paguan 3 me 2.",
+  "Get as close to 21 as you can without going over, and beat the dealer's hand. Blackjack pays 3 to 2.": "Afrohu sa më shumë te 21 pa e kaluar dhe mund dorën e dilerit. Blackjack paguan 3 me 2.",
   "Pays back about {rate}% played perfectly": "Kthen rreth {rate}% kur luhet në mënyrë të përsosur",
   "{count} hand": "{count} dorë",
   "{count} hands": "{count} duar",

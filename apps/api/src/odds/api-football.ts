@@ -1,4 +1,5 @@
 import { EventStatus } from "@prisma/client";
+import type { Goal, GoalRecord, Participant, Side } from "../bets/goals";
 
 /**
  * API-Football (api-sports.io) v3: the fixtures, live scores and pre-match
@@ -18,7 +19,7 @@ export type ApiResponse<T> = {
 export type RawFixture = {
   fixture: { id: number; date: string; status: { short: string; elapsed: number | null } };
   league: { id: number; name: string; country: string; season: number };
-  teams: { home: { name: string }; away: { name: string } };
+  teams: { home: { id?: number; name: string }; away: { id?: number; name: string } };
   goals: { home: number | null; away: number | null };
   /** `fulltime` is the score after 90 minutes, before any extra time. */
   score?: { halftime?: { home: number | null; away: number | null }; fulltime?: { home: number | null; away: number | null } };
@@ -51,6 +52,8 @@ export type FeedLiveOdds = {
   externalId: string;
   /** The feed isn't taking bets on this match at all right now. */
   stopped: boolean;
+  /** The feed says the match is over, often a minute before the fixtures list does. */
+  finished: boolean;
   /** The score and minute the prices were made for, when the feed sends them. */
   homeScore: number | null;
   awayScore: number | null;
@@ -72,6 +75,8 @@ export type FeedFixture = {
   startsAt: Date;
   status: EventStatus;
   elapsed: number | null;
+  /** The feed's short status ("1H", "HT", "2H" …), for showing half-time and other breaks. */
+  period: string;
   homeScore: number | null;
   awayScore: number | null;
   /** The score bets settle on, once the match has finished. Null until then. */
@@ -119,6 +124,7 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     startsAt: new Date(raw.fixture.date),
     status,
     elapsed: raw.fixture.status.elapsed,
+    period: raw.fixture.status.short,
     homeScore: raw.goals.home,
     awayScore: raw.goals.away,
     result: status === EventStatus.COMPLETED && home !== null && away !== null ? { home, away } : null,
@@ -215,9 +221,125 @@ const doubleChance: Array<[string, string, Namer]> = [
   ["Home/Away", "home_away", (home, away) => `${home} or ${away}`],
   ["Draw/Away", "draw_away", (_home, away) => `Draw or ${away}`],
 ];
+const oddEven: Array<[string, string, Namer]> = [
+  ["Odd", "odd", () => "Odd"],
+  ["Even", "even", () => "Even"],
+];
+const halves: Array<[string, string, Namer]> = [
+  ["1st Half", "first", () => "1st half"],
+  ["2nd Half", "second", () => "2nd half"],
+  ["Draw", "equal", () => "Equal"],
+];
 const sideName = (side: string, home: string, away: string) => (side === "home" ? home : side === "away" ? away : "Draw");
 const pairs = (left: string[], right: string[]) => left.flatMap((l) => right.map((r) => [l, r] as const));
 const cap = (word: string) => word[0].toUpperCase() + word.slice(1);
+
+/**
+ * A count's exact value ("0", "1", "2", "more 3"), keyed "0", "1", "2", "3+".
+ * The top value is "N or more", so every outcome is covered.
+ */
+function exactCount(key: string, name: Namer, top: number) {
+  return fixed(key, name, [
+    ...Array.from({ length: top }, (_, n): [string, string, Namer] => [String(n), String(n), () => `${n} goals`]),
+    [`more ${top}`, `${top}+`, () => `${top}+ goals`],
+  ]);
+}
+
+/**
+ * Two markets in one ("Home/Over 2.5", "o/yes 2.5"): one market per line the
+ * feed prices, keyed `{prefix}_X_5`, with an outcome for every pair.
+ * `parse` reads a feed value into [left key, right key, line].
+ */
+function comboLines(
+  prefix: string,
+  name: (line: string) => string,
+  parse: (value: string) => [left: string, right: string, line: string] | null,
+  label: (left: string, right: string, line: string, home: string, away: string) => string,
+  order: { left: string[]; right: string[] },
+) {
+  return (bet: FeedBet, home: string, away: string): Built[] => {
+    const byLine = new Map<string, Map<string, number>>();
+    for (const v of bet.values) {
+      const parsed = parse(String(v.value));
+      if (!parsed || !/^\d+\.5$/.test(parsed[2])) continue;
+      const [left, right, line] = parsed;
+      if (!byLine.has(line)) byLine.set(line, new Map());
+      byLine.get(line)!.set(`${left}_${right}`, Number(v.odd));
+    }
+    return [...byLine.entries()]
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([line, prices]) => ({
+        key: `${prefix}_${line.replace(".", "_")}`,
+        name: name(line),
+        selections: pairs(order.left, order.right).map(([left, right], sortOrder) => ({
+          key: `${left}_${right}`,
+          name: label(left, right, line, home, away),
+          odds: prices.get(`${left}_${right}`) ?? NaN,
+          sortOrder,
+        })),
+      }));
+  };
+}
+
+/** Corner ranges ("Under 6", "6 - 8", "Over 14"), whose bands change from match to match. Keyed "u6", "6-8", "o14". */
+function countRanges(key: string, name: string) {
+  return (bet: FeedBet): Built[] => {
+    const selections = bet.values
+      .map((v) => {
+        const value = String(v.value).trim();
+        const under = /^Under (\d+)$/.exec(value);
+        const over = /^Over (\d+)$/.exec(value);
+        const band = /^(\d+) - (\d+)$/.exec(value);
+        if (under) return { key: `u${under[1]}`, name: `Under ${under[1]}`, from: -1, odds: Number(v.odd) };
+        if (over) return { key: `o${over[1]}`, name: `Over ${over[1]}`, from: Number(over[1]) + 1, odds: Number(v.odd) };
+        if (band) return { key: `${band[1]}-${band[2]}`, name: `${band[1]}–${band[2]}`, from: Number(band[1]), odds: Number(v.odd) };
+        return null;
+      })
+      .filter((v): v is { key: string; name: string; from: number; odds: number } => v !== null)
+      .sort((a, b) => a.from - b.from)
+      .map(({ key: selectionKey, name: selectionName, odds }, sortOrder) => ({ key: selectionKey, name: selectionName, odds, sortOrder }));
+    return selections.length >= 3 ? [{ key, name, selections }] : [];
+  };
+}
+
+/** Winning margin: "1 by 2" is the home team by 2, "2 by 4+" the away team by 4 or more; "Score Draw" a draw with goals, "Draw" 0–0. */
+const winningMargin: Array<[string, string, Namer]> = [
+  ...(["home", "away"] as const).flatMap((side) =>
+    ["1", "2", "3", "4+"].map((by): [string, string, Namer] => [`${side === "home" ? 1 : 2} by ${by}`, `${side}_${by}`, (home, away) => `${side === "home" ? home : away} by ${by}`]),
+  ),
+  ["Score Draw", "score_draw", () => "Score draw"],
+  ["Draw", "no_goal", () => "0–0"],
+];
+
+/**
+ * Goalscorer markets: one outcome per player the feed prices, keyed by the
+ * name in plain letters ("memphis-depay"), the shortest price first, plus
+ * "No goalscorer" where the feed offers it. A player whose price is missing
+ * is left out rather than dropping the whole market.
+ */
+function goalscorers(key: string, name: string) {
+  return (bet: FeedBet): Built[] => {
+    const seen = new Set<string>();
+    const players = bet.values
+      .map((v) => ({ value: String(v.value).trim(), odds: Number(v.odd) }))
+      .filter((v) => v.value.length > 0 && Number.isFinite(v.odds) && v.odds > 1)
+      .map((v) => (/^no goal ?scorer$/i.test(v.value) ? { key: "none", name: "No goalscorer", odds: v.odds } : { key: playerKey(v.value), name: v.value, odds: v.odds }))
+      .filter((v) => v.key.length > 0 && !seen.has(v.key) && Boolean(seen.add(v.key)))
+      .sort((a, b) => (a.key === "none" ? 1 : 0) - (b.key === "none" ? 1 : 0) || a.odds - b.odds || a.name.localeCompare(b.name))
+      .map((v, sortOrder) => ({ ...v, sortOrder }));
+    return players.filter((p) => p.key !== "none").length >= 2 ? [{ key, name, selections: players }] : [];
+  };
+}
+
+/** A player's name in plain lowercase letters, words joined by "-": "Agustín Sant'Anna" → "agustin-sant-anna". */
+export function playerKey(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 /**
  * The markets Bast.al offers, matched on API-Football's pre-match bet names,
@@ -249,7 +371,46 @@ const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away:
       pairs(["home", "draw", "away"], ["yes", "no"]).map(([side, btts]) => [`${cap(side)}/${cap(btts)}`, `${side}_${btts}`, (home, away) => `${sideName(side, home, away)} / ${cap(btts)}`]),
     ),
   ],
+  // Two markets in one.
+  [
+    "Result/Total Goals",
+    comboLines(
+      "result_goals",
+      (line) => `Result and total goals ${line}`,
+      (value) => {
+        const m = /^(Home|Draw|Away)\/(Over|Under) (\d+(?:\.\d+)?)$/.exec(value);
+        return m ? [m[1].toLowerCase(), m[2].toLowerCase(), m[3]] : null;
+      },
+      (side, ou, line, home, away) => `${sideName(side, home, away)} / ${cap(ou)} ${line}`,
+      { left: ["home", "draw", "away"], right: ["over", "under"] },
+    ),
+  ],
+  [
+    "Total Goals/Both Teams To Score",
+    comboLines(
+      "goals_btts",
+      (line) => `Total goals ${line} and both teams score`,
+      (value) => {
+        const m = /^(o|u)\/(yes|no) (\d+(?:\.\d+)?)$/i.exec(value);
+        return m ? [m[1].toLowerCase() === "o" ? "over" : "under", m[2].toLowerCase(), m[3]] : null;
+      },
+      (ou, yn, line) => `${cap(ou)} ${line} / ${cap(yn)}`,
+      { left: ["over", "under"], right: ["yes", "no"] },
+    ),
+  ],
   ["Exact Score", scores("correct_score", "Correct score")],
+  [
+    "Winning Margin",
+    fixed("winning_margin", () => "Winning margin", winningMargin),
+  ],
+  [
+    "Number Of Goals In Match",
+    fixed("goal_range", () => "Number of goals", [
+      ["Under 2 goals", "0-1", () => "0–1 goals"],
+      ["2 or 3 goals", "2-3", () => "2–3 goals"],
+      ["Over 3 goals", "4+", () => "4+ goals"],
+    ]),
+  ],
   [
     "Exact Goals Number",
     fixed("exact_goals", () => "Exact total goals", [
@@ -259,37 +420,51 @@ const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away:
   ],
   ["Total - Home", lines("home_goals", (home, _a, line) => `${home} goals ${line}`, ["0.5", "1.5", "2.5"])],
   ["Total - Away", lines("away_goals", (_h, away, line) => `${away} goals ${line}`, ["0.5", "1.5", "2.5"])],
+  ["Home Team Exact Goals Number", exactCount("home_exact_goals", (home) => `${home} exact goals`, 3)],
+  ["Away Team Exact Goals Number", exactCount("away_exact_goals", (_h, away) => `${away} exact goals`, 3)],
   [
     "Odd/Even",
-    fixed("odd_even", () => "Total goals odd/even", [
-      ["Odd", "odd", () => "Odd"],
-      ["Even", "even", () => "Even"],
-    ]),
+    fixed("odd_even", () => "Total goals odd/even", oddEven),
   ],
+  ["Home Odd/Even", fixed("home_odd_even", (home) => `${home} goals odd/even`, oddEven)],
+  ["Away Odd/Even", fixed("away_odd_even", (_h, away) => `${away} goals odd/even`, oddEven)],
   ["Clean Sheet - Home", fixed("clean_sheet_home", (home) => `${home} clean sheet`, yesNo)],
   ["Clean Sheet - Away", fixed("clean_sheet_away", (_h, away) => `${away} clean sheet`, yesNo)],
   ["Win To Nil", fixed("win_to_nil", () => "Win to nil", eitherTeam)],
+  // Settle from the order of the goals, fetched after full time (see bets/goals.ts).
+  ["Team To Score First", fixed("first_team_score", () => "First team to score", [...eitherTeam, ["No goal", "none", () => "No goal"]])],
+  ["Team To Score Last", fixed("last_team_score", () => "Last team to score", [...eitherTeam, ["No goal", "none", () => "No goal"]])],
+  ["To Win From Behind", fixed("win_from_behind", () => "Win from behind", eitherTeam)],
+  ["Anytime Goal Scorer", goalscorers("scorer_anytime", "Anytime goalscorer")],
+  ["First Goal Scorer", goalscorers("scorer_first", "First goalscorer")],
+  ["Last Goal Scorer", goalscorers("scorer_last", "Last goalscorer")],
   ["Double Chance - First Half", fixed("h1_double_chance", () => "1st half double chance", doubleChance)],
   ["Goals Over/Under First Half", lines("h1_goals", (_h, _a, line) => `1st half goals ${line}`, ["0.5", "1.5", "2.5"])],
   ["Both Teams Score - First Half", fixed("h1_btts", () => "1st half both teams score", yesNo)],
   ["Correct Score - First Half", scores("h1_correct_score", "1st half correct score")],
+  ["Exact Goals Number - First Half", exactCount("h1_exact_goals", () => "1st half exact goals", 5)],
+  ["Odd/Even - First Half", fixed("h1_odd_even", () => "1st half goals odd/even", oddEven)],
   ["Second Half Winner", fixed("h2_winner", () => "2nd half result", outcomes)],
   ["Goals Over/Under - Second Half", lines("h2_goals", (_h, _a, line) => `2nd half goals ${line}`, ["0.5", "1.5", "2.5"])],
   ["Both Teams To Score - Second Half", fixed("h2_btts", () => "2nd half both teams score", yesNo)],
+  ["Second Half Exact Goals Number", exactCount("h2_exact_goals", () => "2nd half exact goals", 5)],
+  ["Odd/Even - Second Half", fixed("h2_odd_even", () => "2nd half goals odd/even", oddEven)],
   [
     "Highest Scoring Half",
-    fixed("highest_half", () => "Highest scoring half", [
-      ["1st Half", "first", () => "1st half"],
-      ["2nd Half", "second", () => "2nd half"],
-      ["Draw", "equal", () => "Equal"],
-    ]),
+    fixed("highest_half", () => "Highest scoring half", halves),
   ],
   ["Win Both Halves", fixed("win_both_halves", () => "Win both halves", eitherTeam)],
   ["To Win Either Half", fixed("win_either_half", () => "Win either half", eitherTeam)],
+  // Two separate bets in one list: each team scoring in both halves.
+  ["To Score In Both Halves By Teams", fixed("score_both_halves", () => "Score in both halves", eitherTeam)],
+  ["Home Highest Scoring Half", fixed("home_highest_half", (home) => `${home} highest scoring half`, halves)],
+  ["Away Highest Scoring Half", fixed("away_highest_half", (_h, away) => `${away} highest scoring half`, halves)],
   // Corners and cards settle from the match statistics fetched after full time.
   ["Corners Over Under", feedLines("corners", (_h, _a, line) => `Total corners ${line}`)],
   ["Home Corners Over/Under", feedLines("home_corners", (home, _a, line) => `${home} corners ${line}`)],
   ["Away Corners Over/Under", feedLines("away_corners", (_h, away, line) => `${away} corners ${line}`)],
+  ["Corners 1x2", fixed("corners_1x2", () => "Most corners", outcomes)],
+  ["Corners. Total (Range)", countRanges("corners_range", "Total corners range")],
   ["Cards Over/Under", feedLines("cards", (_h, _a, line) => `Total cards ${line}`)],
   ["Home Team Total Cards", feedLines("home_cards", (home, _a, line) => `${home} cards ${line}`)],
   ["Away Team Total Cards", feedLines("away_cards", (_h, away, line) => `${away} cards ${line}`)],
@@ -471,6 +646,7 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
   return {
     externalId: String(raw.fixture.id),
     stopped: Boolean(raw.status?.stopped || raw.status?.blocked || raw.status?.finished),
+    finished: Boolean(raw.status?.finished),
     homeScore: goals(raw.teams?.home?.goals),
     awayScore: goals(raw.teams?.away?.goals),
     elapsed: goals(raw.fixture.status?.elapsed),
@@ -554,6 +730,118 @@ export function parseStatistics(raw: RawTeamStatistics[], homeTeam: string): Mat
   };
 }
 
+type RawPerson = { id: number | null; name: string | null };
+
+/** A fixture fetched by id, which comes with its events, lineups and player numbers. */
+export type RawFixtureDetail = RawFixture & {
+  events?: Array<{ time: { elapsed: number | null; extra?: number | null }; team: { id: number; name: string }; player: RawPerson; assist: RawPerson; type: string; detail: string }>;
+  lineups?: Array<{ team: { id: number; name: string }; startXI: Array<{ player: RawPerson }>; substitutes: Array<{ player: RawPerson }> }>;
+  players?: Array<{ team: { id: number; name: string }; players: Array<{ player: RawPerson; statistics: Array<{ games?: { minutes?: number | null } }> }> }>;
+};
+
+/**
+ * The goals of a finished match in order, and who took part, for the
+ * goal-event markets (see bets/goals.ts). Returns null when the goals the
+ * feed lists don't add up to the 90-minute score, so nothing settles on a
+ * list that's still being corrected.
+ * - Missed penalties and extra-time goals are left out, and a goal VAR ruled
+ *   out is dropped.
+ * - The feed gives an own goal to the team it counts for; if the score only
+ *   adds up the other way round, that way is used.
+ * - In a substitution the feed names the players both ways round in
+ *   different matches, so whoever of the two started on the bench came on.
+ */
+export function parseGoalRecord(raw: RawFixtureDetail, score: { home: number; away: number }): GoalRecord | null {
+  const homeId = raw.teams.home.id;
+  const sideOfTeam = (team: { id: number; name: string }): Side => (homeId !== undefined ? (team.id === homeId ? "home" : "away") : team.name === raw.teams.home.name ? "home" : "away");
+  const events = raw.events ?? [];
+  const ruledOut = new Set<number>();
+  events.forEach((event, at) => {
+    if (event.type !== "Var" || !/goal (cancelled|disallowed)/i.test(event.detail)) return;
+    for (let i = at - 1; i >= 0; i--) {
+      const goal = events[i];
+      if (goal.type === "Goal" && goal.team.id === event.team.id && !ruledOut.has(i) && (event.time.elapsed ?? 0) - (goal.time.elapsed ?? 0) <= 5) {
+        ruledOut.add(i);
+        break;
+      }
+    }
+  });
+  const goals: Goal[] = [];
+  events.forEach((event, at) => {
+    if (event.type !== "Goal" || /^missed penalty$/i.test(event.detail) || ruledOut.has(at)) return;
+    const minute = event.time.elapsed;
+    if (minute === null || minute > 90) return;
+    goals.push({
+      minute,
+      side: sideOfTeam(event.team),
+      playerId: event.player.id,
+      player: event.player.name,
+      ownGoal: /^own goal$/i.test(event.detail),
+      penalty: /^penalty$/i.test(event.detail),
+      at,
+    });
+  });
+  const adds = (list: Goal[]) => list.filter((g) => g.side === "home").length === score.home && list.filter((g) => g.side === "away").length === score.away;
+  let counted = goals;
+  if (!adds(counted)) {
+    const flipped = goals.map((g): Goal => (g.ownGoal ? { ...g, side: g.side === "home" ? "away" : "home" } : g));
+    if (!adds(flipped)) return null;
+    counted = flipped;
+  }
+
+  const people = new Map<number, Participant & { started: boolean; bench: boolean; minutes: number | null }>();
+  const person = (who: RawPerson, side: Side) => {
+    if (who.id === null || who.id === undefined) return null;
+    let row = people.get(who.id);
+    if (!row) {
+      row = { id: who.id, side, names: [], played: false, cameOnAt: null, started: false, bench: false, minutes: null };
+      people.set(who.id, row);
+    }
+    if (who.name && !row.names.includes(who.name)) row.names.push(who.name);
+    return row;
+  };
+  for (const lineup of raw.lineups ?? []) {
+    const side = sideOfTeam(lineup.team);
+    for (const { player } of lineup.startXI ?? []) {
+      const row = person(player, side);
+      if (row) row.started = true;
+    }
+    for (const { player } of lineup.substitutes ?? []) {
+      const row = person(player, side);
+      if (row) row.bench = true;
+    }
+  }
+  let anyMinutes = false;
+  for (const team of raw.players ?? []) {
+    const side = sideOfTeam(team.team);
+    for (const entry of team.players ?? []) {
+      const row = person(entry.player, side);
+      const minutes = entry.statistics?.[0]?.games?.minutes ?? null;
+      if (row && minutes !== null) {
+        row.minutes = minutes;
+        anyMinutes = true;
+      }
+    }
+  }
+  if (people.size === 0) return { goals: counted, players: null };
+  events.forEach((event, at) => {
+    const side = sideOfTeam(event.team);
+    const actors = [person(event.player, side), event.type === "subst" ? person(event.assist, side) : null];
+    if (event.type !== "subst") return;
+    for (const row of actors) if (row && row.bench && !row.started && row.cameOnAt === null) row.cameOnAt = at;
+  });
+  const players = [...people.values()].map(
+    (row): Participant => ({
+      id: row.id,
+      side: row.side,
+      names: row.names,
+      cameOnAt: row.cameOnAt,
+      played: row.started || row.cameOnAt !== null || (anyMinutes && row.minutes !== null && row.minutes > 0),
+    }),
+  );
+  return { goals: counted, players };
+}
+
 export class ApiFootballClient {
   constructor(private readonly fetchJson: FetchJson) {}
 
@@ -572,6 +860,13 @@ export class ApiFootballClient {
     if (ids.length === 0) return [];
     const res = (await this.fetchJson("/fixtures", { ids: ids.slice(0, 20).join("-") })) as ApiResponse<RawFixture>;
     return res.response.map(parseFixture);
+  }
+
+  /** Up to 20 finished fixtures by id with their events, lineups and player numbers, for the goal-event markets. */
+  async fixtureDetails(ids: string[]): Promise<RawFixtureDetail[]> {
+    if (ids.length === 0) return [];
+    const res = (await this.fetchJson("/fixtures", { ids: ids.slice(0, 20).join("-") })) as ApiResponse<RawFixtureDetail>;
+    return res.response;
   }
 
   /** Corners and cards for one finished match, or null if the feed has no statistics for it. */

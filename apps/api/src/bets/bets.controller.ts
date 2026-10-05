@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards, BadRequestException } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
-import { BetStatus, Role } from "@prisma/client";
+import { BetStatus, Role, SelectionResult } from "@prisma/client";
 import { AuthGuard, AuthenticatedRequest } from "../auth/auth.guard";
 import { CurrentActor } from "../auth/current-actor.decorator";
 import { MfaGuard } from "../auth/mfa.guard";
@@ -10,7 +10,7 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { Idempotent } from "../idempotency/idempotency.interceptor";
 import { clientIp } from "../security/client-ip";
-import { AdminBetsQueryDto, MyBetsQueryDto, PlaceBetsDto, ResultDto, VoidDto } from "./bets.dto";
+import { AdminBetsQueryDto, MyBetsQueryDto, PlaceBetsDto, ResultDto, SelectionResultDto, VoidDto } from "./bets.dto";
 import { BetsService } from "./bets.service";
 import { SettlementService } from "./settlement.service";
 
@@ -81,6 +81,14 @@ export class BetsController {
         ? { cornersHome: body.cornersHome, cornersAway: body.cornersAway, cardsHome: body.cardsHome, cardsAway: body.cardsAway }
         : null;
     return this.settlement.correctResult(actor, id, body.home, body.away, half, stats);
+  }
+
+  /** Settles one outcome by hand; settlement keeps it from then on. */
+  @Post("admin/selections/:id/result")
+  @Roles(Role.SUPER_ADMIN)
+  @Idempotent()
+  settleSelection(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() body: SelectionResultDto) {
+    return this.settlement.settleSelection(actor, id, body.result as SelectionResult);
   }
 
   @Post("admin/events/:id/void")

@@ -625,6 +625,7 @@ export class UsersService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await hooks?.before?.(tx);
+      await lockAccounts(tx, [isPrint ? null : actor.id, id]);
       if (!isPrint) {
         // Real transfer: the giver must currently hold at least this much.
         // Guarded atomic UPDATE — see delegateCreditGuardedUpdate note below.
@@ -771,6 +772,15 @@ export class UsersService {
       return rejected;
     }
 
+    const recipient = await this.prisma.user.findUnique({ where: { id: transaction.toUserId }, select: { status: true, parentId: true } });
+    if (recipient?.status !== UserStatus.ACTIVE) throw new BadRequestException("The account this transfer is for is suspended. Reject it, or reactivate the account first.");
+    // Still a transfer the giver could make now: the account is still theirs, and theirs is still active.
+    if (transaction.fromUserId) {
+      const giver = await this.prisma.user.findUnique({ where: { id: transaction.fromUserId }, select: { status: true } });
+      if (recipient.parentId !== transaction.fromUserId) throw new BadRequestException("The account this transfer is for has moved to another team since it was asked for. Reject it.");
+      if (giver?.status !== UserStatus.ACTIVE) throw new BadRequestException("The account giving this credit is suspended. Reject it, or reactivate the account first.");
+    }
+
     const amount = Number(transaction.amount);
     const result = await this.prisma.$transaction(async (tx) => {
       // Claim the pending transaction first: if a concurrent request already
@@ -781,6 +791,7 @@ export class UsersService {
         data: { status: BalanceTransactionStatus.APPROVED, approvedById: actor.id, approvedAt: new Date() },
       });
       if (claimed.count === 0) throw new BadRequestException("Transaction is no longer pending");
+      await lockAccounts(tx, [transaction.fromUserId, transaction.toUserId]);
 
       if (transaction.fromUserId) {
         const giverRows = await tx.$queryRaw<{ id: string }[]>`
@@ -868,6 +879,7 @@ export class UsersService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await hooks?.before?.(tx);
+      await lockAccounts(tx, [id, isRetire ? null : actor.id]);
       const childRows = await tx.$queryRaw<{ id: string }[]>`
         UPDATE users
         SET balance = balance - ${dto.amount}::numeric
@@ -1131,14 +1143,15 @@ export class UsersService {
       ? await this.prisma.user.findUnique({ where: { id: player.parentId }, select: { id: true, username: true } })
       : null;
     const { updated, returned } = await this.prisma.$transaction(async (tx) => {
-      // Locks the Player, so no bet or transfer changes the balance while it moves.
+      // Locks the Player (and the account their balance goes back to), so no bet or transfer changes either while it moves.
+      await lockAccounts(tx, [id, previousManager?.id]);
       const [row] = await tx.$queryRaw<Array<{ balance: Prisma.Decimal; parent_id: string | null }>>`
         SELECT balance, parent_id FROM users WHERE id = ${id} FOR UPDATE
       `;
       if (!row || row.parent_id !== player.parentId) {
         throw new ConflictException("This Player changed while you were moving them. Refresh and try again.");
       }
-      const blocked = moveBlocker(player.username, row.balance, await tx.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }));
+      const blocked = moveBlocker(player.username, row.balance, await tx.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }), (await tx.blackjackHand.count({ where: { playerId: id } })) > 0);
       if (blocked) throw new BadRequestException(blocked);
 
       const balance = new Prisma.Decimal(row.balance);
@@ -1338,7 +1351,7 @@ export class UsersService {
     const directChildren = await this.prisma.user.findMany({ where: { parentId: managerId, role: Role.PLAYER }, select: { id: true, username: true } });
     const playerDescendants = await this.hierarchy.getDescendantIds(id);
     const authorized = await this.hierarchy.canActOn(actor, id) && await this.hierarchy.canActOn(actor, managerId);
-    const blocked = moveBlocker(player.username, player.balance, await this.prisma.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }));
+    const blocked = moveBlocker(player.username, player.balance, await this.prisma.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }), (await this.prisma.blackjackHand.count({ where: { playerId: id } })) > 0);
     const reason = !authorized ? "Outside your hierarchy" : player.role !== Role.PLAYER ? "Only Players can be reassigned" : !holdsDirectReports(manager.role) ? "Destination is not a Manager or Owner" : manager.status !== UserStatus.ACTIVE ? "Destination is suspended" : player.parentId === managerId ? "Player is already assigned here" : playerDescendants.includes(managerId) ? "Circular hierarchy detected" : directChildren.length >= manager.managerCapacity ? "Destination capacity reached" : blocked;
     return {
       valid: reason === null,
@@ -1624,7 +1637,19 @@ function clerkRefusal(error: unknown, action: "create" | "update"): string {
   return action === "create" ? `Failed to create Clerk identity: ${reason}` : `Failed to update Clerk identity: ${reason}`;
 }
 
-function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number): string | null {
+/**
+ * Locks these accounts' rows for the rest of the transaction, always in the
+ * same order (by id), so two transfers between the same accounts in opposite
+ * directions (a top-up and a reclaim, say) wait for each other instead of
+ * deadlocking.
+ */
+async function lockAccounts(tx: Prisma.TransactionClient, ids: Array<string | null | undefined>) {
+  const unique = [...new Set(ids.filter((id): id is string => Boolean(id)))].sort();
+  if (unique.length > 0) await tx.$queryRaw`SELECT id FROM users WHERE id = ANY(${unique}) ORDER BY id FOR UPDATE`;
+}
+
+function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, handInPlay = false): string | null {
+  if (handInPlay) return `${username} is in the middle of a blackjack hand. Move them once it's over.`;
   if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;
   if (openBets > 1) return `${username} still has ${openBets} open bets. Move them once they're settled.`;
   if (balance.isNegative()) return `${username}'s balance is below zero (-$${balance.abs().toFixed(2)}). Give them credit to clear it before moving them.`;

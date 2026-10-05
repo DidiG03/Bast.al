@@ -5,11 +5,14 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { LeaguePicker } from "../../../components/league-picker";
 import { MarketPriceHistory } from "../../../components/price-history";
-import { apiFetch, type MeResponse, type OddsEvent, type OddsFilter, type OddsSelection, type OddsSettings, type UserRow } from "../../../lib/api";
+import { usePolling } from "../../../lib/use-polling";
+import { apiFetch, type MeResponse, type OddsEvent, type OddsFilter, type OddsSelection, type OddsSettings, type Sport, type UserRow } from "../../../lib/api";
+import { RaceResultList, RaceRunnerList } from "../../../components/greyhound-races";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { useToast } from "../../../components/toaster";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { livePill } from "../../../lib/live";
 import { isDaysFromToday } from "../../../lib/time";
 
 const FILTERS: Array<[OddsFilter, string]> = [
@@ -19,6 +22,8 @@ const FILTERS: Array<[OddsFilter, string]> = [
 ];
 
 const odds = (value: number) => value.toFixed(2);
+/** Matches drawn at first; "Show more matches" adds this many again. */
+const MATCHES_SHOWN = 60;
 
 function dayLabel(iso: string, { t, date: format }: I18n): string {
   if (isDaysFromToday(iso, 0)) return t("Today");
@@ -28,7 +33,7 @@ function dayLabel(iso: string, { t, date: format }: I18n): string {
 }
 
 function statusText(event: OddsEvent, { t, date }: I18n): string {
-  if (event.status === "LIVE") return event.elapsed === null ? t("Live") : t("Live {minute}'", { minute: event.elapsed });
+  if (event.status === "LIVE") return livePill(event, t);
   if (event.status === "COMPLETED") return t("Full time");
   if (event.status === "POSTPONED") return t("Postponed");
   if (event.status === "CANCELLED") return t("Cancelled");
@@ -49,10 +54,14 @@ export default function OddsPage() {
   const [owners, setOwners] = useState<UserRow[]>([]);
   const [ownerId, setOwnerId] = useState("");
   const [filter, setFilter] = useState<OddsFilter>("upcoming");
+  const [sport, setSport] = useState<Sport>("football");
   const [settings, setSettings] = useState<OddsSettings | null>(null);
   const [events, setEvents] = useState<OddsEvent[] | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [limit, setLimit] = useState(MATCHES_SHOWN);
+  /** Bumped after every change, so opened matches load their markets again. */
+  const [version, setVersion] = useState(0);
   const toast = useToast();
 
   const team = ownerId ? `ownerId=${encodeURIComponent(ownerId)}` : "";
@@ -62,11 +71,12 @@ export default function OddsPage() {
     if (!token) return;
     const [nextSettings, nextEvents] = await Promise.all([
       apiFetch<OddsSettings>(`/odds/settings?${team}`, token),
-      apiFetch<OddsEvent[]>(`/odds/events?filter=${filter}&${team}`, token),
+      // Each match's main market only; a match's other markets load when it's opened.
+      apiFetch<OddsEvent[]>(`/odds/events?filter=${filter}&view=list&sport=${sport}&${team}`, token),
     ]);
     setSettings(nextSettings);
     setEvents(nextEvents);
-  }, [getToken, filter, team]);
+  }, [getToken, filter, sport, team]);
 
   useEffect(() => {
     (async () => {
@@ -87,18 +97,15 @@ export default function OddsPage() {
 
   useEffect(() => {
     setEvents(null);
+    setLimit(MATCHES_SHOWN);
     load().catch((err) => {
       setFailed(true);
       toast.error(err instanceof Error ? err.message : t("Could not load odds"));
     });
   }, [load, toast, t]);
 
-  // Live scores change every few seconds at the source; refresh the Live tab every 30.
-  useEffect(() => {
-    if (filter !== "live") return;
-    const timer = setInterval(() => void load().catch(() => undefined), 30_000);
-    return () => clearInterval(timer);
-  }, [filter, load]);
+  // Live scores change every few seconds at the source; refresh the Live tab every 30 while it's on screen.
+  usePolling(() => void load().catch(() => undefined), 30_000, filter === "live");
 
   /** Runs a change, reloads, and says whether it worked. */
   async function run(action: (token: string) => Promise<unknown>, success?: string): Promise<boolean> {
@@ -107,6 +114,7 @@ export default function OddsPage() {
     try {
       await action(token);
       await load();
+      setVersion((v) => v + 1);
       if (success) toast.success(success);
       return true;
     } catch (err) {
@@ -136,7 +144,7 @@ export default function OddsPage() {
   if (!me || !settings) return failed ? null : <PageLoading label="Loading odds" />;
 
   const groups: Array<[string, OddsEvent[]]> = [];
-  for (const event of events ?? []) {
+  for (const event of (events ?? []).slice(0, limit)) {
     const label = dayLabel(event.startsAt, i18n);
     const last = groups[groups.length - 1];
     if (last && last[0] === label) last[1].push(event);
@@ -169,11 +177,37 @@ export default function OddsPage() {
         <MarginsCard settings={settings} run={run} syncing={syncing} onSync={syncNow} ownerQuery={team} />
       ) : null}
 
-      {settings?.canManageEvents && !ownerId ? <LeaguePicker onSaved={toast.success} /> : null}
+      {settings?.canManageEvents && !ownerId && sport === "football" ? <LeaguePicker onSaved={toast.success} /> : null}
 
+
+      <div className="sport-switch" role="group" aria-label={t("Sport")}>
+        {(
+          [
+            ["football", t("Football")],
+            ["greyhounds", t("Greyhounds")],
+            ["basketball", t("Basketball")],
+            ["nfl", t("NFL")],
+            ["mma", t("MMA")],
+          ] as Array<[Sport, string]>
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            className={`sport-option${sport === key ? " is-active" : ""}`}
+            aria-pressed={sport === key}
+            onClick={() => {
+              setSport(key);
+              // Only football is bet on live: the other sports have no Live tab.
+              if (key !== "football" && filter === "live") setFilter("upcoming");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <nav className="tabs-nav" aria-label={t("Match filter")}>
-        {FILTERS.map(([key, label]) => (
+        {FILTERS.filter(([key]) => sport === "football" || key !== "live").map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -193,7 +227,23 @@ export default function OddsPage() {
       ) : events.length === 0 ? (
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>
-            {filter === "live"
+            {sport === "basketball"
+              ? filter === "finished"
+                ? t("No basketball games finished in the last three days.")
+                : t("No basketball games yet. They're fetched every 3 hours, from the day before they're played.")
+              : sport === "nfl"
+              ? filter === "finished"
+                ? t("No NFL games finished in the last three days.")
+                : t("No NFL games yet. They're fetched every 3 hours, from the day before they're played.")
+              : sport === "mma"
+              ? filter === "finished"
+                ? t("No fights finished in the last three days.")
+                : t("No fights yet. They're fetched every 2 hours, from the day before they take place.")
+              : sport === "greyhounds"
+              ? filter === "finished"
+                ? t("No races finished in the last six hours.")
+                : t("No races yet. Race cards are fetched every 15 minutes once the greyhound feed is connected.")
+              : filter === "live"
               ? t("No matches are live right now.")
               : filter === "finished"
                 ? t("No matches finished in the last three days.")
@@ -206,12 +256,21 @@ export default function OddsPage() {
         groups.map(([label, dayEvents]) => (
           <section key={label} className="stack odds-day">
             <h2 className="odds-day-label">{label}</h2><HelpTip text="All matches on this day with their prices. Tap a price to change it for this team. Hide takes a match off the site; Suspend stops new bets on it." />
-            {dayEvents.map((event) => (
-              <EventCard key={event.id} event={event} canEditPrices={canEditPrices} canManage={Boolean(settings?.canManageEvents)} ownerQuery={team} run={run} />
-            ))}
+            {dayEvents.map((event) =>
+              event.sport === "greyhounds" ? (
+                <RaceAdminCard key={event.id} event={event} canManage={Boolean(settings?.canManageEvents)} run={run} />
+              ) : (
+                <EventCard key={event.id} event={event} canEditPrices={canEditPrices} canManage={Boolean(settings?.canManageEvents)} ownerQuery={team} run={run} version={version} />
+              ),
+            )}
           </section>
         ))
       )}
+      {events && events.length > limit ? (
+        <button type="button" className="secondary bet-show-more" onClick={() => setLimit(limit + MATCHES_SHOWN)}>
+          {t("Show more matches ({count} more)", { count: events.length - limit })}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -311,14 +370,78 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
   );
 }
 
-function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event: OddsEvent; canEditPrices: boolean; canManage: boolean; ownerQuery: string; run: Run }) {
+/** Super Admin, Owner or Manager's view of a race: its dogs, or once run its result, and hide/suspend. Races have no prices to change. */
+function RaceAdminCard({ event, canManage, run }: { event: OddsEvent; canManage: boolean; run: Run }) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const finished = event.status === "COMPLETED" || event.status === "CANCELLED";
+  const facts = [t("Race {number}", { number: event.race?.raceNumber ?? "" }), event.race?.grade, event.race?.distance ? `${event.race.distance}m` : null].filter(Boolean).join(" · ");
+
+  function toggle(field: "hidden" | "suspended") {
+    const next = !event[field];
+    const vars = { match: event.name };
+    const done = field === "hidden" ? (next ? t("{match} is hidden from everyone.", vars) : t("{match} is visible again.", vars)) : next ? t("{match} is suspended.", vars) : t("{match} is open for bets again.", vars);
+    void run((token) => apiFetch(`/odds/events/${event.id}`, token, { method: "PATCH", body: JSON.stringify({ [field]: next }) }), done);
+  }
+
+  return (
+    <article className={`card odds-event race-card${event.hidden ? " is-hidden" : ""}`}>
+      <header className="odds-event-header">
+        <span className="muted odds-league">
+          {event.league}
+          {event.country ? ` · ${event.country}` : ""}
+        </span>
+        <span className="odds-event-badges">
+          {event.hidden ? <span className="status-pill">{t("Hidden")}</span> : null}
+          {event.suspended ? <span className="status-pill odds-pill-warn">{t("Suspended")}</span> : null}
+          <span className="status-pill">{event.status === "COMPLETED" ? t("Finished") : statusText(event, i18n)}</span>
+        </span>
+      </header>
+      <strong>{facts}</strong>
+      {finished ? <RaceResultList race={event} /> : <RaceRunnerList race={event} />}
+      {finished ? null : <p className="muted odds-note">{t("Race bets are paid at the starting price (or forecast dividend), less the team margin. There are no prices to change.")}</p>}
+      {canManage ? (
+        <footer className="odds-event-footer">
+          <span />
+          <span className="odds-admin-actions">
+            <button type="button" className="secondary" onClick={() => toggle("suspended")} disabled={finished}>
+              {event.suspended ? t("Resume bets") : t("Suspend")}
+            </button>
+            <button type="button" className="secondary" onClick={() => toggle("hidden")}>
+              {event.hidden ? t("Show") : t("Hide")}
+            </button>
+          </span>
+        </footer>
+      ) : null}
+    </article>
+  );
+}
+
+function EventCard({ event, canEditPrices, canManage, ownerQuery, run, version }: { event: OddsEvent; canEditPrices: boolean; canManage: boolean; ownerQuery: string; run: Run; version: number }) {
+  const { getToken } = useAuth();
   const i18n = useI18n();
   const { t, tn, ts } = i18n;
   const [showAll, setShowAll] = useState(false);
+  /** Every market, loaded when the match is opened and again after each change. */
+  const [full, setFull] = useState<OddsEvent | null>(null);
+  useEffect(() => {
+    if (!showAll) return;
+    let stale = false;
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+      const next = await apiFetch<OddsEvent>(`/odds/events/${event.id}?${ownerQuery}`, token);
+      if (!stale) setFull(next);
+    })().catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [showAll, version, event.id, ownerQuery, getToken]);
   const [editing, setEditing] = useState<OddsSelection | null>(null);
   const [price, setPrice] = useState("");
   const finished = event.status === "COMPLETED" || event.status === "CANCELLED";
-  const markets = showAll ? event.markets : event.markets.slice(0, 1);
+  const markets = showAll && full ? full.markets : event.markets.slice(0, 1);
+  const more = Math.max(0, event.marketCount - 1);
   const hasScore = event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING";
 
   function startEdit(selection: OddsSelection) {
@@ -443,15 +566,16 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run }: { event
                 </div>
               </form>
             ) : null}
-            <MarketPriceHistory selections={market.selections} />
+            {/* A goalscorer list is too long for the chart. */}
+            {market.key.startsWith("scorer_") ? null : <MarketPriceHistory selections={market.selections} />}
           </div>
         ))
       )}
 
       <footer className="odds-event-footer">
-        {event.markets.length > 1 ? (
-          <button type="button" className="text-button" onClick={() => setShowAll(!showAll)}>
-            {showAll ? t("Fewer markets") : tn(event.markets.length - 1, "{count} more market", "{count} more markets")}
+        {more > 0 ? (
+          <button type="button" className="text-button" onClick={() => setShowAll(!showAll)} aria-expanded={showAll}>
+            {showAll ? (full ? t("Fewer markets") : t("Loading markets")) : tn(more, "{count} more market", "{count} more markets")}
           </button>
         ) : (
           <span />

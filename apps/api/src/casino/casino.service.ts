@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomInt } from "crypto";
-import { BalanceTransactionType, Prisma, Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import type { RandomNumberGenerating } from "pokie";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
@@ -11,7 +11,7 @@ import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
-import { casinoClosedReason } from "./access";
+import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import {
   BETS,
   GAME_NAME,
@@ -113,20 +113,19 @@ export class CasinoService {
   /** The Player's Casino: whether they can play, the game's rules, their free spins and recent spins. */
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const [closed, player, freeSpins, recent, limit, gamble] = await Promise.all([
+    const [closed, player, freeSpins, recent, maxStake, gamble] = await Promise.all([
       this.closedReason(actor),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.prisma.casinoFreeSpins.findUnique({ where: { playerId: actor.id } }),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: { in: ["SPIN", "GAMBLE"] } }, orderBy: { createdAt: "desc" }, take: RECENT, select: { ...spinSelect, grid: true } }),
-      this.prisma.bettingLimit.findUnique({ where: { playerId: actor.id } }),
+      maxStakeOf(this.prisma, actor.id),
       this.prisma.casinoGamble.findUnique({ where: { playerId: actor.id } }),
     ]);
     const lastSpin = recent.find((spin) => spin.kind === "SPIN");
-    const stakes = [limit?.ownerMaxStake, limit?.managerMaxStake].filter((value): value is Prisma.Decimal => value !== null && value !== undefined).map(Number);
     return {
       closed,
       balance: Number(player.balance),
-      maxStake: stakes.length ? Math.min(...stakes) : null,
+      maxStake,
       freeSpins: freeSpins && freeSpins.remaining > 0 ? { remaining: freeSpins.remaining, bet: Number(freeSpins.bet) } : null,
       /** Where the reels rest before the first spin: the last spin's grid. */
       grid: currentGrid(lastSpin?.grid),
@@ -337,11 +336,7 @@ export class CasinoService {
       tx.casinoSpin.count({ where: { playerId, kind: "GAMBLE", createdAt: { gte: since } } }),
     ]);
     const reason = [spins === 1 ? "Casino: 1 spin" : `Casino: ${spins} spins`, ...(guesses ? [guesses === 1 ? "1 double or nothing" : `${guesses} double or nothing`] : [])].join(", ");
-    await tx.balanceTransaction.upsert({
-      where: { id: ledgerLineId(playerId, now) },
-      create: { id: ledgerLineId(playerId, now), toUserId: playerId, actorId: playerId, type: BalanceTransactionType.CASINO, amount: net, reason, createdAt: now },
-      update: { amount: { increment: net }, reason },
-    });
+    await addToDailyLine(tx, ledgerLineId(playerId, now), playerId, net, reason, now);
   }
 
   /**

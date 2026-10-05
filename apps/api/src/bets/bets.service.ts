@@ -8,6 +8,7 @@ import { OddsService } from "../odds/odds.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
+import { RACE_CAP } from "../odds/greyhounds";
 import { combinedOdds, payoutFor } from "./grading";
 import { RiskService } from "./risk.service";
 import { assertOnTeam, type TeamSnapshot } from "./team";
@@ -25,6 +26,7 @@ export const betSelect = {
   id: true,
   stake: true,
   odds: true,
+  spCap: true,
   payout: true,
   status: true,
   description: true,
@@ -96,6 +98,9 @@ export function betView(bet: BetRow) {
     description: bet.description,
     stake,
     odds,
+    /** Greyhounds: paid at the starting price (or forecast dividend), up to `spCap`; `odds` is set when it settles. */
+    sp: bet.spCap !== null,
+    spCap: bet.spCap === null ? null : Number(bet.spCap),
     /** What a win pays back, stake included. */
     potentialPayout: odds === null ? null : Number(payoutFor(BetStatus.WON, bet.stake, bet.odds!)),
     payout: Number(bet.payout),
@@ -153,21 +158,24 @@ export class BetsService {
     const price = async (pick: { selectionId: string; odds: number }) => {
       const selection = byId.get(pick.selectionId);
       if (!selection) throw new BadRequestException("One of the bets on your slip no longer exists. Remove it and try again.");
-      const { odds, bettable, live, score } = await this.odds.priceForPlayer(actor.id, pick.selectionId);
+      const { odds, bettable, live, score, sp, marketKey, margin } = await this.odds.priceForPlayer(actor.id, pick.selectionId);
       if (!bettable) {
         throw new BadRequestException(
           live ? `Live bets on ${selection.market.event.name} are paused right now. Try again in a moment.` : `Bets are closed on ${selection.market.event.name}. Remove it from your slip.`,
         );
       }
-      if (Math.abs(odds - pick.odds) > 0.001) changed.push(`${selection.name} is now ${odds.toFixed(2)}`);
+      if (!sp && Math.abs(odds - pick.odds) > 0.001) changed.push(`${selection.name} is now ${odds.toFixed(2)}`);
       return {
-        price: new Prisma.Decimal(odds.toFixed(2)),
+        /** Null for a race pick: it's paid at the starting price. */
+        price: sp ? null : new Prisma.Decimal(odds.toFixed(2)),
+        /** A race pick: the most it can pay at, and the team's margin to take off the starting price. */
+        sp: sp ? { cap: new Prisma.Decimal(RACE_CAP[marketKey] ?? RACE_CAP.race_winner), margin: new Prisma.Decimal(margin.toFixed(2)) } : null,
         live,
         score,
         selectionId: pick.selectionId,
         eventId: selection.market.event.id,
         label: `${selection.name} (${selection.market.event.name})`,
-        description: `${selection.market.event.name} · ${selection.market.name}: ${selection.name}`.slice(0, 200),
+        description: `${selection.market.event.name} · ${selection.market.name}: ${selection.name}${sp ? " (SP)" : ""}`.slice(0, 200),
       };
     };
 
@@ -179,10 +187,12 @@ export class BetsService {
     if (acca) {
       const legs: Priced[] = [];
       for (const leg of acca.legs) legs.push(await price(leg));
+      // A race pick has no price until the off, so an accumulator can't be priced with one in it.
+      if (legs.some((leg) => leg.sp !== null)) throw new BadRequestException("Greyhound picks can only be single bets. Take them out of the accumulator.");
       if (new Set(legs.map((leg) => leg.eventId)).size !== legs.length) {
         throw new BadRequestException("An accumulator can only have one pick from each match");
       }
-      const odds = combinedOdds(legs.map((leg) => leg.price));
+      const odds = combinedOdds(legs.map((leg) => leg.price!));
       if (odds.greaterThan(MAX_ACCUMULATOR_ODDS)) throw new BadRequestException(`An accumulator's combined odds can't be more than ${MAX_ACCUMULATOR_ODDS}. Remove a pick.`);
       pricedAcca = { stake: new Prisma.Decimal(acca.stake.toFixed(2)), odds, legs };
     }
@@ -200,7 +210,8 @@ export class BetsService {
       const prev = adding.get(selectionId);
       adding.set(selectionId, { payout: (prev?.payout ?? 0) + Number(payout), label });
     };
-    for (const bet of pricedSingles) add(bet.selectionId, payoutFor(BetStatus.WON, bet.stake, bet.price), bet.label);
+    // A race pick counts at its cap until it's settled.
+    for (const bet of pricedSingles) add(bet.selectionId, payoutFor(BetStatus.WON, bet.stake, bet.price ?? bet.sp!.cap), bet.label);
     if (pricedAcca) {
       const payout = payoutFor(BetStatus.WON, pricedAcca.stake, pricedAcca.odds);
       for (const leg of pricedAcca.legs) add(leg.selectionId, payout, leg.label);
@@ -224,7 +235,16 @@ export class BetsService {
       for (const bet of pricedSingles) {
         rows.push(
           await tx.bet.create({
-            data: { playerId: actor.id, selectionId: bet.selectionId, stake: bet.stake, odds: bet.price, description: bet.description, ...snapshot },
+            data: {
+              playerId: actor.id,
+              selectionId: bet.selectionId,
+              stake: bet.stake,
+              odds: bet.price,
+              spCap: bet.sp?.cap ?? null,
+              spMargin: bet.sp?.margin ?? null,
+              description: bet.description,
+              ...snapshot,
+            },
             select: betSelect,
           }),
         );
@@ -241,7 +261,7 @@ export class BetsService {
               description: `Accumulator · ${pricedAcca.legs.length} picks`,
               ...snapshot,
               legs: {
-                create: pricedAcca.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price, description: leg.description, sortOrder })),
+                create: pricedAcca.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price!, description: leg.description, sortOrder })),
               },
             },
             select: betSelect,
@@ -268,7 +288,7 @@ export class BetsService {
       action: "bet.place",
       targetId: actor.id,
       ipAddress,
-      metadata: { bets: created.map((bet) => ({ id: bet.id, kind: bet.kind, stake: Number(bet.stake), odds: Number(bet.odds) })), total: Number(total) },
+      metadata: { bets: created.map((bet) => ({ id: bet.id, kind: bet.kind, stake: Number(bet.stake), odds: bet.odds === null ? "SP" : Number(bet.odds) })), total: Number(total) },
     });
     await this.realtime.publishBalances([actor.id]);
     await this.realtime.publish(actor.id, { type: "bets.changed" });
@@ -283,9 +303,11 @@ export class BetsService {
    * which can be a few seconds old): if the bookmaker has it blocked, a goal
    * went in, or the price moved, the slip is refused and the Player sees the
    * new price. If the feed can't be reached the slip is refused too.
-   * LIVE_VERIFY=off skips the check with the feed.
+   * The other picks on the slip are checked again after the wait as well, so
+   * a match that kicked off (or was suspended) meanwhile isn't bet on at its
+   * pre-match price. LIVE_VERIFY=off skips the check with the feed.
    */
-  private async confirmLive(picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal; label: string }>, playerId: string) {
+  private async confirmLive(picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal | null; label: string }>, playerId: string) {
     const live = picks.filter((pick) => pick.live);
     if (live.length === 0) return;
     const delay = Number(process.env.LIVE_BET_DELAY_MS ?? 5_000);
@@ -296,6 +318,10 @@ export class BetsService {
       } catch {
         throw new ConflictException("We couldn't confirm the live price with the bookmaker just now. Try again in a moment.");
       }
+    }
+    for (const pick of picks.filter((p) => !p.live)) {
+      const now = await this.odds.priceForPlayer(playerId, pick.selectionId);
+      if (!now.bettable || now.live) throw new ConflictException(`Bets on ${pick.label} closed while your slip was being confirmed. Remove it and try again.`);
     }
     for (const pick of live) {
       const now = await this.odds.priceForPlayer(playerId, pick.selectionId);

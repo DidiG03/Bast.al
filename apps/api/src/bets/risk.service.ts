@@ -29,11 +29,11 @@ export class RiskService {
     const only = selectionIds ? Prisma.sql`AND sel_id = ANY(${selectionIds})` : Prisma.empty;
     const rows = await db.$queryRaw<Array<{ sel_id: string; kind: "SINGLE" | "ACCUMULATOR"; bets: bigint; staked: Prisma.Decimal; payout: Prisma.Decimal }>>`
       WITH team_bets AS (
-        SELECT b.id, b.kind, b.stake, FLOOR(b.stake * b.odds * 100) / 100 AS payout, b.selection_id
+        SELECT b.id, b.kind, b.stake, FLOOR(b.stake * COALESCE(b.odds, b.sp_cap) * 100) / 100 AS payout, b.selection_id
         FROM bets b
-        JOIN users p ON p.id = b.player_id
-        LEFT JOIN users m ON m.id = p.parent_id
-        WHERE b.status = 'OPEN' AND b.odds IS NOT NULL AND (p.parent_id = ${ownerId} OR m.parent_id = ${ownerId})
+        -- The team that took the bet (recorded when it was placed), even if the Player has moved since.
+        -- A race bet paid at the starting price counts at its cap until it settles.
+        WHERE b.status = 'OPEN' AND COALESCE(b.odds, b.sp_cap) IS NOT NULL AND b.owner_id = ${ownerId}
       ), picks AS (
         SELECT selection_id AS sel_id, kind, stake, payout FROM team_bets WHERE kind = 'SINGLE' AND selection_id IS NOT NULL
         UNION ALL
@@ -143,7 +143,7 @@ export class RiskService {
     const live = view.filter((e) => e.status !== EventStatus.CANCELLED).sort((a, b) => b.worst.payout - a.worst.payout);
 
     const totals = await this.prisma.bet.aggregate({
-      where: { status: BetStatus.OPEN, player: { OR: [{ parentId: ownerId }, { parent: { parentId: ownerId } }] } },
+      where: { status: BetStatus.OPEN, ownerId },
       _sum: { stake: true },
       _count: { _all: true },
     });

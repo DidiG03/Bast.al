@@ -3,11 +3,15 @@ import { BalanceTransactionType, BetStatus, EventStatus, NotificationSeverity, N
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { NotificationsService } from "../notifications/notifications.service";
+import { RACE_WINNER, gradeRace, raceResultOf, raceSettlePrice } from "../odds/greyhounds";
+import { POINTS_SPORTS, gradeBasketball } from "../odds/basketball";
+import { fightResultOf, gradeFight } from "../odds/mma";
 import { UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { betSelect, betView } from "./bets.service";
+import { GoalRecord, isGoalMarket } from "./goals";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
 import { teamOf } from "./team";
 
@@ -46,6 +50,9 @@ const FEED_CORRECTION_DELAY_MS = 10 * 60_000;
 const UNPLAYED_HOURS = Math.round(UNPLAYED_VOID_MS / 3_600_000);
 const NOT_PLAYED = `Not played within ${UNPLAYED_HOURS} hours of kick-off`;
 const MOVED = `Moved more than ${UNPLAYED_HOURS} hours after the original kick-off`;
+const RACE_UNPLAYED_HOURS = Number(process.env.RACE_UNPLAYED_HOURS) || 6;
+const RACE_UNPLAYED_MS = RACE_UNPLAYED_HOURS * 3_600_000;
+const RACE_NOT_RUN = `No official result within ${RACE_UNPLAYED_HOURS} hours of the race`;
 
 /** Open bets, or accumulator picks still waiting on an open bet: what an unplayed match can still refund. */
 const hasOpenBets = {
@@ -146,7 +153,14 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   private async settleFinished(): Promise<number> {
     const events = await this.prisma.event.findMany({
       where: {
-        OR: [{ status: EventStatus.COMPLETED, resultHome: { not: null }, resultAway: { not: null } }, { status: EventStatus.CANCELLED }],
+        OR: [
+          { status: EventStatus.COMPLETED, resultHome: { not: null }, resultAway: { not: null } },
+          // A greyhound race is only marked finished once its result is final.
+          { status: EventStatus.COMPLETED, sport: "greyhounds" },
+          // A fight is marked finished once its result is in.
+          { status: EventStatus.COMPLETED, sport: "mma" },
+          { status: EventStatus.CANCELLED },
+        ],
         markets: {
           some: {
             selections: {
@@ -156,7 +170,10 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         },
       },
       select: { id: true },
-      take: 50,
+      // Newest first: matches whose picks wait for Super Admin (a goalscorer the
+      // feed can't name for sure) stay in this list, and mustn't hold up new ones.
+      orderBy: { startsAt: "desc" },
+      take: 200,
     });
     let settled = 0;
     for (const event of events) settled += (await this.settleEvent(event.id)).length;
@@ -172,7 +189,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   private async applyFeedCorrections(): Promise<number> {
     const events = await this.prisma.event.findMany({
       where: { resultChangedAt: { not: null, lte: new Date(Date.now() - FEED_CORRECTION_DELAY_MS) } },
-      select: { id: true, name: true, status: true, resultSource: true, resultHome: true, resultAway: true, resultChangedAt: true },
+      select: { id: true, name: true, sport: true, status: true, resultSource: true, resultHome: true, resultAway: true, resultChangedAt: true },
       take: 20,
     });
     let settled = 0;
@@ -183,7 +200,9 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       await this.prisma.event.updateMany({ where: { id: event.id, resultChangedAt: event.resultChangedAt }, data: { resultChangedAt: null } });
       if (changes.length === 0) continue;
       settled += changes.length;
-      const score = `${event.resultHome}-${event.resultAway}`;
+      // Races and fights have no score to name.
+      const race = event.sport === "greyhounds" || event.sport === "mma";
+      const score = race ? "a new result" : `${event.resultHome}-${event.resultAway}`;
       await this.audit.log({ action: "bet.result_feed_correct", metadata: { eventId: event.id, event: event.name, to: score, betsChanged: changes.length } });
       const admins = await this.prisma.user.findMany({ where: { role: Role.SUPER_ADMIN }, select: { id: true } });
       for (const admin of admins) {
@@ -192,8 +211,11 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
           type: NotificationType.BET_SETTLED,
           severity: NotificationSeverity.WARNING,
           title: "Result corrected by the feed",
-          message:
-            changes.length === 1
+          message: race
+            ? changes.length === 1
+              ? `The feed changed the result of ${event.name}, so 1 bet was settled again.`
+              : `The feed changed the result of ${event.name}, so ${changes.length} bets were settled again.`
+            : changes.length === 1
               ? `The feed changed ${event.name} to ${score}, so 1 bet was settled again.`
               : `The feed changed ${event.name} to ${score}, so ${changes.length} bets were settled again.`,
           deepLink: "/dashboard/settlement",
@@ -221,13 +243,17 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       where: {
         externalId: { not: null },
         status: { in: [EventStatus.UPCOMING, EventStatus.LIVE, EventStatus.POSTPONED] },
-        startsAt: { lt: new Date(Date.now() - UNPLAYED_VOID_MS) },
+        // A race's result normally arrives within 20 minutes; one with none after RACE_UNPLAYED_HOURS is refunded.
+        OR: [
+          { sport: { not: "greyhounds" }, startsAt: { lt: new Date(Date.now() - UNPLAYED_VOID_MS) } },
+          { sport: "greyhounds", startsAt: { lt: new Date(Date.now() - RACE_UNPLAYED_MS) } },
+        ],
         ...hasOpenBets,
       },
-      select: { id: true, name: true },
+      select: { id: true, name: true, sport: true },
       take: 50,
     });
-    for (const event of unplayed) refunded += (await this.refund(event, NOT_PLAYED)).length;
+    for (const event of unplayed) refunded += (await this.refund(event, event.sport === "greyhounds" ? RACE_NOT_RUN : NOT_PLAYED)).length;
     return refunded;
   }
 
@@ -265,22 +291,41 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   async settleEvent(eventId: string, regrade = false, actorId: string | null = null): Promise<Change[]> {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      include: { markets: { include: { selections: { select: { id: true, key: true, result: true } } } } },
+      include: { markets: { include: { selections: { select: { id: true, key: true, name: true, result: true, resultSource: true, withdrawn: true } } } } },
     });
     if (!event) return [];
+    const race = event.sport === "greyhounds";
+    const raceResult = race ? raceResultOf(event.raceResult) : null;
+    /** Each outcome's market and key, for the price a race bet is paid at. */
+    const outcomeOf = new Map(event.markets.flatMap((market) => market.selections.map((s) => [s.id, { market: market.key, key: s.key }] as const)));
 
+    const record = goalsOf(event.resultGoals);
     const grades = new Map<string, SelectionResult | null>();
+    // Goal-event outcomes graded before a score correction that can't be graded now
+    // (the goals saved for the old score were dropped): their bets go back to open,
+    // so the goals are fetched again and they settle on the new score, or wait for Super Admin.
+    const reopen = new Set<string>();
     for (const market of event.markets) {
+      const marketNames = market.selections.map((s) => s.name);
       for (const selection of market.selections) {
         let grade: SelectionResult | null = null;
         if (event.status === EventStatus.CANCELLED) grade = SelectionResult.VOID;
+        // An outcome Super Admin settled by hand stays as they set it.
+        else if (selection.resultSource === "manual") grade = selection.result;
+        else if (race) grade = event.status === EventStatus.COMPLETED ? gradeRace(market.key, selection.key, raceResult, selection.withdrawn) : null;
+        else if (event.sport === "mma") grade = event.status === EventStatus.COMPLETED ? gradeFight(market.key, selection.key, fightResultOf(event.fightResult)) : null;
+        // Basketball and the NFL settle on the final score, overtime included.
+        else if (POINTS_SPORTS.has(event.sport)) grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeBasketball(market.key, selection.key, event.resultHome, event.resultAway) : null;
         else if (event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null) {
           const half = event.resultHalfHome !== null && event.resultHalfAway !== null ? { home: event.resultHalfHome, away: event.resultHalfAway } : null;
-          grade = gradeSelection(market.key, selection.key, event.resultHome, event.resultAway, half, statsOf(event));
+          grade = gradeSelection(market.key, selection.key, event.resultHome, event.resultAway, half, statsOf(event), { record, selectionName: selection.name, marketNames });
         }
         grades.set(selection.id, grade);
         if (grade !== null && grade !== selection.result) {
           await this.prisma.selection.update({ where: { id: selection.id }, data: { result: grade } });
+        } else if (regrade && grade === null && selection.result !== null && isGoalMarket(market.key) && event.status === EventStatus.COMPLETED) {
+          reopen.add(selection.id);
+          await this.prisma.selection.update({ where: { id: selection.id }, data: { result: null } });
         }
       }
     }
@@ -290,10 +335,30 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         selectionId: { in: [...grades.keys()] },
         ...(regrade ? { voidReason: null } : { status: BetStatus.OPEN }),
       },
-      select: { ...movable, odds: true, selectionId: true },
+      select: { ...movable, odds: true, spCap: true, spMargin: true, selectionId: true },
     });
     const changes: Change[] = [];
     for (const bet of bets) {
+      // A race bet paid at the starting price: its price is known once the result (with the SP or dividend) is in.
+      if (bet.spCap !== null) {
+        const grade = grades.get(bet.selectionId!);
+        if (!grade) continue;
+        const outcome = outcomeOf.get(bet.selectionId!)!;
+        const price = grade === SelectionResult.WON ? raceSettlePrice(outcome.market, outcome.key, raceResult, Number(bet.spMargin ?? 0), Number(bet.spCap)) : null;
+        // Won, but the feed hasn't sent the price yet: it waits.
+        if (grade === SelectionResult.WON && price === null) continue;
+        const odds = price === null ? null : new Prisma.Decimal(price.toFixed(2));
+        if (!(odds === null ? bet.odds === null : bet.odds?.equals(odds))) await this.prisma.bet.update({ where: { id: bet.id }, data: { odds } });
+        const status = grade as BetStatus;
+        const change = await this.move(bet, status, payoutFor(status, bet.stake, odds ?? new Prisma.Decimal(0)), null, actorId);
+        if (change) changes.push({ ...change, eventName: event.name });
+        continue;
+      }
+      if (reopen.has(bet.selectionId!) && bet.status !== BetStatus.OPEN) {
+        const change = await this.move(bet, BetStatus.OPEN, new Prisma.Decimal(0), null, actorId);
+        if (change) changes.push({ ...change, eventName: event.name });
+        continue;
+      }
       const grade = grades.get(bet.selectionId!);
       if (!grade || bet.odds === null) continue;
       const status = grade as BetStatus;
@@ -309,6 +374,11 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     });
     const touched = new Set<string>();
     for (const leg of legs) {
+      if (reopen.has(leg.selectionId) && leg.result !== null) {
+        await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: null } });
+        touched.add(leg.betId);
+        continue;
+      }
       const grade = grades.get(leg.selectionId);
       if (!grade) continue;
       if (grade !== leg.result) await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: grade } });
@@ -353,9 +423,16 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     if (half && (half.home > home || half.away > away)) throw new BadRequestException("The half-time score can't be higher than the full-time score");
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true, status: true, startsAt: true, resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true },
+      select: { id: true, name: true, sport: true, status: true, startsAt: true, resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true },
     });
     if (!event) throw new NotFoundException("Match not found");
+    if (event.sport === "greyhounds") throw new BadRequestException("A race has no score. Settle its picks one by one, or void the race.");
+    if (event.sport === "mma") throw new BadRequestException("A fight has no score. Settle its picks one by one, or void the fight.");
+    // A basketball or NFL game settles on its final score alone: there's no half-time score, corners or cards.
+    if (POINTS_SPORTS.has(event.sport)) {
+      half = null;
+      stats = null;
+    } else if (home > 99 || away > 99) throw new BadRequestException("A football score can't be more than 99");
     if (event.startsAt > new Date()) throw new BadRequestException("This match hasn't started yet");
     if (event.status === EventStatus.CANCELLED) throw new BadRequestException("This match was cancelled and its bets refunded");
     await this.prisma.event.update({
@@ -380,6 +457,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
           : {}),
         resultSource: "manual",
         status: EventStatus.COMPLETED,
+        // A different score makes the goals saved for the old one useless: they're fetched again.
+        ...(event.resultHome !== home || event.resultAway !== away ? { resultGoals: Prisma.DbNull, goalsCheckedAt: null } : {}),
       },
     });
     const changes = await this.settleEvent(eventId, true, actor.id);
@@ -389,6 +468,38 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       metadata: { eventId, event: event.name, from: event.resultHome === null ? null : `${event.resultHome}-${event.resultAway}`, to: `${home}-${away}`, halfTime: half ? `${half.home}-${half.away}` : undefined, stats: stats ?? undefined, betsChanged: changes.length },
     });
     return { eventId, result: { home, away }, betsChanged: changes.length };
+  }
+
+  /**
+   * Super Admin: settles one outcome of a finished match by hand, for picks
+   * the feed can't settle (a goalscorer whose name matches no one for sure,
+   * statistics the feed never sent). Settlement keeps this result from then
+   * on, and the match's bets are settled again.
+   */
+  async settleSelection(actor: Actor, selectionId: string, result: SelectionResult) {
+    const selection = await this.prisma.selection.findUnique({
+      where: { id: selectionId },
+      select: { id: true, key: true, name: true, result: true, market: { select: { key: true, name: true, event: { select: { id: true, name: true, sport: true, status: true, resultHome: true, raceResult: true } } } } },
+    });
+    if (!selection) throw new NotFoundException("Pick not found");
+    const event = selection.market.event;
+    if (event.sport === "greyhounds") {
+      if (event.status !== EventStatus.COMPLETED) throw new BadRequestException("This race hasn't got its final result yet");
+      // A winning race bet is paid at the SP or dividend, so it can only be settled as won once the feed has sent it.
+      if (result === SelectionResult.WON && raceSettlePrice(selection.market.key, selection.key, raceResultOf(event.raceResult), 0, Number.MAX_SAFE_INTEGER) === null) {
+        throw new BadRequestException(selection.market.key === RACE_WINNER ? "The starting price isn't known yet, so this can't be settled as won" : "The forecast dividend isn't known yet, so this can't be settled as won");
+      }
+    } else if (event.sport === "mma") {
+      if (event.status !== EventStatus.COMPLETED) throw new BadRequestException("This fight hasn't got its result yet");
+    } else if (event.status !== EventStatus.COMPLETED || event.resultHome === null) throw new BadRequestException("Set the match's result first");
+    await this.prisma.selection.update({ where: { id: selectionId }, data: { result, resultSource: "manual" } });
+    const changes = await this.settleEvent(event.id, true, actor.id);
+    await this.audit.log({
+      actorId: actor.id,
+      action: "bet.selection_result",
+      metadata: { eventId: event.id, event: event.name, market: selection.market.name, selection: selection.name, from: selection.result, to: result, betsChanged: changes.length },
+    });
+    return { selectionId, result, betsChanged: changes.length };
   }
 
   /** Super Admin: voids one bet and refunds the stake, whatever state it's in. */
@@ -458,8 +569,26 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       where: { id: { in: [...stats.keys()] } },
       orderBy: { startsAt: "desc" },
       take: 100,
-      select: { id: true, name: true, league: true, startsAt: true, status: true, homeScore: true, awayScore: true, resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true, resultCornersHome: true, resultCornersAway: true, resultCardsHome: true, resultCardsAway: true, statsSource: true, extraTime: true, resultSource: true, suspended: true },
+      select: { id: true, sport: true, name: true, league: true, startsAt: true, status: true, homeScore: true, awayScore: true, resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true, resultCornersHome: true, resultCornersAway: true, resultCardsHome: true, resultCardsAway: true, statsSource: true, extraTime: true, resultSource: true, suspended: true },
     });
+    // Outcomes of finished matches that still have open bets: the feed couldn't settle them.
+    const finished = events.filter((e) => e.status === EventStatus.COMPLETED && (e.resultHome !== null || e.sport !== "football")).map((e) => e.id);
+    const openPick = { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null, bet: { voidReason: null } } } }] };
+    const stuck =
+      finished.length === 0
+        ? []
+        : await this.prisma.selection.findMany({
+            // A race pick can also be graded (won) but wait for its starting price.
+            where: { AND: [{ OR: [{ result: null }, { market: { event: { sport: "greyhounds" } } }] }, openPick], market: { eventId: { in: finished } } },
+            select: { id: true, name: true, market: { select: { eventId: true, name: true } }, _count: { select: { bets: { where: { status: BetStatus.OPEN } }, legs: { where: { result: null } } } } },
+            take: 500,
+          });
+    const waitingBy = new Map<string, Array<{ selectionId: string; market: string; name: string; bets: number }>>();
+    for (const pick of stuck) {
+      const list = waitingBy.get(pick.market.eventId) ?? [];
+      list.push({ selectionId: pick.id, market: pick.market.name, name: pick.name, bets: pick._count.bets + pick._count.legs });
+      waitingBy.set(pick.market.eventId, list);
+    }
     const now = new Date();
     return events.map((event) => {
       const stat = stats.get(event.id)!;
@@ -470,6 +599,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         halfTime: event.resultHalfHome === null || event.resultHalfAway === null ? null : { home: event.resultHalfHome, away: event.resultHalfAway },
         stats: statsOf(event),
         bets: { open, total: Number(stat.total), staked: Number(stat.staked), openStaked: Number(stat.open_staked) },
+        /** Super Admin only: picks of a finished match still waiting for a result, to settle by hand. */
+        waiting: teamOf ? [] : waitingBy.get(event.id) ?? [],
         /** Started long ago but still has open bets: the feed hasn't settled it, so it may need a hand. */
         needsAttention: open > 0 && event.startsAt.getTime() < now.getTime() - 3 * 3_600_000,
       };
@@ -670,6 +801,13 @@ export function ledgerReason(from: BetStatus, to: BetStatus, delta: Prisma.Decim
 /** An Owner's or Manager's Players: ones they created, plus their Managers' Players. */
 function teamPlayers(teamOf: string): Prisma.UserWhereInput {
   return { OR: [{ parentId: teamOf }, { parent: { parentId: teamOf } }] };
+}
+
+/** The goals a match settles its goal-event markets on, as saved by the feed sync (see bets/goals.ts). */
+function goalsOf(value: Prisma.JsonValue | null): GoalRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as unknown as GoalRecord;
+  return Array.isArray(record.goals) ? { goals: record.goals, players: Array.isArray(record.players) ? record.players : null } : null;
 }
 
 /** The corners and cards a match settles on, once all four numbers are known. */

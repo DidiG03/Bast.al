@@ -9,6 +9,7 @@ import { apiFetch, type MeResponse, type RiskEvent, type RiskSelection, type Ris
 import { formatMoney, formatSignedMoney } from "../../../lib/format";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { HelpTip } from "../../../components/help-tip";
+import { usePolling } from "../../../lib/use-polling";
 
 function when(event: RiskEvent, { t, date }: I18n): string {
   if (event.status === "LIVE") return event.homeScore !== null && event.awayScore !== null ? t("Live {score}", { score: `${event.homeScore}–${event.awayScore}` }) : t("Live");
@@ -64,10 +65,10 @@ export default function RiskPage() {
       setFailed(true);
       toast.error(err instanceof Error ? err.message : t("Could not load the risk view"));
     });
-    // Scores and new bets change the picture; refresh every 30 seconds while the page is open.
-    const timer = setInterval(() => void load().catch(() => undefined), 30_000);
-    return () => clearInterval(timer);
   }, [ready, load, toast, t]);
+
+  // Scores and new bets change the picture; refresh every 30 seconds while the page is on screen.
+  usePolling(() => void load().catch(() => undefined), 30_000, ready);
 
   useRealtime((event) => {
     if (ready && event.type === "resync") void load().catch(() => undefined);

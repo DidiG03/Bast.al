@@ -295,12 +295,37 @@ test("the extra markets parse from a real API-Football response", async () => {
   const ht = markets.find((m) => m.key === "ht_ft");
   assert.equal(ht.selections.length, 9);
   assert.equal(ht.selections.find((s) => s.key === "home_draw").name, "Home FC / Draw");
-  const corners = markets.filter((m) => m.key.startsWith("corners_"));
+  const corners = markets.filter((m) => m.key.startsWith("corners_") && m.key !== "corners_1x2" && m.key !== "corners_range");
   assert.ok(corners.length >= 1 && corners.length <= 3, "up to three corner lines");
   assert.ok(corners.every((m) => /^corners_\d+_5$/.test(m.key)), "only half lines, so no pushes");
   assert.match(corners[0].name, /^Total corners \d+\.5$/);
   const cs = markets.find((m) => m.key === "correct_score");
   assert.ok(cs.selections.every((s) => /^\d-\d$/.test(s.key)));
+});
+
+test("the combo, team, half and goal-event markets parse from a real API-Football answer", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const raw = JSON.parse(await readFile(new URL("./fixtures/api-football-odds-wide.json", import.meta.url), "utf8")).response[0];
+  const markets = parseMarkets(raw, "Home FC", "Away FC", 8);
+  const byKey = new Map(markets.map((m) => [m.key, m]));
+  for (const key of [
+    "result_goals_2_5", "goals_btts_2_5", "home_exact_goals", "away_exact_goals", "goal_range", "winning_margin",
+    "h1_exact_goals", "h2_exact_goals", "h1_odd_even", "h2_odd_even", "home_odd_even", "away_odd_even",
+    "score_both_halves", "home_highest_half", "away_highest_half", "corners_1x2", "corners_range",
+    "first_team_score", "last_team_score", "win_from_behind", "scorer_anytime", "scorer_first", "scorer_last",
+  ]) {
+    assert.ok(byKey.has(key), `missing ${key}`);
+  }
+  assert.deepEqual(byKey.get("result_goals_2_5").selections.map((s) => s.key), ["home_over", "home_under", "draw_over", "draw_under", "away_over", "away_under"]);
+  assert.equal(byKey.get("result_goals_2_5").selections[0].name, "Home FC / Over 2.5");
+  assert.deepEqual(byKey.get("goals_btts_2_5").selections.map((s) => s.name), ["Over 2.5 / Yes", "Over 2.5 / No", "Under 2.5 / Yes", "Under 2.5 / No"]);
+  assert.deepEqual(byKey.get("home_exact_goals").selections.map((s) => s.key), ["0", "1", "2", "3+"]);
+  assert.equal(byKey.get("winning_margin").selections.length, 10);
+  assert.equal(byKey.get("winning_margin").selections.find((s) => s.key === "no_goal").name, "0–0");
+  assert.deepEqual(byKey.get("corners_range").selections.map((s) => s.key), ["u6", "6-8", "9-11", "12-14", "o14"]);
+  assert.deepEqual(byKey.get("first_team_score").selections.map((s) => s.key), ["home", "away", "none"]);
+  for (const market of markets) for (const s of market.selections) assert.ok(Number.isFinite(s.odds) && s.odds > 1, `${market.key}/${s.key} is priced`);
+  assert.equal(new Set(markets.map((m) => m.key)).size, markets.length, "market keys are unique");
 });
 
 test("Super Admin's league pick decides which new matches are synced; listed ones keep syncing", async () => {

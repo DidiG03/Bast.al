@@ -30,9 +30,10 @@ import {
   type TeamCommissions,
   type UserRow,
 } from "../../lib/api";
-import { serverApiFetch } from "../../lib/api-server";
+import { getMe, serverApiFetch } from "../../lib/api-server";
 import { formatMoney, formatSignedMoney } from "../../lib/format";
 import { getT } from "../../lib/i18n/server";
+import { livePill } from "../../lib/live";
 import { addDays, dayKey, isDaysFromToday, startOfDay, startOfWeek } from "../../lib/time";
 
 const MATCH_TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
@@ -118,7 +119,7 @@ export default async function DashboardPage() {
   const token = await getToken();
   if (!token) redirect("/sign-in");
 
-  const me = await serverApiFetch<MeResponse>("/users/me", token);
+  const me = await getMe(token);
 
   if (me.role === "PLAYER") {
     return <PlayerHome me={me} token={token} />;
@@ -617,33 +618,17 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
   );
 }
 
-/**
- * The matches worth showing first: live ones, then the ones starting in the
- * next two days with the most to bet on (the big leagues have the most
- * markets), soonest first when that's equal.
- */
-function pickTopEvents(live: OddsEvent[], upcoming: OddsEvent[], count: number): OddsEvent[] {
-  const soon = Date.now() + 2 * DAY_MS;
-  const open = (event: OddsEvent) => (event.bettable || event.live) && event.markets.length > 0;
-  const liveNow = live.filter(open).sort((a, b) => b.markets.length - a.markets.length);
-  const next = upcoming
-    .filter((event) => open(event) && new Date(event.startsAt).getTime() <= soon)
-    .sort((a, b) => b.markets.length - a.markets.length || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
-  const later = upcoming.filter((event) => open(event) && new Date(event.startsAt).getTime() > soon);
-  return [...liveNow.slice(0, 2), ...next, ...liveNow.slice(2), ...later].slice(0, count);
-}
-
 async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
   const { t, tn, ts, date } = getT();
-  const [live, upcoming, slip, bets] = me.parent
+  // Live first, then the next two days' matches with the most to bet on: picked by the API.
+  const [topEvents, nextRaces, slip, bets] = me.parent
     ? await Promise.all([
-        serverApiFetch<OddsEvent[]>("/odds/events?filter=live", token).catch(() => []),
-        serverApiFetch<OddsEvent[]>("/odds/events?filter=upcoming", token).catch(() => []),
+        serverApiFetch<OddsEvent[]>("/odds/top-events?count=4", token).catch(() => []),
+        serverApiFetch<OddsEvent[]>("/odds/top-events?count=3&sport=greyhounds", token).catch(() => []),
         serverApiFetch<SlipInfo>("/bets/slip", token).catch(() => null),
         serverApiFetch<MyBets>("/bets/mine?status=open", token).catch(() => null),
       ])
     : [[], [], null, null];
-  const topEvents = pickTopEvents(live, upcoming, 4);
   // Why this account can't bet (a suspended Manager, no team yet): a warning toast, and no Top events.
   const blocked = me.status === "SUSPENDED" ? t("Your account is suspended. Ask your Manager or Owner.") : slip?.blocked ? ts(slip.blocked) : null;
   const week = bets?.week;
@@ -675,9 +660,7 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
                     <span className="player-top-event-league">{event.league}</span>
                     <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
                       {event.status === "LIVE"
-                        ? event.elapsed === null
-                          ? t("Live")
-                          : t("Live {minute}'", { minute: event.elapsed })
+                        ? livePill(event, t)
                         : `${topEventDayLabel(event.startsAt)} · ${date(event.startsAt, MATCH_TIME)}`}
                     </span>
                   </div>
@@ -698,6 +681,27 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
               ))}
             </div>
           )}
+        </section>
+      ) : null}
+
+      {me.parent && !blocked && nextRaces.length > 0 ? (
+        <section className="stack">
+          <div className="page-title-row">
+            <h2 style={{ margin: 0 }}>
+              {t("Next races")}
+              <HelpTip text="The next greyhound races. Back a dog to win, or pick the 1st and 2nd. Race bets pay the starting price, set when the race starts." />
+            </h2>
+            <Link href="/dashboard/bet?sport=greyhounds">{t("View all")} →</Link>
+          </div>
+          <div className="player-next-races">
+            {nextRaces.map((race) => (
+              <Link key={race.id} href="/dashboard/bet?sport=greyhounds" className="card player-next-race">
+                <span className="player-top-event-league">{race.league}</span>
+                <strong>{t("Race {number}", { number: race.race?.raceNumber ?? "" })}</strong>
+                <span className="status-pill">{date(race.startsAt, MATCH_TIME)}</span>
+              </Link>
+            ))}
+          </div>
         </section>
       ) : null}
 

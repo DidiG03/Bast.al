@@ -22,7 +22,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { clientIp } from "../security/client-ip";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { AdjustBalanceDto, ApprovalLimitDto, BalanceLimitDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
+import { AdjustBalanceDto, ApprovalLimitDto, ApproveTransactionDto, BalanceLimitDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { ReassignUserDto } from "./dto/reassign-user.dto";
 import { AuditQueryDto } from "./dto/audit-query.dto";
@@ -334,8 +334,8 @@ export class UsersController {
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
-  approve(@CurrentActor() actor: Actor, @Param("transactionId") transactionId: string, @Body("approve") approve: boolean, @Req() req: AuthenticatedRequest) {
-    return this.users.approveBalance(actor, transactionId, approve, clientIp(req));
+  approve(@CurrentActor() actor: Actor, @Param("transactionId") transactionId: string, @Body() dto: ApproveTransactionDto, @Req() req: AuthenticatedRequest) {
+    return this.users.approveBalance(actor, transactionId, dto.approve, clientIp(req));
   }
 
   @Get(":id/balance/statement")

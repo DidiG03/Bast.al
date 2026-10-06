@@ -130,11 +130,6 @@ export class TennisSyncService implements OnModuleInit, OnModuleDestroy {
         // And a few outcomes of each, so an outcome spelled differently shows up too.
         const sample = (name: string) => Object.keys(Object.values(odds).find((raw) => raw?.[name])?.[name] ?? {}).slice(0, 4);
         this.logger.log(`Tennis outcomes in the feed: ${names.map((name) => `${name} [${sample(name).join(" | ")}]`).join("; ")}`);
-        // One over/under and one handicap in full, to see where the feed puts the line.
-        for (const name of ["Over/Under by Games in Match", "Asian Handicap (Games)"]) {
-          const raw = Object.values(odds).find((r) => r?.[name])?.[name];
-          if (raw) this.logger.log(`Tennis ${name} in full: ${JSON.stringify(raw).slice(0, 600)}`);
-        }
       }
       for (const [key, raw] of Object.entries(odds ?? {})) {
         const match = saved.get(key);

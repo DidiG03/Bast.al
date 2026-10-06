@@ -64,57 +64,93 @@
     }
    },
    "Over/Under by Games in Match": {
-    "Over 20.5": {
-     "bet365": "1.60"
+    "Over/Under by Games in Match Over": {
+     "20.5": {
+      "bet365": "1.60",
+      "Marathon": "1.60"
+     },
+     "21.5": {
+      "bet365": "1.80",
+      "Marathon": "1.80"
+     },
+     "22.5": {
+      "bet365": "2.05",
+      "Marathon": "2.05"
+     },
+     "23.5": {
+      "bet365": "2.40",
+      "Marathon": "2.40"
+     },
+     "22": {
+      "bet365": "1.90",
+      "Marathon": "1.90"
+     }
     },
-    "Under 20.5": {
-     "bet365": "2.25"
-    },
-    "Over 21.5": {
-     "bet365": "1.80"
-    },
-    "Under 21.5": {
-     "bet365": "1.95"
-    },
-    "Over 22.5": {
-     "bet365": "2.05"
-    },
-    "Under 22.5": {
-     "bet365": "1.70"
-    },
-    "Over 23.5": {
-     "bet365": "2.40"
-    },
-    "Under 23.5": {
-     "bet365": "1.52"
-    },
-    "Over 22": {
-     "bet365": "1.9"
-    },
-    "Under 22": {
-     "bet365": "1.9"
+    "Over/Under by Games in Match Under": {
+     "20.5": {
+      "bet365": "2.25",
+      "Marathon": "2.25"
+     },
+     "21.5": {
+      "bet365": "1.95",
+      "Marathon": "1.95"
+     },
+     "22.5": {
+      "bet365": "1.70",
+      "Marathon": "1.70"
+     },
+     "23.5": {
+      "bet365": "1.52",
+      "Marathon": "1.52"
+     },
+     "22": {
+      "bet365": "1.90",
+      "Marathon": "1.90"
+     }
     }
    },
    "Over/Under (1st Set)": {
-    "Over 9.5": {
-     "bet365": "1.85"
+    "Over/Under (1st Set) Over": {
+     "9.5": {
+      "bet365": "1.85",
+      "Marathon": "1.85"
+     }
     },
-    "Under 9.5": {
-     "bet365": "1.90"
+    "Over/Under (1st Set) Under": {
+     "9.5": {
+      "bet365": "1.90",
+      "Marathon": "1.90"
+     }
     }
    },
    "Asian Handicap (Games)": {
-    "Home -3.5": {
-     "bet365": "1.85"
+    "Asian Handicap (Games) Home": {
+     "-3.5": {
+      "bet365": "1.85",
+      "Marathon": "1.85"
+     },
+     "-4.5": {
+      "bet365": "2.10",
+      "Marathon": "2.10"
+     },
+     "-3": {
+      "bet365": "1.80",
+      "Marathon": "1.80"
+     }
     },
-    "Away +3.5": {
-     "bet365": "1.90"
-    },
-    "Home -4.5": {
-     "bet365": "2.10"
-    },
-    "Away +4.5": {
-     "bet365": "1.70"
+    "Asian Handicap (Games) Away": {
+     "+3.5": {
+      "bet365": "1.90",
+      "Marathon": "1.90"
+     },
+     "+4.5": {
+      "bet365": "1.70",
+      "Marathon": "1.70"
+     },
+     "+3": {
+      "bet365": "2.00",
+      "Marathon": "2.00"
+     }
     }
    },
    "Win In Straigh Sets (Player 1)": {
@@ -142,19 +178,29 @@
     }
    },
    "Asian Handicap (Sets)": {
-    "Home -1.5": {
-     "bet365": "2.05"
+    "Asian Handicap (Sets) Home": {
+     "-1.5": {
+      "bet365": "2.05",
+      "Marathon": "2.05"
+     }
     },
-    "Away -1.5": {
-     "bet365": "1.75"
+    "Asian Handicap (Sets) Away": {
+     "-1.5": {
+      "bet365": "1.75",
+      "Marathon": "1.75"
+     }
     }
    },
    "Total - Home": {
-    "Over 12.5": {
-     "bet365": "1.80"
+    "Total Over": {
+     "12.5": {
+      "bet365": "1.80"
+     }
     },
-    "Under 12.5": {
-     "bet365": "1.95"
+    "Total Under": {
+     "12.5": {
+      "bet365": "1.95"
+     }
     }
    },
    "Odd/Even": {
@@ -190,16 +236,16 @@
     }
    },
    "Set / Match": {
-    "Home/Home": {
+    "1/1": {
      "bet365": "1.60"
     },
-    "Home/Away": {
+    "1/2": {
      "bet365": "8.00"
     },
-    "Away/Home": {
+    "2/1": {
      "bet365": "4.50"
     },
-    "Away/Away": {
+    "2/2": {
      "bet365": "4.75"
     }
    },
@@ -218,43 +264,71 @@
     }
    },
    "Over/Under by Games (2nd Set)": {
-    "Over 9.5": {
-     "bet365": "1.90"
+    "Over/Under by Games (2nd Set) Over": {
+     "9.5": {
+      "bet365": "1.90",
+      "Marathon": "1.90"
+     }
     },
-    "Under 9.5": {
-     "bet365": "1.85"
+    "Over/Under by Games (2nd Set) Under": {
+     "9.5": {
+      "bet365": "1.85",
+      "Marathon": "1.85"
+     }
     }
    },
    "Home Team Total (1st Set)": {
-    "Over 5.5": {
-     "bet365": "1.70"
+    "Over": {
+     "5.5": {
+      "bet365": "1.70"
+     }
     },
-    "Under 5.5": {
-     "bet365": "2.10"
+    "Under": {
+     "5.5": {
+      "bet365": "2.10"
+     }
     }
    },
    "Asian Handicap (1st Set)": {
-    "Home -1.5": {
-     "bet365": "1.95"
+    "Asian Handicap (1st Set) Home": {
+     "-1.5": {
+      "bet365": "1.95",
+      "Marathon": "1.95"
+     }
     },
-    "Away -1.5": {
-     "bet365": "1.85"
+    "Asian Handicap (1st Set) Away": {
+     "+1.5": {
+      "bet365": "1.85",
+      "Marathon": "1.85"
+     }
     }
    },
    "Over/Under": {
-    "Over 2.5": {
-     "bet365": "2.60"
+    "Over/Under Over": {
+     "2.5": {
+      "bet365": "2.60",
+      "Marathon": "2.60"
+     }
     },
-    "Under 2.5": {
-     "bet365": "1.45"
+    "Over/Under Under": {
+     "2.5": {
+      "bet365": "1.45",
+      "Marathon": "1.45"
+     }
     }
    },
    "Total Tiebreaks": {
-    "Over 0.5": {
-     "bet365": "2.00"
+    "Total Tiebreaks Over": {
+     "0.5": {
+      "bet365": "2.00",
+      "Marathon": "2.00"
+     }
     },
-    "Under 0.5": {
-     "bet365": "1.80"
+    "Total Tiebreaks Under": {
+     "0.5": {
+      "bet365": "1.80",
+      "Marathon": "1.80"
+     }
     }
    }
   },

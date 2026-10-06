@@ -62,8 +62,13 @@ export type RawTennisMatch = {
   scores?: Array<{ score_first?: string; score_second?: string; score_set?: string }>;
 };
 
-/** Odds per market, then per outcome, then per bookmaker: { "Home/Away": { "Home": { "bet365": "1.50" } } }. */
-export type RawTennisOdds = Record<string, Record<string, Record<string, string>>>;
+/**
+ * Odds per market, then per outcome, then per bookmaker: { "Home/Away": { "Home": { "bet365": "1.50" } } }.
+ * Over/under and handicap markets have the line between the outcome and the bookmaker:
+ * { "Over/Under by Games in Match": { "Over/Under by Games in Match Over": { "21.5": { "bet365": "1.80" } } } }.
+ */
+export type RawTennisOdds = Record<string, Record<string, Record<string, unknown>>>;
+type Books = Record<string, unknown>;
 
 /** "Atp Singles" → "ATP Singles". */
 const tourName = (type: string) => type.replace(/\b(atp|wta|itf|utr)\b/gi, (word) => word.toUpperCase());
@@ -159,8 +164,9 @@ const signed = (line: number) => `${line > 0 ? "+" : line < 0 ? "−" : ""}${Mat
 export function parseTennisOdds(raw: RawTennisOdds, home: string, away: string, bookmaker: string): TennisMarket[] {
   const wanted = bookmaker.toLowerCase();
   /** One bookmaker's prices for every outcome named, or null if no bookmaker has them all. */
-  const prices = (market: string, outcomes: string[]): number[] | null => {
-    const byOutcome = outcomes.map((outcome) => raw[market]?.[outcome] ?? {});
+  const prices = (market: string, outcomes: string[]): number[] | null => bookPrices(outcomes.map((outcome) => raw[market]?.[outcome] ?? {}));
+  /** One bookmaker's prices for every outcome, given each outcome's prices by bookmaker; the chosen one first. */
+  const bookPrices = (byOutcome: Books[]): number[] | null => {
     const books = [...new Set(byOutcome.flatMap((books) => Object.keys(books)))].sort((a, b) => (a.toLowerCase() === wanted ? -1 : b.toLowerCase() === wanted ? 1 : 0));
     for (const book of books) {
       const odds = byOutcome.map((books) => price(books[book]));
@@ -241,19 +247,30 @@ export function parseTennisOdds(raw: RawTennisOdds, home: string, away: string, 
    */
   const lines = (market: string | null, a: string, b: string) => {
     if (!market) return [];
-    const read = (side: string) =>
-      Object.keys(raw[market] ?? {})
+    const outcomes = raw[market] ?? {};
+    /** Each half line on one side with its prices by bookmaker: from "Over 22.5", or from "… Over" holding { "22.5": {…} }. */
+    const read = (side: string): Array<{ line: number; books: Books }> => {
+      const flat = Object.keys(outcomes)
         .map((outcome) => ({ outcome, match: new RegExp(`^(${side})\\s*\\(?([+-]?\\d+(?:\\.\\d+)?)\\)?$`, "i").exec(outcome.trim()) }))
-        .filter((o): o is { outcome: string; match: RegExpExecArray } => o.match !== null && isHalf(Number(o.match[2])))
-        .map((o) => ({ outcome: o.outcome, line: Number(o.match[2]) }));
+        .filter((o): o is { outcome: string; match: RegExpExecArray } => o.match !== null)
+        .map((o) => ({ line: Number(o.match[2]), books: outcomes[o.outcome] }));
+      const nested = Object.keys(outcomes)
+        .filter((outcome) => new RegExp(`(^|\\s)${side}$`, "i").test(outcome.trim()))
+        .flatMap((outcome) =>
+          Object.entries(outcomes[outcome])
+            .filter(([line, books]) => /^[+-]?\d+(\.\d+)?$/.test(line.trim()) && books !== null && typeof books === "object")
+            .map(([line, books]) => ({ line: Number(line), books: books as Books })),
+        );
+      return [...flat, ...nested].filter((l) => isHalf(l.line));
+    };
     const others = read(b);
     const handicap = a === "Home";
     const priced = read(a)
-      .map(({ outcome, line }) => {
+      .map(({ line, books }) => {
         const candidates = others.filter((o) => (handicap ? o.line === -line || o.line === line : o.line === line));
         const fair = candidates
-          .map((o) => ({ o, odds: prices(market, [outcome, o.outcome]) }))
-          .filter((c): c is { o: { outcome: string; line: number }; odds: number[] } => c.odds !== null)
+          .map((o) => ({ o, odds: bookPrices([books, o.books]) }))
+          .filter((c): c is { o: { line: number; books: Books }; odds: number[] } => c.odds !== null)
           .map((c) => ({ ...c, book: 1 / c.odds[0] + 1 / c.odds[1] }))
           .filter((c) => c.book > 0.98 && c.book < 1.2)
           .sort((x, y) => Math.abs(x.book - 1.06) - Math.abs(y.book - 1.06))[0];

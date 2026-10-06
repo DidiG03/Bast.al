@@ -391,6 +391,8 @@ export const server: Record<string, string> = {
   "{name} still has {count} open bets. Move them once they're settled.": "{name} ka ende {count} baste të hapura. Zhvendose pasi të mbyllen.",
   "{name}'s balance is below zero ({amount}). Give them credit to clear it before moving them.": "Balanca e {name} është nën zero ({amount}). Jepi kredi për ta mbuluar para se ta zhvendosësh.",
   "This Player changed while you were moving them. Refresh and try again.": "Ky Lojtar ndryshoi ndërsa po e zhvendosje. Rifresko dhe provo sërish.",
+  "{name} is in the middle of Book of Ra free spins. Move them once they're over.": "{name} është në mes të rrotullimeve falas të Book of Ra. Zhvendose pasi të mbarojnë.",
+  "The draw is out of range": "Tërheqja është jashtë kufijve",
   "{name} is in the middle of a blackjack hand. Move them once it's over.": "{name} është në mes të një dore blackjack. Zhvendose pasi të mbarojë.",
   "The account this transfer is for has moved to another team since it was asked for. Reject it.": "Llogaria që merr këtë transferim është zhvendosur në një skuadër tjetër që kur u kërkua. Refuzoje.",
   "The account giving this credit is suspended. Reject it, or reactivate the account first.": "Llogaria që jep këtë kredi është pezulluar. Refuzoje, ose riaktivizoje llogarinë më parë.",

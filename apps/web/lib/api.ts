@@ -652,7 +652,7 @@ export type CasinoSpinRow = {
   win: number;
   free: boolean;
   freeSpinsWon: number;
-  gamble: { pick: CardColor; suit: CardSuit } | null;
+  gamble: { pick: CardColor; suit: CardSuit; game?: "slot" | "book" } | null;
   createdAt: string;
 };
 
@@ -732,17 +732,82 @@ export type CasinoAdmin = {
   teamOpen: boolean | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
   /** Each game on its own: the slot (spins and double or nothing), roulette and blackjack (`spins` are its hands). */
-  games: Record<"slot" | "roulette" | "blackjack", { spins: number; staked: number; won: number; payoutRate: number | null }>;
+  games: Record<"slot" | "roulette" | "blackjack", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
+    /** Book of Ra: paid spins and free ones, with double or nothing on its wins. */
+    book: { spins: number; freeSpins: number; staked: number; won: number; payoutRate: number | null };
+  };
   players: Array<{
     id: string;
     username: string;
     spins: number;
     roulette: { spins: number; staked: number; won: number };
     blackjack: { hands: number; staked: number; won: number };
+    book: { spins: number; freeSpins: number; staked: number; won: number };
     staked: number;
     won: number;
     net: number;
   }>;
+};
+
+/** Book of Ra's symbols, as the API names them. */
+export type BookSymbol = "EXPLORER" | "PHARAOH" | "STATUE" | "SCARAB" | "ACE" | "KING" | "QUEEN" | "JACK" | "TEN" | "BOOK";
+export type BookPaying = Exclude<BookSymbol, "BOOK">;
+
+/** A round of free spins in progress: every spin plays at `bet`, and `special` expands. `won` is the round's total so far, the spin that started it included. */
+export type BookFeature = { bet: number; special: BookPaying; remaining: number; played: number; won: number };
+
+/** One Book of Ra spin in the Player's recent list. A free spin has `stake` 0 and `special` set. */
+export type BookSpinRow = { id: string; bet: number; stake: number; win: number; free: boolean; freeSpinsWon: number; special: BookPaying | null; createdAt: string };
+
+export type BookState = {
+  closed: string | null;
+  balance: number;
+  maxStake: number | null;
+  grid: BookSymbol[][] | null;
+  feature: BookFeature | null;
+  gamble: CasinoGamble | null;
+  recent: BookSpinRow[];
+  game: {
+    name: string;
+    reels: number;
+    rows: number;
+    lines: number;
+    bets: number[];
+    symbols: BookSymbol[];
+    book: BookSymbol;
+    paying: BookPaying[];
+    lineShapes: number[][];
+    /** In line bets (a tenth of the bet): [2, 3, 4, 5] of a kind; 0 doesn't pay. */
+    linePays: Record<BookPaying, [number, number, number, number]>;
+    /** Books anywhere, in times the whole bet. */
+    scatterPays: Record<"3" | "4" | "5", number>;
+    /** How many reels each symbol must be on to expand and pay in free spins. */
+    expandsFrom: Record<BookPaying, number>;
+    freeSpins: number;
+    maxWin: number;
+    payoutRate: number;
+    gambleSteps: number;
+    gambleLimit: number;
+  };
+};
+
+export type BookSpinResult = {
+  spin: BookSpinRow;
+  grid: BookSymbol[][];
+  lines: Array<{ line: number; symbol: BookPaying; count: number; cells: Array<[number, number]>; win: number }>;
+  scatter: { count: number; cells: Array<[number, number]>; win: number } | null;
+  /** In a free spin: the special symbol filling `reels`, paying `perLine` on every line. Dollars. */
+  expansion: { symbol: BookPaying; reels: number[]; perLine: number; win: number } | null;
+  win: number;
+  free: boolean;
+  freeSpinsWon: number;
+  feature: BookFeature | null;
+  /** The round's total, when this was its last free spin. */
+  featureEnded: number | null;
+  /** The round reached the most it can pay. */
+  capped: boolean;
+  gamble: CasinoGamble | null;
+  balance: number;
 };
 
 /** A card: rank (A, 2–9, T, J, Q, K) then suit (S, H, D, C), "AS", "TD". */

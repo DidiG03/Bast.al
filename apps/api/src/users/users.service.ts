@@ -1151,7 +1151,7 @@ export class UsersService {
       if (!row || row.parent_id !== player.parentId) {
         throw new ConflictException("This Player changed while you were moving them. Refresh and try again.");
       }
-      const blocked = moveBlocker(player.username, row.balance, await tx.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }), (await tx.blackjackHand.count({ where: { playerId: id } })) > 0);
+      const blocked = moveBlocker(player.username, row.balance, await tx.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }), await inPlay(tx, id));
       if (blocked) throw new BadRequestException(blocked);
 
       const balance = new Prisma.Decimal(row.balance);
@@ -1351,7 +1351,7 @@ export class UsersService {
     const directChildren = await this.prisma.user.findMany({ where: { parentId: managerId, role: Role.PLAYER }, select: { id: true, username: true } });
     const playerDescendants = await this.hierarchy.getDescendantIds(id);
     const authorized = await this.hierarchy.canActOn(actor, id) && await this.hierarchy.canActOn(actor, managerId);
-    const blocked = moveBlocker(player.username, player.balance, await this.prisma.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }), (await this.prisma.blackjackHand.count({ where: { playerId: id } })) > 0);
+    const blocked = moveBlocker(player.username, player.balance, await this.prisma.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }), await inPlay(this.prisma, id));
     const reason = !authorized ? "Outside your hierarchy" : player.role !== Role.PLAYER ? "Only Players can be reassigned" : !holdsDirectReports(manager.role) ? "Destination is not a Manager or Owner" : manager.status !== UserStatus.ACTIVE ? "Destination is suspended" : player.parentId === managerId ? "Player is already assigned here" : playerDescendants.includes(managerId) ? "Circular hierarchy detected" : directChildren.length >= manager.managerCapacity ? "Destination capacity reached" : blocked;
     return {
       valid: reason === null,
@@ -1648,8 +1648,15 @@ async function lockAccounts(tx: Prisma.TransactionClient, ids: Array<string | nu
   if (unique.length > 0) await tx.$queryRaw`SELECT id FROM users WHERE id = ANY(${unique}) ORDER BY id FOR UPDATE`;
 }
 
-function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, handInPlay = false): string | null {
-  if (handInPlay) return `${username} is in the middle of a blackjack hand. Move them once it's over.`;
+/** Casino rounds a Player is in the middle of, whose winnings would otherwise land with a new team. */
+async function inPlay(db: Pick<Prisma.TransactionClient, "blackjackHand" | "casinoBookFeature">, playerId: string) {
+  const [hands, rounds] = await Promise.all([db.blackjackHand.count({ where: { playerId } }), db.casinoBookFeature.count({ where: { playerId } })]);
+  return { blackjack: hands > 0, freeSpins: rounds > 0 };
+}
+
+function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, playing: { blackjack: boolean; freeSpins: boolean } = { blackjack: false, freeSpins: false }): string | null {
+  if (playing.blackjack) return `${username} is in the middle of a blackjack hand. Move them once it's over.`;
+  if (playing.freeSpins) return `${username} is in the middle of Book of Ra free spins. Move them once they're over.`;
   if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;
   if (openBets > 1) return `${username} still has ${openBets} open bets. Move them once they're settled.`;
   if (balance.isNegative()) return `${username}'s balance is below zero (-$${balance.abs().toFixed(2)}). Give them credit to clear it before moving them.`;

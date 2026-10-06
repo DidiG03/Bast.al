@@ -42,12 +42,12 @@ const SYMBOL_NAMES: Record<SlotSymbol, string> = {
   STAR: msg("Star"),
 };
 
-const SUIT_MARKS: Record<CardSuit, string> = { HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣", SPADES: "♠" };
+export const SUIT_MARKS: Record<CardSuit, string> = { HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣", SPADES: "♠" };
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
-/** Each line has its own colour, on the reels and in the list of wins. */
-const LINE_COLORS = ["#3fa9f5", "#ef3b3b", "#3cc45a", "#f5d02f", "#f27ad6"];
+/** Each line has its own colour, on the reels and in the list of wins. Book of Ra uses all 10. */
+export const LINE_COLORS = ["#3fa9f5", "#ef3b3b", "#3cc45a", "#f5d02f", "#f27ad6", "#ff8c1a", "#9b6bff", "#2ee6d6", "#c2e83a", "#ff5f8f"];
 const STAR_COLOR = "#ffffff";
 /** A spin that pays this many times its bet gets the big-win treatment. */
 const BIG_WIN = 20;
@@ -58,7 +58,7 @@ const BIG_WIN = 20;
  * the higher numbers further from the middle row. The reels draw the line to
  * the same spot, so it runs straight into its number.
  */
-function lineEnds(shapes: number[][]): { left: number[]; right: number[] } {
+export function lineEnds(shapes: number[][]): { left: number[]; right: number[] } {
   const side = (rowOf: (shape: number[]) => number) => {
     const ends = shapes.map(() => 0);
     for (const row of [0, 1, 2]) {
@@ -108,7 +108,7 @@ function combosFor(result: CasinoSpinResult, game: CasinoState["game"]): Combo[]
 }
 
 /** Every win at once: all the cells, and every line drawn. */
-function overview(combos: Combo[]): ReelWin {
+export function overview(combos: Array<{ reel: ReelWin }>): ReelWin {
   const seen = new Map<string, [number, number]>();
   for (const cell of combos.flatMap((combo) => combo.reel.cells)) seen.set(cell.join(":"), cell);
   return {
@@ -120,10 +120,10 @@ function overview(combos: Combo[]): ReelWin {
 }
 
 /** How long a win takes to count up, in milliseconds; the coin sound lasts as long. */
-const countUpTime = (amount: number) => Math.min(1600, 500 + amount * 40);
+export const countUpTime = (amount: number) => Math.min(1600, 500 + amount * 40);
 
 /** Counts up to `target` when it changes, so a win ticks up instead of just appearing. */
-function useCountUp(target: number, instant: boolean): number {
+export function useCountUp(target: number, instant: boolean): number {
   const [shown, setShown] = useState(target);
   useEffect(() => {
     if (instant || target <= 0) {
@@ -444,48 +444,7 @@ export function SlotGame() {
                 {!reelsReady && !plainGrid ? <LoadingSpinner label="Setting up the reels" /> : null}
 
                 {(gamble && !auto) || card ? (
-                  <div className="slot-gamble">
-                    <div className={`casino-gamble${card ? (card.won ? " is-won" : " is-lost") : ""}`} aria-live="polite">
-                      <div className={`casino-card${card ? ` is-${card.suit === "HEARTS" || card.suit === "DIAMONDS" ? "red" : "black"}` : ""}`} key={recent[0]?.id}>
-                        {card ? SUIT_MARKS[card.suit] : "?"}
-                      </div>
-                      <div className="casino-gamble-body">
-                        {card ? (
-                          <strong>{card.won ? t("Right! You now have {amount}.", { amount: formatMoney(card.win) }) : t("Wrong card. This win is lost.")}</strong>
-                        ) : (
-                          <strong>{t("Double or nothing?")}</strong>
-                        )}
-                        {gamble ? (
-                          <>
-                            <span className="muted">
-                              {t("Guess the card's colour: {amount} becomes {double}, or nothing.", { amount: formatMoney(gamble.amount), double: formatMoney(gamble.amount * 2) })}{" "}
-                              {tn(gamble.stepsLeft, "{count} guess left.", "{count} guesses left.")}
-                            </span>
-                            <div className="casino-gamble-actions">
-                              <button type="button" className="casino-pick is-red" disabled={guessing} onClick={() => guess("RED")}>
-                                {t("Red")} ♥♦
-                              </button>
-                              <button type="button" className="casino-pick is-black" disabled={guessing} onClick={() => guess("BLACK")}>
-                                {t("Black")} ♣♠
-                              </button>
-                              <button type="button" className="secondary" disabled={guessing} onClick={takeWin}>
-                                {t("Take {amount}", { amount: formatMoney(gamble.amount) })}
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            {card?.won ? <span className="muted">{t("That's the most this win can be doubled. It's in your balance.")}</span> : null}
-                            <div className="casino-gamble-actions">
-                              <button type="button" className="secondary" onClick={() => setCard(null)}>
-                                {t("Continue")}
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <GamblePanel gamble={gamble} card={card} cardKey={recent[0]?.id} guessing={guessing} onGuess={guess} onTake={takeWin} onContinue={() => setCard(null)} />
                 ) : null}
               </div>
               <LineMarkers side="right" shapes={state.game.lineShapes} lit={litLines} />
@@ -609,7 +568,7 @@ export function SlotGame() {
 }
 
 /** The numbered markers at the side of the reels: each line's number where it starts (left) and ends (right), placed where its line meets the edge. */
-function LineMarkers({ side, shapes, lit }: { side: "left" | "right"; shapes: number[][]; lit: Set<number> }) {
+export function LineMarkers({ side, shapes, lit }: { side: "left" | "right"; shapes: number[][]; lit: Set<number> }) {
   const ends = lineEnds(shapes)[side];
   return (
     <div className={`slot-markers is-${side}`} aria-hidden="true">
@@ -728,6 +687,71 @@ function Rules({ game, bet, onClose, i18n }: { game: CasinoState["game"]; bet: n
           {t("On average spins pay back {rate}% of what they cost. Each spin is decided on our server, never on your phone.", { rate: game.payoutRate })}
         </p>
       </section>
+    </div>
+  );
+}
+
+/**
+ * Double or nothing after a win (both slots): the card, the win at stake,
+ * red or black, and taking the win; then whether the guess was right.
+ */
+export function GamblePanel({
+  gamble,
+  card,
+  cardKey,
+  guessing,
+  onGuess,
+  onTake,
+  onContinue,
+}: {
+  gamble: CasinoGamble | null;
+  card: { suit: CardSuit; won: boolean; win: number } | null;
+  /** Changes with each guess, so the card turns over again. */
+  cardKey?: string;
+  guessing: boolean;
+  onGuess(pick: CardColor): void;
+  onTake(): void;
+  onContinue(): void;
+}) {
+  const { t, tn } = useI18n();
+  return (
+    <div className="slot-gamble">
+      <div className={`casino-gamble${card ? (card.won ? " is-won" : " is-lost") : ""}`} aria-live="polite">
+        <div className={`casino-card${card ? ` is-${card.suit === "HEARTS" || card.suit === "DIAMONDS" ? "red" : "black"}` : ""}`} key={cardKey}>
+          {card ? SUIT_MARKS[card.suit] : "?"}
+        </div>
+        <div className="casino-gamble-body">
+          {card ? <strong>{card.won ? t("Right! You now have {amount}.", { amount: formatMoney(card.win) }) : t("Wrong card. This win is lost.")}</strong> : <strong>{t("Double or nothing?")}</strong>}
+          {gamble ? (
+            <>
+              <span className="muted">
+                {t("Guess the card's colour: {amount} becomes {double}, or nothing.", { amount: formatMoney(gamble.amount), double: formatMoney(gamble.amount * 2) })}{" "}
+                {tn(gamble.stepsLeft, "{count} guess left.", "{count} guesses left.")}
+              </span>
+              <div className="casino-gamble-actions">
+                <button type="button" className="casino-pick is-red" disabled={guessing} onClick={() => onGuess("RED")}>
+                  {t("Red")} ♥♦
+                </button>
+                <button type="button" className="casino-pick is-black" disabled={guessing} onClick={() => onGuess("BLACK")}>
+                  {t("Black")} ♣♠
+                </button>
+                <button type="button" className="secondary" disabled={guessing} onClick={onTake}>
+                  {t("Take {amount}", { amount: formatMoney(gamble.amount) })}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {card?.won ? <span className="muted">{t("That's the most this win can be doubled. It's in your balance.")}</span> : null}
+              <div className="casino-gamble-actions">
+                <button type="button" className="secondary" onClick={onContinue}>
+                  {t("Continue")}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

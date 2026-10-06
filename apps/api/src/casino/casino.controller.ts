@@ -18,11 +18,20 @@ import { BETS } from "./game";
 import { MAX_SPOTS } from "./roulette";
 import { RouletteService } from "./roulette.service";
 import { BlackjackService } from "./blackjack.service";
+import { BookService } from "./book.service";
+import { BETS as BOOK_BETS } from "./book";
 
 class SpinDto {
   @ApiProperty({ enum: BETS, description: "What the spin costs, in dollars. Ignored while the Player has free spins left from the old game." })
   @IsNumber()
   @IsIn([...BETS])
+  bet!: number;
+}
+
+class BookSpinDto {
+  @ApiProperty({ enum: BOOK_BETS, description: "What the spin costs, in dollars. Ignored during free spins, which play at the bet that started them." })
+  @IsNumber()
+  @IsIn([...BOOK_BETS])
   bet!: number;
 }
 
@@ -96,6 +105,7 @@ export class CasinoController {
     private readonly casino: CasinoService,
     private readonly roulette: RouletteService,
     private readonly blackjack: BlackjackService,
+    private readonly book: BookService,
   ) {}
 
   /** The Player's Casino: can they play, the rules, free spins, recent spins. */
@@ -169,6 +179,22 @@ export class CasinoController {
   @Idempotent()
   blackjackAction(@CurrentActor() actor: Actor, @Body() body: BlackjackActionDto) {
     return this.blackjack.act(actor, body.action);
+  }
+
+  /** The Player's Book of Ra: can they play, the rules, free spins in progress, their last spins. */
+  @Get("book")
+  @Roles(Role.PLAYER)
+  bookState(@CurrentActor() actor: Actor) {
+    return this.book.state(actor);
+  }
+
+  /** One Book of Ra spin, paid or free. Autoplay and free spins come quickly, hence the higher limit. Idempotent like a slot spin. */
+  @Post("book/spin")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Idempotent()
+  bookSpin(@CurrentActor() actor: Actor, @Body() body: BookSpinDto, @Req() req: AuthenticatedRequest) {
+    return this.book.spin(actor, body.bet, clientIp(req));
   }
 
   /** Whether the Casino is open, and how it did in a period, per Player. */

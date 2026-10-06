@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { bookArt, bookSymbolImage, loadBookArt } from "../../../components/book-symbols";
 import { HelpTip } from "../../../components/help-tip";
 import { useI18n } from "../../../components/i18n-provider";
 import { PageLoading } from "../../../components/loading-spinner";
@@ -18,6 +19,8 @@ import { addDays, startOfMonth, startOfWeek } from "../../../lib/time";
 const ROULETTE_RATE = 97.3;
 /** Blackjack's, with perfect play, as measured by the API's scripts/blackjack-rtp.mjs. */
 const BLACKJACK_RATE = 99.6;
+/** Book of Ra's, as measured by the API's scripts/book-rtp.mjs. */
+const BOOK_RATE = 94.9;
 
 /** The Casino: a lobby of games for Players; the switches and the figures for staff. */
 export default function CasinoPage() {
@@ -79,6 +82,16 @@ function CasinoLobby() {
               <small>{t("Pays back {rate}% on average", { rate: state.game.payoutRate })}</small>
             </span>
           </Link>
+          <Link className="casino-tile is-book" href="/dashboard/casino/book">
+            <span className="casino-tile-art" aria-hidden="true">
+              <BookTileArt />
+            </span>
+            <span className="casino-tile-body">
+              <strong>Book of Ra</strong>
+              <span>{t("Explore the pyramids for the book. 3 books open 10 free spins, where one special symbol fills whole reels and pays on all 10 lines.")}</span>
+              <small>{t("Pays back {rate}% on average", { rate: BOOK_RATE })}</small>
+            </span>
+          </Link>
           <Link className="casino-tile is-roulette" href="/dashboard/casino/roulette">
             <span className="casino-tile-art" aria-hidden="true">
               <RouletteTileArt />
@@ -108,6 +121,19 @@ function CasinoLobby() {
       )}
     </div>
   );
+}
+
+/** Book of Ra's tile: the cover picture from its art folder, or the book drawn in code. */
+function BookTileArt() {
+  const [cover, setCover] = useState<{ src: string; photo: boolean } | null>(null);
+  useEffect(() => {
+    loadBookArt().then(() => {
+      const photo = bookArt("cover");
+      setCover(photo ? { src: photo.src, photo: true } : { src: bookSymbolImage("BOOK", 220), photo: false });
+    });
+  }, []);
+  // eslint-disable-next-line @next/next/no-img-element -- a picture made in the browser, or one from the art folder
+  return cover ? <img className={`casino-tile-cover is-book${cover.photo ? " is-photo" : ""}`} src={cover.src} alt="" /> : null;
 }
 
 /** A small wheel for the roulette tile. */
@@ -358,7 +384,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
       </div>
 
       <div className="report-grid">
-        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
+        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
         <Stat label={t("Staked")} value={formatMoney(data.totals.staked)} hint={t("What spins and rounds cost")} />
         <Stat label={t("Paid out")} value={formatMoney(data.totals.won)} hint={data.totals.payoutRate === null ? t("No spins yet") : t("{rate}% of what was staked", { rate: data.totals.payoutRate })} />
         <Stat label={t("Casino profit")} help="What Players lost in the Casino minus what they won. It's part of the team's profit in Commissions." value={formatSignedMoney(data.totals.net)} highlight={data.totals.net < 0 ? "bad" : "good"} />
@@ -372,6 +398,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
               ["slot", t("Fruit slot"), tn(data.games.slot.spins, "{count} spin", "{count} spins")],
               ["roulette", t("Roulette"), tn(data.games.roulette.spins, "{count} round", "{count} rounds")],
               ["blackjack", t("Blackjack"), tn(data.games.blackjack.spins, "{count} hand", "{count} hands")],
+              ["book", "Book of Ra", `${tn(data.games.book.spins, "{count} spin", "{count} spins")} · ${tn(data.games.book.freeSpins, "{count} free spin", "{count} free spins")}`],
             ] as const
           ).map(([key, name, count]) => {
             const game = data.games[key];
@@ -405,7 +432,8 @@ function CasinoOverview({ me }: { me: MeResponse }) {
                   <span className="muted">
                     {tn(player.spins, "{count} spin", "{count} spins")}
                     {player.roulette.spins > 0 ? ` · ${tn(player.roulette.spins, "{count} roulette round", "{count} roulette rounds")}` : ""}
-                    {player.blackjack.hands > 0 ? ` · ${tn(player.blackjack.hands, "{count} blackjack hand", "{count} blackjack hands")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
+                    {player.blackjack.hands > 0 ? ` · ${tn(player.blackjack.hands, "{count} blackjack hand", "{count} blackjack hands")}` : ""}
+                    {player.book.spins > 0 ? ` · ${tn(player.book.spins, "{count} Book of Ra spin", "{count} Book of Ra spins")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
                   </span>
                 </div>
                 <strong className={player.net < 0 ? "is-bad" : undefined}>{formatSignedMoney(player.net)}</strong>

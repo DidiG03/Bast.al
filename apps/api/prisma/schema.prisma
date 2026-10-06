@@ -148,6 +148,7 @@ model User {
   casinoFreeSpins        CasinoFreeSpins?
   casinoGamble           CasinoGamble?
   blackjackHand          BlackjackHand?
+  bookFeature            CasinoBookFeature?
 
   @@index([parentId])
   @@index([role])
@@ -704,6 +705,8 @@ enum CasinoPlayKind {
   GAMBLE
   ROULETTE
   BLACKJACK
+  /// Book of Ra: a paid spin or a free one (see `free`).
+  BOOK
 }
 
 /// A blackjack round still being played: one per Player at most. The stakes
@@ -731,6 +734,8 @@ model BlackjackHand {
 model CasinoGamble {
   playerId  String   @id @map("player_id")
   player    User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  /// The game whose win this is: "slot" (Sizzling Hot) or "book" (Book of Ra).
+  game      String   @default("slot")
   amount    Decimal  @db.Decimal(12, 2)
   steps     Int      @default(0)
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -747,4 +752,24 @@ model CasinoFreeSpins {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("casino_free_spins")
+}
+
+/// A Player's round of Book of Ra free spins in progress: kept between
+/// requests, so each free spin is its own request and nothing is lost if the
+/// Player leaves. Gone once the round ends.
+model CasinoBookFeature {
+  playerId  String   @id @map("player_id")
+  player    User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  /// The bet of the spin that started it; every free spin plays at it.
+  bet       Decimal  @db.Decimal(12, 2)
+  /// The symbol that expands this round.
+  special   String
+  remaining Int
+  played    Int      @default(0)
+  /// What the round has paid so far, the spin that started it included (for the MAX_WIN cap).
+  won       Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("casino_book_features")
 }

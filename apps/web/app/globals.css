@@ -7941,8 +7941,9 @@ button.is-blocked {
 }
 
 .sport-option svg {
-  width: 1.15rem;
-  height: 1.15rem;
+  flex: none;
+  width: 1.35rem;
+  height: 1.35rem;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
@@ -8173,4 +8174,640 @@ button.is-blocked {
   justify-items: start;
   color: var(--text);
   text-decoration: none;
+}
+
+/* Book of Ra: the slot cabinet in sandstone, gold and lapis; deep blue during free spins. */
+.slot-cabinet.is-book {
+  --slot-red: #8a5a14;
+  --slot-red-dark: #4a2c06;
+  --slot-gold: #ffd35a;
+  background: linear-gradient(90deg, #2a1a06, #4a3312 50%, #2a1a06);
+}
+
+.slot-cabinet.is-book .slot-marquee {
+  background: linear-gradient(180deg, #d4a43a, #8a5a14 55%, #4a2c06);
+}
+
+.slot-cabinet.is-book .slot-title {
+  color: #fff3b0;
+  text-shadow: 0 2px 0 #4a2c06, 0 0 14px rgba(255, 211, 90, 0.55);
+}
+
+.slot-cabinet.is-book .casino-window {
+  background: linear-gradient(180deg, #e6c27a, #8a6a2c);
+  box-shadow: 0 0 0 2px #2a1a06, 0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.slot-cabinet.is-book .slot-controls {
+  background: linear-gradient(180deg, #7a4e10, #3a2204);
+}
+
+.slot-cabinet.is-book.is-free {
+  background: linear-gradient(90deg, #08163a, #16306e 50%, #08163a);
+}
+
+.slot-cabinet.is-book.is-free .slot-marquee {
+  background: linear-gradient(180deg, #2d5bc4, #16306e 55%, #08163a);
+}
+
+.book-free-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 1rem;
+  color: #fff3b0;
+  font-weight: 800;
+  font-size: clamp(0.85rem, 2vw, 1.15rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.book-free-banner b {
+  color: #ffd35a;
+  font-size: 1.3em;
+}
+
+.book-special {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.book-special img {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px #ffd35a;
+}
+
+/* The book opening on the special symbol, and the end of the free spins, over the reels. */
+.book-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 0.6rem;
+  background: radial-gradient(ellipse at center, rgba(40, 24, 4, 0.82), rgba(8, 4, 0, 0.92));
+}
+
+.book-intro,
+.book-summary {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  max-width: 32rem;
+  color: #fff3b0;
+  text-align: center;
+}
+
+.book-intro > strong,
+.book-summary > span {
+  font-size: clamp(1.3rem, 3.6vw, 2.2rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 0 16px rgba(255, 211, 90, 0.6);
+}
+
+.book-summary > strong {
+  color: #ffd35a;
+  font-size: clamp(2rem, 6vw, 3.4rem);
+  font-weight: 900;
+}
+
+.book-open {
+  display: flex;
+  perspective: 600px;
+}
+
+.book-page {
+  display: grid;
+  place-items: center;
+  width: clamp(4.5rem, 14vw, 7.5rem);
+  aspect-ratio: 3 / 4;
+  background: linear-gradient(90deg, #f6e6bd, #fff6dc);
+  border: 3px solid #7d1414;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+.book-page.is-left {
+  border-right-width: 1px;
+  border-radius: 10px 2px 2px 10px;
+  background: linear-gradient(90deg, #fff6dc, #e8d29c);
+}
+
+.book-page.is-right {
+  border-left-width: 1px;
+  border-radius: 2px 10px 10px 2px;
+  transform-origin: left center;
+  animation: book-flip 110ms linear infinite;
+}
+
+.book-page img {
+  width: 82%;
+  border-radius: 8px;
+}
+
+.book-open.is-chosen .book-page.is-right {
+  animation: book-glow 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes book-flip {
+  from {
+    transform: rotateY(-18deg);
+  }
+  to {
+    transform: rotateY(0deg);
+  }
+}
+
+@keyframes book-glow {
+  from {
+    box-shadow: 0 0 10px rgba(255, 211, 90, 0.4);
+  }
+  to {
+    box-shadow: 0 0 34px rgba(255, 211, 90, 0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-page.is-right,
+  .book-open.is-chosen .book-page.is-right {
+    animation: none;
+  }
+}
+
+/* Autoplay: how many spins, and the win that stops it. */
+.book-auto {
+  position: relative;
+  display: flex;
+}
+
+.book-auto > .slot-btn {
+  flex: 1;
+}
+
+.book-auto-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  z-index: 5;
+  display: grid;
+  gap: 0.5rem;
+  width: min(18rem, 80vw);
+  padding: 0.8rem;
+  border: 2px solid var(--slot-gold);
+  border-radius: 12px;
+  background: #241606;
+  color: #fff3b0;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+
+.book-auto-menu .muted {
+  color: rgba(255, 243, 176, 0.75);
+  font-size: 0.82rem;
+}
+
+.book-auto-menu label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.book-auto-counts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+
+/* The lobby tile. */
+.casino-tile.is-book .casino-tile-art {
+  padding: 0.6rem;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #e6c27a, #8a5a14 60%, #2a1a06);
+}
+
+.casino-tile-cover.is-book {
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5));
+}
+
+/* A cover picture fills the whole tile, framed on the explorer: his hat and face. */
+.casino-tile.is-book .casino-tile-art:has(.is-photo) {
+  padding: 0;
+}
+
+.casino-tile-cover.is-book.is-photo {
+  width: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: 50% 33%;
+  border-radius: 0;
+  filter: none;
+}
+
+/* Book of Ra, made to look like the original cabinet: a sunset marquee, a stone wall with hieroglyphs, banded reels, numbered line boxes and a dark control bar. */
+.slot-cabinet.is-book {
+  --slot-gold: #f3d070;
+  border: 3px solid #6a4a1c;
+  border-radius: 10px;
+  background: #1a1008;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), inset 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+.slot-cabinet.is-book.is-free {
+  background-color: #0c1430;
+}
+
+.slot-cabinet.is-book .book-marquee {
+  position: relative;
+  height: clamp(3.8rem, 11vw, 7.2rem);
+  padding: 0;
+  overflow: hidden;
+  background: #2a0603;
+  border-bottom: 3px solid #c9a040;
+  box-shadow: 0 3px 0 #3a2204;
+}
+
+.book-marquee-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The title keeps its shape in the middle of the bar, clear of the buttons at either end. */
+.book-marquee-logo {
+  position: absolute;
+  inset: 0.15rem 2.8rem;
+  width: calc(100% - 5.6rem);
+  height: calc(100% - 0.3rem);
+}
+
+.slot-cabinet.is-book .book-marquee .slot-exit,
+.slot-cabinet.is-book .book-marquee .slot-fullscreen {
+  z-index: 1;
+}
+
+.slot-cabinet.is-book .book-free-banner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  padding: 0.25rem 3rem;
+  background: linear-gradient(180deg, rgba(8, 20, 70, 0.55), rgba(8, 20, 70, 0.9));
+  font-size: clamp(0.7rem, 1.8vw, 1rem);
+}
+
+/* The temple below the marquee: the carved wall behind everything, a column each side, the reels and buttons between them. */
+.book-hall {
+  --book-marker-wide: clamp(1.7rem, 4.3vw, 3.1rem);
+  /* Between the reels and the numbers: the outer band (7px) and a little room. */
+  --book-gap: calc(7px + 0.2rem);
+  --book-column: calc(var(--book-marker-wide) + 1.8rem);
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.book-wall {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+}
+
+.book-column {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: -1;
+  display: flex;
+  flex-direction: column;
+  width: var(--book-column);
+  filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.75));
+}
+
+/* Each column stands behind its numbered boxes, centred on them, either side of the reels (placed by useHallLayout). */
+.book-column.is-left {
+  left: calc(var(--book-reels-left, 0px) - var(--book-gap) - var(--book-marker-wide) / 2 - var(--book-column) / 2);
+}
+
+.book-column.is-right {
+  left: calc(var(--book-reels-left, 0px) + var(--book-reels-width, 0px) + var(--book-gap) + var(--book-marker-wide) / 2 - var(--book-column) / 2);
+}
+
+.book-hall:not([data-placed]) .book-column {
+  visibility: hidden;
+}
+
+.book-column-capital {
+  flex: none;
+  width: 100%;
+  height: auto;
+}
+
+.book-column-shaft {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.slot-cabinet.is-book .slot-stage {
+  gap: var(--book-gap);
+  padding: 0.7rem 0.6rem;
+}
+
+/* The reels' frame, as the original: a red and turquoise band down each outer edge, like those between the reels, and gold bars along the top and bottom. */
+.slot-cabinet.is-book .casino-window {
+  padding: 0;
+  overflow: visible;
+  background: #0e0904;
+  box-shadow: 0 -3px 0 #e2b23c, 0 7px 0 #d8a630, 0 9px 0 #5a3a08, 0 14px 22px rgba(0, 0, 0, 0.6);
+}
+
+.slot-cabinet.is-book .casino-window::before,
+.slot-cabinet.is-book .casino-window::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  background: repeating-linear-gradient(180deg, #b51d14 0 14px, #f3c64b 14px 15.5px, #1fa596 15.5px 22.5px, #f3c64b 22.5px 24px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  content: "";
+  pointer-events: none;
+}
+
+.slot-cabinet.is-book .casino-window::before {
+  right: 100%;
+}
+
+.slot-cabinet.is-book .casino-window::after {
+  left: 100%;
+}
+
+.book-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.slot-cabinet.is-book .slot-reels,
+.slot-cabinet.is-book .casino-plain {
+  position: relative;
+}
+
+/* The numbered boxes: one column a side, spaced evenly down the reels, so each line meets its box. */
+.book-markers {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: space-around;
+  width: var(--book-marker-wide);
+  container-type: size;
+}
+
+/* With the reels sized to the screen, the numbers are as tall as the reels. */
+.slot-stage > .book-markers {
+  height: calc(var(--reels-wide) * 384 / 680 + 10px);
+}
+
+/* The original's boxes: flat colour, bevelled, a dark shadow below, the number in black with a slight emboss. */
+.book-marker {
+  --marker: #3d8fe0;
+  display: grid;
+  place-items: center;
+  height: 7.6cqh;
+  border-radius: 4px;
+  background: var(--marker);
+  color: #111;
+  font-size: min(5cqh, 50cqw);
+  font-weight: 900;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.35), -1px -1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    inset 2px 0 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.25),
+    inset -2px 0 0 rgba(0, 0, 0, 0.15),
+    0 3px 4px rgba(0, 0, 0, 0.65);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.book-marker.is-lit {
+  box-shadow: 0 0 0 2px #fff, 0 0 14px var(--marker);
+  transform: scale(1.12);
+}
+
+/* The control bar: dark, with gold-framed buttons and a green START. */
+/* The buttons sit between the columns: as wide as the reels, or a little wider when the reels are narrow. */
+.slot-cabinet.is-book .slot-controls {
+  align-self: center;
+  width: max(var(--book-reels-width, 100%), min(100%, 36rem));
+  max-width: 100%;
+  gap: 0.4rem;
+  padding: 0.3rem 0 0.6rem;
+  background: none;
+  border-top: 0;
+  box-shadow: none;
+}
+
+/* The buttons: dark glass in a thin gold frame, gold words; LINES and AUTO with white labels. */
+.slot-cabinet.is-book .slot-btn {
+  border: 2px solid #c9a227;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #f6d21e;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.slot-cabinet.is-book .slot-btn small {
+  color: #fff;
+}
+
+.slot-cabinet.is-book .slot-btn b {
+  color: #f6d21e;
+  font-size: 1.25em;
+}
+
+.slot-cabinet.is-book .slot-auto small {
+  color: #fff;
+}
+
+/* The message: a thin, light line over a divider and the credits in bold white. */
+.slot-cabinet.is-book .slot-message {
+  gap: 0;
+  padding: 0.15rem 0.6rem 0.2rem;
+  border: 1px solid rgba(220, 200, 160, 0.3);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.slot-cabinet.is-book .slot-message span {
+  width: 100%;
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  color: #d6d6d6;
+  font-size: clamp(0.85rem, 2.1vw, 1.45rem);
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.slot-cabinet.is-book .slot-message.is-win span {
+  color: #f6d21e;
+  font-weight: 700;
+}
+
+.slot-cabinet.is-book .slot-message small {
+  padding-top: 0.15rem;
+  color: #fff;
+  font-size: clamp(0.72rem, 1.5vw, 1rem);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.slot-cabinet.is-book .slot-auto .slot-switch {
+  border-color: #c9a227;
+}
+
+.slot-cabinet.is-book .slot-auto .slot-switch::after {
+  background: #c9a227;
+}
+
+/* START and TOTAL BET: rings over the right-hand numbers, sized to the reels (placed by useHallLayout). */
+.book-rings {
+  --book-ring: calc(var(--book-reels-height, 12rem) * 0.34);
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.book-hall:not([data-placed]) .book-rings {
+  visibility: hidden;
+}
+
+.book-ring-spot {
+  position: absolute;
+  left: min(
+    calc(var(--book-reels-left, 0px) + var(--book-reels-width, 0px) + var(--book-gap) + var(--book-marker-wide) / 2),
+    calc(100% - var(--book-ring) / 2 - 0.2rem)
+  );
+  top: calc(var(--book-reels-top, 0px) + var(--book-reels-height, 0px) * var(--at));
+  width: var(--book-ring);
+  height: var(--book-ring);
+  transform: translate(-50%, -50%);
+  container-type: size;
+  pointer-events: auto;
+}
+
+.book-ring-spot.is-start {
+  --at: 0.37;
+}
+
+.book-ring-spot.is-bet {
+  --at: 0.84;
+}
+
+.book-ring {
+  position: relative;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 2px solid;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.3) 70%, rgba(0, 0, 0, 0.18));
+  font-weight: 900;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.book-ring.is-start {
+  border-color: #3ec03e;
+  color: #5ae04a;
+  font-size: 15cqw;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  text-transform: uppercase;
+}
+
+.book-ring.is-start:not(:disabled):hover {
+  box-shadow: 0 0 14px rgba(80, 230, 80, 0.55);
+}
+
+.book-ring.is-start:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.book-start-arrows {
+  position: absolute;
+  inset: 6%;
+  width: 88%;
+  height: 88%;
+}
+
+.book-ring.is-start span {
+  position: relative;
+}
+
+.book-ring.is-bet {
+  border-color: #c9a227;
+  color: #f6d21e;
+}
+
+.book-ring.is-bet:disabled {
+  cursor: default;
+}
+
+.book-ring.is-bet small {
+  color: #fff;
+  font-size: 10cqw;
+  text-transform: uppercase;
+}
+
+.book-ring.is-bet b {
+  font-size: 15cqw;
+  font-variant-numeric: tabular-nums;
+}
+
+.book-bet-menu {
+  right: calc(100% + 0.4rem);
+  bottom: 0;
+  width: min(15rem, 70vw);
+}
+
+.book-bet-menu .book-auto-counts {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.book-bet-menu .slot-btn.is-on {
+  border-color: #fff;
+  background: rgba(246, 210, 30, 0.2);
+}
+
+.slot-cabinet.is-book .slot-start {
+  min-width: 6.5rem;
+  border-color: #33c45e;
+  background: linear-gradient(180deg, #123a1c, #04140a);
+  color: #6dff94;
+  box-shadow: 0 0 10px rgba(51, 196, 94, 0.35), inset 0 1px 0 rgba(160, 255, 190, 0.25);
+}
+
+.slot-cabinet.is-book .slot-start:not(:disabled):hover {
+  box-shadow: 0 0 16px rgba(51, 196, 94, 0.6);
 }

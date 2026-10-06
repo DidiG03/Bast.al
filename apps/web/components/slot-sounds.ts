@@ -213,4 +213,30 @@ export const slotSound = {
     noise(0, 0.06, { filter: "bandpass", freq: 1400, gain: 0.25 });
     tone(320, 0, 0.12, { type: "sine", gain: 0.2, slideTo: 160 });
   },
+
+  /** Book of Ra: free spins won, a fanfare in an Eastern scale. */
+  freeSpinsWon() {
+    [440, 466, 554, 587, 659, 698, 831, 880].forEach((freq, index) => tone(freq, index * 0.12, 0.22, { type: "triangle", gain: 0.13 }));
+    tone(880, 1.0, 0.9, { type: "square", gain: 0.08 });
+    tone(1319, 1.0, 0.9, { type: "triangle", gain: 0.08 });
+  },
+
+  /** Book of Ra: the book's pages flipping before the special symbol shows. */
+  pageFlip(pages = 6) {
+    for (let i = 0; i < pages; i += 1) noise(i * 0.11, 0.09, { filter: "bandpass", freq: 3000 - i * 200, sweepTo: 900, gain: 0.14 });
+  },
+
+  /** Book of Ra: the special symbol chosen, a low gong. */
+  gong() {
+    tone(110, 0, 1.6, { type: "sine", gain: 0.35, slideTo: 98 });
+    tone(220, 0, 1.2, { type: "triangle", gain: 0.12, slideTo: 200 });
+    noise(0, 0.25, { filter: "lowpass", freq: 600, gain: 0.2 });
+  },
+
+  /** Book of Ra: the special symbol growing to fill a reel, a rising shimmer. */
+  expand(reel: number) {
+    const base = 330 * 2 ** (reel / 6);
+    tone(base, 0, 0.45, { type: "triangle", gain: 0.12, slideTo: base * 2 });
+    noise(0, 0.4, { filter: "highpass", freq: 4000, sweepTo: 8000, gain: 0.05 });
+  },
 };

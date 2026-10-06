@@ -649,21 +649,27 @@ const MARKET_GROUPS = [
   ["handicap", msg("Handicap")],
   ["points", msg("Total points")],
   ["sets", msg("Sets")],
+  ["games", msg("Games")],
+  ["quarters", msg("Quarters")],
 ] as const;
 type MarketGroup = (typeof MARKET_GROUPS)[number][0];
 
 function marketGroup(key: string): MarketGroup {
-  // Basketball and the NFL: the winner, then handicap and total points lines.
-  if (key === "bb_winner") return "main";
+  // Basketball and the NFL: the result, handicap and points lines, the halves, then the quarters.
+  if (["bb_winner", "bb_3way", "bb_double_chance", "bb_ht_ft"].includes(key)) return "main";
   if (key.startsWith("bb_handicap_")) return "handicap";
-  if (key.startsWith("bb_total_")) return "points";
-  // Tennis: who wins the match, then the 1st set and the score in sets.
-  if (key === "tn_winner") return "main";
+  if (/^bb_(total_|home_total_|away_total_|odd_even)/.test(key)) return "points";
+  if (/^bb_(h1|h2)_/.test(key) || key === "bb_highest_half") return "halves";
+  if (/^bb_q[1-4]_/.test(key)) return "quarters";
+  // Tennis: who wins the match, then the sets (the 1st set and the score in sets), then games.
+  if (key === "tn_winner" || key.startsWith("tn_straight_")) return "main";
+  if (/^tn_(games|handicap)_/.test(key)) return "games";
   if (key.startsWith("tn_")) return "sets";
   // MMA: who wins, then the rounds lines.
   if (key.startsWith("fight_")) return "main";
   if (/^rounds_\d+_5$/.test(key)) return "rounds";
   if (["match_winner", "double_chance", "draw_no_bet", "btts"].includes(key)) return "main";
+  if (/^(ah|eh)_/.test(key)) return "handicap";
   if (/^(home_|away_)?(corners|cards)_/.test(key)) return "corners";
   if (key.startsWith("scorer_")) return "scorers";
   if (/^(result_goals|goals_btts)_/.test(key) || key === "result_btts") return "combos";

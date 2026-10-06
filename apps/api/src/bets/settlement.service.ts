@@ -3,8 +3,8 @@ import { BalanceTransactionType, BetStatus, EventStatus, NotificationSeverity, N
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { NotificationsService } from "../notifications/notifications.service";
-import { RACE_WINNER, gradeRace, raceResultOf, raceSettlePrice } from "../odds/greyhounds";
-import { POINTS_SPORTS, gradeBasketball } from "../odds/basketball";
+import { RACE_TRICAST, RACE_WINNER, gradeRace, raceResultOf, raceSettlePrice } from "../odds/greyhounds";
+import { POINTS_SPORTS, gradeBasketball, periodsResultOf } from "../odds/basketball";
 import { fightResultOf, gradeFight } from "../odds/mma";
 import { gradeTennis, tennisResultOf } from "../odds/tennis";
 import { UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
@@ -319,7 +319,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         else if (event.sport === "mma") grade = event.status === EventStatus.COMPLETED ? gradeFight(market.key, selection.key, fightResultOf(event.fightResult)) : null;
         else if (event.sport === "tennis") grade = event.status === EventStatus.COMPLETED ? gradeTennis(market.key, selection.key, tennisResultOf(event.fightResult)) : null;
         // Basketball and the NFL settle on the final score, overtime included.
-        else if (POINTS_SPORTS.has(event.sport)) grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeBasketball(market.key, selection.key, event.resultHome, event.resultAway) : null;
+        else if (POINTS_SPORTS.has(event.sport)) grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeBasketball(market.key, selection.key, event.resultHome, event.resultAway, periodsResultOf(event.fightResult)) : null;
         else if (event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null) {
           const half = event.resultHalfHome !== null && event.resultHalfAway !== null ? { home: event.resultHalfHome, away: event.resultHalfAway } : null;
           grade = gradeSelection(market.key, selection.key, event.resultHome, event.resultAway, half, statsOf(event), { record, selectionName: selection.name, marketNames });
@@ -427,16 +427,21 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     if (half && (half.home > home || half.away > away)) throw new BadRequestException("The half-time score can't be higher than the full-time score");
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true, sport: true, status: true, startsAt: true, resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true },
+      select: { id: true, name: true, sport: true, status: true, startsAt: true, resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true, fightResult: true },
     });
     if (!event) throw new NotFoundException("Match not found");
     if (event.sport === "greyhounds") throw new BadRequestException("A race has no score. Settle its picks one by one, or void the race.");
     if (event.sport === "mma") throw new BadRequestException("A fight has no score. Settle its picks one by one, or void the fight.");
     if (event.sport === "tennis") throw new BadRequestException("A tennis match is settled on its sets. Settle its picks one by one, or void the match.");
-    // A basketball or NFL game settles on its final score alone: there's no half-time score, corners or cards.
+    // A basketball or NFL game is corrected by its final score alone: there's no half-time score, corners or cards to enter.
+    // The quarters the feed sent stay for the period markets while they still add up to it; otherwise those picks wait for Super Admin.
+    let periodsStale = false;
     if (POINTS_SPORTS.has(event.sport)) {
       half = null;
       stats = null;
+      const periods = periodsResultOf(event.fightResult);
+      const sum = periods ? [...periods.quarters, periods.overtime ?? [0, 0]].reduce((t, [h, a]) => ({ home: t.home + h, away: t.away + a }), { home: 0, away: 0 }) : null;
+      periodsStale = sum !== null && (sum.home !== home || sum.away !== away);
     } else if (home > 99 || away > 99) throw new BadRequestException("A football score can't be more than 99");
     if (event.startsAt > new Date()) throw new BadRequestException("This match hasn't started yet");
     if (event.status === EventStatus.CANCELLED) throw new BadRequestException("This match was cancelled and its bets refunded");
@@ -460,6 +465,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
               statsSource: "manual",
             }
           : {}),
+        ...(periodsStale ? { fightResult: Prisma.DbNull, resultHalfHome: null, resultHalfAway: null } : {}),
         resultSource: "manual",
         status: EventStatus.COMPLETED,
         // A different score makes the goals saved for the old one useless: they're fetched again.
@@ -492,7 +498,13 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       if (event.status !== EventStatus.COMPLETED) throw new BadRequestException("This race hasn't got its final result yet");
       // A winning race bet is paid at the SP or dividend, so it can only be settled as won once the feed has sent it.
       if (result === SelectionResult.WON && raceSettlePrice(selection.market.key, selection.key, raceResultOf(event.raceResult), 0, Number.MAX_SAFE_INTEGER) === null) {
-        throw new BadRequestException(selection.market.key === RACE_WINNER ? "The starting price isn't known yet, so this can't be settled as won" : "The forecast dividend isn't known yet, so this can't be settled as won");
+        throw new BadRequestException(
+          selection.market.key === RACE_WINNER
+            ? "The starting price isn't known yet, so this can't be settled as won"
+            : selection.market.key === RACE_TRICAST
+              ? "The tricast dividend isn't known yet, so this can't be settled as won"
+              : "The forecast dividend isn't known yet, so this can't be settled as won",
+        );
       }
     } else if (event.sport === "mma") {
       if (event.status !== EventStatus.COMPLETED) throw new BadRequestException("This fight hasn't got its result yet");

@@ -7,11 +7,20 @@ import { SelectionResult } from "@prisma/client";
  * come from The Odds API (US bookmakers), matched to API-Sports' games by
  * team names and tip-off.
  *
- * Markets, at fixed prices like football, all including overtime:
+ * Markets, at fixed prices like football, all including overtime unless
+ * they say otherwise:
  * - Winner: either team (a tie, which basketball doesn't have, would be void);
  * - Handicap: a home team handicap and its mirror for the away team;
- * - Total points: over or under.
+ * - Total points: over or under; each team's points too; odd or even;
+ * - Result in regulation time (3 way, and double chance), without overtime;
+ * - Half time / full time;
+ * - The 1st half, the 2nd half (overtime included) and each quarter: who
+ *   wins it (2 way, a tie void; and 3 way), handicap, total points, each
+ *   team's points, odd or even; and which half scores more (regulation; a
+ *   tie void).
  * Only half-point lines are offered, so a bet never lands exactly on the line.
+ * The period markets settle on the quarter scores the feed sends with the
+ * result (kept in Event.fightResult, see GamePeriods).
  */
 
 export const BASKETBALL_PROVIDER = "api-sports-basketball";
@@ -32,11 +41,30 @@ export type FeedGame = {
   status: GameStatus;
   /** Final scores, overtime included, once it's over. */
   score: { home: number; away: number } | null;
+  /** Each quarter's score and the overtime's, once it's over, if the feed sent them all. */
+  periods: GamePeriods | null;
 };
+
+/** What Event.fightResult keeps for a basketball or NFL game: the quarters, as [home, away], and overtime. */
+export type GamePeriods = { quarters: Array<[number, number]>; overtime: [number, number] | null };
+
+/** The quarters and overtime from the feed's score lines, or null unless all four quarters are there. */
+export function periodsOf(home: Record<string, unknown> | undefined, away: Record<string, unknown> | undefined, overtimeField: string): GamePeriods | null {
+  const n = (value: unknown) => (Number.isInteger(value) ? (value as number) : null);
+  const quarters = [1, 2, 3, 4].map((q) => [n(home?.[`quarter_${q}`]), n(away?.[`quarter_${q}`])] as const);
+  if (quarters.some(([a, b]) => a === null || b === null)) return null;
+  const ot = [n(home?.[overtimeField]), n(away?.[overtimeField])] as const;
+  return { quarters: quarters as Array<[number, number]>, overtime: ot[0] !== null && ot[1] !== null ? [ot[0], ot[1]] : null };
+}
+
+export function periodsResultOf(value: unknown): GamePeriods | null {
+  if (!value || typeof value !== "object" || !Array.isArray((value as GamePeriods).quarters)) return null;
+  return value as GamePeriods;
+}
 
 export type GameMarket = { key: string; name: string; sortOrder: number; selections: Array<{ key: string; name: string; odds: number; sortOrder: number }> };
 
-type RawScore = { total?: number | null };
+type RawScore = { total?: number | null; quarter_1?: number | null; quarter_2?: number | null; quarter_3?: number | null; quarter_4?: number | null; over_time?: number | null };
 export type RawGame = {
   id: number;
   date?: string;
@@ -71,6 +99,7 @@ export function parseGame(raw: RawGame): FeedGame | null {
     startsAt,
     status,
     score: status === "finished" && Number.isInteger(h) && Number.isInteger(a) ? { home: h!, away: a! } : null,
+    periods: status === "finished" ? periodsOf(raw.scores?.home, raw.scores?.away, "over_time") : null,
   };
 }
 
@@ -136,20 +165,109 @@ export function parseApiSportsOdds(raw: { bookmakers?: RawBookmaker[] }, home: s
   const ml = bet("Home/Away");
   const mlHome = price(ml?.find((v) => v.value === "Home")?.odd);
   const mlAway = price(ml?.find((v) => v.value === "Away")?.odd);
-  const pairs = (values: Array<{ value: string; odd: string }> | null, a: string, b: string): Line[] => {
-    const byLine = new Map<number, Partial<Line>>();
-    for (const v of values ?? []) {
-      const match = new RegExp(`^(${a}|${b}) ([+-]?\\d+(?:\\.\\d+)?)$`).exec(v.value);
-      const odds = price(v.odd);
-      if (!match || odds === null) continue;
-      const line = Number(match[2]);
-      const entry = byLine.get(line) ?? { line };
-      entry[match[1] === a ? "a" : "b"] = odds;
-      byLine.set(line, entry);
-    }
-    return [...byLine.values()].filter((l): l is Line => l.a !== undefined && l.b !== undefined);
+  return [
+    ...gameMarkets(home, away, mlHome && mlAway ? { home: mlHome, away: mlAway } : null, linePairs(bet("Asian Handicap"), "Home", "Away"), linePairs(bet("Over/Under"), "Over", "Under")),
+    ...moreGameMarkets(bet, home, away),
+  ];
+}
+
+type Values = Array<{ value: string; odd: string }> | null;
+
+/** Lines from "Over 161.5"/"Under 161.5", or "Home -1.5"/"Away -1.5" (both the home team's handicap). */
+function linePairs(values: Values, a: string, b: string): Line[] {
+  const byLine = new Map<number, Partial<Line>>();
+  for (const v of values ?? []) {
+    const match = new RegExp(`^(${a}|${b}) ([+-]?\\d+(?:\\.\\d+)?)$`).exec(v.value);
+    const odds = price(v.odd);
+    if (!match || odds === null) continue;
+    const line = Number(match[2]);
+    const entry = byLine.get(line) ?? { line };
+    entry[match[1] === a ? "a" : "b"] = odds;
+    byLine.set(line, entry);
+  }
+  return [...byLine.values()].filter((l): l is Line => l.a !== undefined && l.b !== undefined);
+}
+
+/** The game's periods, as they're named in market keys and to Players. */
+const PERIODS = [
+  { key: "h1", label: "1st half", feed: ["1st Half", "First Half"] },
+  { key: "h2", label: "2nd half (incl. overtime)", feed: ["2nd Half", "Second Half"] },
+  { key: "q1", label: "1st quarter", feed: ["1st Qtr", "1st Quarter"] },
+  { key: "q2", label: "2nd quarter", feed: ["2nd Qtr", "2nd Quarter"] },
+  { key: "q3", label: "3rd quarter", feed: ["3rd Qtr", "3rd Quarter"] },
+  { key: "q4", label: "4th quarter", feed: ["4th Qtr", "4th Quarter"] },
+] as const;
+/** Lines shown in the smaller markets (periods, team totals). */
+const MORE_LINES = 3;
+
+/**
+ * Everything else API-Sports prices for a game, by the feed's names (see
+ * the test fixture basketball-odds.json): results without overtime, team
+ * totals, odd/even, half time / full time, and the halves and quarters.
+ */
+function moreGameMarkets(bet: (name: string) => Values, home: string, away: string): GameMarket[] {
+  const markets: GameMarket[] = [];
+  const any = (...names: string[]) => names.map(bet).find((values) => values) ?? null;
+  const pick = (values: Values, wanted: Array<[feed: string, key: string, name: string]>) => {
+    const selections = wanted.map(([feed, key, name], sortOrder) => ({ key, name, odds: price(values?.find((v) => v.value === feed)?.odd), sortOrder }));
+    return selections.every((s) => s.odds !== null) ? (selections as GameMarket["selections"]) : null;
   };
-  return gameMarkets(home, away, mlHome && mlAway ? { home: mlHome, away: mlAway } : null, pairs(bet("Asian Handicap"), "Home", "Away"), pairs(bet("Over/Under"), "Over", "Under"));
+  const push = (key: string, name: string, sortOrder: number, selections: GameMarket["selections"] | null) => {
+    if (selections) markets.push({ key, name, sortOrder, selections });
+  };
+  const winner2 = (values: Values) => pick(values, [["Home", "home", home], ["Away", "away", away]]);
+  const winner3 = (values: Values) => pick(values, [["Home", "home", home], ["Draw", "draw", "Draw"], ["Away", "away", away]]);
+  const oddEven = (values: Values) => pick(values, [["Odd", "odd", "Odd"], ["Even", "even", "Even"]]);
+  const totals = (values: Values, key: string, name: string, sortOrder: number) =>
+    mainLines(linePairs(values, "Over", "Under"), true)
+      .slice(0, MORE_LINES)
+      .forEach((l, i) => push(`${key}_${lineKey(l.line)}`, `${name} ${l.line}`, sortOrder + i, [{ key: "over", name: `Over ${l.line}`, odds: l.a, sortOrder: 0 }, { key: "under", name: `Under ${l.line}`, odds: l.b, sortOrder: 1 }]));
+  const handicaps = (values: Values, key: string, name: string, sortOrder: number) =>
+    mainLines(linePairs(values, "Home", "Away"), true)
+      .slice(0, MORE_LINES)
+      .forEach((l, i) =>
+        push(`${key}_${lineKey(l.line)}`, `${name} ${home} ${signed(l.line)}`, sortOrder + i, [
+          { key: "home", name: `${home} ${signed(l.line)}`, odds: l.a, sortOrder: 0 },
+          { key: "away", name: `${away} ${signed(-l.line)}`, odds: l.b, sortOrder: 1 },
+        ]),
+      );
+
+  push("bb_3way", "Result in regulation time", 1, winner3(bet("3Way Result")));
+  push("bb_double_chance", "Double chance (regulation time)", 2, pick(bet("Double Chance"), [["Home/Draw", "home_draw", `${home} or draw`], ["Draw/Away", "draw_away", `Draw or ${away}`]]));
+  push("bb_odd_even", "Total points odd/even", 50, oddEven(any("Odd/Even (Including OT)", "Odd/Even")));
+  totals(any("Home Team Total Goals (Including OT)", "Total - Home"), "bb_home_total", `${home} points`, 60);
+  totals(any("Away Team Total Goals (Including OT)", "Total - Away"), "bb_away_total", `${away} points`, 65);
+  const sides = ["home", "draw", "away"] as const;
+  const feedSide = { home: "1", draw: "X", away: "2" };
+  const sideName = (side: (typeof sides)[number]) => (side === "home" ? home : side === "away" ? away : "Draw");
+  push(
+    "bb_ht_ft",
+    "Half time / full time",
+    70,
+    pick(
+      bet("HT/FT (Including OT)"),
+      sides.flatMap((ht) => (["home", "away"] as const).map((ft): [string, string, string] => [`${feedSide[ht]}/${feedSide[ft]}`, `${ht}_${ft}`, `${sideName(ht)} / ${sideName(ft)}`])),
+    ),
+  );
+  push("bb_highest_half", "Highest scoring half", 75, pick(bet("Highest Scoring Half"), [["1st Half", "first", "1st half"], ["2nd Half", "second", "2nd half"]]));
+
+  PERIODS.forEach((period, index) => {
+    const base = 100 + index * 20;
+    const named = (patterns: (feed: string) => string[]) => any(...period.feed.flatMap(patterns));
+    push(`bb_${period.key}_winner`, `${period.label} winner`, base, winner2(named((f) => [`Home/Away - ${f}`, `Home/Away (${f})`])));
+    push(`bb_${period.key}_3way`, `${period.label} result`, base + 1, winner3(named((f) => [`${f} 3Way Result`, `3Way Result - ${f}`])));
+    handicaps(named((f) => [`Asian Handicap ${f}`, `Asian Handicap (${f})`]), `bb_${period.key}_handicap`, `${period.label} handicap`, base + 2);
+    totals(named((f) => [`Over/Under ${f}`]), `bb_${period.key}_total`, `${period.label} total points`, base + 6);
+    push(`bb_${period.key}_odd_even`, `${period.label} points odd/even`, base + 10, oddEven(named((f) => [`Odd/Even ${f}`, `Odd/Even (${f})`])));
+    const team = (side: "Home" | "Away") =>
+      named((f) => {
+        const word = f.replace("Qtr", "Quarter");
+        return [`${side} Team Total Goals(${f})`, `${side} Team Total Points (${word})`, `${side} Team Total Points (${f})`];
+      });
+    totals(team("Home"), `bb_${period.key}_home_total`, `${home} ${period.label} points`, base + 12);
+    totals(team("Away"), `bb_${period.key}_away_total`, `${away} ${period.label} points`, base + 16);
+  });
+  return markets;
 }
 
 /** One NBA game from The Odds API. */
@@ -192,9 +310,85 @@ export const POINTS_SPORTS: ReadonlySet<string> = new Set(["basketball", "nfl"])
 
 export const isBasketballMarket = (marketKey: string) => marketKey.startsWith("bb_");
 
-/** One outcome's result from the final score (overtime included). */
-export function gradeBasketball(marketKey: string, selectionKey: string, home: number, away: number): SelectionResult | null {
+const add2 = (a: [number, number], b: [number, number]) => ({ home: a[0] + b[0], away: a[1] + b[1] });
+
+/** A period's score: the 1st half, the 2nd half with overtime, or a quarter; regulation time is "reg". */
+function periodScore(periods: GamePeriods, period: string): { home: number; away: number } | null {
+  const add = (list: Array<[number, number] | null>) => list.reduce((sum, p) => ({ home: sum.home + (p?.[0] ?? 0), away: sum.away + (p?.[1] ?? 0) }), { home: 0, away: 0 });
+  const q = periods.quarters;
+  if (period === "h1") return add([q[0], q[1]]);
+  if (period === "h2") return add([q[2], q[3], periods.overtime]);
+  if (period === "reg") return add(q);
+  const quarter = /^q([1-4])$/.exec(period);
+  return quarter ? add([q[Number(quarter[1]) - 1]]) : null;
+}
+
+/**
+ * One outcome's result from the final score (overtime included), and the
+ * quarter scores for the period and regulation-time markets (null without
+ * them: those bets wait for Super Admin).
+ */
+export function gradeBasketball(marketKey: string, selectionKey: string, home: number, away: number, periods: GamePeriods | null = null): SelectionResult | null {
   const result = (margin: number) => (margin > 0 ? SelectionResult.WON : margin < 0 ? SelectionResult.LOST : SelectionResult.VOID);
+  const won = (yes: boolean) => (yes ? SelectionResult.WON : SelectionResult.LOST);
+  const threeWay = (score: { home: number; away: number }) => {
+    const side = score.home > score.away ? "home" : score.home < score.away ? "away" : "draw";
+    return ["home", "draw", "away"].includes(selectionKey) ? won(side === selectionKey) : null;
+  };
+  const overUnder = (points: number, line: number) => (selectionKey === "over" ? result(points - line) : selectionKey === "under" ? result(line - points) : null);
+  const oddEven = (points: number) => (selectionKey === "odd" || selectionKey === "even" ? won((points % 2 === 1) === (selectionKey === "odd")) : null);
+  const lineIn = (key: string) => {
+    const m = /_(m?)(\d+)_(\d)$/.exec(key);
+    return m ? (m[1] ? -1 : 1) * Number(`${m[2]}.${m[3]}`) : null;
+  };
+
+  // Each team's points, overtime included: bb_home_total_80_5.
+  const team = /^bb_(home|away)_total_/.exec(marketKey);
+  if (team) {
+    const line = lineIn(marketKey);
+    return line === null ? null : overUnder(team[1] === "home" ? home : away, line);
+  }
+  if (marketKey === "bb_odd_even") return oddEven(home + away);
+
+  // Periods and regulation time need the quarter scores.
+  const period = /^bb_(h1|h2|q[1-4])_(winner|3way|handicap|total|odd_even|home_total|away_total)/.exec(marketKey);
+  if (period || ["bb_3way", "bb_double_chance", "bb_ht_ft", "bb_highest_half"].includes(marketKey)) {
+    if (!periods) return null;
+    const regulation = periodScore(periods, "reg")!;
+    if (marketKey === "bb_3way") return threeWay(regulation);
+    if (marketKey === "bb_double_chance") {
+      const side = regulation.home > regulation.away ? "home" : regulation.home < regulation.away ? "away" : "draw";
+      const covers: Record<string, string[]> = { home_draw: ["home", "draw"], draw_away: ["draw", "away"] };
+      return covers[selectionKey] ? won(covers[selectionKey].includes(side)) : null;
+    }
+    if (marketKey === "bb_ht_ft") {
+      const half = periodScore(periods, "h1")!;
+      const [ht, ft] = selectionKey.split("_");
+      const htSide = half.home > half.away ? "home" : half.home < half.away ? "away" : "draw";
+      const ftSide = home > away ? "home" : "away";
+      return won(htSide === ht && ftSide === ft);
+    }
+    if (marketKey === "bb_highest_half") {
+      const [first, second] = [periodScore(periods, "h1")!, add2(periods.quarters[2], periods.quarters[3])];
+      const a = first.home + first.away;
+      const b = second.home + second.away;
+      if (a === b) return SelectionResult.VOID;
+      return selectionKey === "first" || selectionKey === "second" ? won((a > b) === (selectionKey === "first")) : null;
+    }
+    const score = periodScore(periods, period![1])!;
+    const kind = period![2];
+    const line = lineIn(marketKey);
+    if (kind === "winner") return selectionKey === "home" || selectionKey === "away" ? result(selectionKey === "home" ? score.home - score.away : score.away - score.home) : null;
+    if (kind === "3way") return threeWay(score);
+    if (kind === "odd_even") return oddEven(score.home + score.away);
+    if (line === null) return null;
+    if (kind === "total") return overUnder(score.home + score.away, line);
+    if (kind === "home_total") return overUnder(score.home, line);
+    if (kind === "away_total") return overUnder(score.away, line);
+    const homeMargin = score.home + line - score.away;
+    return selectionKey === "home" || selectionKey === "away" ? result(selectionKey === "home" ? homeMargin : -homeMargin) : null;
+  }
+
   if (marketKey === "bb_winner") return result(selectionKey === "home" ? home - away : away - home);
   const handicap = /^bb_handicap_(m?)(\d+)_(\d)$/.exec(marketKey);
   if (handicap) {

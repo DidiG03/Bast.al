@@ -1,4 +1,4 @@
-import type { FeedGame, GameStatus } from "./basketball";
+import { type FeedGame, type GameStatus, periodsOf } from "./basketball";
 
 /**
  * NFL: games, results and prices from API-Sports' American football API (the
@@ -16,7 +16,7 @@ export type RawNflGame = {
   game?: { id?: number; date?: { timestamp?: number }; status?: { short?: string } };
   league?: { id?: number; name?: string; country?: { name?: string } };
   teams?: { home?: { name?: string }; away?: { name?: string } };
-  scores?: { home?: { total?: number | null }; away?: { total?: number | null } };
+  scores?: { home?: Record<string, number | null | undefined> & { total?: number | null }; away?: Record<string, number | null | undefined> & { total?: number | null } };
 };
 
 const UPCOMING = new Set(["NS", "TBD"]);
@@ -45,5 +45,6 @@ export function parseNflGame(raw: RawNflGame): FeedGame | null {
     startsAt: new Date(timestamp * 1000),
     status,
     score: status === "finished" && Number.isInteger(h) && Number.isInteger(a) ? { home: h!, away: a! } : null,
+    periods: status === "finished" ? periodsOf(raw.scores?.home, raw.scores?.away, "overtime") : null,
   };
 }

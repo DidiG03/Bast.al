@@ -7,28 +7,34 @@ export { RACE_CLOSE_MS } from "./pricing";
  * for GB, IE and AU tracks, and each race's official result. There are no
  * prices before a race, so race bets are paid the way UK bookmakers take
  * them: a Winner bet at the dog's starting price (SP), a Forecast (1st and
- * 2nd in order) at the official forecast dividend, both less the team's
+ * 2nd in order) at the official forecast dividend, and a Tricast (1st, 2nd
+ * and 3rd in order) at the official tricast dividend, all less the team's
  * margin and never above a ceiling (RACE_CAP).
  *
  * Settling, the usual rules:
  * - A dog withdrawn before the race: Winner bets on it are void, and so are
- *   Forecasts that name it. A reserve that runs from its trap is a new runner.
+ *   Forecasts and Tricasts that name it. A reserve that runs from its trap is
+ *   a new runner.
  * - A void or abandoned race: everything is void.
  * - A dead heat for 1st: a Winner bet on one of the dogs is paid on its
- *   stake divided by how many dead-heated. A Forecast touched by a dead heat
- *   waits for Super Admin.
+ *   stake divided by how many dead-heated. A Forecast or Tricast touched by a
+ *   dead heat waits for Super Admin.
  * - A dog that ran but didn't finish (or was disqualified) has lost.
  */
 
 export const RACE_PROVIDER = "greyhoundapi";
 export const RACE_WINNER = "race_winner";
 export const RACE_FORECAST = "race_forecast";
-export const isRaceMarket = (marketKey: string) => marketKey === RACE_WINNER || marketKey === RACE_FORECAST;
+export const RACE_TRICAST = "race_tricast";
+export const isRaceMarket = (marketKey: string) => marketKey === RACE_WINNER || marketKey === RACE_FORECAST || marketKey === RACE_TRICAST;
+/** A Tricast is offered on fields of up to this many dogs (6 is 120 outcomes; 8 would be 336). */
+const TRICAST_MAX_FIELD = 6;
 
 /** The most a race bet can be settled at, and what the team's open payouts count it at until then. */
 export const RACE_CAP: Record<string, number> = {
   [RACE_WINNER]: Number(process.env.GREYHOUND_MAX_SP) || 51,
   [RACE_FORECAST]: Number(process.env.GREYHOUND_MAX_FORECAST) || 500,
+  [RACE_TRICAST]: Number(process.env.GREYHOUND_MAX_TRICAST) || 2000,
 };
 
 export type RunnerStatus = "runner" | "reserve" | "withdrawn" | "disqualified";
@@ -49,12 +55,14 @@ export type FeedRace = {
   result: RaceResult | null;
 };
 
-/** What Event.raceResult keeps: the finishing order with each dog's SP, and the forecast dividend. */
+/** What Event.raceResult keeps: the finishing order with each dog's SP, and the forecast and tricast dividends. */
 export type RaceResult = {
   /** Provisional results wait; only final ones settle. */
   final: boolean;
   positions: Array<{ dogId: number; position: number; sp: number | null }>;
   forecastDividend: number | null;
+  /** Missing on results saved before the Tricast was offered. */
+  tricastDividend?: number | null;
 };
 
 /** What Event.race keeps. */
@@ -72,7 +80,7 @@ export type RawRace = {
   scheduled_start?: { utc?: string };
   status?: string;
   runners?: RawRunner[];
-  result?: { result_status?: string; positions?: RawPosition[]; forecast_dividend?: string | number | null } | null;
+  result?: { result_status?: string; positions?: RawPosition[]; forecast_dividend?: string | number | null; tricast_dividend?: string | number | null } | null;
 };
 
 const STATUSES: RunnerStatus[] = ["runner", "reserve", "withdrawn", "disqualified"];
@@ -109,12 +117,13 @@ export function parseRace(raw: RawRace): FeedRace | null {
     startsAt,
     status: raw.status ?? "scheduled",
     runners,
-    result: positions.length > 0 ? { final: raw.result?.result_status === "final", positions, forecastDividend: decimal(raw.result?.forecast_dividend) } : null,
+    result: positions.length > 0 ? { final: raw.result?.result_status === "final", positions, forecastDividend: decimal(raw.result?.forecast_dividend), tricastDividend: decimal(raw.result?.tricast_dividend) } : null,
   };
 }
 
 export const dogKey = (dogId: number) => `d${dogId}`;
 export const forecastKey = (first: number, second: number) => `d${first}-d${second}`;
+export const tricastKey = (first: number, second: number, third: number) => `d${first}-d${second}-d${third}`;
 
 export type RaceMarket = {
   key: string;
@@ -124,12 +133,36 @@ export type RaceMarket = {
 };
 
 /**
- * A race's two markets. Every dog on the card is listed (a withdrawn one
- * can't be bet on); Forecast has every 1st–2nd pair of dogs still running.
+ * A race's markets. Every dog on the card is listed (a withdrawn one can't
+ * be bet on); Forecast has every 1st–2nd pair of dogs, and Tricast (on
+ * fields of up to TRICAST_MAX_FIELD) every 1st–2nd–3rd.
  */
 export function raceMarkets(race: FeedRace): RaceMarket[] {
   const dogs = race.runners;
   const out = (dog: FeedRunner) => dog.status === "withdrawn";
+  const tricast: RaceMarket[] =
+    dogs.length >= 3 && dogs.length <= TRICAST_MAX_FIELD
+      ? [
+          {
+            key: RACE_TRICAST,
+            name: "Tricast",
+            sortOrder: 2,
+            selections: dogs.flatMap((first) =>
+              dogs.flatMap((second) =>
+                dogs
+                  .filter((third) => second.dogId !== first.dogId && third.dogId !== first.dogId && third.dogId !== second.dogId)
+                  .map((third) => ({
+                    key: tricastKey(first.dogId, second.dogId, third.dogId),
+                    name: `${first.name} → ${second.name} → ${third.name}`,
+                    sortOrder: first.trap * 10_000 + second.trap * 100 + third.trap,
+                    info: { traps: [first.trap, second.trap, third.trap] },
+                    withdrawn: out(first) || out(second) || out(third),
+                  })),
+              ),
+            ),
+          },
+        ]
+      : [];
   return [
     {
       key: RACE_WINNER,
@@ -153,6 +186,7 @@ export function raceMarkets(race: FeedRace): RaceMarket[] {
           })),
       ),
     },
+    ...tricast,
   ];
 }
 
@@ -175,12 +209,22 @@ export function gradeRace(marketKey: string, selectionKey: string, result: RaceR
     if (second.length === 0) return first[0] === dogs[0] ? null : SelectionResult.LOST;
     return first[0] === dogs[0] && second[0] === dogs[1] ? SelectionResult.WON : SelectionResult.LOST;
   }
+  if (marketKey === RACE_TRICAST) {
+    const placed = [at(1), at(2), at(3)];
+    // A dead heat anywhere in the first three waits for Super Admin.
+    if (placed.some((dogsAt) => dogsAt.length > 1)) return null;
+    // Fewer than three finished: lost unless the ones that did match so far (then it waits).
+    const finished = placed.filter((dogsAt) => dogsAt.length === 1).map((dogsAt) => dogsAt[0]);
+    const matches = finished.every((dog, i) => dog === dogs[i]);
+    if (finished.length < 3) return matches ? null : SelectionResult.LOST;
+    return matches ? SelectionResult.WON : SelectionResult.LOST;
+  }
   return null;
 }
 
 /**
- * The price a winning race bet is paid at: the SP (Winner) or the forecast
- * dividend, less the margin, never above the cap, and for a dead heat
+ * The price a winning race bet is paid at: the SP (Winner), or the forecast
+ * or tricast dividend, less the margin, never above the cap, and for a dead heat
  * divided by how many dogs shared 1st. Null while the feed hasn't sent it.
  */
 export function raceSettlePrice(marketKey: string, selectionKey: string, result: RaceResult | null, margin: number, cap: number): number | null {
@@ -193,6 +237,8 @@ export function raceSettlePrice(marketKey: string, selectionKey: string, result:
     share = Math.max(1, result.positions.filter((p) => p.position === 1).length);
   } else if (marketKey === RACE_FORECAST) {
     raw = result.forecastDividend;
+  } else if (marketKey === RACE_TRICAST) {
+    raw = result.tricastDividend ?? null;
   }
   if (raw === null) return null;
   const price = Math.min(applyMargin(raw, margin), cap);

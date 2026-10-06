@@ -48,7 +48,7 @@ const games = (await read("nfl-games.json")).response;
 const feedOdds = (await read("nfl-odds.json")).response;
 
 const HOUR = 3_600_000;
-const panthers = (hours, extra = {}) => ({ ...parseNflGame(games.find((g) => g.game.id === 21575)), status: "upcoming", score: null, startsAt: new Date(Date.now() + hours * HOUR), ...extra });
+const panthers = (hours, extra = {}) => ({ ...parseNflGame(games.find((g) => g.game.id === 21575)), status: "upcoming", score: null, periods: null, startsAt: new Date(Date.now() + hours * HOUR), ...extra });
 
 let n = 0;
 async function user(role, parentId, extra = {}) {
@@ -78,7 +78,7 @@ test("a game and its prices are saved and listed under NFL only", async () => {
   await sync.upsertMarkets(eventId, parseApiSportsOdds(feedOdds[0], game.home, game.away, 4));
   const list = await odds.events(ditaActor, "upcoming", undefined, "list", "nfl");
   assert.deepEqual(list.map((g) => [g.name, g.league, g.sport]), [["Carolina Panthers v Detroit Lions", "NFL", "nfl"]]);
-  assert.equal((await odds.event(ditaActor, eventId)).markets.length, 11, "the winner, 5 spreads and 5 totals");
+  assert.equal((await odds.event(ditaActor, eventId)).markets.length, 12, "the winner, the result in regulation time, 5 spreads and 5 totals");
   assert.deepEqual(await odds.events(ditaActor, "upcoming", undefined, "list", "basketball"), [], "not on the basketball list");
   assert.deepEqual(await odds.events(ditaActor, "upcoming", undefined, "list"), [], "nor on the football list");
 });

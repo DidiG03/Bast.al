@@ -163,7 +163,7 @@ The API needs outbound access to `v3.football.api-sports.io`.
 
 Games and results come from [API-Sports' basketball API](https://api-sports.io/documentation/basketball/v1) (same account, its own daily quota). The default leagues (`BASKETBALL_LEAGUES`) are the NBA, Euroleague, ABA League and the top leagues of Italy, Spain, Turkey, Greece, France, Germany and Kosovo. Prices for the European leagues come from API-Sports (bet365 first); API-Sports has none for the NBA on any plan, so NBA prices come from [The Odds API](https://the-odds-api.com) (DraftKings first, then FanDuel, BetMGM), matched to API-Sports' games by team names and tip-off. Without `ODDS_API_KEY`, NBA games are listed without prices and can't be bet on.
 
-Players bet at fixed prices on **Winner**, **Handicap** and **Total points**, all including overtime. European games offer the five half-point lines nearest the even one, so a bet never lands on the line; the NBA has the bookmaker's main line, and landing on a whole-number line gives the stake back. Bets close at tip-off. Bets settle on the final score, and Super Admin can correct a score on the Settlement page like a football one.
+Players bet at fixed prices on **Winner**, **Handicap** and **Total points**, all including overtime, plus everything else API-Sports prices for European games: each team's points, odd/even, the result in regulation time (3-way and double chance), half time / full time, highest scoring half, and for the 1st half, the 2nd half (overtime included) and each quarter the winner (2-way and 3-way), handicap, total points, each team's points and odd/even (up to 3 lines each). The period markets settle on the quarter scores, kept with the result in `Event.fightResult`; the half-time score is stored from them too. If Super Admin corrects a score so the quarters no longer add up, they're dropped and those picks wait on the Settlement page. European games offer the five half-point lines nearest the even one, so a bet never lands on the line; the NBA has the bookmaker's main line, and landing on a whole-number line gives the stake back. Bets close at tip-off. Bets settle on the final score, and Super Admin can correct a score on the Settlement page like a football one.
 
 On the free plans: today's and tomorrow's games every 3 hours (2 requests), each European game's prices when it first appears and once more in its last 4 hours (never into the last 12 requests of the day), NBA prices every 6 hours (3 credits, about 360 a month), and results every 30 minutes only while a started game has none.
 
@@ -178,7 +178,7 @@ On the free plans: today's and tomorrow's games every 3 hours (2 requests), each
 
 ### NFL
 
-Games, results and prices come from [API-Sports' American football API](https://api-sports.io/documentation/american-football/v1) (same account, its own daily quota), bet365 first. Bets are the same as basketball's: **Winner** (a tie is void), **Handicap** (the spread) and **Total points**, all including overtime, with the five half-point lines nearest the even one. Bets close at kick-off and settle on the final score; Super Admin can correct a score on the Settlement page.
+Games, results and prices come from [API-Sports' American football API](https://api-sports.io/documentation/american-football/v1) (same account, its own daily quota), bet365 first. Bets are the same as basketball's: **Winner** (a tie is void), **Handicap** (the spread) and **Total points**, all including overtime, with the five half-point lines nearest the even one, and any of basketball's other markets the bookmaker prices (usually the result in regulation time). Bets close at kick-off and settle on the final score; Super Admin can correct a score on the Settlement page.
 
 On the free plan (yesterday to tomorrow only, so a game is listed from the day before): today's and tomorrow's games every 3 hours (2 requests), each game's prices when it first appears and once more in its last 4 hours (never into the last 12 requests of the day), and results every 30 minutes only while a game that started over 2½ hours ago has none. A full Sunday stays near 70 requests.
 
@@ -203,7 +203,7 @@ The free plan (100 requests a day) only sees yesterday to tomorrow, so fights ap
 
 ### Tennis
 
-Matches come from [API-Tennis](https://api-tennis.com): fixtures, set-by-set scores and bookmaker prices in one feed. Players bet on **Match winner**, **1st set winner** and **Set betting** (the score in sets, e.g. "Sinner 2-1"), at fixed prices less the team margin. Bets close at the listed start, or as soon as the match is on court if that's earlier. If a player retires, a market already decided stands (the 1st set winner once the 1st set was finished) and the others are void; a walkover is void.
+Matches come from [API-Tennis](https://api-tennis.com): fixtures, set-by-set scores and bookmaker prices in one feed. Players bet on **Match winner**, **1st set winner**, **Set betting** (the score in sets, e.g. "Sinner 2-1"), **To win in straight sets**, **1st set correct score**, **Total games** (in the match and in the 1st set) and **Games handicap**, each when the feed prices it, at fixed prices less the team margin. Games count a tie-break, and a match tie-break, as one game. The feed's market names are logged once per start ("Tennis markets in the feed: …"), so one it names differently shows up. Bets close at the listed start, or as soon as the match is on court if that's earlier. If a player retires, the 1st set markets stand once the 1st set was finished and everything else is void; a walkover is void.
 
 | Variable | Purpose |
 | --- | --- |
@@ -215,9 +215,9 @@ Matches come from [API-Tennis](https://api-tennis.com): fixtures, set-by-set sco
 
 ### Greyhound racing
 
-Races come from [GreyhoundAPI](https://greyhoundapi.com) (GB, Irish and Australian tracks; the Race Day plan, $49/month, is enough). There are no prices before a race, so race bets are paid the way UK bookmakers take them: **Winner** at the dog's starting price (SP) and **Forecast** (1st and 2nd in order) at the official forecast dividend, both less the team's margin. Race picks are singles only. Bets close a minute before the scheduled start and settle when the final result arrives, usually 12–18 minutes after the race.
+Races come from [GreyhoundAPI](https://greyhoundapi.com) (GB, Irish and Australian tracks; the Race Day plan, $49/month, is enough). There are no prices before a race, so race bets are paid the way UK bookmakers take them: **Winner** at the dog's starting price (SP), **Forecast** (1st and 2nd in order) at the official forecast dividend and **Tricast** (1st, 2nd and 3rd in order, on fields of up to six) at the official tricast dividend, all less the team's margin. Race picks are singles only. Bets close a minute before the scheduled start and settle when the final result arrives, usually 12–18 minutes after the race.
 
-To protect the house, a Winner bet is paid at most `GREYHOUND_MAX_SP` (51.00, i.e. 50/1) and a Forecast at most `GREYHOUND_MAX_FORECAST` (500.00); the Owner's payout cap and the Risk page count open race bets at those ceilings. A withdrawn dog's bets (and Forecasts naming it) are void, a void or abandoned race refunds everything, and a dead heat for 1st pays a Winner bet on half its stake (a Forecast touched by one waits on the Settlement page).
+To protect the house, a Winner bet is paid at most `GREYHOUND_MAX_SP` (51.00, i.e. 50/1) a Forecast at most `GREYHOUND_MAX_FORECAST` (500.00) and a Tricast at most `GREYHOUND_MAX_TRICAST` (2000.00); the Owner's payout cap and the Risk page count open race bets at those ceilings. A withdrawn dog's bets (and Forecasts and Tricasts naming it) are void, a void or abandoned race refunds everything, and a dead heat for 1st pays a Winner bet on half its stake (a Forecast or Tricast touched by a dead heat waits on the Settlement page).
 
 | Variable | Purpose |
 | --- | --- |
@@ -225,7 +225,7 @@ To protect the house, a Winner bet is paid at most `GREYHOUND_MAX_SP` (51.00, i.
 | `GREYHOUND_REGIONS` | Countries to list, comma-separated. Defaults to `GB,IE,AU`. |
 | `GREYHOUND_HOURS` | How far ahead race cards are fetched. Defaults to `24` (up to 48). |
 | `GREYHOUND_CARDS_INTERVAL_MS`, `GREYHOUND_RESULTS_INTERVAL_MS` | Defaults: race cards, today's results and the status of races awaiting one every 15 minutes (about 6 requests); new results every 2 minutes while a run race has open bets (1 request). Up to about 1,300 requests a day. A sandbox key uses 4 hours and 2 hours. |
-| `GREYHOUND_MAX_SP`, `GREYHOUND_MAX_FORECAST` | The ceilings above. |
+| `GREYHOUND_MAX_SP`, `GREYHOUND_MAX_FORECAST`, `GREYHOUND_MAX_TRICAST` | The ceilings above. |
 | `RACE_UNPLAYED_HOURS` | A race with no official result this long after its start has its bets refunded. Defaults to `6`. |
 
 The API needs outbound access to `api.greyhoundapi.com`.

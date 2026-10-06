@@ -446,7 +446,7 @@ export type Sport = "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "
 /** Greyhounds: the race's details. A withdrawn dog shows as a suspended pick. */
 export type RaceInfo = { raceNumber: number | null; grade: string | null; distance: number | null; region: string | null };
 /** Greyhounds: the official result, once it's in. */
-export type RaceResult = { final: boolean; positions: Array<{ dogId: number; position: number; sp: number | null }>; forecastDividend: number | null };
+export type RaceResult = { final: boolean; positions: Array<{ dogId: number; position: number; sp: number | null }>; forecastDividend: number | null; tricastDividend?: number | null };
 
 export type OddsEvent = {
   id: string;

@@ -70,14 +70,28 @@ export function gradeSelection(
     return null;
   }
 
-  // Over/under lines: goals_1_5, home_goals_0_5, h1_goals_1_5, h2_goals_2_5 …
-  const line = /^(goals|home_goals|away_goals|h1_goals|h2_goals)_(\d+)_5$/.exec(marketKey);
+  // Handicaps: ah_m1_5 (Asian, home/away), eh_p1 (European, home/draw/away), on the
+  // 90 minutes, the 1st half (h1_) or corners. The line is the home team's.
+  const handicap = /^(ah|eh|h1_ah|h1_eh|corners_ah)_(m|p)?(\d+)(?:_(\d))?$/.exec(marketKey);
+  if (handicap) {
+    const [, kind, sign, whole, tenth] = handicap;
+    const line = (sign === "m" ? -1 : 1) * Number(`${whole}.${tenth ?? 0}`);
+    const score = kind.startsWith("h1") ? half : kind === "corners_ah" ? (stats ? { home: stats.cornersHome, away: stats.cornersAway } : null) : full;
+    if (!score) return null;
+    const margin = score.home + line - score.away;
+    if (kind.endsWith("eh")) return result(selectionKey, { home: margin, away: 0 });
+    if (selectionKey !== "home" && selectionKey !== "away") return null;
+    return won(selectionKey === "home" ? margin > 0 : margin < 0);
+  }
+
+  // Over/under lines: goals_1_5, home_goals_0_5, h1_goals_1_5, h2_goals_2_5, h1_home_goals_0_5 …
+  const line = /^(goals|home_goals|away_goals|h1_goals|h2_goals|h1_home_goals|h1_away_goals|h2_home_goals|h2_away_goals)_(\d+)_5$/.exec(marketKey);
   if (line) {
     const [, scope, whole] = line;
     const threshold = Number(whole) + 0.5;
     const score = scope.startsWith("h1") ? half : scope.startsWith("h2") ? second : full;
     if (!score) return null;
-    const goals = scope === "home_goals" ? score.home : scope === "away_goals" ? score.away : score.home + score.away;
+    const goals = scope.endsWith("home_goals") ? score.home : scope.endsWith("away_goals") ? score.away : score.home + score.away;
     if (selectionKey === "over") return won(goals > threshold);
     if (selectionKey === "under") return won(goals < threshold);
     return null;
@@ -103,6 +117,14 @@ export function gradeSelection(
       return yesNo(selectionKey, away === 0);
     case "clean_sheet_away":
       return yesNo(selectionKey, home === 0);
+    case "home_scores":
+      return yesNo(selectionKey, home > 0);
+    case "away_scores":
+      return yesNo(selectionKey, away > 0);
+    case "win_to_nil_home":
+      return yesNo(selectionKey, home > away && away === 0);
+    case "win_to_nil_away":
+      return yesNo(selectionKey, away > home && home === 0);
     case "win_to_nil":
       if (selectionKey === "home") return won(home > away && away === 0);
       if (selectionKey === "away") return won(away > home && home === 0);
@@ -149,6 +171,12 @@ export function gradeSelection(
       return correctScore(selectionKey, half);
     case "h2_winner":
       return result(selectionKey, second);
+    case "h2_double_chance":
+      return doubleChance(selectionKey, second);
+    case "home_win_both_halves":
+      return yesNo(selectionKey, sideOf(half) === "home" && sideOf(second) === "home");
+    case "away_win_both_halves":
+      return yesNo(selectionKey, sideOf(half) === "away" && sideOf(second) === "away");
     case "h2_btts":
       return bothScore(selectionKey, second);
     case "ht_ft": {

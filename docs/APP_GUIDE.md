@@ -79,14 +79,15 @@ If Players have already bet enough that a Man City win would cost the team $4,80
 
 The **Bet** page shows every match for the next 7 days from about 90 competitions: Europe's top leagues and their second divisions, England's League One and Two, the Balkans (Albania, Kosovo, North Macedonia, Montenegro, Bosnia, Slovenia, Bulgaria, and more), UEFA and national-team competitions, women's football (Champions League, WSL, Frauen-Bundesliga, Division 1), and the bigger leagues of the Americas, Africa and Asia. You can change the list on the **Odds** page.
 
-A match opens to around 60 bet types under short headings:
+A match opens to around 70 bet types under short headings:
 - **Main:** result, double chance, draw no bet, both teams score.
+- **Handicap:** Asian handicap (like "Tirana −1.5": Tirana have to win by 2 or more; half-goal lines only, so there's no draw) and the 3-way handicap (like "Tirana −1": a 2–1 win counts as a draw), on the match and on the 1st half.
 - **Goals:** total goals lines, exact goals, goal ranges (0–1, 2–3, 4+), odd/even, correct score, winning margin.
-- **Teams:** each team's goals and exact goals, clean sheets, win to nil, first and last team to score, win from behind.
-- **Halves:** half-time result and goals, half-time/full-time, each half's exact goals, scoring in both halves.
+- **Teams:** each team's goals and exact goals, each team to score, clean sheets, win to nil, first and last team to score, win from behind.
+- **Halves:** half-time result and goals, each team's goals in each half, 2nd half double chance, half-time/full-time, each half's exact goals, scoring in both halves, a team to win both halves.
 - **Combos:** result + total goals, total goals + both teams score, result + both teams score.
 - **Goalscorers:** anytime, first and last goalscorer.
-- **Corners & cards:** totals, most corners and corner ranges.
+- **Corners & cards:** totals, most corners, corner ranges and the corners handicap.
 
 Everything settles on the 90 minutes, never extra time. Goalscorer bets follow the usual rules: own goals don't count, a player who doesn't play gets the stake back, and so does a first-goalscorer pick on a player who came on after the first goal.
 
@@ -99,9 +100,12 @@ The feed spells players' names differently in different places ("Memphis Depay" 
 The **Basketball** switch on the Bet page lists NBA games and the main European leagues (Euroleague, ABA, Italy, Spain, Turkey, Greece, France, Germany, Kosovo). Players bet on:
 - **Winner:** either team, overtime included.
 - **Handicap:** a team with points added or taken away, like "Olimpia Milano −8.5": Milano have to win by 9 or more.
-- **Total points:** over or under a line, like 170.5, overtime included.
+- **Total points:** over or under a line, like 170.5, overtime included; each team's points; odd or even.
+- **Result in regulation time:** home, draw or away after four quarters (overtime doesn't count), and double chance.
+- **Half time / full time**, and **highest scoring half**.
+- **Halves and quarters:** for the 1st half, the 2nd half (overtime included) and each quarter: who wins it (2-way, a tie gives the stake back; or 3-way), handicap, total points, each team's points and odd/even.
 
-Bets close at tip-off and settle on the final score. Basketball picks can go in an accumulator with football and MMA.
+A European game has around 80 bets when the bookmaker prices them all; NBA games have the main three. Bets close at tip-off and settle on the final score, and the halves and quarters on the quarter scores the feed sends with it. Basketball picks can go in an accumulator with football and MMA.
 
 **Example:** Maria bets $10 on "Verona +8.5" at 1.77. Milano win 87–80, but with the 8.5 points Verona finish ahead (88.5 to 87), so she gets $17.70 back.
 
@@ -109,7 +113,7 @@ For now the free plan shows games from the day before they're played. NBA prices
 
 ## NFL
 
-The **NFL** switch on the Bet page lists NFL games, with the same three bets as basketball: **Winner**, **Handicap** (the spread, like "Detroit Lions −3.5": the Lions have to win by 4 or more) and **Total points**, all overtime included. If a game ends in a tie, Winner bets are void and the stake comes back.
+The **NFL** switch on the Bet page lists NFL games, with the same bets as basketball (whichever the bookmaker prices, usually the main ones and the result in regulation time): **Winner**, **Handicap** (the spread, like "Detroit Lions −3.5": the Lions have to win by 4 or more) and **Total points**, all overtime included. If a game ends in a tie, Winner bets are void and the stake comes back.
 
 Bets close at kick-off and settle on the final score. NFL picks can go in an accumulator with the other sports (not greyhounds). Like basketball, the free plan shows games from the day before they're played, so Sunday's games appear on Saturday.
 
@@ -119,8 +123,12 @@ The **Tennis** switch on the Bet page lists ATP and WTA matches for today and to
 - **Match winner:** either player.
 - **1st set winner:** either player.
 - **Set betting:** the score in sets, like "Sinner 2-1" (in a best-of-five match, 3-0, 3-1 or 3-2).
+- **To win in straight sets:** yes or no, for each player.
+- **1st set correct score:** like "Sinner 6-4".
+- **Total games:** over or under a line, like 21.5, in the match or in the 1st set. A tie-break counts as one game.
+- **Games handicap:** a player with games added or taken away, like "Sinner −3.5": Sinner has to win at least 4 more games than the opponent.
 
-Bets close at the listed start, or as soon as the match is on court if that's earlier, and settle when it ends. If a player retires, anything already decided stands and the rest is void: a 1st set winner bet is paid once the 1st set was finished, but Match winner and Set betting bets get the stake back. A walkover gives every stake back. Tennis picks can go in an accumulator with the other sports (not greyhounds).
+Bets close at the listed start, or as soon as the match is on court if that's earlier, and settle when it ends. If a player retires, the 1st set bets stand once the 1st set was finished, and every other bet gets the stake back. A walkover gives every stake back. Tennis picks can go in an accumulator with the other sports (not greyhounds).
 
 **Example:** Maria bets $10 on "1st set winner: Zverev" at 1.80 and $10 on "Match winner: Fritz" at 2.10. Zverev wins the 1st set 6-3, then retires injured. Her 1st set bet pays $18, and the Match winner bet comes back as $10.
 
@@ -147,6 +155,7 @@ On the **Bet** page, Players switch between **Football** and **Greyhounds**. Gre
 There's no price before a greyhound race, so bets are paid the way British bookmakers take them:
 - **Winner:** tap **SP** next to a dog. If it wins, the bet pays the dog's *starting price* (the price when the race starts), less the team's margin.
 - **Forecast:** pick the 1st and 2nd dog in order. It pays the official *forecast dividend*, less the margin.
+- **Tricast:** pick the 1st, 2nd and 3rd dog in order. It pays the official *tricast dividend*, less the margin. Offered on races of up to six dogs.
 
 Race picks are single bets only, never in an accumulator. Bets close a minute before the start and settle about 15 minutes after the race, when the official result comes in.
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, type OddsEvent, type OddsSelection } from "../lib/api";
 import { msg } from "../lib/i18n/core";
 import { usePolling } from "../lib/use-polling";
@@ -84,6 +84,7 @@ export function RaceResultList({ race }: { race: OddsEvent }) {
       </ol>
       {result.positions.filter((p) => p.position === 1).length > 1 ? <p className="muted race-result-note">{t("Dead heat for 1st: Winner bets on these dogs are paid on half the stake.")}</p> : null}
       {result.forecastDividend ? <p className="muted race-result-note">{t("Forecast dividend {amount}", { amount: result.forecastDividend.toFixed(2) })}</p> : null}
+      {result.tricastDividend ? <p className="muted race-result-note">{t("Tricast dividend {amount}", { amount: result.tricastDividend.toFixed(2) })}</p> : null}
       {!result.final ? <p className="muted race-result-note">{t("Provisional result. Bets settle once it's final.")}</p> : null}
     </div>
   );
@@ -127,8 +128,8 @@ function LatestResults({ races }: { races: OddsEvent[] }) {
 
 /**
  * Greyhound races on the bet page: the next races to run, each with its dogs
- * to back to win at the starting price, and a Forecast picker (1st and 2nd in
- * order) paid at the official dividend.
+ * to back to win at the starting price, and Forecast (1st and 2nd in order)
+ * and Tricast (1st, 2nd and 3rd) pickers, paid at the official dividends.
  */
 export function GreyhoundRaces({ selected, onPick, active }: { selected: Set<string>; onPick: (event: OddsEvent, market: string, selection: OddsSelection) => void; active: boolean }) {
   const { getToken } = useAuth();
@@ -138,9 +139,10 @@ export function GreyhoundRaces({ selected, onPick, active }: { selected: Set<str
   const [failed, setFailed] = useState(false);
   const [track, setTrack] = useState("");
   const [limit, setLimit] = useState(RACES_SHOWN);
-  /** Races opened for a Forecast, and their full markets once loaded. */
+  /** Races opened for a Forecast or Tricast, and their full markets once loaded. */
   const [details, setDetails] = useState<Record<string, OddsEvent>>({});
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [modes, setModes] = useState<Record<string, PickerMode>>({});
   const openRef = useRef(open);
   openRef.current = open;
 
@@ -193,8 +195,14 @@ export function GreyhoundRaces({ selected, onPick, active }: { selected: Set<str
   }, [bettable]);
   const shown = bettable.filter((race) => !track || race.league === track);
 
-  function toggleForecast(id: string) {
-    const opening = !open.has(id);
+  function togglePicker(id: string, mode: PickerMode) {
+    const opening = modes[id] !== mode;
+    setModes((current) => {
+      const next = { ...current };
+      if (opening) next[id] = mode;
+      else delete next[id];
+      return next;
+    });
     setOpen((current) => {
       const next = new Set(current);
       if (opening) next.add(id);
@@ -219,7 +227,7 @@ export function GreyhoundRaces({ selected, onPick, active }: { selected: Set<str
   return (
     <div className="stack">
       <p className="muted race-intro">
-        {t("Winner bets pay the dog's starting price (SP), set when the race starts. Forecasts (1st and 2nd in order) pay the official forecast dividend.")}
+        {t("Winner bets pay the dog's starting price (SP), set when the race starts. Forecasts (1st and 2nd in order) and Tricasts (1st, 2nd and 3rd in order) pay the official dividends.")}
         <HelpTip text="UK and Irish greyhound racing is bet this way: the price isn't known when you bet. A dog at 3/1 pays back 4 times your stake if it wins. Bets close a minute before the start and settle about 15 minutes after the race." />
       </p>
       {tracks.length > 1 ? (
@@ -247,8 +255,8 @@ export function GreyhoundRaces({ selected, onPick, active }: { selected: Set<str
               key={race.id}
               race={race}
               detail={details[race.id]}
-              forecastOpen={open.has(race.id)}
-              onForecast={() => toggleForecast(race.id)}
+              mode={modes[race.id] ?? null}
+              onMode={(mode) => togglePicker(race.id, mode)}
               selected={selected}
               onPick={onPick}
             />
@@ -284,25 +292,30 @@ export function RaceRunnerList({ race }: { race: OddsEvent }) {
   );
 }
 
+type PickerMode = "forecast" | "tricast";
+
 function RaceCard({
   race,
   detail,
-  forecastOpen,
-  onForecast,
+  mode,
+  onMode,
   selected,
   onPick,
 }: {
   race: OddsEvent;
   detail?: OddsEvent;
-  forecastOpen: boolean;
-  onForecast: () => void;
+  /** Which picker is open, if any. */
+  mode: PickerMode | null;
+  onMode: (mode: PickerMode) => void;
   selected: Set<string>;
   onPick: (event: OddsEvent, market: string, selection: OddsSelection) => void;
 }) {
   const { t, date } = useI18n();
   const region = race.race?.region ?? race.country;
   const winner = race.markets.find((market) => market.key === "race_winner");
-  const forecast = detail?.markets.find((market) => market.key === "race_forecast");
+  const picked = mode ? detail?.markets.find((market) => market.key === `race_${mode}`) : undefined;
+  // A Tricast is offered on fields of up to 6 dogs: no toggle when the race has more.
+  const tricastOffered = (winner?.selections.length ?? 0) >= 3 && (winner?.selections.length ?? 0) <= 6;
   const minutes = Math.round((new Date(race.startsAt).getTime() - Date.now()) / 60_000);
   const facts = [race.race?.grade, race.race?.distance ? `${race.race.distance}m` : null].filter(Boolean).join(" · ");
   return (
@@ -345,12 +358,21 @@ function RaceCard({
           );
         })}
       </ul>
-      <button type="button" className={`text-button race-forecast-toggle${forecastOpen ? " is-open" : ""}`} onClick={onForecast} aria-expanded={forecastOpen}>
-        {forecastOpen ? t("Hide forecast") : t("Forecast: pick 1st and 2nd")}
-      </button>
-      {forecastOpen ? (
-        forecast ? (
-          <ForecastPicker race={race} region={region} market={forecast} dogs={winner?.selections ?? []} selected={selected} onPick={onPick} />
+      <div className="race-picker-toggles">
+        <button type="button" className={`text-button race-forecast-toggle${mode === "forecast" ? " is-open" : ""}`} onClick={() => onMode("forecast")} aria-expanded={mode === "forecast"}>
+          {mode === "forecast" ? t("Hide forecast") : t("Forecast: pick 1st and 2nd")}
+        </button>
+        {tricastOffered ? (
+          <button type="button" className={`text-button race-forecast-toggle${mode === "tricast" ? " is-open" : ""}`} onClick={() => onMode("tricast")} aria-expanded={mode === "tricast"}>
+            {mode === "tricast" ? t("Hide tricast") : t("Tricast: pick 1st, 2nd and 3rd")}
+          </button>
+        ) : null}
+      </div>
+      {mode ? (
+        picked ? (
+          <PlacesPicker key={mode} places={mode === "tricast" ? 3 : 2} race={race} region={region} market={picked} dogs={winner?.selections ?? []} selected={selected} onPick={onPick} />
+        ) : detail ? (
+          <p className="muted race-result-note">{t("Not offered for this race.")}</p>
         ) : (
           <LoadingSpinner label="Loading" size="small" />
         )
@@ -359,7 +381,9 @@ function RaceCard({
   );
 }
 
-function ForecastPicker({
+/** Picks the dogs to finish 1st and 2nd (Forecast), or 1st, 2nd and 3rd (Tricast), in order. */
+function PlacesPicker({
+  places,
   race,
   region,
   market,
@@ -367,6 +391,7 @@ function ForecastPicker({
   selected,
   onPick,
 }: {
+  places: 2 | 3;
   race: OddsEvent;
   region: string | null | undefined;
   market: OddsEvent["markets"][number];
@@ -375,11 +400,16 @@ function ForecastPicker({
   onPick: (event: OddsEvent, market: string, selection: OddsSelection) => void;
 }) {
   const { t } = useI18n();
-  const [first, setFirst] = useState<number | null>(null);
-  const [second, setSecond] = useState<number | null>(null);
+  const [chosen, setChosen] = useState<Array<number | null>>(() => Array(places).fill(null));
   const running = dogs.filter((dog) => !dog.suspended && dog.info?.trap);
-  const pair = first !== null && second !== null ? market.selections.find((s) => s.info?.traps?.[0] === first && s.info?.traps?.[1] === second && !s.suspended) : undefined;
-  const row = (label: string, value: number | null, other: number | null, set: (trap: number) => void) => (
+  const complete = chosen.every((trap) => trap !== null);
+  const pair = complete ? market.selections.find((s) => !s.suspended && chosen.every((trap, i) => s.info?.traps?.[i] === trap)) : undefined;
+  const labels = [t("1st"), t("2nd"), t("3rd")];
+  const row = (place: number) => {
+    const label = labels[place];
+    const value = chosen[place];
+    const taken = chosen.filter((trap, i) => i !== place && trap !== null);
+    return (
     <div className="race-forecast-row" role="group" aria-label={label}>
       <span className="muted">{label}</span>
       {running.map((dog) => {
@@ -389,28 +419,30 @@ function ForecastPicker({
             key={trap}
             type="button"
             className={`race-forecast-trap${value === trap ? " is-active" : ""}`}
-            disabled={other === trap}
+            disabled={taken.includes(trap)}
             aria-pressed={value === trap}
             aria-label={`${label}: ${dog.name}`}
-            onClick={() => set(trap)}
+            onClick={() => setChosen((current) => current.map((old, i) => (i === place ? trap : old)))}
           >
             <Trap trap={trap} region={region} />
           </button>
         );
       })}
     </div>
-  );
+    );
+  };
   return (
     <div className="race-forecast">
-      {row(t("1st"), first, second, setFirst)}
-      {row(t("2nd"), second, first, setSecond)}
+      {Array.from({ length: places }, (_, place) => (
+        <Fragment key={place}>{row(place)}</Fragment>
+      ))}
       <button
         type="button"
         className={pair && selected.has(pair.id) ? "secondary" : ""}
         disabled={!pair}
         onClick={() => pair && onPick(race, market.name, pair)}
       >
-        {pair ? (selected.has(pair.id) ? t("Remove {pick} from the slip", { pick: pair.name }) : t("Add {pick} to the slip", { pick: pair.name })) : t("Pick 1st and 2nd")}
+        {pair ? (selected.has(pair.id) ? t("Remove {pick} from the slip", { pick: pair.name }) : t("Add {pick} to the slip", { pick: pair.name })) : places === 3 ? t("Pick 1st, 2nd and 3rd") : t("Pick 1st and 2nd")}
       </button>
     </div>
   );

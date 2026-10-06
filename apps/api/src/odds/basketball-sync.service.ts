@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { EventStatus } from "@prisma/client";
+import { EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { type FetchJson, httpFetchJson } from "./api-football";
-import { BASKETBALL_PROVIDER, type FeedGame, NBA_LEAGUE_ID, type OddsApiEvent, type RawGame, parseApiSportsOdds, parseGame, parseOddsApiEvent, teamKey } from "./basketball";
+import { BASKETBALL_PROVIDER, type FeedGame, NBA_LEAGUE_ID, type OddsApiEvent, type RawGame, parseApiSportsOdds, parseGame, parseOddsApiEvent, periodsResultOf, teamKey } from "./basketball";
 import { OddsSyncService, movedLater } from "./odds-sync.service";
 
 const LOCK_KEY = "basketball:sync";
@@ -227,7 +227,7 @@ export class BasketballSyncService implements OnModuleInit, OnModuleDestroy {
  */
 export async function saveScoredGame(prisma: PrismaService, provider: string, sport: string, game: FeedGame, create = true): Promise<string | null> {
   const where = { provider_externalId: { provider, externalId: game.externalId } };
-  const before = await prisma.event.findUnique({ where, select: { id: true, status: true, startsAt: true, resultHome: true, resultAway: true, resultSource: true } });
+  const before = await prisma.event.findUnique({ where, select: { id: true, status: true, startsAt: true, resultHome: true, resultAway: true, resultSource: true, fightResult: true } });
   if ((!before && !create) || before?.resultSource === "manual") return before?.id ?? null;
   const status =
     game.status === "cancelled" ? EventStatus.CANCELLED
@@ -235,7 +235,11 @@ export async function saveScoredGame(prisma: PrismaService, provider: string, sp
     : game.score ? EventStatus.COMPLETED
     : game.status === "upcoming" ? EventStatus.UPCOMING
     : EventStatus.LIVE;
-  const changed = before?.status === EventStatus.COMPLETED && game.score !== null && (before.resultHome !== game.score.home || before.resultAway !== game.score.away);
+  const previous = periodsResultOf(before?.fightResult);
+  const changed =
+    before?.status === EventStatus.COMPLETED &&
+    game.score !== null &&
+    (before.resultHome !== game.score.home || before.resultAway !== game.score.away || (previous !== null && game.periods !== null && JSON.stringify(previous) !== JSON.stringify(game.periods)));
   const data = {
     name: `${game.home} v ${game.away}`,
     league: game.league,
@@ -251,6 +255,14 @@ export async function saveScoredGame(prisma: PrismaService, provider: string, sp
           awayScore: game.score.away,
           resultHome: game.score.home,
           resultAway: game.score.away,
+          // The quarters, for the period markets; the half-time score from them.
+          ...(game.periods
+            ? {
+                fightResult: game.periods as unknown as Prisma.InputJsonValue,
+                resultHalfHome: game.periods.quarters[0][0] + game.periods.quarters[1][0],
+                resultHalfAway: game.periods.quarters[0][1] + game.periods.quarters[1][1],
+              }
+            : {}),
           resultSource: "feed",
           ...(before?.status !== EventStatus.COMPLETED ? { finishedAt: new Date() } : {}),
         }

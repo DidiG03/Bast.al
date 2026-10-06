@@ -39,7 +39,7 @@ test("a retirement, a walkover and a live match", () => {
 
 test("prices: the chosen bookmaker, else one that prices the whole market", () => {
   const markets = parseTennisOdds(odds["12077001"], "J. Sinner", "B. Shelton", "bet365");
-  assert.deepEqual(markets.map((m) => m.key), ["tn_winner", "tn_set1", "tn_sets"]);
+  assert.deepEqual(markets.map((m) => m.key).slice(0, 3), ["tn_winner", "tn_set1", "tn_sets"]);
   assert.deepEqual(markets[0].selections.map((s) => [s.key, s.name, s.odds]), [["home", "J. Sinner", 1.44], ["away", "B. Shelton", 2.75]]);
   assert.deepEqual(markets[1].selections.map((s) => s.odds), [1.5, 2.5], "bwin, the only one with the 1st set");
   assert.deepEqual(
@@ -73,4 +73,42 @@ test("when a set is over", () => {
   assert.equal(setFinished(6, 5), false);
   assert.equal(setFinished(10, 8), true, "a match tie-break");
   assert.equal(setFinished(5, 3), false);
+});
+
+test("more markets: straight sets, 1st set score, total games and games handicap", () => {
+  const markets = parseTennisOdds(odds["12077001"], "J. Sinner", "B. Shelton", "bet365");
+  const keys = markets.map((m) => m.key);
+  assert.deepEqual(keys, ["tn_winner", "tn_set1", "tn_sets", "tn_straight_home", "tn_straight_away", "tn_set1_score", "tn_games_20_5", "tn_games_21_5", "tn_games_22_5", "tn_set1_games_9_5", "tn_handicap_m4_5", "tn_handicap_m3_5"]);
+  const by = (key) => markets.find((m) => m.key === key);
+  assert.deepEqual(by("tn_straight_home").selections.map((s) => [s.key, s.odds]), [["yes", 1.95], ["no", 1.8]]);
+  assert.equal(by("tn_straight_away").name, "B. Shelton to win in straight sets");
+  assert.deepEqual(by("tn_set1_score").selections.map((s) => s.name).slice(0, 5), ["J. Sinner 6-3", "J. Sinner 6-4", "J. Sinner 7-5", "J. Sinner 7-6", "B. Shelton 6-3"], "1:0 isn't a set score");
+  assert.deepEqual(by("tn_games_21_5").selections.map((s) => [s.name, s.odds]), [["Over 21.5", 1.8], ["Under 21.5", 1.95]], "the even line and those nearest; whole lines left out");
+  assert.deepEqual(by("tn_handicap_m3_5").selections.map((s) => [s.name, s.odds]), [["J. Sinner −3.5", 1.85], ["B. Shelton +3.5", 1.9]]);
+});
+
+test("settling the new markets", () => {
+  // Swiatek 4-6 7-6 6-2: 31 games, 17 to 14; the 1st set went 4-6.
+  const result = match("12077002").result;
+  assert.equal(gradeTennis("tn_straight_home", "no", result), "WON");
+  assert.equal(gradeTennis("tn_straight_away", "no", result), "WON");
+  assert.equal(gradeTennis("tn_set1_score", "4_6", result), "WON");
+  assert.equal(gradeTennis("tn_set1_score", "6_4", result), "LOST");
+  assert.equal(gradeTennis("tn_set1_games_9_5", "over", result), "WON");
+  assert.equal(gradeTennis("tn_games_30_5", "over", result), "WON");
+  assert.equal(gradeTennis("tn_games_31_5", "under", result), "WON");
+  assert.equal(gradeTennis("tn_handicap_m2_5", "home", result), "WON", "17 - 2.5 beats 14");
+  assert.equal(gradeTennis("tn_handicap_m3_5", "away", result), "WON", "17 - 3.5 is short of 14");
+  const straight = { outcome: "away", sets: [[3, 6], [6, 7]], completed: true };
+  assert.equal(gradeTennis("tn_straight_away", "yes", straight), "WON");
+  assert.equal(gradeTennis("tn_straight_home", "no", straight), "WON");
+  // A match tie-break counts as one game.
+  assert.equal(gradeTennis("tn_games_25_5", "under", { outcome: "home", sets: [[6, 4], [4, 6], [10, 8]], completed: true }), "WON", "21 games");
+  // Zverev retired at 6-3 1-2: the 1st set markets stand, the rest is void.
+  const retired = match("12077003").result;
+  assert.equal(gradeTennis("tn_set1_score", "6_3", retired), "WON");
+  assert.equal(gradeTennis("tn_set1_games_8_5", "over", retired), "WON");
+  assert.equal(gradeTennis("tn_games_20_5", "under", retired), "VOID");
+  assert.equal(gradeTennis("tn_handicap_m3_5", "home", retired), "VOID");
+  assert.equal(gradeTennis("tn_straight_home", "no", retired), "VOID");
 });

@@ -281,6 +281,51 @@ function comboLines(
   };
 }
 
+const signedLine = (line: number) => `${line > 0 ? "+" : line < 0 ? "−" : ""}${Math.abs(line)}`;
+/** "-1.5" → "m1_5", "1" → "p1", "0" → "0", for a market key. */
+const handicapKey = (line: number) => `${line < 0 ? "m" : line > 0 ? "p" : ""}${String(Math.abs(line)).replace(".", "_")}`;
+
+/**
+ * Handicaps, "Home -1.5" and "Away -1.5": the number is the home team's
+ * handicap on both sides (as in API-Sports' basketball odds). Asian lines
+ * are half lines only, two outcomes and no push; European ones ("Handicap
+ * Result": "Home -1", "Draw -1", "Away -1") whole lines with a draw. Up to
+ * `max` lines, the most evenly priced and those nearest it.
+ */
+function handicaps(prefix: string, name: (home: string, line: string) => string, european: boolean, max = 3) {
+  return (bet: FeedBet, home: string, away: string): Built[] => {
+    const byLine = new Map<number, Map<string, number>>();
+    for (const v of bet.values) {
+      const m = /^(Home|Draw|Away) ([+-]?\d+(?:\.\d+)?)$/.exec(String(v.value).trim());
+      if (!m) continue;
+      const line = Number(m[2]);
+      const half = Math.abs((Math.abs(line) % 1) - 0.5) < 1e-9;
+      if (european ? !Number.isInteger(line) || line === 0 : !half) continue;
+      if (!byLine.has(line)) byLine.set(line, new Map());
+      byLine.get(line)!.set(m[1].toLowerCase(), Number(v.odd));
+    }
+    const sides = european ? ["home", "draw", "away"] : ["home", "away"];
+    const priced = [...byLine.entries()].filter(([, prices]) => sides.every((side) => (prices.get(side) ?? 0) > 1));
+    if (priced.length === 0) return [];
+    const spread = (prices: Map<string, number>) => Math.abs(prices.get("home")! - prices.get("away")!);
+    const even = priced.reduce((best, entry) => (spread(entry[1]) < spread(best[1]) ? entry : best))[0];
+    return priced
+      .sort(([a], [b]) => Math.abs(a - even) - Math.abs(b - even))
+      .slice(0, max)
+      .sort(([a], [b]) => a - b)
+      .map(([line, prices]) => ({
+        key: `${prefix}_${handicapKey(line)}`,
+        name: name(home, signedLine(line)),
+        selections: sides.map((side, sortOrder) => ({
+          key: side,
+          name: side === "home" ? `${home} ${signedLine(line)}` : side === "away" ? `${away} ${signedLine(-line)}` : `Draw (${signedLine(line)})`,
+          odds: prices.get(side)!,
+          sortOrder,
+        })),
+      }));
+  };
+}
+
 /** Corner ranges ("Under 6", "6 - 8", "Over 14"), whose bands change from match to match. Keyed "u6", "6-8", "o14". */
 function countRanges(key: string, name: string) {
   return (bet: FeedBet): Built[] => {
@@ -354,6 +399,9 @@ const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away:
   ["Goals Over/Under", lines("goals", (_h, _a, line) => `Total goals ${line}`, ["2.5", "1.5", "3.5", "0.5", "4.5"])],
   ["Both Teams Score", fixed("btts", () => "Both teams score", yesNo)],
   ["Home/Away", fixed("draw_no_bet", () => "Draw no bet", eitherTeam)],
+  // Handicaps settle on the 90-minute score like everything else.
+  ["Asian Handicap", handicaps("ah", (home, line) => `Asian handicap ${home} ${line}`, false)],
+  ["Handicap Result", handicaps("eh", (home, line) => `Handicap ${home} ${line}`, true)],
   ["First Half Winner", fixed("h1_winner", () => "1st half result", outcomes)],
   [
     "HT/FT Double",
@@ -430,7 +478,11 @@ const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away:
   ["Away Odd/Even", fixed("away_odd_even", (_h, away) => `${away} goals odd/even`, oddEven)],
   ["Clean Sheet - Home", fixed("clean_sheet_home", (home) => `${home} clean sheet`, yesNo)],
   ["Clean Sheet - Away", fixed("clean_sheet_away", (_h, away) => `${away} clean sheet`, yesNo)],
+  ["Home Team Score a Goal", fixed("home_scores", (home) => `${home} to score`, yesNo)],
+  ["Away Team Score a Goal", fixed("away_scores", (_h, away) => `${away} to score`, yesNo)],
   ["Win To Nil", fixed("win_to_nil", () => "Win to nil", eitherTeam)],
+  ["Win to Nil - Home", fixed("win_to_nil_home", (home) => `${home} to win to nil`, yesNo)],
+  ["Win to Nil - Away", fixed("win_to_nil_away", (_h, away) => `${away} to win to nil`, yesNo)],
   // Settle from the order of the goals, fetched after full time (see bets/goals.ts).
   ["Team To Score First", fixed("first_team_score", () => "First team to score", [...eitherTeam, ["No goal", "none", () => "No goal"]])],
   ["Team To Score Last", fixed("last_team_score", () => "Last team to score", [...eitherTeam, ["No goal", "none", () => "No goal"]])],
@@ -439,12 +491,19 @@ const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away:
   ["First Goal Scorer", goalscorers("scorer_first", "First goalscorer")],
   ["Last Goal Scorer", goalscorers("scorer_last", "Last goalscorer")],
   ["Double Chance - First Half", fixed("h1_double_chance", () => "1st half double chance", doubleChance)],
+  ["Asian Handicap First Half", handicaps("h1_ah", (home, line) => `1st half Asian handicap ${home} ${line}`, false)],
+  ["Handicap Result - First Half", handicaps("h1_eh", (home, line) => `1st half handicap ${home} ${line}`, true)],
+  ["Home Team Total Goals(1st Half)", lines("h1_home_goals", (home, _a, line) => `${home} 1st half goals ${line}`, ["0.5", "1.5"])],
+  ["Away Team Total Goals(1st Half)", lines("h1_away_goals", (_h, away, line) => `${away} 1st half goals ${line}`, ["0.5", "1.5"])],
   ["Goals Over/Under First Half", lines("h1_goals", (_h, _a, line) => `1st half goals ${line}`, ["0.5", "1.5", "2.5"])],
   ["Both Teams Score - First Half", fixed("h1_btts", () => "1st half both teams score", yesNo)],
   ["Correct Score - First Half", scores("h1_correct_score", "1st half correct score")],
   ["Exact Goals Number - First Half", exactCount("h1_exact_goals", () => "1st half exact goals", 5)],
   ["Odd/Even - First Half", fixed("h1_odd_even", () => "1st half goals odd/even", oddEven)],
   ["Second Half Winner", fixed("h2_winner", () => "2nd half result", outcomes)],
+  ["Double Chance - Second Half", fixed("h2_double_chance", () => "2nd half double chance", doubleChance)],
+  ["Home Team Total Goals(2nd Half)", lines("h2_home_goals", (home, _a, line) => `${home} 2nd half goals ${line}`, ["0.5", "1.5"])],
+  ["Away Team Total Goals(2nd Half)", lines("h2_away_goals", (_h, away, line) => `${away} 2nd half goals ${line}`, ["0.5", "1.5"])],
   ["Goals Over/Under - Second Half", lines("h2_goals", (_h, _a, line) => `2nd half goals ${line}`, ["0.5", "1.5", "2.5"])],
   ["Both Teams To Score - Second Half", fixed("h2_btts", () => "2nd half both teams score", yesNo)],
   ["Second Half Exact Goals Number", exactCount("h2_exact_goals", () => "2nd half exact goals", 5)],
@@ -455,6 +514,8 @@ const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away:
   ],
   ["Win Both Halves", fixed("win_both_halves", () => "Win both halves", eitherTeam)],
   ["To Win Either Half", fixed("win_either_half", () => "Win either half", eitherTeam)],
+  ["Home win both halves", fixed("home_win_both_halves", (home) => `${home} to win both halves`, yesNo)],
+  ["Away win both halves", fixed("away_win_both_halves", (_h, away) => `${away} to win both halves`, yesNo)],
   // Two separate bets in one list: each team scoring in both halves.
   ["To Score In Both Halves By Teams", fixed("score_both_halves", () => "Score in both halves", eitherTeam)],
   ["Home Highest Scoring Half", fixed("home_highest_half", (home) => `${home} highest scoring half`, halves)],
@@ -465,6 +526,7 @@ const MARKETS: Array<[betName: string, build: (bet: FeedBet, home: string, away:
   ["Away Corners Over/Under", feedLines("away_corners", (_h, away, line) => `${away} corners ${line}`)],
   ["Corners 1x2", fixed("corners_1x2", () => "Most corners", outcomes)],
   ["Corners. Total (Range)", countRanges("corners_range", "Total corners range")],
+  ["Corners Asian Handicap", handicaps("corners_ah", (home, line) => `Corners handicap ${home} ${line}`, false)],
   ["Cards Over/Under", feedLines("cards", (_h, _a, line) => `Total cards ${line}`)],
   ["Home Team Total Cards", feedLines("home_cards", (home, _a, line) => `${home} cards ${line}`)],
   ["Away Team Total Cards", feedLines("away_cards", (_h, away, line) => `${away} cards ${line}`)],

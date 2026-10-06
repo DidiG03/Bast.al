@@ -93,18 +93,19 @@ test("setup", async () => {
   ditaActor = { id: dita.id, role: "PLAYER", parentId: manager.id };
 });
 
-test("a race card becomes a race with a Winner and a Forecast market, listed under greyhounds only", async () => {
+test("a race card becomes a race with Winner, Forecast and Tricast markets, listed under greyhounds only", async () => {
   await greyhounds.saveRace(race("r1", new Date(Date.now() + 30 * MIN)));
   const list = await odds.events(ditaActor, "upcoming", undefined, "list", "greyhounds");
   assert.equal(list.length, 1);
   const [row] = list;
   assert.equal(row.sport, "greyhounds");
   assert.equal(row.name, "Romford · Race 4");
-  assert.equal(row.marketCount, 2);
+  assert.equal(row.marketCount, 3);
   assert.deepEqual(row.markets[0].selections.map((s) => [s.name, s.price, s.sp, s.info.trap]), [["Swift Airy", 0, true, 1], ["Zoo Da Man", 0, true, 2], ["Rathorpe Ogie", 0, true, 3], ["Cheery Girl", 0, true, 4]]);
   assert.deepEqual(await odds.events(ditaActor, "upcoming", undefined, "list"), [], "the football list doesn't show races");
   const full = await odds.event(ditaActor, row.id);
   assert.equal(full.markets[1].selections.length, 12);
+  assert.equal(full.markets[2].selections.length, 24, "every 1st-2nd-3rd of four dogs");
 });
 
 test("a race bet is placed at SP, counts at its ceiling, and can't go in an accumulator", async () => {

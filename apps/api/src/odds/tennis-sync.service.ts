@@ -52,6 +52,8 @@ export class TennisSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly days = Math.min(7, Math.max(1, Number(process.env.TENNIS_DAYS) || 2));
   private redis?: Redis;
   private running = false;
+  /** The feed's market names, logged once per start, so a market it names differently doesn't go unnoticed. */
+  private marketsLogged = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -121,6 +123,11 @@ export class TennisSyncService implements OnModuleInit, OnModuleDestroy {
     let priced = 0;
     if (saved.size > 0) {
       const odds = await this.get!<Record<string, RawTennisOdds>>("get_odds", { date_start: range.date_start, date_stop: range.date_stop });
+      if (!this.marketsLogged && odds && Object.keys(odds).length > 0) {
+        this.marketsLogged = true;
+        const names = [...new Set(Object.values(odds).flatMap((raw) => Object.keys(raw ?? {})))].sort();
+        this.logger.log(`Tennis markets in the feed: ${names.join(", ")}`);
+      }
       for (const [key, raw] of Object.entries(odds ?? {})) {
         const match = saved.get(key);
         if (!match) continue;

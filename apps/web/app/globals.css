@@ -8060,6 +8060,12 @@ button.is-blocked {
   justify-self: start;
 }
 
+.race-picker-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+}
+
 .race-forecast {
   display: grid;
   gap: 0.6rem;

@@ -662,8 +662,8 @@ function marketGroup(key: string): MarketGroup {
   if (/^bb_(h1|h2)_/.test(key) || key === "bb_highest_half") return "halves";
   if (/^bb_q[1-4]_/.test(key)) return "quarters";
   // Tennis: who wins the match, then the sets (the 1st set and the score in sets), then games.
-  if (key === "tn_winner" || key.startsWith("tn_straight_")) return "main";
-  if (/^tn_(games|handicap)_/.test(key)) return "games";
+  if (key === "tn_winner" || key === "tn_set_match" || /^tn_(straight|one_set|behind)_/.test(key)) return "main";
+  if (/^tn_(games|handicap|home_games|away_games)_/.test(key) || key === "tn_odd_even") return "games";
   if (key.startsWith("tn_")) return "sets";
   // MMA: who wins, then the rounds lines.
   if (key.startsWith("fight_")) return "main";

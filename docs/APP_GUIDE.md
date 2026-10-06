@@ -123,12 +123,14 @@ The **Tennis** switch on the Bet page lists ATP and WTA matches for today and to
 - **Match winner:** either player.
 - **1st set winner:** either player.
 - **Set betting:** the score in sets, like "Sinner 2-1" (in a best-of-five match, 3-0, 3-1 or 3-2).
-- **To win in straight sets:** yes or no, for each player.
-- **1st set correct score:** like "Sinner 6-4".
-- **Total games:** over or under a line, like 21.5, in the match or in the 1st set. A tie-break counts as one game.
+- **To win in straight sets**, **to win at least one set** and **to win from a set down:** yes or no, for each player.
+- **1st set / match:** who wins the 1st set and who wins the match, like "Shelton / Sinner".
+- **Sets handicap:** like "Sinner −1.5": Sinner has to win without dropping a set.
+- **The 1st and 2nd sets:** the winner, the correct score (like "Sinner 6-4"), total games, a games handicap, each player's games and odd/even.
+- **Total games:** over or under a line, like 21.5; each player's games; odd or even. A tie-break counts as one game.
 - **Games handicap:** a player with games added or taken away, like "Sinner −3.5": Sinner has to win at least 4 more games than the opponent.
 
-Bets close at the listed start, or as soon as the match is on court if that's earlier, and settle when it ends. If a player retires, the 1st set bets stand once the 1st set was finished, and every other bet gets the stake back. A walkover gives every stake back. Tennis picks can go in an accumulator with the other sports (not greyhounds).
+Bets close at the listed start, or as soon as the match is on court if that's earlier, and settle when it ends. If a player retires, bets on a set that was finished stand, "to win at least one set" stands for a player who already had, and every other bet gets the stake back. A walkover gives every stake back. Tennis picks can go in an accumulator with the other sports (not greyhounds).
 
 **Example:** Maria bets $10 on "1st set winner: Zverev" at 1.80 and $10 on "Match winner: Fritz" at 2.10. Zverev wins the 1st set 6-3, then retires injured. Her 1st set bet pays $18, and the Match winner bet comes back as $10.
 

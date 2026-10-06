@@ -78,7 +78,8 @@ test("when a set is over", () => {
 test("more markets: straight sets, 1st set score, total games and games handicap", () => {
   const markets = parseTennisOdds(odds["12077001"], "J. Sinner", "B. Shelton", "bet365");
   const keys = markets.map((m) => m.key);
-  assert.deepEqual(keys, ["tn_winner", "tn_set1", "tn_sets", "tn_straight_home", "tn_straight_away", "tn_set1_score", "tn_games_20_5", "tn_games_21_5", "tn_games_22_5", "tn_set1_games_9_5", "tn_handicap_m4_5", "tn_handicap_m3_5"]);
+  for (const key of ["tn_winner", "tn_set1", "tn_sets", "tn_straight_home", "tn_straight_away", "tn_set1_score", "tn_games_20_5", "tn_games_21_5", "tn_games_22_5", "tn_set1_games_9_5", "tn_handicap_m4_5", "tn_handicap_m3_5"]) assert.ok(keys.includes(key), key);
+  assert.ok(!keys.some((key) => key.startsWith("tn_games_2_5")), "\"Over/Under\" at 2.5 is sets, not games");
   const by = (key) => markets.find((m) => m.key === key);
   assert.deepEqual(by("tn_straight_home").selections.map((s) => [s.key, s.odds]), [["yes", 1.95], ["no", 1.8]]);
   assert.equal(by("tn_straight_away").name, "B. Shelton to win in straight sets");
@@ -111,4 +112,36 @@ test("settling the new markets", () => {
   assert.equal(gradeTennis("tn_games_20_5", "under", retired), "VOID");
   assert.equal(gradeTennis("tn_handicap_m3_5", "home", retired), "VOID");
   assert.equal(gradeTennis("tn_straight_home", "no", retired), "VOID");
+});
+
+test("the feed's other markets: 2nd set, sets handicap, each player's games, odd/even, set and match", () => {
+  const markets = parseTennisOdds(odds["12077001"], "J. Sinner", "B. Shelton", "bet365");
+  const keys = markets.map((m) => m.key);
+  for (const key of ["tn_set2", "tn_sets_handicap_m1_5", "tn_home_games_12_5", "tn_odd_even", "tn_set1_odd_even", "tn_one_set_away", "tn_behind_home", "tn_set_match", "tn_set2_score", "tn_set2_games_9_5", "tn_set1_home_games_5_5", "tn_set1_handicap_m1_5"]) assert.ok(keys.includes(key), key);
+  assert.deepEqual(markets.find((m) => m.key === "tn_set_match").selections.map((s) => [s.name, s.odds]), [["J. Sinner / J. Sinner", 1.6], ["J. Sinner / B. Shelton", 8], ["B. Shelton / J. Sinner", 4.5], ["B. Shelton / B. Shelton", 4.75]]);
+  assert.ok(!keys.some((key) => /tiebreak/i.test(key)), "tie-breaks aren't offered");
+});
+
+test("settling the feed's other markets", () => {
+  // Swiatek 4-6 7-6 6-2: lost the 1st set, won the 2nd 7-6 and the match; 17 games to 14.
+  const result = match("12077002").result;
+  assert.equal(gradeTennis("tn_set2", "home", result), "WON");
+  assert.equal(gradeTennis("tn_set2_score", "7_6", result), "WON");
+  assert.equal(gradeTennis("tn_set2_games_12_5", "over", result), "WON", "13 games");
+  assert.equal(gradeTennis("tn_set1_handicap_m1_5", "away", result), "WON", "6-4 to Gauff");
+  assert.equal(gradeTennis("tn_set1_home_games_4_5", "under", result), "WON");
+  assert.equal(gradeTennis("tn_set1_odd_even", "even", result), "WON");
+  assert.equal(gradeTennis("tn_sets_handicap_m1_5", "away", result), "WON", "2-1 isn't by two sets");
+  assert.equal(gradeTennis("tn_home_games_16_5", "over", result), "WON");
+  assert.equal(gradeTennis("tn_odd_even", "odd", result), "WON", "31 games");
+  assert.equal(gradeTennis("tn_one_set_away", "yes", result), "WON");
+  assert.equal(gradeTennis("tn_behind_home", "yes", result), "WON");
+  assert.equal(gradeTennis("tn_set_match", "away_home", result), "WON");
+  // Zverev retired at 6-3 1-2: having won a set stands; the 2nd set and the match are void.
+  const retired = match("12077003").result;
+  assert.equal(gradeTennis("tn_one_set_home", "yes", retired), "WON");
+  assert.equal(gradeTennis("tn_one_set_away", "yes", retired), "VOID");
+  assert.equal(gradeTennis("tn_set2", "away", retired), "VOID");
+  assert.equal(gradeTennis("tn_set_match", "home_away", retired), "VOID");
+  assert.equal(gradeTennis("tn_set1_odd_even", "odd", retired), "WON", "9 games in the 1st set");
 });

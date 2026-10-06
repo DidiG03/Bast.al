@@ -63,22 +63,6 @@
      "bet365": "3.00"
     }
    },
-   "Win In Straight Sets (Player 1)": {
-    "Yes": {
-     "bet365": "1.95"
-    },
-    "No": {
-     "bet365": "1.80"
-    }
-   },
-   "Win In Straight Sets (Player 2)": {
-    "Yes": {
-     "bet365": "6.50"
-    },
-    "No": {
-     "bet365": "1.10"
-    }
-   },
    "Over/Under by Games in Match": {
     "Over 20.5": {
      "bet365": "1.60"
@@ -131,6 +115,146 @@
     },
     "Away +4.5": {
      "bet365": "1.70"
+    }
+   },
+   "Win In Straigh Sets (Player 1)": {
+    "Yes": {
+     "bet365": "1.95"
+    },
+    "No": {
+     "bet365": "1.80"
+    }
+   },
+   "Win In Straigh Sets (Player 2)": {
+    "Yes": {
+     "bet365": "6.50"
+    },
+    "No": {
+     "bet365": "1.10"
+    }
+   },
+   "Home/Away (2nd Set)": {
+    "Home": {
+     "bet365": "1.45"
+    },
+    "Away": {
+     "bet365": "2.70"
+    }
+   },
+   "Asian Handicap (Sets)": {
+    "Home -1.5": {
+     "bet365": "2.05"
+    },
+    "Away -1.5": {
+     "bet365": "1.75"
+    }
+   },
+   "Total - Home": {
+    "Over 12.5": {
+     "bet365": "1.80"
+    },
+    "Under 12.5": {
+     "bet365": "1.95"
+    }
+   },
+   "Odd/Even": {
+    "Odd": {
+     "bet365": "1.90"
+    },
+    "Even": {
+     "bet365": "1.90"
+    }
+   },
+   "Odd/Even (1st Set)": {
+    "Odd": {
+     "bet365": "1.85"
+    },
+    "Even": {
+     "bet365": "1.95"
+    }
+   },
+   "Win at least one set (Player 2)": {
+    "Yes": {
+     "bet365": "2.10"
+    },
+    "No": {
+     "bet365": "1.70"
+    }
+   },
+   "Win From behind (Player 1)": {
+    "Yes": {
+     "bet365": "6.00"
+    },
+    "No": {
+     "bet365": "1.12"
+    }
+   },
+   "Set / Match": {
+    "Home/Home": {
+     "bet365": "1.60"
+    },
+    "Home/Away": {
+     "bet365": "8.00"
+    },
+    "Away/Home": {
+     "bet365": "4.50"
+    },
+    "Away/Away": {
+     "bet365": "4.75"
+    }
+   },
+   "Correct Score 2nd Half": {
+    "6:4": {
+     "bet365": "6.00"
+    },
+    "6:3": {
+     "bet365": "6.50"
+    },
+    "4:6": {
+     "bet365": "11.00"
+    },
+    "3:6": {
+     "bet365": "15.00"
+    }
+   },
+   "Over/Under by Games (2nd Set)": {
+    "Over 9.5": {
+     "bet365": "1.90"
+    },
+    "Under 9.5": {
+     "bet365": "1.85"
+    }
+   },
+   "Home Team Total (1st Set)": {
+    "Over 5.5": {
+     "bet365": "1.70"
+    },
+    "Under 5.5": {
+     "bet365": "2.10"
+    }
+   },
+   "Asian Handicap (1st Set)": {
+    "Home -1.5": {
+     "bet365": "1.95"
+    },
+    "Away -1.5": {
+     "bet365": "1.85"
+    }
+   },
+   "Over/Under": {
+    "Over 2.5": {
+     "bet365": "2.60"
+    },
+    "Under 2.5": {
+     "bet365": "1.45"
+    }
+   },
+   "Total Tiebreaks": {
+    "Over 0.5": {
+     "bet365": "2.00"
+    },
+    "Under 0.5": {
+     "bet365": "1.80"
     }
    }
   },

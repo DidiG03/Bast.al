@@ -275,7 +275,9 @@ model Event {
   id                 String      @id @default(cuid())
   /// "football"; "greyhounds" for a greyhound race (league = the track,
   /// country = GB, IE or AU); "mma" for a fight (league = the card,
-  /// country = the weight class, home/away team = the fighters).
+  /// country = the weight class, home/away team = the fighters); "tennis"
+  /// for a match (league = the tournament, country = the tour and round,
+  /// home/away team = the players, home/away score = sets won).
   sport              String      @default("football")
   name               String
   league             String
@@ -343,6 +345,7 @@ model Event {
   /// card's first fight starts (fights often go on earlier than listed).
   closesAt           DateTime?   @map("closes_at")
   /// MMA: who won, how, in which round and at what time (see odds/mma.ts).
+  /// Tennis: who won, every set's games, and whether a player retired (see odds/tennis.ts).
   fightResult        Json?       @map("fight_result")
   /// "feed" or "manual". The feed never overwrites a manual result.
   resultSource       String?     @map("result_source")

@@ -13,6 +13,15 @@ export const server: Record<string, string> = {
   "Total points {line}": "Pikët gjithsej {line}",
   "Asian Handicap": "Handikap aziatik",
   "The Odds API answered {status}": "The Odds API u përgjigj me {status}",
+  // Tennis markets
+  "1st set winner": "Fituesi i setit të parë",
+  "Set betting": "Rezultati në sete",
+  "Set Betting": "Rezultati në sete",
+  "Home/Away (1st Set)": "Fituesi i setit të parë",
+  "API-Tennis answered {status} for {method}": "API-Tennis u përgjigj me {status} për {method}",
+  "API-Tennis: {error}": "API-Tennis: {error}",
+  "A tennis match is settled on its sets. Settle its picks one by one, or void the match.": "Një ndeshje tenisi zgjidhet sipas seteve. Zgjidh zgjedhjet një nga një, ose anulo ndeshjen.",
+  "This match hasn't got its result yet": "Kjo ndeshje nuk e ka ende rezultatin",
   // MMA markets
   "Fight winner": "Fituesi i ndeshjes MMA",
   "Fight result": "Rezultati i ndeshjes MMA (me barazim)",

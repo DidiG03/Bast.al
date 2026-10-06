@@ -312,6 +312,12 @@ export const betting: Record<string, string> = {
   "No basketball games are open for bets right now. Check back soon.": "Asnjë ndeshje basketbolli nuk pranon baste tani. Kthehu së shpejti.",
   "No basketball games finished in the last three days.": "Asnjë ndeshje basketbolli nuk ka përfunduar në tri ditët e fundit.",
   "No basketball games yet. They're fetched every 3 hours, from the day before they're played.": "Ende nuk ka ndeshje basketbolli. Merren çdo 3 orë, që nga dita para se të luhen.",
+  // Tennis
+  "Tennis": "Tenis",
+  "Sets": "Setet",
+  "No tennis matches are open for bets right now. Check back soon.": "Asnjë ndeshje tenisi nuk pranon baste tani. Kthehu së shpejti.",
+  "No tennis matches finished in the last three days.": "Asnjë ndeshje tenisi nuk ka përfunduar në tri ditët e fundit.",
+  "No tennis matches yet. They're fetched every 30 minutes, two days ahead.": "Ende nuk ka ndeshje tenisi. Merren çdo 30 minuta, dy ditë përpara.",
   // NFL
   "NFL": "NFL",
   "No NFL games are open for bets right now. Check back soon.": "Asnjë ndeshje NFL nuk pranon baste tani. Kthehu së shpejti.",

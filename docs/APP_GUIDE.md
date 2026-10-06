@@ -113,6 +113,19 @@ The **NFL** switch on the Bet page lists NFL games, with the same three bets as 
 
 Bets close at kick-off and settle on the final score. NFL picks can go in an accumulator with the other sports (not greyhounds). Like basketball, the free plan shows games from the day before they're played, so Sunday's games appear on Saturday.
 
+## Tennis (with a number)
+
+The **Tennis** switch on the Bet page lists ATP and WTA matches for today and tomorrow, with the tournament and round. Players bet on:
+- **Match winner:** either player.
+- **1st set winner:** either player.
+- **Set betting:** the score in sets, like "Sinner 2-1" (in a best-of-five match, 3-0, 3-1 or 3-2).
+
+Bets close at the listed start, or as soon as the match is on court if that's earlier, and settle when it ends. If a player retires, anything already decided stands and the rest is void: a 1st set winner bet is paid once the 1st set was finished, but Match winner and Set betting bets get the stake back. A walkover gives every stake back. Tennis picks can go in an accumulator with the other sports (not greyhounds).
+
+**Example:** Maria bets $10 on "1st set winner: Zverev" at 1.80 and $10 on "Match winner: Fritz" at 2.10. Zverev wins the 1st set 6-3, then retires injured. Her 1st set bet pays $18, and the Match winner bet comes back as $10.
+
+On the Settlement page a tennis match has no score to enter: settle its picks one by one, or void the match.
+
 ## MMA (with a number)
 
 On the **Bet** page there's also an **MMA** switch: UFC and other cards, each fight with both fighters, its weight class and bet365's prices less the team margin. Players can bet:

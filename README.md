@@ -201,6 +201,18 @@ The free plan (100 requests a day) only sees yesterday to tomorrow, so fights ap
 | `MMA_DAYS` | Days of fights fetched, from today. Defaults to `2` (the free plan's limit). |
 | `MMA_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `5` (bet365 in the MMA list). |
 
+### Tennis
+
+Matches come from [API-Tennis](https://api-tennis.com): fixtures, set-by-set scores and bookmaker prices in one feed. Players bet on **Match winner**, **1st set winner** and **Set betting** (the score in sets, e.g. "Sinner 2-1"), at fixed prices less the team margin. Bets close at the listed start, or as soon as the match is on court if that's earlier. If a player retires, a market already decided stands (the 1st set winner once the 1st set was finished) and the others are void; a walkover is void.
+
+| Variable | Purpose |
+| --- | --- |
+| `TENNIS_API_KEY` | API key from API-Tennis. Without it tennis is off. `TENNIS_FEED=off` turns it off too. |
+| `TENNIS_TOURS` | Competitions to list, by the feed's names, comma-separated. Defaults to `Atp Singles,Wta Singles`; add e.g. `Challenger Men Singles`. |
+| `TENNIS_DAYS` | Days of matches fetched, from today. Defaults to `2` (up to 7). |
+| `TENNIS_SYNC_INTERVAL_MS`, `TENNIS_LIVE_INTERVAL_MS` | Defaults 30 minutes (matches and prices, two requests) and 5 minutes (matches on court and results, only while a match is due or under way). |
+| `TENNIS_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `bet365`, else the first that prices the whole market. |
+
 ### Greyhound racing
 
 Races come from [GreyhoundAPI](https://greyhoundapi.com) (GB, Irish and Australian tracks; the Race Day plan, $49/month, is enough). There are no prices before a race, so race bets are paid the way UK bookmakers take them: **Winner** at the dog's starting price (SP) and **Forecast** (1st and 2nd in order) at the official forecast dividend, both less the team's margin. Race picks are singles only. Bets close a minute before the scheduled start and settle when the final result arrives, usually 12–18 minutes after the race.

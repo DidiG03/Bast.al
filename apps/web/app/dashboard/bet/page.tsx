@@ -130,7 +130,7 @@ function BetPage() {
   const tabParam = params.get("tab");
   const tab: Tab = tabParam === "open" || tabParam === "settled" ? tabParam : "matches";
   const sportParam = params.get("sport");
-  const sport: Sport = sportParam === "greyhounds" || sportParam === "mma" || sportParam === "basketball" || sportParam === "nfl" ? sportParam : "football";
+  const sport: Sport = sportParam === "greyhounds" || sportParam === "mma" || sportParam === "basketball" || sportParam === "nfl" || sportParam === "tennis" ? sportParam : "football";
   /** Football and MMA share the match list; greyhound races have their own. */
   const listed = sport !== "greyhounds";
   // Opened from a match on the Overview: scroll to it and light it up.
@@ -488,6 +488,7 @@ function BetPage() {
             [
               ["football", t("Football")],
               ["greyhounds", t("Greyhounds")],
+              ["tennis", t("Tennis")],
               ["basketball", t("Basketball")],
               ["nfl", t("NFL")],
               ["mma", t("MMA")],
@@ -571,6 +572,8 @@ function BetPage() {
                       ? t("No basketball games are open for bets right now. Check back soon.")
                       : sport === "nfl"
                       ? t("No NFL games are open for bets right now. Check back soon.")
+                      : sport === "tennis"
+                      ? t("No tennis matches are open for bets right now. Check back soon.")
                       : t("No matches are open for bets right now. Check back soon.")
                     : t("No matches match your search.")}
                 </p>
@@ -645,6 +648,7 @@ const MARKET_GROUPS = [
   ["rounds", msg("Rounds")],
   ["handicap", msg("Handicap")],
   ["points", msg("Total points")],
+  ["sets", msg("Sets")],
 ] as const;
 type MarketGroup = (typeof MARKET_GROUPS)[number][0];
 
@@ -653,6 +657,9 @@ function marketGroup(key: string): MarketGroup {
   if (key === "bb_winner") return "main";
   if (key.startsWith("bb_handicap_")) return "handicap";
   if (key.startsWith("bb_total_")) return "points";
+  // Tennis: who wins the match, then the 1st set and the score in sets.
+  if (key === "tn_winner") return "main";
+  if (key.startsWith("tn_")) return "sets";
   // MMA: who wins, then the rounds lines.
   if (key.startsWith("fight_")) return "main";
   if (/^rounds_\d+_5$/.test(key)) return "rounds";
@@ -882,6 +889,15 @@ function SportIcon({ sport }: { sport: Sport }) {
         <ellipse cx="12" cy="12" rx="10" ry="5.8" transform="rotate(-45 12 12)" />
         {/* The laces along the seam, and a stripe near each end. */}
         <path d="M9.2 14.8 14.8 9.2M9.6 12.6l1.8 1.8M11.1 11.1l1.8 1.8M12.6 9.6l1.8 1.8M5.4 14.2l4.4 4.4M14.2 5.4l4.4 4.4" />
+      </svg>
+    );
+  if (sport === "tennis")
+    // A tennis ball: its two curved seams.
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.5" fill="currentColor" fillOpacity="0.16" />
+        <circle cx="12" cy="12" r="9.5" />
+        <path d="M5.2 5.4C8.6 8.6 8.6 15.4 5.2 18.6M18.8 5.4c-3.4 3.2-3.4 10 0 13.2" />
       </svg>
     );
   // MMA: a fighter's glove, open at the fingers, with its wrist strap.

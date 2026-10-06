@@ -374,7 +374,7 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
         </button>
         {canSettle && mode === null ? (
           <span className="odds-admin-actions">
-            {event.sport === "greyhounds" || event.sport === "mma" ? null : (
+            {event.sport === "greyhounds" || event.sport === "mma" || event.sport === "tennis" ? null : (
               <button type="button" className="secondary" onClick={() => setMode("result")} disabled={!started || event.status === "CANCELLED"} title={!started ? t("The match hasn't started") : undefined}>
                 {event.result ? t("Correct result") : t("Set result")}
               </button>

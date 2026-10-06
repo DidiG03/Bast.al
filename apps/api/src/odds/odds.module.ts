@@ -6,6 +6,7 @@ import { GreyhoundSyncService } from "./greyhound-sync.service";
 import { BasketballSyncService } from "./basketball-sync.service";
 import { NflSyncService } from "./nfl-sync.service";
 import { MmaSyncService } from "./mma-sync.service";
+import { TennisSyncService } from "./tennis-sync.service";
 import { OddsSyncService } from "./odds-sync.service";
 import { OddsController } from "./odds.controller";
 import { OddsService } from "./odds.service";
@@ -13,7 +14,7 @@ import { OddsService } from "./odds.service";
 @Module({
   imports: [AuthModule, SecurityModule, AuditModule],
   controllers: [OddsController],
-  providers: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService],
-  exports: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService],
+  providers: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService],
+  exports: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService],
 })
 export class OddsModule {}

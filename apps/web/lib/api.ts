@@ -441,7 +441,7 @@ export type OddsSelection = {
 
 export type PricePoint = { price: number; recordedAt: string };
 
-export type Sport = "football" | "greyhounds" | "mma" | "basketball" | "nfl";
+export type Sport = "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "tennis";
 
 /** Greyhounds: the race's details. A withdrawn dog shows as a suspended pick. */
 export type RaceInfo = { raceNumber: number | null; grade: string | null; distance: number | null; region: string | null };

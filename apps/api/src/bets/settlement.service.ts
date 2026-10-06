@@ -6,6 +6,7 @@ import { NotificationsService } from "../notifications/notifications.service";
 import { RACE_WINNER, gradeRace, raceResultOf, raceSettlePrice } from "../odds/greyhounds";
 import { POINTS_SPORTS, gradeBasketball } from "../odds/basketball";
 import { fightResultOf, gradeFight } from "../odds/mma";
+import { gradeTennis, tennisResultOf } from "../odds/tennis";
 import { UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
@@ -159,6 +160,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
           { status: EventStatus.COMPLETED, sport: "greyhounds" },
           // A fight is marked finished once its result is in.
           { status: EventStatus.COMPLETED, sport: "mma" },
+          // A tennis match too: its result is the sets, and it may have ended with a retirement.
+          { status: EventStatus.COMPLETED, sport: "tennis" },
           { status: EventStatus.CANCELLED },
         ],
         markets: {
@@ -201,7 +204,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       if (changes.length === 0) continue;
       settled += changes.length;
       // Races and fights have no score to name.
-      const race = event.sport === "greyhounds" || event.sport === "mma";
+      const race = event.sport === "greyhounds" || event.sport === "mma" || event.sport === "tennis";
       const score = race ? "a new result" : `${event.resultHome}-${event.resultAway}`;
       await this.audit.log({ action: "bet.result_feed_correct", metadata: { eventId: event.id, event: event.name, to: score, betsChanged: changes.length } });
       const admins = await this.prisma.user.findMany({ where: { role: Role.SUPER_ADMIN }, select: { id: true } });
@@ -314,6 +317,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         else if (selection.resultSource === "manual") grade = selection.result;
         else if (race) grade = event.status === EventStatus.COMPLETED ? gradeRace(market.key, selection.key, raceResult, selection.withdrawn) : null;
         else if (event.sport === "mma") grade = event.status === EventStatus.COMPLETED ? gradeFight(market.key, selection.key, fightResultOf(event.fightResult)) : null;
+        else if (event.sport === "tennis") grade = event.status === EventStatus.COMPLETED ? gradeTennis(market.key, selection.key, tennisResultOf(event.fightResult)) : null;
         // Basketball and the NFL settle on the final score, overtime included.
         else if (POINTS_SPORTS.has(event.sport)) grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeBasketball(market.key, selection.key, event.resultHome, event.resultAway) : null;
         else if (event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null) {
@@ -428,6 +432,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     if (!event) throw new NotFoundException("Match not found");
     if (event.sport === "greyhounds") throw new BadRequestException("A race has no score. Settle its picks one by one, or void the race.");
     if (event.sport === "mma") throw new BadRequestException("A fight has no score. Settle its picks one by one, or void the fight.");
+    if (event.sport === "tennis") throw new BadRequestException("A tennis match is settled on its sets. Settle its picks one by one, or void the match.");
     // A basketball or NFL game settles on its final score alone: there's no half-time score, corners or cards.
     if (POINTS_SPORTS.has(event.sport)) {
       half = null;
@@ -491,6 +496,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       }
     } else if (event.sport === "mma") {
       if (event.status !== EventStatus.COMPLETED) throw new BadRequestException("This fight hasn't got its result yet");
+    } else if (event.sport === "tennis") {
+      if (event.status !== EventStatus.COMPLETED) throw new BadRequestException("This match hasn't got its result yet");
     } else if (event.status !== EventStatus.COMPLETED || event.resultHome === null) throw new BadRequestException("Set the match's result first");
     await this.prisma.selection.update({ where: { id: selectionId }, data: { result, resultSource: "manual" } });
     const changes = await this.settleEvent(event.id, true, actor.id);

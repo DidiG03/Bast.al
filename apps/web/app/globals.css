@@ -7917,14 +7917,25 @@ button.is-blocked {
 
 /* ---------- Greyhound racing (bet page) ---------- */
 
+/* The sports in a row; on a narrow screen the row scrolls sideways on its own instead of widening the page. */
 .sport-switch {
   display: inline-grid;
   grid-auto-flow: column;
   gap: 0.25rem;
+  align-self: flex-start;
   justify-self: start;
+  max-width: 100%;
+  min-width: 0;
   padding: 0.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
   border: 1px solid var(--border);
   border-radius: 999px;
+}
+
+.sport-switch::-webkit-scrollbar {
+  display: none;
 }
 
 .sport-option {
@@ -7938,6 +7949,7 @@ button.is-blocked {
   background: transparent;
   color: var(--muted);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .sport-option svg {

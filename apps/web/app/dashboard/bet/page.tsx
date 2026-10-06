@@ -493,7 +493,17 @@ function BetPage() {
               ["mma", t("MMA")],
             ] as Array<[Sport, string]>
           ).map(([key, label]) => (
-            <button key={key} type="button" className={`sport-option${sport === key ? " is-active" : ""}`} aria-pressed={sport === key} onClick={() => setSport(key)}>
+            <button
+              key={key}
+              type="button"
+              className={`sport-option${sport === key ? " is-active" : ""}`}
+              aria-pressed={sport === key}
+              onClick={(event) => {
+                setSport(key);
+                // On a narrow screen the row scrolls: bring the chosen sport fully into view.
+                event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+              }}
+            >
               <SportIcon sport={key} />
               {label}
             </button>

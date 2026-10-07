@@ -159,6 +159,12 @@ export class BookService {
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
       const feature = await tx.casinoBookFeature.findUnique({ where: { playerId: actor.id } });
       const free = feature !== null;
+      if (!free && (await tx.minesRound.findUnique({ where: { playerId: actor.id }, select: { playerId: true } }))) {
+        throw new BadRequestException("Finish the Mines round you're playing first.");
+      }
+      if (!free && (await tx.penaltyRound.findUnique({ where: { playerId: actor.id }, select: { playerId: true } }))) {
+        throw new BadRequestException("Finish the Penalty round you're playing first.");
+      }
       if (!free && !BETS.some((allowed) => allowed === bet)) throw new BadRequestException(`Choose a bet of ${BETS.map((b) => money(b)).join(", ")}`);
       const playedAt = free ? feature.bet : new Prisma.Decimal(bet);
       const stake = free ? new Prisma.Decimal(0) : playedAt;

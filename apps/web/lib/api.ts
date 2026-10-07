@@ -731,8 +731,8 @@ export type CasinoAdmin = {
   /** A Manager's team: whether their Owner has the Casino open. Null for others. */
   teamOpen: boolean | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
-  /** Each game on its own: the slot (spins and double or nothing), roulette and blackjack (`spins` are its hands). */
-  games: Record<"slot" | "roulette" | "blackjack", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
+  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds). */
+  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
     /** Book of Ra: paid spins and free ones, with double or nothing on its wins. */
     book: { spins: number; freeSpins: number; staked: number; won: number; payoutRate: number | null };
   };
@@ -743,6 +743,8 @@ export type CasinoAdmin = {
     roulette: { spins: number; staked: number; won: number };
     blackjack: { hands: number; staked: number; won: number };
     book: { spins: number; freeSpins: number; staked: number; won: number };
+    mines: { rounds: number; staked: number; won: number };
+    penalty: { rounds: number; staked: number; won: number };
     staked: number;
     won: number;
     net: number;
@@ -915,5 +917,91 @@ export type RouletteResult = {
   staked: number;
   win: number;
   winners: Array<{ spot: string; amount: number; win: number }>;
+  balance: number;
+};
+
+export type MinesPhase = "PLAY" | "WON" | "LOST";
+export type MinesTile = "hidden" | "gem" | "mine" | "hit";
+
+/** A Mines round as the Player may see it. Tiles stay hidden until the round ends. */
+export type MinesRoundView = {
+  phase: MinesPhase;
+  mines: number;
+  bet: number;
+  opened: number;
+  multiplier: number;
+  nextMultiplier: number | null;
+  cashout: number;
+  capped: boolean;
+  tiles: MinesTile[];
+};
+
+export type MinesRoundRow = MinesRoundView & { id: string; createdAt: string };
+
+export type MinesState = {
+  closed: string | null;
+  balance: number;
+  /** The most one round can stake: the Player's max stake, or the top chip without one. */
+  tableMax: number;
+  round: MinesRoundView | null;
+  recent: MinesRoundRow[];
+  game: {
+    name: string;
+    bets: number[];
+    mineCounts: number[];
+    tiles: number;
+    columns: number;
+    payoutRate: number;
+    maxWin: number;
+  };
+};
+
+export type MinesStepResult = {
+  round: MinesRoundView;
+  balance: number;
+};
+
+export type PenaltyDirection = "LEFT" | "CENTER" | "RIGHT";
+export type PenaltyPhase = "PLAY" | "WON" | "LOST";
+
+/** One kick the Player has already taken: where they aimed, where the keeper went, and whether it scored. */
+export type PenaltyKick = { aim: PenaltyDirection; dive: PenaltyDirection; goal: boolean };
+
+/** A penalty shootout as the Player may see it. The next dive isn't chosen until they kick. */
+export type PenaltyRoundView = {
+  phase: PenaltyPhase;
+  bet: number;
+  goals: number;
+  multiplier: number;
+  nextMultiplier: number | null;
+  cashout: number;
+  capped: boolean;
+  kicks: PenaltyKick[];
+};
+
+export type PenaltyRoundRow = PenaltyRoundView & { id: string; createdAt: string };
+
+export type PenaltyState = {
+  closed: string | null;
+  balance: number;
+  /** The most one shootout can stake: the Player's max stake, or the top chip without one. */
+  tableMax: number;
+  round: PenaltyRoundView | null;
+  recent: PenaltyRoundRow[];
+  game: {
+    name: string;
+    bets: number[];
+    directions: PenaltyDirection[];
+    /** What stopping after the first `fullPriceGoals` goals pays back, in percent. */
+    payoutRate: number;
+    fullPriceGoals: number;
+    /** What each later goal multiplies by, below the fair 1.5. */
+    laterStep: number;
+    maxWin: number;
+  };
+};
+
+export type PenaltyStepResult = {
+  round: PenaltyRoundView;
   balance: number;
 };

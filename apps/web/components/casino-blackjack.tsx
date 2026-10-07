@@ -575,8 +575,8 @@ function BlackjackRules({ state, onClose, i18n }: { state: BlackjackState; onClo
     [t("Push"), t("The same total as the dealer. Your bet comes back.")],
     [t("Hit or stand"), t("Hit takes another card; stand keeps what you have. Over 21 is bust and loses.")],
     [t("Double"), t("Double your bet on your first two cards and take exactly one more card. Once a round.")],
-    [t("Split"), t("Two cards of the same value become two hands, each with its own bet. Once a round; split aces get one card each.")],
-    [t("Insurance"), t("When the dealer shows an ace: half your bet that the dealer has blackjack. Pays 2 to 1.")],
+    [t("Split"), t("Two cards of the same rank, like two kings (not a king and a queen), become two hands, each with its own bet. Once a round; split aces get one card each.")],
+    [t("Insurance"), t("When the dealer shows an ace: half your bet that the dealer has blackjack. Pays 2 to 1, settled when the dealer's card is turned over.")],
   ];
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -586,7 +586,7 @@ function BlackjackRules({ state, onClose, i18n }: { state: BlackjackState; onClo
           <button type="button" className="modal-close secondary" onClick={onClose} aria-label={t("Close")}>×</button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          {t("Get closer to 21 than the dealer. Cards 2 to 10 count their number, faces 10, an ace 1 or 11. The dealer draws to 17 and stands on every 17, soft 17 included. Six decks, shuffled for every round.")}
+          {t("Get closer to 21 than the dealer. Cards 2 to 10 count their number, faces 10, an ace 1 or 11. The dealer draws to 17 and stands on every 17, soft 17 included. The dealer's second card stays face down until you've played: a dealer's blackjack beats every hand but a blackjack, doubles and splits included. Six decks, shuffled for every round.")}
         </p>
         <div className="report-list">
           {rows.map(([name, how]) => (

@@ -149,6 +149,8 @@ model User {
   casinoGamble           CasinoGamble?
   blackjackHand          BlackjackHand?
   bookFeature            CasinoBookFeature?
+  minesRound             MinesRound?
+  penaltyRound           PenaltyRound?
 
   @@index([parentId])
   @@index([role])
@@ -667,7 +669,9 @@ model CommissionPayout {
 /// like a bet's, for the settlement journal and the Casino page's figures.
 /// A spin, one guess at double or nothing (kind GAMBLE: bet and stake are the win at risk),
 /// a round of roulette (kind ROULETTE: bet and stake are all the chips on the table),
-/// or a round of blackjack (kind BLACKJACK: bet is the first bet, stake everything put down, doubles, splits and insurance included).
+/// a round of blackjack (kind BLACKJACK: bet is the first bet, stake everything put down, doubles, splits and insurance included),
+/// a round of Mines (kind MINES: bet and stake are the stake; `mines` is the field, hidden until the round ended),
+/// or a penalty shootout (kind PENALTY: bet and stake are the stake; `penalty` is every kick, the keeper's dive included).
 model CasinoSpin {
   id           String            @id @default(cuid())
   kind         CasinoPlayKind    @default(SPIN)
@@ -694,6 +698,10 @@ model CasinoSpin {
   roulette     Json?
   /// A blackjack round: every card dealt, each hand's moves and result, and the rest of the shoe.
   blackjack    Json?
+  /// A Mines round: the stake, where the mines were, the tiles opened and what it paid.
+  mines        Json?
+  /// A penalty shootout: every kick, where the keeper dived, and what it paid.
+  penalty      Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -710,6 +718,10 @@ enum CasinoPlayKind {
   BLACKJACK
   /// Book of Ra: a paid spin or a free one (see `free`).
   BOOK
+  /// A round of Mines, cashed out or lost.
+  MINES
+  /// A penalty shootout, cashed out or saved.
+  PENALTY
 }
 
 /// A blackjack round still being played: one per Player at most. The stakes
@@ -731,6 +743,50 @@ model BlackjackHand {
 
   @@index([updatedAt])
   @@map("blackjack_hands")
+}
+
+/// A Mines round still being played: one per Player at most. The stake
+/// already left the balance; the round is recorded as a CasinoSpin when it
+/// ends, and this row goes. The mine positions are in `state`, so they never
+/// leave the server while the round is open. The team and rates are taken
+/// when the round starts.
+model MinesRound {
+  playerId    String   @id @map("player_id")
+  player      User     @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  ownerId     String?  @map("owner_id")
+  managerId   String?  @map("manager_id")
+  ownerRate   Decimal  @default(0) @map("owner_rate") @db.Decimal(5, 2)
+  managerRate Decimal  @default(0) @map("manager_rate") @db.Decimal(5, 2)
+  /// What the round took from the balance.
+  staked      Decimal  @db.Decimal(12, 2)
+  state       Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("mines_rounds")
+}
+
+/// A penalty shootout still being played: one per Player at most. The stake
+/// already left the balance; the round is recorded as a CasinoSpin when it
+/// ends, and this row goes. Each kick's keeper dive is chosen when the Player
+/// shoots, so it isn't known ahead of the kick. The team and rates are taken
+/// when the round starts.
+model PenaltyRound {
+  playerId    String   @id @map("player_id")
+  player      User     @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  ownerId     String?  @map("owner_id")
+  managerId   String?  @map("manager_id")
+  ownerRate   Decimal  @default(0) @map("owner_rate") @db.Decimal(5, 2)
+  managerRate Decimal  @default(0) @map("manager_rate") @db.Decimal(5, 2)
+  /// What the round took from the balance.
+  staked      Decimal  @db.Decimal(12, 2)
+  state       Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("penalty_rounds")
 }
 
 /// A win a Player can still take to double or nothing: how much is at risk, and how many guesses they've made.

@@ -60,13 +60,21 @@ test("blackjack pays 3 to 2 at once; against the dealer's blackjack it's a tie; 
   assert.equal(paidOut(three), 2000);
 });
 
-test("the dealer's blackjack with a ten showing ends the round before the Player moves", () => {
-  const round = deal(1000, stacked("9S", "KH", "9D", "AC"));
-  assert.deepEqual([round.phase, round.hands[0].result, paidOut(round)], ["DONE", "LOSE", 0]);
+test("the dealer's blackjack stays face down until the Player has played, and then beats a double too", () => {
+  const round = deal(1000, stacked("6S", "KH", "5D", "AC", "TD")); // 11 against a king, the ace face down
+  assert.equal(round.phase, "PLAYER");
+  assert.deepEqual(publicView(round).dealer, ["KH", null]);
+  const done = act(round, "double"); // 21 in three cards
+  assert.deepEqual(done.dealer, ["KH", "AC"], "the dealer doesn't draw on blackjack");
+  assert.deepEqual([done.hands[0].result, staked(done), paidOut(done)], ["LOSE", 2000, 0]);
+  const ace = play(deal(1000, stacked("TS", "AH", "9D", "KC")), "noInsurance");
+  assert.equal(ace.phase, "PLAYER", "with an ace showing too, the Player plays first");
 });
 
 test("insurance costs half the bet and pays 2 to 1 when the dealer has blackjack", () => {
-  const hit = act(deal(1000, stacked("TS", "AH", "9D", "KC")), "insure");
+  const insured = act(deal(1000, stacked("TS", "AH", "9D", "KC")), "insure");
+  assert.deepEqual([insured.phase, insured.insurancePayout], ["PLAYER", 0], "settled when the dealer's card is turned over");
+  const hit = act(insured, "stand");
   assert.deepEqual([hit.insurance, hit.insurancePayout, hit.hands[0].result, staked(hit), paidOut(hit)], [500, 1500, "LOSE", 1500, 1500]);
   const miss = act(deal(1000, stacked("TS", "AH", "9D", "7C")), "insure");
   assert.deepEqual([miss.phase, miss.insurancePayout, staked(miss)], ["PLAYER", 0, 1500], "insurance lost, the hand plays on");
@@ -103,8 +111,9 @@ test("split aces get one card each, and 21 on a split hand isn't blackjack", () 
   assert.deepEqual(round.hands.map((hand) => [hand.cards.length, hand.result, hand.payout]), [[2, "WIN", 2000], [2, "LOSE", 0]]);
 });
 
-test("cards of the same value split; different values don't", () => {
-  assert.ok(allowed(deal(1000, stacked("KS", "9H", "QD", "8C"))).includes("split"));
+test("only two cards of the same rank split: two kings, not a king and a queen", () => {
+  assert.ok(allowed(deal(1000, stacked("KS", "9H", "KD", "8C"))).includes("split"));
+  assert.ok(!allowed(deal(1000, stacked("KS", "9H", "QD", "8C"))).includes("split"));
   assert.ok(!allowed(deal(1000, stacked("KS", "9H", "9D", "8C"))).includes("split"));
 });
 

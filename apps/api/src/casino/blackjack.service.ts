@@ -119,6 +119,12 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
       if (await tx.blackjackHand.findUnique({ where: { playerId: actor.id }, select: { playerId: true } })) {
         throw new BadRequestException("Finish the hand you're playing first.");
       }
+      if (await tx.minesRound.findUnique({ where: { playerId: actor.id }, select: { playerId: true } })) {
+        throw new BadRequestException("Finish the Mines round you're playing first.");
+      }
+      if (await tx.penaltyRound.findUnique({ where: { playerId: actor.id }, select: { playerId: true } })) {
+        throw new BadRequestException("Finish the Penalty round you're playing first.");
+      }
       // A slot win still open to double or nothing is taken as it is: it's already in the balance.
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
       await this.limits.assertCanPlace(actor.id, bet);

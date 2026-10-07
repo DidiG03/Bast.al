@@ -50,22 +50,22 @@ test("the daily loss limit counts today's net losses plus today's open stakes", 
       : { _sum: { stake: new Prisma.Decimal("40"), payout: new Prisma.Decimal("12.5") } };
   const noSpins = { aggregate: async () => ({ _sum: { stake: null, win: null } }) };
   const noHand = { findUnique: async () => null };
-  const limits = new BettingLimitsService({ bet: { aggregate }, casinoSpin: noSpins, blackjackHand: noHand }, {});
+  const limits = new BettingLimitsService({ bet: { aggregate }, casinoSpin: noSpins, blackjackHand: noHand, minesRound: noHand, penaltyRound: noHand }, {});
   assert.equal(await limits.usedToday("p1"), 42.5);
 
   // A Player who is up on the day has used only their open stakes.
   const winning = new BettingLimitsService(
-    { bet: { aggregate: async ({ where }) => (where.status === "OPEN" ? { _sum: { stake: new Prisma.Decimal("5") } } : { _sum: { stake: new Prisma.Decimal("10"), payout: new Prisma.Decimal("30") } }) }, casinoSpin: noSpins, blackjackHand: noHand },
+    { bet: { aggregate: async ({ where }) => (where.status === "OPEN" ? { _sum: { stake: new Prisma.Decimal("5") } } : { _sum: { stake: new Prisma.Decimal("10"), payout: new Prisma.Decimal("30") } }) }, casinoSpin: noSpins, blackjackHand: noHand, minesRound: noHand, penaltyRound: noHand },
     {},
   );
   assert.equal(await winning.usedToday("p1"), 5);
 
   // Casino losses count in the same limit: 27.50 lost on bets, 20 more on spins.
   const spins = { aggregate: async () => ({ _sum: { stake: new Prisma.Decimal("30"), win: new Prisma.Decimal("10") } }) };
-  const both = new BettingLimitsService({ bet: { aggregate }, casinoSpin: spins, blackjackHand: noHand }, {});
+  const both = new BettingLimitsService({ bet: { aggregate }, casinoSpin: spins, blackjackHand: noHand, minesRound: noHand, penaltyRound: noHand }, {});
   assert.equal(await both.usedToday("p1"), 62.5);
 
-  // A blackjack round still in play counts like an open bet: 7.50 more.
-  const inPlay = new BettingLimitsService({ bet: { aggregate }, casinoSpin: spins, blackjackHand: { findUnique: async () => ({ staked: new Prisma.Decimal("7.5") }) } }, {});
-  assert.equal(await inPlay.usedToday("p1"), 70);
+  // A blackjack hand and a Mines round still in play count like open bets: 7.50 and 2 more.
+  const inPlay = new BettingLimitsService({ bet: { aggregate }, casinoSpin: spins, blackjackHand: { findUnique: async () => ({ staked: new Prisma.Decimal("7.5") }) }, minesRound: { findUnique: async () => ({ staked: new Prisma.Decimal("2") }) }, penaltyRound: noHand }, {});
+  assert.equal(await inPlay.usedToday("p1"), 72);
 });

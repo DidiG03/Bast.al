@@ -8,14 +8,19 @@ import { randomInt } from "crypto";
  *
  * The rules:
  * - A fresh 6-deck shoe, shuffled for every round, so nothing carries over.
- * - One hand per round. The dealer takes a card face down and checks it for
- *   blackjack when showing an ace (after offering insurance) or a ten.
+ * - One hand per round. The dealer takes a card face down and doesn't look
+ *   at it until the Player has played: a dealer's blackjack shows only then,
+ *   and beats every hand but a blackjack, doubles and splits included.
  * - The dealer stands on every 17, soft 17 included.
- * - Blackjack pays 3 to 2, a win 1 to 1, a tie returns the bet.
- * - Insurance, when the dealer shows an ace: half the bet, pays 2 to 1.
- * - One split per round (two cards of the same value), and one double down
- *   per round: on the first two cards, or on one of the split hands. Split
- *   aces get one card each. 21 on a split hand isn't blackjack.
+ * - Blackjack pays 3 to 2 at once (a tie if the dealer has one too), a win
+ *   1 to 1, a tie returns the bet.
+ * - Insurance, when the dealer shows an ace: half the bet, pays 2 to 1 if
+ *   the face-down card makes blackjack, settled when it's turned over.
+ * - One split per round, of two cards of the same rank (two kings, not a
+ *   king and a queen), and one double down per round: on the first two
+ *   cards, or on one of the split hands. Split aces get one card each. 21
+ *   on a split hand isn't blackjack.
+ * RULES holds the settings that set the house's edge.
  *
  * Money here is in cents, so every amount stays a whole number.
  */
@@ -23,7 +28,21 @@ import { randomInt } from "crypto";
 export const GAME_NAME = "Blackjack";
 export const DECKS = 6;
 /** What the round pays back on average with perfect play, in percent, as measured by scripts/blackjack-rtp.mjs. */
-export const PAYOUT_RATE = 99.6;
+export const PAYOUT_RATE = 99.5;
+/** The rules that set the house's edge. Kept together so the payout-rate script can measure other settings. */
+export const RULES = {
+  /** What a blackjack pays, as [to win, for every]: [3, 2] is 3 to 2. */
+  blackjackPays: [3, 2] as [number, number],
+  /** Whether the dealer draws on a soft 17. */
+  dealerHitsSoft17: false,
+  /** The hard totals a double down is allowed on; null for any first two cards. */
+  doubleOn: null as number[] | null,
+  /** Whether a split hand may be doubled. */
+  doubleAfterSplit: true,
+  /** The pairs that may be split, by card value (1 is aces, 10 a pair of tens, jacks, queens or kings); null for every pair. */
+  splitPairs: null as number[] | null,
+};
+
 /** The chips, in dollars. A bet is a sum of them. */
 export const CHIPS = [0.5, 1, 2, 5, 10, 25] as const;
 /** The most a first bet can be when the Player has no max stake set. */
@@ -109,7 +128,7 @@ const take = (round: Round): Card => {
   return card;
 };
 
-/** Starts a round: the bet (cents) down, two cards each. With insurance to offer it waits for the Player; otherwise blackjacks settle at once. */
+/** Starts a round: the bet (cents) down, two cards each. With insurance to offer it waits for the Player; otherwise a Player's blackjack settles at once. */
 export function deal(bet: number, shoe: Card[] = newShoe()): Round {
   if (!Number.isInteger(bet) || bet <= 0) throw new Error("A bet is a whole number of cents");
   const round: Round = {
@@ -134,15 +153,16 @@ export function deal(bet: number, shoe: Card[] = newShoe()): Round {
     round.phase = "INSURANCE";
     return round;
   }
-  return checkNaturals(round);
+  return checkNatural(round);
 }
 
-/** The dealer checks for blackjack (with an ace or a ten showing), and blackjacks on either side end the round. */
-function checkNaturals(round: Round): Round {
-  const dealerNatural = isNatural(round.dealer);
-  const playerNatural = isNatural(round.hands[0].cards);
-  if (round.insurance) round.insurancePayout = dealerNatural ? round.insurance * 3 : 0;
-  if (dealerNatural || playerNatural) {
+/**
+ * A Player's blackjack ends the round at once (the dealer's card is turned
+ * over: a blackjack there too is a tie). The dealer doesn't look for one of
+ * their own here; it shows when the Player has played.
+ */
+function checkNatural(round: Round): Round {
+  if (isNatural(round.hands[0].cards)) {
     round.hands[0].done = true;
     return finish(round);
   }
@@ -156,9 +176,15 @@ export function allowed(round: Round): Action[] {
   if (round.phase !== "PLAYER") return [];
   const hand = round.hands[round.active];
   const moves: Action[] = ["hit", "stand"];
-  if (hand.cards.length === 2 && !round.doubleUsed) moves.push("double");
-  if (!round.splitUsed && round.hands.length === 1 && hand.cards.length === 2 && cardValue(hand.cards[0]) === cardValue(hand.cards[1])) moves.push("split");
+  if (hand.cards.length === 2 && !round.doubleUsed && canDouble(hand)) moves.push("double");
+  if (!round.splitUsed && round.hands.length === 1 && hand.cards.length === 2 && hand.cards[0][0] === hand.cards[1][0] && (RULES.splitPairs === null || RULES.splitPairs.includes(cardValue(hand.cards[0])))) moves.push("split");
   return moves;
+}
+
+function canDouble(hand: PlayerHand): boolean {
+  if (hand.split && !RULES.doubleAfterSplit) return false;
+  const { total, soft } = handTotal(hand.cards);
+  return RULES.doubleOn === null || (!soft && RULES.doubleOn.includes(total));
 }
 
 /** Plays one move and returns the round after it (a new object; the one passed in isn't changed). Throws on a move that isn't allowed. */
@@ -168,7 +194,7 @@ export function act(input: Round, action: Action): Round {
 
   if (action === "insure" || action === "noInsurance") {
     round.insurance = action === "insure" ? Math.floor(round.bet / 2) : 0;
-    return checkNaturals(round);
+    return checkNatural(round);
   }
 
   const hand = round.hands[round.active];
@@ -220,11 +246,16 @@ function finish(round: Round): Round {
   round.revealed = true;
   round.hands.forEach((hand) => (hand.done = true));
   const dealerNatural = isNatural(round.dealer);
+  if (round.insurance) round.insurancePayout = dealerNatural ? round.insurance * 3 : 0;
   const live = round.hands.some((hand) => handTotal(hand.cards).total <= 21);
   const naturalOnly = round.hands.length === 1 && isNatural(round.hands[0].cards);
-  // The dealer stands on every 17; there's nothing to draw for when the Player is bust or has blackjack.
+  // The dealer draws to 17 (and on a soft 17 if RULES say so); there's nothing to draw for when the Player is bust or has blackjack.
   if (live && !dealerNatural && !naturalOnly) {
-    while (handTotal(round.dealer).total < 17) round.dealer.push(take(round));
+    const draws = () => {
+      const { total, soft } = handTotal(round.dealer);
+      return total < 17 || (total === 17 && soft && RULES.dealerHitsSoft17);
+    };
+    while (draws()) round.dealer.push(take(round));
   }
   const dealer = handTotal(round.dealer).total;
   for (const hand of round.hands) {
@@ -232,7 +263,7 @@ function finish(round: Round): Round {
     const natural = !hand.split && isNatural(hand.cards);
     if (total > 21) settle(hand, "BUST", 0);
     else if (natural && dealerNatural) settle(hand, "PUSH", hand.bet);
-    else if (natural) settle(hand, "BLACKJACK", hand.bet + (hand.bet * 3) / 2);
+    else if (natural) settle(hand, "BLACKJACK", hand.bet + (hand.bet * RULES.blackjackPays[0]) / RULES.blackjackPays[1]);
     else if (dealerNatural) settle(hand, "LOSE", 0);
     else if (dealer > 21 || total > dealer) settle(hand, "WIN", hand.bet * 2);
     else if (total === dealer) settle(hand, "PUSH", hand.bet);

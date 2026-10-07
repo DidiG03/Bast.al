@@ -13,6 +13,8 @@ const STORAGE_KEY = "bastal-slot-sound";
 
 let audio: AudioContext | null = null;
 let master: GainNode | null = null;
+/** A silent loop started on the tap, so the browser doesn't put the audio to sleep before the server answers. */
+let keepAlive: AudioBufferSourceNode | null = null;
 let ticking: ReturnType<typeof setInterval> | null = null;
 /** Stops the ticking if a landing is missed; cleared with it, so an earlier spin's never cuts a later one short. */
 let tickingLimit: ReturnType<typeof setTimeout> | null = null;
@@ -26,9 +28,15 @@ function readSetting(): boolean {
   }
 }
 
-/** The audio graph, once the Player has tapped; null before then, or when sound is off or unsupported. */
+/**
+ * The audio graph, once the Player has tapped. A suspended or interrupted context (the phone
+ * ducked the audio, or the tab was in the background) still counts: the note is scheduled and
+ * resume() is kicked, so it plays when the graph wakes up. Dropping those notes is what made
+ * the speaker stay on while the table went quiet.
+ */
 function ready(): { ctx: AudioContext; out: GainNode } | null {
-  if (!on || !audio || !master || audio.state !== "running") return null;
+  if (!on || !audio || !master || audio.state === "closed") return null;
+  if (audio.state !== "running") void audio.resume().catch(() => undefined);
   return { ctx: audio, out: master };
 }
 
@@ -36,43 +44,61 @@ function ready(): { ctx: AudioContext; out: GainNode } | null {
 function tone(freq: number, at: number, length: number, options: { type?: OscillatorType; gain?: number; slideTo?: number } = {}) {
   const sound = ready();
   if (!sound) return;
-  const { ctx, out } = sound;
-  const start = ctx.currentTime + at;
-  const osc = ctx.createOscillator();
-  const env = ctx.createGain();
-  osc.type = options.type ?? "square";
-  osc.frequency.setValueAtTime(freq, start);
-  if (options.slideTo) osc.frequency.exponentialRampToValueAtTime(options.slideTo, start + length);
-  const peak = options.gain ?? 0.2;
-  env.gain.setValueAtTime(0.0001, start);
-  env.gain.exponentialRampToValueAtTime(peak, start + 0.008);
-  env.gain.exponentialRampToValueAtTime(0.0001, start + length);
-  osc.connect(env).connect(out);
-  osc.start(start);
-  osc.stop(start + length + 0.02);
+  try {
+    const { ctx, out } = sound;
+    const start = ctx.currentTime + at;
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = options.type ?? "square";
+    osc.frequency.setValueAtTime(freq, start);
+    if (options.slideTo && options.slideTo > 0) osc.frequency.exponentialRampToValueAtTime(options.slideTo, start + length);
+    const peak = options.gain ?? 0.2;
+    env.gain.setValueAtTime(0.0001, start);
+    env.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), start + Math.min(0.008, length * 0.4));
+    env.gain.exponentialRampToValueAtTime(0.0001, start + Math.max(length, 0.02));
+    osc.connect(env).connect(out);
+    osc.start(start);
+    osc.stop(start + length + 0.02);
+  } catch {
+    // A note the browser won't schedule is skipped. It must not fail the round.
+  }
 }
 
 /** A burst of filtered noise: clicks, thunks and swishes. */
 function noise(at: number, length: number, options: { gain?: number; filter?: BiquadFilterType; freq?: number; sweepTo?: number } = {}) {
   const sound = ready();
   if (!sound) return;
-  const { ctx, out } = sound;
-  const start = ctx.currentTime + at;
-  const samples = Math.max(1, Math.floor(ctx.sampleRate * length));
-  const buffer = ctx.createBuffer(1, samples, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < samples; i += 1) data[i] = Math.random() * 2 - 1;
-  const source = ctx.createBufferSource();
-  source.buffer = buffer;
-  const filter = ctx.createBiquadFilter();
-  filter.type = options.filter ?? "bandpass";
-  filter.frequency.setValueAtTime(options.freq ?? 1200, start);
-  if (options.sweepTo) filter.frequency.exponentialRampToValueAtTime(options.sweepTo, start + length);
-  const env = ctx.createGain();
-  env.gain.setValueAtTime(options.gain ?? 0.2, start);
-  env.gain.exponentialRampToValueAtTime(0.0001, start + length);
-  source.connect(filter).connect(env).connect(out);
-  source.start(start);
+  try {
+    const { ctx, out } = sound;
+    const start = ctx.currentTime + at;
+    const samples = Math.max(1, Math.floor(ctx.sampleRate * length));
+    const buffer = ctx.createBuffer(1, samples, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < samples; i += 1) data[i] = Math.random() * 2 - 1;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = options.filter ?? "bandpass";
+    const freq = Math.max(1, options.freq ?? 1200);
+    filter.frequency.setValueAtTime(freq, start);
+    if (options.sweepTo && options.sweepTo > 0) filter.frequency.exponentialRampToValueAtTime(options.sweepTo, start + length);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(Math.max(options.gain ?? 0.2, 0.0002), start);
+    env.gain.exponentialRampToValueAtTime(0.0001, start + Math.max(length, 0.02));
+    source.connect(filter).connect(env).connect(out);
+    source.start(start);
+  } catch {
+    // Same as a note: skip it, leave the round alone.
+  }
+}
+
+function release() {
+  try {
+    keepAlive?.stop();
+  } catch {
+    // Already stopped.
+  }
+  keepAlive = null;
 }
 
 export const slotSound = {
@@ -88,25 +114,46 @@ export const slotSound = {
     } catch {
       // Private browsing: it just isn't remembered.
     }
-    if (!next) this.stopTicking();
-    else this.unlock();
+    if (!next) {
+      this.stopTicking();
+      release();
+    } else this.unlock();
   },
 
   /** Call from a tap: browsers only start sound after the Player has touched the page. */
   unlock() {
     if (!on || typeof window === "undefined") return;
     try {
-      if (!audio) {
-        const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (!Context) return;
+      const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Context) return;
+      if (!audio || audio.state === "closed") {
+        release();
         audio = new Context();
         master = audio.createGain();
         master.gain.value = 0.5;
         master.connect(audio.destination);
       }
-      if (audio.state === "suspended") void audio.resume();
     } catch {
       audio = null;
+      master = null;
+      return;
+    }
+    if (!audio || !master) return;
+    // "interrupted" is the phone taking the audio away. It is not "suspended", and it stays
+    // silent until resume() runs inside a tap.
+    if (audio.state !== "running") void audio.resume().catch(() => undefined);
+    try {
+      if (!keepAlive) {
+        const buffer = audio.createBuffer(1, audio.sampleRate, audio.sampleRate);
+        const source = audio.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(master);
+        source.start();
+        keepAlive = source;
+      }
+    } catch {
+      // The context is still there. The coin or the blast plays when the round answers.
     }
   },
 
@@ -161,6 +208,22 @@ export const slotSound = {
   coins(milliseconds: number) {
     const count = Math.min(40, Math.max(4, Math.round(milliseconds / 55)));
     for (let i = 0; i < count; i += 1) tone(1900 + (i % 3) * 180, (i * milliseconds) / count / 1000, 0.05, { type: "square", gain: 0.05 });
+  },
+
+  /** Mines: a coin landing on a safe tile. Each later gem sits a little higher. */
+  coinPop(step = 1) {
+    const lift = Math.min(12, Math.max(0, step - 1)) * 28;
+    noise(0, 0.028, { filter: "highpass", freq: 4800, gain: 0.18 });
+    tone(1520 + lift, 0, 0.07, { type: "triangle", gain: 0.16 });
+    tone(2140 + lift, 0.04, 0.1, { type: "square", gain: 0.05 });
+  },
+
+  /** Mines: the tile you opened was a mine. */
+  explosion() {
+    noise(0, 0.07, { filter: "highpass", freq: 1600, gain: 0.26 });
+    noise(0.02, 0.48, { filter: "lowpass", freq: 480, sweepTo: 90, gain: 0.38 });
+    tone(96, 0.02, 0.46, { type: "sine", gain: 0.4, slideTo: 38 });
+    tone(420, 0, 0.12, { type: "sawtooth", gain: 0.07, slideTo: 80 });
   },
 
   /** Double or nothing: the card turning over. */
@@ -231,6 +294,35 @@ export const slotSound = {
     tone(110, 0, 1.6, { type: "sine", gain: 0.35, slideTo: 98 });
     tone(220, 0, 1.2, { type: "triangle", gain: 0.12, slideTo: 200 });
     noise(0, 0.25, { filter: "lowpass", freq: 600, gain: 0.2 });
+  },
+
+  /** Penalty: the referee's whistle as a shootout starts. */
+  whistle() {
+    tone(2800, 0, 0.18, { type: "square", gain: 0.06 });
+    tone(3200, 0.16, 0.22, { type: "square", gain: 0.05 });
+  },
+
+  /** Penalty: the boot on the ball. */
+  kick() {
+    noise(0, 0.05, { filter: "lowpass", freq: 700, gain: 0.32 });
+    tone(180, 0, 0.08, { type: "sine", gain: 0.22, slideTo: 70 });
+  },
+
+  /** Penalty: the ball in the net. */
+  net() {
+    noise(0, 0.22, { filter: "bandpass", freq: 2400, sweepTo: 600, gain: 0.2 });
+    tone(880, 0.02, 0.16, { type: "triangle", gain: 0.1 });
+  },
+
+  /** Penalty: a short cheer after a goal. */
+  cheer() {
+    [523, 659, 784].forEach((freq, index) => tone(freq, index * 0.07, 0.16, { type: "triangle", gain: 0.08 }));
+  },
+
+  /** Penalty: the keeper getting a hand to it. */
+  save() {
+    noise(0, 0.08, { filter: "bandpass", freq: 900, gain: 0.28 });
+    tone(160, 0.02, 0.28, { type: "sine", gain: 0.22, slideTo: 70 });
   },
 
   /** Book of Ra: the special symbol growing to fill a reel, a rising shimmer. */

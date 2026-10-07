@@ -8829,3 +8829,1384 @@ button.is-blocked {
 .slot-cabinet.is-book .slot-start:not(:disabled):hover {
   box-shadow: 0 0 16px rgba(51, 196, 94, 0.6);
 }
+
+/* ============================================================
+   Casino: Mines
+   ============================================================ */
+.casino-tile.is-mines .casino-tile-art {
+  background:
+    radial-gradient(circle at 50% 40%, #243044, #121820 70%);
+}
+
+.mines-tile-preview {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.28rem;
+  width: min(100%, 11rem);
+}
+
+.mines-tile-cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: linear-gradient(160deg, #3a4658, #1c2430);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 0 #0c1016;
+}
+
+.mines-tile-cell.is-gem {
+  background: radial-gradient(circle at 35% 30%, #fff4c4, #e2b43a 48%, #8a6410);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.mines-tile-cell.is-mine {
+  background: radial-gradient(circle at 35% 30%, #8b939e, #1a1e24 55%, #050608);
+}
+
+.mines-cabinet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 50% 0%, #2a3544, #121820 72%);
+  box-shadow: 0 0 0 4px #1a140c, 0 18px 40px rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+.mines-cabinet.is-boom::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 42%, rgba(255, 170, 70, 0.46), rgba(255, 40, 0, 0) 62%);
+  animation: mines-flash-fade 0.55s ease-out forwards;
+}
+
+.mines-cabinet.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.mines-cabinet:fullscreen {
+  width: 100%;
+  height: 100%;
+}
+
+.mines-marquee {
+  background: linear-gradient(180deg, #3d4c63, #1c2633 60%, #121820);
+}
+
+.mines-cabinet .mines-sound {
+  right: 6.2rem;
+}
+
+.mines-cabinet .mines-rules {
+  right: 3.4rem;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.mines-cabinet.is-full .slot-exit,
+.mines-cabinet:fullscreen .slot-exit {
+  display: grid;
+}
+
+.mines-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.4rem;
+}
+
+.mines-cabinet.is-full .mines-stage {
+  flex: 1;
+  justify-content: center;
+}
+
+.mines-readout {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  width: min(100%, 28rem);
+}
+
+.mines-readout span {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  text-align: center;
+}
+
+.mines-readout small {
+  color: #b7c3d4;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mines-readout strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+}
+
+.mines-message {
+  margin: 0;
+  min-height: 1.4em;
+  color: #d5deea;
+  font-weight: 650;
+  text-align: center;
+}
+
+.mines-message.is-win {
+  color: #7dffa8;
+}
+
+.mines-message.is-loss {
+  color: #ffb4a8;
+}
+
+.mines-grid {
+  display: grid;
+  gap: 0.45rem;
+  width: min(100%, 28rem);
+}
+
+.mines-cell {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(165deg, #4a5870, #2a3444 55%, #1a212c);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 3px 0 #121820;
+  cursor: pointer;
+}
+
+.mines-cell:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.mines-cell.is-fresh {
+  z-index: 1;
+}
+
+.mines-cell.is-hidden:not(:disabled):hover {
+  transform: translateY(-1px);
+  background: linear-gradient(165deg, #5b6b86, #334056 55%, #1e2632);
+}
+
+.mines-cell.is-gem {
+  background: radial-gradient(circle at 50% 62%, #4a3514, #16130e 74%);
+  box-shadow: inset 0 0 0 1px rgba(240, 196, 80, 0.28);
+}
+
+.mines-cell.is-mine {
+  background: radial-gradient(circle at 50% 55%, #2c261e, #121212 72%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.mines-cell.is-hit {
+  background: radial-gradient(circle at 50% 50%, #5a220e, #1a0c08 70%);
+  box-shadow: inset 0 0 0 1px rgba(255, 120, 40, 0.4), 0 0 16px rgba(255, 80, 20, 0.28);
+}
+
+.mines-cell.is-hit.is-fresh {
+  animation: mines-shake 0.42s linear;
+}
+
+.mines-stone {
+  width: 42%;
+  height: 42%;
+  border-radius: 4px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.05));
+  transform: rotate(45deg);
+}
+
+.mines-coins {
+  position: relative;
+  width: 78%;
+  height: 78%;
+}
+
+.mines-coin-stack {
+  position: absolute;
+  inset: 8%;
+}
+
+.mines-coin-stack i {
+  position: absolute;
+  width: 58%;
+  height: 58%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.95), transparent 36%),
+    radial-gradient(circle at 50% 46%, #ffe9a0, #f0c14b 48%, #a87412 80%);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 244, 200, 0.95),
+    inset 0 0 0 4px rgba(120, 78, 8, 0.35),
+    0 2px 0 #6d4c0c;
+}
+
+.mines-coin-stack i:nth-child(1) { left: 2%; bottom: 2%; }
+.mines-coin-stack i:nth-child(2) { right: 0; bottom: 10%; }
+.mines-coin-stack i:nth-child(3) { left: 18%; top: 0; }
+
+.mines-coins.is-fresh .mines-coin-stack {
+  animation: mines-coin-pop 0.42s cubic-bezier(0.2, 1.45, 0.4, 1) both;
+}
+
+.mines-fly {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff6c8, #e2b43a 55%, #8a6410);
+  box-shadow: inset 0 0 0 2px rgba(255, 244, 200, 0.9), 0 1px 0 #6d4c0c;
+  pointer-events: none;
+  animation: mines-coin-fly 0.62s ease-out forwards;
+}
+
+.mines-blast {
+  position: relative;
+  width: 82%;
+  height: 82%;
+}
+
+.mines-blast.is-fresh:not(.is-exploding) {
+  animation: mines-bomb-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.mines-bomb-body {
+  position: absolute;
+  left: 18%;
+  top: 24%;
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #9aa3ae, #2a3038 42%, #0c0e12 74%);
+  box-shadow: inset -6px -8px 0 rgba(0, 0, 0, 0.35), 0 3px 0 #000;
+}
+
+.mines-fuse {
+  position: absolute;
+  top: 8%;
+  left: 58%;
+  width: 8%;
+  height: 28%;
+  border-radius: 4px;
+  background: linear-gradient(#f3d48a, #b86a28);
+  transform: rotate(18deg);
+  transform-origin: bottom center;
+}
+
+.mines-fuse::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffe36a;
+  box-shadow: 0 0 8px 2px #ff8a00;
+  animation: mines-spark 0.7s ease-in-out infinite;
+}
+
+.mines-blast.is-hit::before {
+  content: "";
+  position: absolute;
+  left: 10%;
+  top: 18%;
+  width: 78%;
+  height: 66%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #2a0c06 18%, #6a2810 58%, transparent 74%);
+  box-shadow: 0 0 14px rgba(255, 90, 20, 0.5);
+}
+
+.mines-blast.is-exploding .mines-bomb-body,
+.mines-blast.is-exploding .mines-fuse {
+  animation: mines-bomb-blow 0.48s ease-in forwards;
+}
+
+.mines-blast.is-exploding .mines-fuse {
+  animation-duration: 0.18s;
+}
+
+.mines-flash,
+.mines-shock,
+.mines-smoke,
+.mines-shard {
+  position: absolute;
+  pointer-events: none;
+}
+
+.mines-flash {
+  inset: -8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, #ffe38a 26%, #ff6a00 54%, transparent 72%);
+  animation: mines-flash 0.5s ease-out forwards;
+}
+
+.mines-shock {
+  left: 18%;
+  top: 22%;
+  width: 64%;
+  height: 64%;
+  border: 3px solid rgba(255, 210, 90, 0.95);
+  border-radius: 50%;
+  animation: mines-shock 0.5s ease-out forwards;
+}
+
+.mines-smoke {
+  left: 8%;
+  top: 10%;
+  width: 84%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(90, 90, 90, 0.75), rgba(40, 40, 40, 0) 70%);
+  animation: mines-smoke 0.7s ease-out 0.08s forwards;
+  opacity: 0;
+}
+
+.mines-shard {
+  left: 50%;
+  top: 48%;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: linear-gradient(#fff1b0, #ff7a18);
+  animation: mines-shard 0.55s ease-out forwards;
+}
+
+@keyframes mines-coin-pop {
+  from { transform: translateY(10px) scale(0.2); }
+  to { transform: translateY(0) scale(1); }
+}
+
+@keyframes mines-coin-fly {
+  from { transform: translate(-50%, -50%) scale(0.35); opacity: 1; }
+  to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.9); opacity: 0; }
+}
+
+@keyframes mines-bomb-in {
+  from { transform: scale(0.15) rotate(-18deg); }
+  to { transform: scale(1) rotate(0); }
+}
+
+@keyframes mines-bomb-blow {
+  0% { transform: scale(1); opacity: 1; }
+  35% { transform: scale(1.28); opacity: 1; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+@keyframes mines-spark {
+  50% { transform: scale(0.65); opacity: 0.5; }
+}
+
+@keyframes mines-flash {
+  0% { transform: scale(0.15); opacity: 1; }
+  40% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes mines-flash-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes mines-shock {
+  from { transform: scale(0.3); opacity: 1; }
+  to { transform: scale(1.85); opacity: 0; }
+}
+
+@keyframes mines-smoke {
+  from { transform: scale(0.4); opacity: 0.8; }
+  to { transform: scale(1.7); opacity: 0; }
+}
+
+@keyframes mines-shard {
+  from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.4); opacity: 0; }
+}
+
+@keyframes mines-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-3px, 1px); }
+  40% { transform: translate(3px, -2px); }
+  60% { transform: translate(-2px, 2px); }
+  80% { transform: translate(2px, -1px); }
+}
+
+.mines-controls {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem 1rem 1rem;
+}
+
+.mines-picks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.mines-pick {
+  min-width: 2.6rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #e8eef6;
+  font-weight: 700;
+}
+
+.mines-pick.is-on {
+  border-color: #e9c46a;
+  background: rgba(233, 196, 106, 0.18);
+  color: #ffe7a3;
+}
+
+.mines-pick:disabled {
+  opacity: 0.55;
+}
+
+.mines-go {
+  justify-self: center;
+  min-width: min(100%, 16rem);
+  padding: 0.75rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f0d48a, #c9962e);
+  color: #2a1c08;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.mines-go:disabled {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mines-cell.is-hidden:not(:disabled):hover,
+  .mines-cell.is-hit.is-fresh,
+  .mines-coins.is-fresh .mines-coin-stack,
+  .mines-blast.is-fresh:not(.is-exploding),
+  .mines-blast.is-exploding .mines-bomb-body,
+  .mines-blast.is-exploding .mines-fuse,
+  .mines-fuse::after {
+    animation: none;
+    transform: none;
+  }
+
+  .mines-fly,
+  .mines-flash,
+  .mines-shock,
+  .mines-smoke,
+  .mines-shard,
+  .mines-cabinet.is-boom::after {
+    display: none;
+  }
+}
+
+/* ============================================================
+   Casino: Penalty
+   ============================================================ */
+.casino-tile.is-penalty .casino-tile-art {
+  padding: 0;
+  overflow: hidden;
+  background: #0b1830;
+}
+
+/* The game's scene as the tile's picture: filling it, no rounded corners of its own. */
+.casino-tile-art .penalty-scene.is-still {
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.penalty-cabinet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 50% 0%, #1d4f2a, #102416 72%);
+  box-shadow: 0 0 0 4px #1a140c, 0 18px 40px rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+.penalty-cabinet.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.penalty-cabinet:fullscreen {
+  width: 100%;
+  height: 100%;
+}
+
+.penalty-marquee {
+  background: linear-gradient(180deg, #2f6b3a, #16331c 60%, #102416);
+}
+
+.penalty-cabinet .penalty-sound {
+  right: 6.2rem;
+}
+
+.penalty-cabinet .penalty-rules {
+  right: 3.4rem;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.penalty-cabinet.is-full .slot-exit,
+.penalty-cabinet:fullscreen .slot-exit {
+  display: grid;
+}
+
+.penalty-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 0;
+  padding: 0.65rem 1rem 0.25rem;
+  box-sizing: border-box;
+}
+
+.penalty-cabinet.is-full .penalty-stage,
+.penalty-cabinet:fullscreen .penalty-stage {
+  flex: 1;
+  justify-content: flex-start;
+}
+
+/* The Penalty scene: one 1000 × 800 world (see penalty-scene.tsx), cropped to fit, with the goal kept in view. */
+.penalty-scene {
+  container-type: size;
+  position: relative;
+  width: 100%;
+  height: clamp(24rem, 64vh, 48rem);
+  flex: 1 1 auto;
+  min-height: 22rem;
+  overflow: hidden;
+  border-radius: 16px;
+  isolation: isolate;
+  background: #0b1830;
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.06);
+}
+
+.penalty-cabinet.is-full .penalty-scene,
+.penalty-cabinet:fullscreen .penalty-scene {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+}
+
+.pk-world {
+  --pk-h: calc(0.8 * max(100cqw, 125cqh));
+  position: absolute;
+  left: 50%;
+  /* The goal sits just above the middle; the world never leaves a gap above or below. */
+  top: clamp(calc(100cqh - var(--pk-h)), calc(50cqh - 0.6 * var(--pk-h)), 0px);
+  width: calc(1.25 * var(--pk-h));
+  height: var(--pk-h);
+  transform: translateX(-50%);
+}
+
+.pk-stadium,
+.pk-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pk-stadium { z-index: 0; }
+.pk-frame { z-index: 3; }
+
+.pk-lines path {
+  fill: none;
+  stroke: #f4f8f0;
+  stroke-width: 3.2;
+  stroke-opacity: 0.85;
+  stroke-linejoin: round;
+}
+
+.pk-backnet {
+  transform-box: fill-box;
+  transform-origin: 50% 60%;
+}
+
+.penalty-scene.is-goal .pk-backnet {
+  animation: pk-net 0.6s ease-out both;
+}
+
+/* The net gives where the ball went in. */
+.penalty-scene.is-aim-left .pk-backnet { transform-origin: 22% 45%; }
+.penalty-scene.is-aim-right .pk-backnet { transform-origin: 78% 45%; }
+.penalty-scene.is-aim-center .pk-backnet { transform-origin: 50% 35%; }
+
+/*
+ * The keeper: a 170-unit box with the feet on the goal line. A move lasts
+ * 1.05s from 0.5s after the kick is chosen (the taker's run-up); the ball
+ * runs on the same clock, leaving the boot at 6% and meeting the gloves at 44%. penalty-scene.tsx works out where from the same
+ * numbers (AT_CONTACT): change them together.
+ */
+.pk-keeper {
+  position: absolute;
+  left: 41.5%;
+  top: 49.4%;
+  z-index: 1;
+  width: 17%;
+  height: 21.25%;
+  transform-origin: 50% 90%;
+  transition: transform 0.25s ease-out;
+  pointer-events: none;
+}
+
+.pk-keeper-body {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+}
+
+.pk-keeper svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.pk-keeper svg.is-mirrored { transform: scaleX(-1); }
+
+.pk-keeper.is-ready svg { animation: pk-ready 1.6s ease-in-out infinite; }
+
+.pk-world:has(.pk-zone.is-left:not(:disabled):hover) .pk-keeper.is-ready { transform: translateX(-9%) rotate(-4deg); }
+.pk-world:has(.pk-zone.is-right:not(:disabled):hover) .pk-keeper.is-ready { transform: translateX(9%) rotate(4deg); }
+
+/* Which pose shows when: load, then flight, then down on the grass; or crouch, then up. */
+.pk-pose,
+.pk-held { opacity: 0; }
+
+.pk-keeper.is-side.is-done .pk-pose.is-landed,
+.pk-keeper.is-side.is-done .pk-held.is-landed,
+.pk-keeper.is-up.is-done .pk-pose.is-air,
+.pk-keeper.is-up.is-done .pk-held.is-air { opacity: 1; }
+
+.pk-keeper.is-moving .pk-pose.is-ready { animation: pk-show-ready 1.05s 0.5s step-end both; }
+.pk-keeper.is-moving .pk-pose.is-load { animation: pk-show-load 1.05s 0.5s step-end both; }
+.pk-keeper.is-moving .pk-pose.is-flight { animation: pk-show-flight 1.05s 0.5s step-end both; }
+.pk-keeper.is-moving .pk-pose.is-landed { animation: pk-show-landed 1.05s 0.5s step-end both; }
+.pk-keeper.is-moving .pk-held.is-flight { animation: pk-show-held-flight 1.05s 0.5s step-end both; }
+.pk-keeper.is-moving .pk-held.is-landed { animation: pk-show-landed 1.05s 0.5s step-end both; }
+.pk-keeper.is-moving .pk-pose.is-crouch { animation: pk-show-load 1.05s 0.5s step-end both; }
+.pk-keeper.is-moving .pk-pose.is-air { animation: pk-show-air 1.05s 0.5s step-end both; }
+.pk-keeper.is-moving .pk-held.is-air { animation: pk-show-held-air 1.05s 0.5s step-end both; }
+
+/* Across (with a turn) on the outer box; up and down, and the squash of landing, on the inner one. */
+.pk-keeper.is-moving.is-left { animation: pk-keep-x-left 1.05s 0.5s both; }
+.pk-keeper.is-moving.is-right { animation: pk-keep-x-right 1.05s 0.5s both; }
+.pk-keeper.is-moving.is-side .pk-keeper-body { animation: pk-keep-y-side 1.05s 0.5s both; }
+.pk-keeper.is-moving.is-up .pk-keeper-body { animation: pk-keep-y-up 1.05s 0.5s both; }
+.pk-keeper.is-done.is-left { transform: translateX(-77%); }
+.pk-keeper.is-done.is-right { transform: translateX(77%); }
+.pk-keeper.is-up.is-done .pk-keeper-body { transform: translateY(10.5%); }
+
+/* The keeper's shadow stays on the grass: smaller and fainter the higher he is. */
+.pk-keeper-shadow {
+  position: absolute;
+  left: 43%;
+  top: 68.6%;
+  z-index: 1;
+  width: 14%;
+  height: 2.2%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+
+.pk-keeper-shadow.is-moving.is-left { animation: pk-shadow-left 1.05s 0.5s both; }
+.pk-keeper-shadow.is-moving.is-right { animation: pk-shadow-right 1.05s 0.5s both; }
+.pk-keeper-shadow.is-moving.is-center { animation: pk-shadow-up 1.05s 0.5s both; }
+.pk-keeper-shadow.is-done.is-left { transform: translateX(-88%) scaleX(1.55); }
+.pk-keeper-shadow.is-done.is-right { transform: translateX(88%) scaleX(1.55); }
+
+/* The ball: 34 units across, resting on the penalty spot. */
+.pk-ball {
+  position: absolute;
+  left: 48.3%;
+  top: 80%;
+  z-index: 2;
+  width: 3.4%;
+  aspect-ratio: 1;
+  pointer-events: none;
+}
+
+.pk-ball svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.pk-ball::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 0;
+  bottom: -14%;
+  height: 26%;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: -1;
+}
+
+.pk-ball.is-moving::after,
+.pk-ball.is-done.is-goal::after { opacity: 0; }
+
+.pk-ball.is-moving .pk-ball-panels { animation: pk-spin 0.3s linear infinite; transform-origin: 32px 32px; }
+
+.pk-ball.is-moving.is-left.is-goal { animation: pk-ball-goal-left 1.05s 0.5s both; }
+.pk-ball.is-moving.is-center.is-goal { animation: pk-ball-goal-center 1.05s 0.5s both; }
+.pk-ball.is-moving.is-right.is-goal { animation: pk-ball-goal-right 1.05s 0.5s both; }
+.pk-ball.is-moving.is-catch { animation: pk-ball-catch 1.05s 0.5s both; }
+.pk-ball.is-moving.is-left.is-parry { animation: pk-ball-parry-left 1.05s 0.5s both; }
+.pk-ball.is-moving.is-right.is-parry { animation: pk-ball-parry-right 1.05s 0.5s both; }
+.pk-ball.is-moving.is-center.is-parry { animation: pk-ball-parry-over 1.05s 0.5s both; }
+
+/* Where the ball ends: on the floor of the net, in the keeper's gloves (hidden here), wide of the post, or on the roof of the net. */
+.pk-ball.is-done.is-left.is-goal { left: 31.6%; top: 64.6%; transform: scale(0.56); }
+.pk-ball.is-done.is-center.is-goal { left: 48.6%; top: 64.6%; transform: scale(0.56); }
+.pk-ball.is-done.is-right.is-goal { left: 65%; top: 64.6%; transform: scale(0.56); }
+.pk-ball.is-done.is-catch { opacity: 0; }
+.pk-ball.is-done.is-left.is-parry { left: 17.4%; top: 72.8%; transform: scale(0.74); }
+.pk-ball.is-done.is-right.is-parry { left: 79.2%; top: 72.8%; transform: scale(0.74); }
+.pk-ball.is-done.is-center.is-parry { left: 48.3%; top: 46.6%; transform: scale(0.5); }
+
+/* The taker, from behind, standing off the ball to its left. */
+.pk-taker {
+  position: absolute;
+  left: 28.5%;
+  top: 65.2%;
+  z-index: 4;
+  width: 23.1%;
+  height: 37.5%;
+  pointer-events: none;
+}
+
+.pk-taker svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/*
+ * The kick, 3.2s: set, three running strides, the left foot planted beside
+ * the ball (15.5%), the strike (15.5–18%, the ball leaves at 0.56s), the
+ * follow through, he watches, celebrates or holds his head, then steps back
+ * to his mark (48–70%, done by 2.24s) for the next one. He moves up the pitch toward the
+ * ball and gets a little smaller with the distance.
+ */
+.pk-taker { transform-origin: 50% 92.3%; }
+
+.pk-taker.is-kicking { animation: pk-taker-run 3.2s both; }
+
+.pk-tpose { opacity: 0; }
+.pk-taker.is-done .pk-tpose.is-stance { opacity: 1; }
+.pk-taker.is-kicking .pk-tpose.is-stance { animation: pk-t-stance 3.2s step-end both, pk-breathe 2.8s ease-in-out infinite; }
+.pk-taker.is-kicking .pk-tpose.is-runA { animation: pk-t-run-a 3.2s step-end both; }
+.pk-taker.is-kicking .pk-tpose.is-runB { animation: pk-t-run-b 3.2s step-end both; }
+.pk-taker.is-kicking .pk-tpose.is-plant { animation: pk-t-plant 3.2s step-end both; }
+.pk-taker.is-kicking .pk-tpose.is-strike { animation: pk-t-strike 3.2s step-end both; }
+.pk-taker.is-kicking .pk-tpose.is-follow { animation: pk-t-follow 3.2s step-end both; }
+.pk-taker.is-kicking .pk-tpose.is-watch { animation: pk-t-watch 3.2s step-end both; }
+.pk-taker.is-kicking .pk-tpose.is-react { animation: pk-t-react 3.2s step-end both; }
+.pk-taker.is-done .pk-tpose.is-stance,
+.pk-taker-still { animation: pk-breathe 2.8s ease-in-out infinite; }
+
+/* Waiting, he shifts his weight from hip to hip, pivoting on his feet. */
+.pk-tpose.is-stance,
+.pk-taker-still {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+@keyframes pk-breathe {
+  0%, 100% { transform: translateX(-0.8px) rotate(-1.3deg); }
+  25% { transform: translateX(0) translateY(-0.6px) rotate(0deg); }
+  50% { transform: translateX(0.8px) rotate(1.4deg); }
+  75% { transform: translateX(0) translateY(-0.6px) rotate(0deg); }
+}
+
+@keyframes pk-t-stance { 0% { opacity: 1; } 3% { opacity: 0; } 70%, 100% { opacity: 1; } }
+/* Strides on the way up, then (backwards) on the way back to his mark. */
+@keyframes pk-t-run-a { 0% { opacity: 0; } 3% { opacity: 1; } 6% { opacity: 0; } 9% { opacity: 1; } 12% { opacity: 0; } 48% { opacity: 1; } 53.5% { opacity: 0; } 59% { opacity: 1; } 64.5%, 100% { opacity: 0; } }
+@keyframes pk-t-run-b { 0% { opacity: 0; } 6% { opacity: 1; } 9% { opacity: 0; } 53.5% { opacity: 1; } 59% { opacity: 0; } 64.5% { opacity: 1; } 70%, 100% { opacity: 0; } }
+@keyframes pk-t-plant { 0% { opacity: 0; } 12% { opacity: 1; } 15.5%, 100% { opacity: 0; } }
+@keyframes pk-t-strike { 0% { opacity: 0; } 15.5% { opacity: 1; } 18%, 100% { opacity: 0; } }
+@keyframes pk-t-follow { 0% { opacity: 0; } 18% { opacity: 1; } 30%, 100% { opacity: 0; } }
+@keyframes pk-t-watch { 0% { opacity: 0; } 30% { opacity: 1; } 34%, 100% { opacity: 0; } }
+/* Arms up for a goal, hands on his head for a save, once the ball has arrived. */
+@keyframes pk-t-react { 0% { opacity: 0; } 34% { opacity: 1; } 48%, 100% { opacity: 0; } }
+
+/* Up the pitch to the ball, a small bob on each stride, slowing into the plant; later, back down to the mark. */
+@keyframes pk-taker-run {
+  0% { transform: translate(0, 0) scale(1); animation-timing-function: ease-in; }
+  3% { transform: translate(2%, -4%) scale(0.985); }
+  4.5% { transform: translate(4.5%, -9%) scale(0.975); }
+  6% { transform: translate(7%, -12%) scale(0.965); }
+  7.5% { transform: translate(9.5%, -18%) scale(0.952); }
+  9% { transform: translate(12%, -21%) scale(0.94); }
+  10.5% { transform: translate(15%, -27%) scale(0.925); }
+  12% { transform: translate(18%, -30.5%) scale(0.91); animation-timing-function: ease-out; }
+  15.5% { transform: translate(21.5%, -36.2%) scale(0.88); }
+  18% { transform: translate(22%, -36.6%) scale(0.88); animation-timing-function: ease-out; }
+  30% { transform: translate(24%, -38%) scale(0.875); }
+  48% { transform: translate(24%, -38%) scale(0.875); animation-timing-function: ease-in-out; }
+  50.75% { transform: translate(21%, -34.5%) scale(0.885); }
+  53.5% { transform: translate(18%, -29%) scale(0.9); }
+  56.25% { transform: translate(14.5%, -25%) scale(0.915); }
+  59% { transform: translate(11%, -19%) scale(0.935); }
+  61.75% { transform: translate(7.5%, -14.5%) scale(0.95); }
+  64.5% { transform: translate(4.5%, -8.5%) scale(0.968); }
+  67.25% { transform: translate(1.8%, -4%) scale(0.985); animation-timing-function: ease-out; }
+  70%, 100% { transform: translate(0, 0) scale(1); }
+}
+
+/* Where to shoot: the goal mouth in three. */
+.pk-zones {
+  position: absolute;
+  left: 28%;
+  top: 48.5%;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 44%;
+  height: 21.5%;
+}
+
+.pk-zone {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  font-size: clamp(0.62rem, 2.2cqmin, 0.95rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: none;
+}
+
+/* The labels sit on the grass under the goal mouth, clear of the keeper. */
+.pk-zone span {
+  position: absolute;
+  top: calc(100% + 0.8cqmin);
+  padding: 0.2em 0.7em;
+  border-radius: 999px;
+  background: rgba(6, 16, 12, 0.6);
+  white-space: nowrap;
+}
+
+.pk-zone:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.pk-zone:disabled span { opacity: 0; transition: opacity 0.2s; }
+
+.pk-zone:not(:disabled):active { transform: none; }
+
+.pk-zone:not(:disabled):hover span {
+  background: #ffe14a;
+  color: #1a1408;
+}
+
+/* Target rings, behind the keeper so the middle one doesn't hide him. */
+.pk-targets {
+  position: absolute;
+  left: 28%;
+  top: 48.5%;
+  z-index: 0;
+  width: 44%;
+  height: 21.5%;
+  pointer-events: none;
+}
+
+.pk-target {
+  position: absolute;
+  top: 22%;
+  width: 7.5cqmin;
+  height: 7.5cqmin;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.pk-target.is-left { left: 10%; }
+.pk-target.is-center { left: 50%; top: 9%; width: 6cqmin; height: 6cqmin; }
+.pk-target.is-right { left: 90%; }
+
+.pk-world:has(.pk-zone:not(:disabled)) .pk-target {
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  animation: penalty-target 1.5s ease-in-out infinite;
+}
+
+.pk-world:has(.pk-zone.is-left:not(:disabled):hover) .pk-target.is-left,
+.pk-world:has(.pk-zone.is-center:not(:disabled):hover) .pk-target.is-center,
+.pk-world:has(.pk-zone.is-right:not(:disabled):hover) .pk-target.is-right {
+  border-color: #ffe14a;
+  background: rgba(255, 225, 74, 0.2);
+  animation: none;
+}
+
+@keyframes pk-ready {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(1.6%) scaleY(0.985); }
+}
+
+/* Outlines: each figure is drawn first as a dark silhouette with a thick edge, then in colour on top. */
+.pk-outline * {
+  fill: #0a100c;
+  stroke: #0a100c;
+  stroke-width: 3.4px;
+  stroke-linejoin: round;
+  opacity: 1;
+}
+
+/*
+ * Waiting, the keeper is never still (a 4.8s loop): he shuffles along his
+ * line, bounces on his toes, and throws a dummy: arms spread wide, a hard lean
+ * one way (40–55%), then back. His shadow goes with him.
+ */
+.pk-keeper.is-ready .pk-keeper-body { animation: pk-sway 4.8s ease-in-out infinite; }
+.pk-keeper-shadow:not(.is-moving):not(.is-done) { animation: pk-sway-shadow 4.8s ease-in-out infinite; }
+.pk-idle-pose.is-spread { opacity: 0; }
+.pk-keeper.is-ready .pk-idle-pose.is-ready { animation: pk-idle-crouch 4.8s step-end infinite; }
+.pk-keeper.is-ready .pk-idle-pose.is-spread { animation: pk-idle-spread 4.8s step-end infinite; }
+
+/* As the taker runs up, a feint the other way before the real dive. */
+.pk-keeper-fake {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+}
+
+.pk-keeper.is-moving.is-left .pk-keeper-fake { animation: pk-feint-right 0.55s ease-in-out both; }
+.pk-keeper.is-moving.is-right .pk-keeper-fake { animation: pk-feint-left 0.55s ease-in-out both; }
+.pk-keeper.is-moving.is-center .pk-keeper-fake { animation: pk-feint-hop 0.55s ease-in-out both; }
+
+/* The ball's shadow runs along the grass under it, fading as the ball rises. */
+.pk-ball-shadow {
+  position: absolute;
+  left: 47.6%;
+  top: 82.6%;
+  z-index: 1;
+  width: 4.6%;
+  height: 1.7%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pk-ball-shadow.is-moving.is-left.is-goal { animation: pk-bshadow-left 1.05s 0.5s both; }
+.pk-ball-shadow.is-moving.is-center.is-goal { animation: pk-bshadow-center 1.05s 0.5s both; }
+.pk-ball-shadow.is-moving.is-right.is-goal { animation: pk-bshadow-right 1.05s 0.5s both; }
+.pk-ball-shadow.is-moving.is-saved { animation: pk-bshadow-save 1.05s 0.5s both; }
+
+/* The camera pushes in on the goal as the taker runs up, and eases back after. */
+.penalty-scene.is-kick-a .pk-world { animation: pk-cam-a 1.75s ease-in-out both; }
+.penalty-scene.is-kick-b .pk-world { animation: pk-cam-b 1.75s ease-in-out both; }
+.pk-world { transform-origin: 50% 60%; }
+
+/* The crowd: flashes, and on its feet for a goal. */
+.pk-flash { opacity: 0; animation: pk-flash 5.2s linear infinite; }
+.penalty-scene.is-goal .pk-crowd.is-even { animation: pk-crowd-jump 0.34s ease-in-out 5; }
+.penalty-scene.is-goal .pk-crowd.is-odd { animation: pk-crowd-jump 0.34s 0.17s ease-in-out 5; }
+
+/* Like a broadcast picture: a little darker towards the edges. */
+.pk-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 50% 56%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.4) 100%);
+  pointer-events: none;
+}
+
+@keyframes pk-sway {
+  0%, 100% { transform: translateX(-4%) rotate(-1deg); }
+  12% { transform: translateX(-1%) translateY(-2.5%) rotate(0deg); }
+  18% { transform: translateX(1%) translateY(0) rotate(0.5deg); }
+  24% { transform: translateX(2%) translateY(-2.5%) rotate(0.5deg); }
+  30% { transform: translateX(4%) translateY(0) rotate(1deg); }
+  40% { transform: translateX(3%) rotate(1deg); }
+  46% { transform: translateX(-9%) rotate(-5deg); }
+  55% { transform: translateX(-6%) rotate(-3deg); }
+  66% { transform: translateX(1%) rotate(0.6deg); }
+  78% { transform: translateX(-1%) translateY(-2%) rotate(0deg); }
+  86% { transform: translateX(-3%) translateY(0) rotate(-0.8deg); }
+}
+
+@keyframes pk-sway-shadow {
+  0%, 100% { transform: translateX(-5%); }
+  18% { transform: translateX(1%); }
+  30% { transform: translateX(5%); }
+  40% { transform: translateX(4%); }
+  46% { transform: translateX(-11%); }
+  55% { transform: translateX(-7%); }
+  66% { transform: translateX(1%); }
+  86% { transform: translateX(-4%); }
+}
+
+@keyframes pk-idle-crouch { 0% { opacity: 1; } 40% { opacity: 0; } 55%, 100% { opacity: 1; } }
+@keyframes pk-idle-spread { 0% { opacity: 0; } 40% { opacity: 1; } 55%, 100% { opacity: 0; } }
+
+@keyframes pk-feint-right {
+  0% { transform: translateX(0) rotate(0); }
+  40% { transform: translateX(9%) rotate(4deg); }
+  75% { transform: translateX(-2%) rotate(-1deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+
+@keyframes pk-feint-left {
+  0% { transform: translateX(0) rotate(0); }
+  40% { transform: translateX(-9%) rotate(-4deg); }
+  75% { transform: translateX(2%) rotate(1deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+
+@keyframes pk-feint-hop {
+  0% { transform: translate(0, 0); }
+  30% { transform: translate(-6%, -4%); }
+  55% { transform: translate(5%, 0); }
+  80% { transform: translate(0, -3%); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes pk-bshadow-left {
+  0%, 6% { left: 47.6%; top: 82.6%; opacity: 0.55; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: 38.3%; top: 76%; opacity: 0.4; transform: scale(0.78); animation-timing-function: ease-in; }
+  44% { left: 31%; top: 69.8%; opacity: 0.2; transform: scale(0.55); }
+  50%, 100% { left: 31%; top: 69.8%; opacity: 0; transform: scale(0.55); }
+}
+
+@keyframes pk-bshadow-center {
+  0%, 6% { left: 47.6%; top: 82.6%; opacity: 0.55; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: 47.6%; top: 76%; opacity: 0.4; transform: scale(0.78); animation-timing-function: ease-in; }
+  44% { left: 47.6%; top: 69.8%; opacity: 0.2; transform: scale(0.55); }
+  50%, 100% { left: 47.6%; top: 69.8%; opacity: 0; transform: scale(0.55); }
+}
+
+@keyframes pk-bshadow-right {
+  0%, 6% { left: 47.6%; top: 82.6%; opacity: 0.55; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: 56.9%; top: 76%; opacity: 0.4; transform: scale(0.78); animation-timing-function: ease-in; }
+  44% { left: 64.6%; top: 69.8%; opacity: 0.2; transform: scale(0.55); }
+  50%, 100% { left: 64.6%; top: 69.8%; opacity: 0; transform: scale(0.55); }
+}
+
+@keyframes pk-bshadow-save {
+  0%, 6% { left: 47.6%; top: 82.6%; opacity: 0.55; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: calc((47.6% + var(--pk-cl) - 0.6%) / 2); top: 76%; opacity: 0.4; transform: scale(0.78); animation-timing-function: ease-in; }
+  44% { left: calc(var(--pk-cl) - 0.6%); top: 69.8%; opacity: 0.2; transform: scale(0.55); }
+  50%, 100% { left: calc(var(--pk-cl) - 0.6%); top: 69.8%; opacity: 0; transform: scale(0.55); }
+}
+
+@keyframes pk-cam-a {
+  0% { transform: translateX(-50%) scale(1); }
+  33% { transform: translateX(-50%) scale(1.05); }
+  58% { transform: translateX(-50%) scale(1.09); }
+  64% { transform: translateX(-50.25%) scale(1.09); }
+  67% { transform: translateX(-49.75%) scale(1.09); }
+  70% { transform: translateX(-50%) scale(1.09); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+@keyframes pk-cam-b {
+  0% { transform: translateX(-50%) scale(1); }
+  33% { transform: translateX(-50%) scale(1.05); }
+  58% { transform: translateX(-50%) scale(1.09); }
+  64% { transform: translateX(-50.25%) scale(1.09); }
+  67% { transform: translateX(-49.75%) scale(1.09); }
+  70% { transform: translateX(-50%) scale(1.09); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+@keyframes pk-flash {
+  0%, 95% { opacity: 0; }
+  96% { opacity: 0.95; }
+  98%, 100% { opacity: 0; }
+}
+
+@keyframes pk-crowd-jump {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2.6px); }
+}
+
+/* Every frame named through 100%, so with step-end the last pose stays once the move is over. */
+@keyframes pk-show-ready { 0% { opacity: 1; } 5%, 100% { opacity: 0; } }
+@keyframes pk-show-load { 0% { opacity: 0; } 5% { opacity: 1; } 14%, 100% { opacity: 0; } }
+@keyframes pk-show-flight { 0% { opacity: 0; } 14% { opacity: 1; } 62%, 100% { opacity: 0; } }
+@keyframes pk-show-landed { 0% { opacity: 0; } 62%, 100% { opacity: 1; } }
+@keyframes pk-show-held-flight { 0% { opacity: 0; } 44% { opacity: 1; } 62%, 100% { opacity: 0; } }
+@keyframes pk-show-air { 0% { opacity: 0; } 14%, 100% { opacity: 1; } }
+@keyframes pk-show-held-air { 0% { opacity: 0; } 44%, 100% { opacity: 1; } }
+
+/* Across: a quick lean, then flight at an even speed (no force acts sideways in the air), then a slide that slows to a stop. */
+@keyframes pk-keep-x-left {
+  0% { transform: translateX(0) rotate(0); animation-timing-function: ease-in; }
+  14% { transform: translateX(-3%) rotate(-4deg); animation-timing-function: linear; }
+  44% { transform: translateX(-46%) rotate(-10deg); animation-timing-function: linear; }
+  62% { transform: translateX(-71%) rotate(-3deg); animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); }
+  80% { transform: translateX(-76.5%) rotate(0deg); animation-timing-function: ease-out; }
+  100% { transform: translateX(-77%) rotate(0deg); }
+}
+
+@keyframes pk-keep-x-right {
+  0% { transform: translateX(0) rotate(0); animation-timing-function: ease-in; }
+  14% { transform: translateX(3%) rotate(4deg); animation-timing-function: linear; }
+  44% { transform: translateX(46%) rotate(10deg); animation-timing-function: linear; }
+  62% { transform: translateX(71%) rotate(3deg); animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); }
+  80% { transform: translateX(76.5%) rotate(0deg); animation-timing-function: ease-out; }
+  100% { transform: translateX(77%) rotate(0deg); }
+}
+
+/*
+ * Up and down: gravity slows the rise (ease-out) and speeds the fall
+ * (ease-in). The flight pose is drawn higher than the landed one, so the
+ * lift is measured from it: at 61.9% it's down on the grass (+36%), and at
+ * 62% the landed pose takes over at 0. Landing squashes, bounces once, settles.
+ */
+@keyframes pk-keep-y-side {
+  0% { transform: translateY(0) scaleY(1); animation-timing-function: ease-in; }
+  13.9% { transform: translateY(2%) scaleY(0.96); }
+  14% { transform: translateY(6%) scaleY(1); animation-timing-function: ease-out; }
+  33% { transform: translateY(-21%); animation-timing-function: ease-in; }
+  44% { transform: translateY(-13.5%); animation-timing-function: ease-in; }
+  61.9% { transform: translateY(36%) scaleY(1); }
+  62% { transform: translateY(0) scaleY(0.92); animation-timing-function: ease-out; }
+  68% { transform: translateY(-3.5%) scaleY(1); animation-timing-function: ease-in; }
+  74% { transform: translateY(0) scaleY(0.97); animation-timing-function: ease-out; }
+  82%, 100% { transform: translateY(0) scaleY(1); }
+}
+
+/* A jump in the middle: the up pose's feet are 21 units off the ground when it's drawn, so standing is +10.5%. */
+@keyframes pk-keep-y-up {
+  0% { transform: translateY(0) scaleY(1); animation-timing-function: ease-in; }
+  13.9% { transform: translateY(0) scaleY(0.97); }
+  14% { transform: translateY(12%); animation-timing-function: ease-out; }
+  36% { transform: translateY(-16%); animation-timing-function: ease-in; }
+  44% { transform: translateY(-12%); animation-timing-function: ease-in; }
+  64% { transform: translateY(10.5%) scaleY(0.94); animation-timing-function: ease-out; }
+  72% { transform: translateY(8.5%) scaleY(1); animation-timing-function: ease-in; }
+  80%, 100% { transform: translateY(10.5%) scaleY(1); }
+}
+
+@keyframes pk-shadow-left {
+  0% { transform: translateX(0) scaleX(1); opacity: 1; }
+  14% { transform: translateX(-4%) scaleX(1.1); opacity: 1; }
+  33% { transform: translateX(-36%) scaleX(0.8); opacity: 0.45; }
+  62% { transform: translateX(-80%) scaleX(1.5); opacity: 1; }
+  100% { transform: translateX(-88%) scaleX(1.55); opacity: 1; }
+}
+
+@keyframes pk-shadow-right {
+  0% { transform: translateX(0) scaleX(1); opacity: 1; }
+  14% { transform: translateX(4%) scaleX(1.1); opacity: 1; }
+  33% { transform: translateX(36%) scaleX(0.8); opacity: 0.45; }
+  62% { transform: translateX(80%) scaleX(1.5); opacity: 1; }
+  100% { transform: translateX(88%) scaleX(1.55); opacity: 1; }
+}
+
+@keyframes pk-shadow-up {
+  0%, 14% { transform: scale(1); opacity: 1; }
+  36% { transform: scale(0.7); opacity: 0.5; }
+  64%, 100% { transform: scale(1); opacity: 1; }
+}
+
+/* The ball leaves the spot as the taker strikes (6%), crosses the line at 44%, then: */
+@keyframes pk-ball-goal-left {
+  0%, 6% { left: 48.3%; top: 80%; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: 39%; top: 57%; transform: scale(0.76); animation-timing-function: ease-in; }
+  44% { left: 31.3%; top: 54.6%; transform: scale(0.6); animation-timing-function: ease-out; }
+  52% { left: 30.9%; top: 55.4%; transform: scale(0.55); animation-timing-function: ease-in; }
+  64% { left: 31.2%; top: 64.6%; transform: scale(0.56); animation-timing-function: ease-out; }
+  72% { left: 31.4%; top: 62.4%; animation-timing-function: ease-in; }
+  80% { left: 31.5%; top: 64.6%; }
+  100% { left: 31.6%; top: 64.6%; transform: scale(0.56); }
+}
+
+@keyframes pk-ball-goal-center {
+  0%, 6% { left: 48.3%; top: 80%; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: 48.3%; top: 56%; transform: scale(0.74); animation-timing-function: ease-in; }
+  44% { left: 48.3%; top: 51.5%; transform: scale(0.6); animation-timing-function: ease-out; }
+  52% { left: 48.4%; top: 52.4%; transform: scale(0.55); animation-timing-function: ease-in; }
+  64% { left: 48.5%; top: 64.6%; transform: scale(0.56); animation-timing-function: ease-out; }
+  72% { left: 48.5%; top: 62.4%; animation-timing-function: ease-in; }
+  80% { left: 48.6%; top: 64.6%; }
+  100% { left: 48.6%; top: 64.6%; transform: scale(0.56); }
+}
+
+@keyframes pk-ball-goal-right {
+  0%, 6% { left: 48.3%; top: 80%; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: 57.6%; top: 57%; transform: scale(0.76); animation-timing-function: ease-in; }
+  44% { left: 65.3%; top: 54.6%; transform: scale(0.6); animation-timing-function: ease-out; }
+  52% { left: 65.7%; top: 55.4%; transform: scale(0.55); animation-timing-function: ease-in; }
+  64% { left: 65.4%; top: 64.6%; transform: scale(0.56); animation-timing-function: ease-out; }
+  72% { left: 65.2%; top: 62.4%; animation-timing-function: ease-in; }
+  80% { left: 65.1%; top: 64.6%; }
+  100% { left: 65%; top: 64.6%; transform: scale(0.56); }
+}
+
+/* Caught: the ball flies into the gloves (--pk-cl, --pk-ct), and the keeper's own ball takes over. */
+@keyframes pk-ball-catch {
+  0%, 6% { left: 48.3%; top: 80%; transform: scale(1); opacity: 1; animation-timing-function: ease-out; }
+  25% { left: calc((48.3% + var(--pk-cl)) / 2); top: calc((80% + var(--pk-ct)) / 2 - 3%); transform: scale(0.78); animation-timing-function: ease-in; }
+  43.9% { left: var(--pk-cl); top: var(--pk-ct); transform: scale(0.62); opacity: 1; }
+  44%, 100% { left: var(--pk-cl); top: var(--pk-ct); transform: scale(0.62); opacity: 0; }
+}
+
+/* Parried: off the gloves, out past the post, down onto the grass, a bounce and a roll. */
+@keyframes pk-ball-parry-left {
+  0%, 6% { left: 48.3%; top: 80%; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: calc((48.3% + var(--pk-cl)) / 2); top: calc((80% + var(--pk-ct)) / 2 - 3%); transform: scale(0.78); animation-timing-function: ease-in; }
+  44% { left: var(--pk-cl); top: var(--pk-ct); transform: scale(0.62); animation-timing-function: ease-out; }
+  56% { left: 21.5%; top: 50%; transform: scale(0.66); animation-timing-function: ease-in; }
+  70% { left: 19.4%; top: 72.6%; transform: scale(0.72); animation-timing-function: ease-out; }
+  78% { left: 18.7%; top: 69.4%; animation-timing-function: ease-in; }
+  86% { left: 18.1%; top: 72.8%; animation-timing-function: ease-out; }
+  100% { left: 17.4%; top: 72.8%; transform: scale(0.74); }
+}
+
+@keyframes pk-ball-parry-right {
+  0%, 6% { left: 48.3%; top: 80%; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: calc((48.3% + var(--pk-cl)) / 2); top: calc((80% + var(--pk-ct)) / 2 - 3%); transform: scale(0.78); animation-timing-function: ease-in; }
+  44% { left: var(--pk-cl); top: var(--pk-ct); transform: scale(0.62); animation-timing-function: ease-out; }
+  56% { left: 75.1%; top: 50%; transform: scale(0.66); animation-timing-function: ease-in; }
+  70% { left: 77.2%; top: 72.6%; transform: scale(0.72); animation-timing-function: ease-out; }
+  78% { left: 77.9%; top: 69.4%; animation-timing-function: ease-in; }
+  86% { left: 78.5%; top: 72.8%; animation-timing-function: ease-out; }
+  100% { left: 79.2%; top: 72.8%; transform: scale(0.74); }
+}
+
+/* Tipped over the bar from the middle: up, over, and down onto the roof of the net. */
+@keyframes pk-ball-parry-over {
+  0%, 6% { left: 48.3%; top: 80%; transform: scale(1); animation-timing-function: ease-out; }
+  25% { left: 48.3%; top: calc((80% + var(--pk-ct)) / 2 - 3%); transform: scale(0.78); animation-timing-function: ease-in; }
+  44% { left: var(--pk-cl); top: var(--pk-ct); transform: scale(0.62); animation-timing-function: ease-out; }
+  60% { left: 48.3%; top: 39%; transform: scale(0.54); animation-timing-function: ease-in; }
+  76% { left: 48.3%; top: 46.6%; transform: scale(0.5); animation-timing-function: ease-out; }
+  84% { left: 48.3%; top: 45.2%; animation-timing-function: ease-in; }
+  92%, 100% { left: 48.3%; top: 46.6%; transform: scale(0.5); }
+}
+
+@keyframes pk-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pk-net {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.035, 1.05); }
+  70% { transform: scale(0.99, 0.985); }
+  100% { transform: scale(1); }
+}
+
+@keyframes penalty-call {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes penalty-target {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pk-keeper,
+  .pk-keeper-body,
+  .pk-keeper svg,
+  .pk-keeper-shadow,
+  .pk-pose,
+  .pk-held,
+  .pk-ball,
+  .pk-ball .pk-ball-panels,
+  .pk-taker,
+  .pk-tpose,
+  .pk-taker-still,
+  .pk-keeper-fake,
+  .pk-idle-pose,
+  .pk-ball-shadow,
+  .pk-world,
+  .pk-crowd,
+  .pk-flash,
+  .pk-backnet,
+  .penalty-call,
+  .pk-target { animation: none !important; transition: none; }
+
+  /* Straight to where the move ends. */
+  .pk-keeper.is-moving.is-left { transform: translateX(-77%); }
+  .pk-keeper.is-moving.is-right { transform: translateX(77%); }
+  .pk-keeper.is-up.is-moving .pk-keeper-body { transform: translateY(10.5%); }
+  .pk-keeper.is-side.is-moving .pk-pose.is-landed,
+  .pk-keeper.is-side.is-moving .pk-held.is-landed,
+  .pk-keeper.is-up.is-moving .pk-pose.is-air,
+  .pk-keeper.is-up.is-moving .pk-held.is-air { opacity: 1; }
+  .pk-keeper-shadow.is-moving.is-left { transform: translateX(-88%) scaleX(1.55); }
+  .pk-keeper-shadow.is-moving.is-right { transform: translateX(88%) scaleX(1.55); }
+  .pk-ball.is-moving.is-left.is-goal { left: 31.6%; top: 64.6%; transform: scale(0.56); }
+  .pk-ball.is-moving.is-center.is-goal { left: 48.6%; top: 64.6%; transform: scale(0.56); }
+  .pk-ball.is-moving.is-right.is-goal { left: 65%; top: 64.6%; transform: scale(0.56); }
+  .pk-ball.is-moving.is-catch { opacity: 0; }
+  .pk-ball.is-moving.is-left.is-parry { left: 17.4%; top: 72.8%; transform: scale(0.74); }
+  .pk-ball.is-moving.is-right.is-parry { left: 79.2%; top: 72.8%; transform: scale(0.74); }
+  .pk-ball.is-moving.is-center.is-parry { left: 48.3%; top: 46.6%; transform: scale(0.5); }
+  .pk-taker.is-kicking { transform: none; }
+  .pk-taker.is-kicking .pk-tpose.is-stance { opacity: 1; }
+}
+
+.penalty-call {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7%;
+  z-index: 9;
+  margin: 0;
+  font-size: clamp(1.8rem, 10cqmin, 4.2rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  animation: penalty-call 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  pointer-events: none;
+}
+
+.penalty-call.is-goal { color: #ffe56a; }
+.penalty-call.is-save { color: #ffd0c8; }

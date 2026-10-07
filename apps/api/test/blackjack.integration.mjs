@@ -127,7 +127,9 @@ test("insurance costs half the bet and pays 2 to 1 against the dealer's blackjac
   stack("TS", "AH", "9D", "KC");
   const dealt = await blackjack.deal(bea, 10);
   assert.deepEqual([dealt.round.phase, dealt.round.allowed], ["INSURANCE", ["insure", "noInsurance"]]);
-  const done = await blackjack.act(bea, "insure");
+  const insured = await blackjack.act(bea, "insure");
+  assert.deepEqual([insured.round.phase, insured.round.insurance, insured.round.insurancePayout], ["PLAYER", 5, 0], "the dealer's card stays down while the Player plays");
+  const done = await blackjack.act(bea, "stand");
   assert.deepEqual([done.round.phase, done.round.insurance, done.round.insurancePayout, done.round.payout, done.balance], ["DONE", 5, 15, 15, 218]);
 });
 

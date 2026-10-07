@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiProperty, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { Role } from "@prisma/client";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { AuthGuard, AuthenticatedRequest } from "../auth/auth.guard";
 import { CurrentActor } from "../auth/current-actor.decorator";
 import { MfaGuard } from "../auth/mfa.guard";
@@ -19,7 +19,11 @@ import { MAX_SPOTS } from "./roulette";
 import { RouletteService } from "./roulette.service";
 import { BlackjackService } from "./blackjack.service";
 import { BookService } from "./book.service";
+import { MinesService } from "./mines.service";
+import { PenaltyService } from "./penalty.service";
 import { BETS as BOOK_BETS } from "./book";
+import { MINE_COUNTS, TILES } from "./mines";
+import { DIRECTIONS } from "./penalty";
 
 class SpinDto {
   @ApiProperty({ enum: BETS, description: "What the spin costs, in dollars. Ignored while the Player has free spins left from the old game." })
@@ -68,6 +72,39 @@ class BlackjackDealDto {
   bet!: number;
 }
 
+class MinesStartDto {
+  @ApiProperty({ enum: [0.5, 1, 2, 5, 10], description: "The stake, in dollars" })
+  @IsNumber()
+  bet!: number;
+
+  @ApiProperty({ enum: MINE_COUNTS, description: "How many mines are hidden on the 5 by 5 field" })
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([...MINE_COUNTS])
+  mines!: number;
+}
+
+class MinesRevealDto {
+  @ApiProperty({ description: "The tile to open, 0 to 24, left to right and top to bottom" })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(TILES - 1)
+  tile!: number;
+}
+
+class PenaltyStartDto {
+  @ApiProperty({ enum: [0.5, 1, 2, 5, 10], description: "The stake, in dollars" })
+  @IsNumber()
+  bet!: number;
+}
+
+class PenaltyKickDto {
+  @ApiProperty({ enum: DIRECTIONS, description: "Where the kick is aimed" })
+  @IsIn([...DIRECTIONS])
+  aim!: "LEFT" | "CENTER" | "RIGHT";
+}
+
 class BlackjackActionDto {
   @ApiProperty({ enum: ["hit", "stand", "double", "split", "insure", "noInsurance"] })
   @IsIn(["hit", "stand", "double", "split", "insure", "noInsurance"])
@@ -106,6 +143,8 @@ export class CasinoController {
     private readonly roulette: RouletteService,
     private readonly blackjack: BlackjackService,
     private readonly book: BookService,
+    private readonly mines: MinesService,
+    private readonly penalty: PenaltyService,
   ) {}
 
   /** The Player's Casino: can they play, the rules, free spins, recent spins. */
@@ -195,6 +234,74 @@ export class CasinoController {
   @Idempotent()
   bookSpin(@CurrentActor() actor: Actor, @Body() body: BookSpinDto, @Req() req: AuthenticatedRequest) {
     return this.book.spin(actor, body.bet, clientIp(req));
+  }
+
+  /** The Player's Mines table: can they play, the rules, the round in play, their last rounds. */
+  @Get("mines")
+  @Roles(Role.PLAYER)
+  minesState(@CurrentActor() actor: Actor) {
+    return this.mines.state(actor);
+  }
+
+  /** Starts a round. A repeated request with the same Idempotency-Key gets the first answer back. */
+  @Post("mines/start")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Idempotent()
+  minesStart(@CurrentActor() actor: Actor, @Body() body: MinesStartDto) {
+    return this.mines.start(actor, body.bet, body.mines);
+  }
+
+  /** Opens one tile. Idempotent like a start. */
+  @Post("mines/reveal")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 180, ttl: 60_000 } })
+  @Idempotent()
+  minesReveal(@CurrentActor() actor: Actor, @Body() body: MinesRevealDto) {
+    return this.mines.open(actor, body.tile);
+  }
+
+  /** Cashes out the round in play. Idempotent like a start. */
+  @Post("mines/cashout")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Idempotent()
+  minesCashOut(@CurrentActor() actor: Actor) {
+    return this.mines.collect(actor);
+  }
+
+  /** The Player's penalty shootout: can they play, the rules, the one in play, their last rounds. */
+  @Get("penalty")
+  @Roles(Role.PLAYER)
+  penaltyState(@CurrentActor() actor: Actor) {
+    return this.penalty.state(actor);
+  }
+
+  /** Starts a shootout. A repeated request with the same Idempotency-Key gets the first answer back. */
+  @Post("penalty/start")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Idempotent()
+  penaltyStart(@CurrentActor() actor: Actor, @Body() body: PenaltyStartDto) {
+    return this.penalty.start(actor, body.bet);
+  }
+
+  /** Aims one kick. Idempotent like a start. */
+  @Post("penalty/kick")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Idempotent()
+  penaltyKick(@CurrentActor() actor: Actor, @Body() body: PenaltyKickDto) {
+    return this.penalty.shoot(actor, body.aim);
+  }
+
+  /** Cashes out the shootout in play. Idempotent like a start. */
+  @Post("penalty/cashout")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Idempotent()
+  penaltyCashOut(@CurrentActor() actor: Actor) {
+    return this.penalty.collect(actor);
   }
 
   /** Whether the Casino is open, and how it did in a period, per Player. */

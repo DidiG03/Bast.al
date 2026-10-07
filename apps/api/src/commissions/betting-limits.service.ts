@@ -109,13 +109,15 @@ export class BettingLimitsService {
     return Math.round(((await this.lossToday(playerId)) + (await this.openStakes(playerId))) * 100) / 100;
   }
 
-  /** Money still riding: stakes on bets placed today that are still open, and on a blackjack round still being played. */
+  /** Money still riding: stakes on bets placed today that are still open, and on a blackjack, Mines or Penalty round still being played. */
   private async openStakes(playerId: string): Promise<number> {
-    const [open, blackjack] = await Promise.all([
+    const [open, blackjack, mines, penalty] = await Promise.all([
       this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfDay(new Date()) } }, _sum: { stake: true } }),
       this.prisma.blackjackHand.findUnique({ where: { playerId }, select: { staked: true } }),
+      this.prisma.minesRound.findUnique({ where: { playerId }, select: { staked: true } }),
+      this.prisma.penaltyRound.findUnique({ where: { playerId }, select: { staked: true } }),
     ]);
-    return Number(open._sum.stake ?? 0) + Number(blackjack?.staked ?? 0);
+    return Number(open._sum.stake ?? 0) + Number(blackjack?.staked ?? 0) + Number(mines?.staked ?? 0) + Number(penalty?.staked ?? 0);
   }
 
   /**

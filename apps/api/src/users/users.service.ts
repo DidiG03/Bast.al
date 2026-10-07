@@ -1649,14 +1649,21 @@ async function lockAccounts(tx: Prisma.TransactionClient, ids: Array<string | nu
 }
 
 /** Casino rounds a Player is in the middle of, whose winnings would otherwise land with a new team. */
-async function inPlay(db: Pick<Prisma.TransactionClient, "blackjackHand" | "casinoBookFeature">, playerId: string) {
-  const [hands, rounds] = await Promise.all([db.blackjackHand.count({ where: { playerId } }), db.casinoBookFeature.count({ where: { playerId } })]);
-  return { blackjack: hands > 0, freeSpins: rounds > 0 };
+async function inPlay(db: Pick<Prisma.TransactionClient, "blackjackHand" | "casinoBookFeature" | "minesRound" | "penaltyRound">, playerId: string) {
+  const [hands, rounds, mines, penalty] = await Promise.all([
+    db.blackjackHand.count({ where: { playerId } }),
+    db.casinoBookFeature.count({ where: { playerId } }),
+    db.minesRound.count({ where: { playerId } }),
+    db.penaltyRound.count({ where: { playerId } }),
+  ]);
+  return { blackjack: hands > 0, freeSpins: rounds > 0, mines: mines > 0, penalty: penalty > 0 };
 }
 
-function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, playing: { blackjack: boolean; freeSpins: boolean } = { blackjack: false, freeSpins: false }): string | null {
+function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, playing: { blackjack: boolean; freeSpins: boolean; mines: boolean; penalty: boolean } = { blackjack: false, freeSpins: false, mines: false, penalty: false }): string | null {
   if (playing.blackjack) return `${username} is in the middle of a blackjack hand. Move them once it's over.`;
   if (playing.freeSpins) return `${username} is in the middle of Book of Ra free spins. Move them once they're over.`;
+  if (playing.mines) return `${username} is in the middle of a Mines round. Move them once it's over.`;
+  if (playing.penalty) return `${username} is in the middle of a Penalty round. Move them once it's over.`;
   if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;
   if (openBets > 1) return `${username} still has ${openBets} open bets. Move them once they're settled.`;
   if (balance.isNegative()) return `${username}'s balance is below zero (-$${balance.abs().toFixed(2)}). Give them credit to clear it before moving them.`;

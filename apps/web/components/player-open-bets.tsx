@@ -22,7 +22,7 @@ function picksOf(bet: AdminBet): BetLeg[] {
 /** A Player's open bets, for their Owner, Manager or Super Admin, from the Users tree. */
 export function PlayerOpenBetsModal({ player, onClose }: { player: { id: string; username: string }; onClose: () => void }) {
   const { getToken } = useAuth();
-  const { t, tn, date } = useI18n();
+  const { t, tn, ts, date } = useI18n();
   const [bets, setBets] = useState<AdminBet[] | null>(null);
   const toast = useToast();
 
@@ -92,7 +92,7 @@ export function PlayerOpenBetsModal({ player, onClose }: { player: { id: string;
                 <li key={bet.id} className="card bet-card is-open">
                   <div className="bet-card-top">
                     <div className="bet-card-name">
-                      <strong>{bet.kind === "ACCUMULATOR" ? tn(bet.legs.length, "Accumulator · {count} pick", "Accumulator · {count} picks") : bet.kind === "BUILDER" ? tn(bet.legs.length, "Bet builder · {count} pick", "Bet builder · {count} picks") : t("Single")}</strong>
+                      <strong>{bet.kind === "ACCUMULATOR" ? tn(bet.legs.length, "Accumulator · {count} pick", "Accumulator · {count} picks") : bet.kind === "BUILDER" ? tn(bet.legs.length, "Bet builder · {count} pick", "Bet builder · {count} picks") : bet.kind === "SYSTEM" ? ts(bet.description) : t("Single")}</strong>
                       <span className="muted">{t("Placed {when}", { when: date(bet.placedAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) })}</span>
                     </div>
                     <span className="status-pill bet-status-open">{t("Open")}</span>

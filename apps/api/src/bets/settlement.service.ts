@@ -14,10 +14,11 @@ import { UsersService } from "../users/users.service";
 import { betSelect, betView } from "./bets.service";
 import { GoalRecord, isGoalMarket } from "./goals";
 import { builderOutcome } from "./builder";
+import { systemOutcome } from "./system";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
 import { teamOf } from "./team";
 
-type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean; builder?: boolean };
+type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean; builder?: boolean; system?: { won: number; lines: number } };
 
 const money = (value: Prisma.Decimal | number) => `$${Number(value).toFixed(2)}`;
 
@@ -405,10 +406,17 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     if (betIds.length === 0) return [];
     const bets = await this.prisma.bet.findMany({
       where: { id: { in: betIds }, voidReason: null, ...(regrade ? {} : { status: BetStatus.OPEN }) },
-      select: { ...movable, kind: true, odds: true, legs: { select: { odds: true, result: true } } },
+      select: { ...movable, kind: true, odds: true, system: true, legs: { orderBy: { sortOrder: "asc" }, select: { odds: true, result: true } } },
     });
     const changes: Change[] = [];
     for (const bet of bets) {
+      if (bet.kind === BetKind.SYSTEM) {
+        const info = bet.system as { sizes: number[]; lineStake: number };
+        const outcome = systemOutcome(bet.legs, info.sizes, new Prisma.Decimal(info.lineStake));
+        const change = await this.move(bet, BetStatus[outcome.status], outcome.payout, null, actorId);
+        if (change) changes.push({ ...change, eventName: bet.description ?? "System", accumulator: true, system: { won: outcome.won, lines: outcome.lines } });
+        continue;
+      }
       const outcome = bet.kind === BetKind.BUILDER ? { status: BetStatus[builderOutcome(bet.legs)], odds: bet.odds ?? new Prisma.Decimal(1) } : accumulatorOutcome(bet.legs);
       const payout = outcome.status === BetStatus.OPEN ? new Prisma.Decimal(0) : payoutFor(outcome.status, bet.stake, outcome.odds);
       const change = await this.move(bet, outcome.status, payout, null, actorId);
@@ -742,7 +750,15 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     for (const change of changes.filter((c) => c.accumulator)) {
       const { playerId, delta, status } = change;
       const back = delta.isNegative() ? ` ${money(delta.abs())} was taken back from your balance.` : "";
-      const [title, message] = change.builder
+      const [title, message] = change.system
+        ? status === BetStatus.WON
+          ? ["Your system bet paid out", `${change.system.won} of its ${change.system.lines} bets won. ${delta.isPositive() ? `${money(delta)} was added to your balance.` : back.trim()}`.trim()]
+          : status === BetStatus.LOST
+            ? ["System bet settled", `None of your system bet's ${change.system.lines} bets won.${back}`]
+            : status === BetStatus.VOID
+              ? ["System bet refunded", `Every pick in your system bet was void, so your stake went back to your balance.${back}`]
+              : ["Result corrected", `A result in your system bet was corrected, so it's open again.${back}`]
+        : change.builder
         ? status === BetStatus.WON
           ? ["Your bet builder won", delta.isPositive() ? `${money(delta)} was added to your balance.` : back.trim() || "Your bet builder won."]
           : status === BetStatus.LOST

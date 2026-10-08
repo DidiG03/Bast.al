@@ -531,7 +531,9 @@ export type BetLeg = {
 
 export type Bet = {
   id: string;
-  kind: "SINGLE" | "ACCUMULATOR" | "BUILDER";
+  kind: "SINGLE" | "ACCUMULATOR" | "BUILDER" | "SYSTEM";
+  /** A system bet: its name ("Yankee", "2 from 4"), line sizes, stake per line, number of lines and most it can return. */
+  system?: { name: string; sizes: number[]; lineStake: number; lines: number; maxReturn: number } | null;
   /** An accumulator's or a bet builder's picks, in slip order. Empty for singles. */
   legs: BetLeg[];
   description: string | null;

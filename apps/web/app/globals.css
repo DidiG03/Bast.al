@@ -3180,6 +3180,18 @@ button.odds-selection:hover,
 }
 
 .bet-chips,
+/* The system picker on the slip: which doubles, trebles… to make of the picks. */
+.bet-system-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bet-system-pick select {
+  flex: 1;
+  min-width: 0;
+}
+
 .bet-quick {
   display: flex;
   gap: 0.4rem;

@@ -37,9 +37,9 @@ export class RiskService {
       ), picks AS (
         SELECT selection_id AS sel_id, kind, stake, payout FROM team_bets WHERE kind = 'SINGLE' AND selection_id IS NOT NULL
         UNION ALL
-        -- A bet builder's picks count with the accumulators' (both pay only if every pick wins).
+        -- Bet builders' and system bets' picks count with the accumulators', each at the bet's most it can return.
         SELECT l.selection_id AS sel_id, 'ACCUMULATOR'::"BetKind" AS kind, t.stake, t.payout FROM team_bets t JOIN bet_legs l ON l.bet_id = t.id
-        WHERE t.kind IN ('ACCUMULATOR', 'BUILDER') AND l.result IS NULL
+        WHERE t.kind IN ('ACCUMULATOR', 'BUILDER', 'SYSTEM') AND l.result IS NULL
       )
       SELECT sel_id, kind, COUNT(*) AS bets, SUM(stake) AS staked, SUM(payout) AS payout
       FROM picks WHERE TRUE ${only}

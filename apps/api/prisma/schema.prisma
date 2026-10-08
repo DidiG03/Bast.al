@@ -504,6 +504,10 @@ model Bet {
   /// legs, and `odds` is the combined price locked when the bet was placed.
   kind        BetKind              @default(SINGLE)
   legs        BetLeg[]
+  /// SYSTEM bets: { name, sizes, lineStake, lines, maxReturn }. `stake` is
+  /// lineStake times lines, and `odds` the most it returns over the stake,
+  /// rounded up, so the team's open payouts never count it at less.
+  system      Json?
   /// The stake and every settlement move, in the Player's balance ledger.
   ledger      BalanceTransaction[]
   /// The team that took the bet and the commission rates in force when it was
@@ -550,6 +554,8 @@ enum BetKind {
   ACCUMULATOR
   /// Several picks from one football match, priced together (see bets/builder.ts).
   BUILDER
+  /// Picks from different matches as every combination of the chosen sizes (see bets/system.ts).
+  SYSTEM
 }
 
 /// One pick in an accumulator or a bet builder. Every leg must win for the

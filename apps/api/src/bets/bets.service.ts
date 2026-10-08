@@ -11,12 +11,17 @@ import { UsersService } from "../users/users.service";
 import { RACE_CAP } from "../odds/greyhounds";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
+import { MIN_STAKE } from "./bets.dto";
+import { normalSizes, systemLines, systemMaxReturn, systemName } from "./system";
 import { RiskService } from "./risk.service";
 import { assertOnTeam, type TeamSnapshot } from "./team";
 
 type SlipBet = { selectionId: string; stake: number; odds: number };
 type SlipAccumulator = { legs: Array<{ selectionId: string; odds: number }>; stake: number };
 type SlipBuilder = { legs: Array<{ selectionId: string; odds: number }>; stake: number; odds: number };
+type SlipSystem = { legs: Array<{ selectionId: string; odds: number }>; sizes: number[]; lineStake: number };
+/** What a system bet records about itself (Bet.system). */
+type SystemInfo = { name: string; sizes: number[]; lineStake: number; lines: number; maxReturn: number };
 
 /** Highest combined price an accumulator can have. */
 export const MAX_ACCUMULATOR_ODDS = 5000;
@@ -36,6 +41,7 @@ export const betSelect = {
   settledAt: true,
   voidReason: true,
   kind: true,
+  system: true,
   legs: {
     orderBy: { sortOrder: "asc" },
     select: {
@@ -86,8 +92,11 @@ export function betView(bet: BetRow) {
   const stake = Number(bet.stake);
   const odds = bet.odds === null ? null : Number(bet.odds);
   const event = bet.selection?.market.event ?? null;
+  const system = (bet.system as SystemInfo | null) ?? null;
   return {
     kind: bet.kind,
+    /** A system bet's name, line sizes, stake per line, number of lines and most it can return. */
+    system,
     legs: bet.legs.map((leg) => ({
       name: leg.selection.name,
       market: leg.selection.market.name,
@@ -104,7 +113,7 @@ export function betView(bet: BetRow) {
     sp: bet.spCap !== null,
     spCap: bet.spCap === null ? null : Number(bet.spCap),
     /** What a win pays back, stake included. */
-    potentialPayout: odds === null ? null : Number(payoutFor(BetStatus.WON, bet.stake, bet.odds!)),
+    potentialPayout: system ? system.maxReturn : odds === null ? null : Number(payoutFor(BetStatus.WON, bet.stake, bet.odds!)),
     payout: Number(bet.payout),
     status: bet.status,
     placedAt: bet.placedAt,
@@ -135,10 +144,10 @@ export class BetsService {
   ) {}
 
   /**
-   * Places a slip: any number of singles, plus at most one accumulator and
-   * one bet builder. Everything goes on or nothing does.
+   * Places a slip: any number of singles, plus at most one accumulator, one
+   * bet builder and one system bet. Everything goes on or nothing does.
    */
-  async place(actor: Actor, input: { bets?: SlipBet[]; accumulator?: SlipAccumulator; builder?: SlipBuilder; acceptOddsChanges?: boolean }, ipAddress?: string) {
+  async place(actor: Actor, input: { bets?: SlipBet[]; accumulator?: SlipAccumulator; builder?: SlipBuilder; system?: SlipSystem; acceptOddsChanges?: boolean }, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players can place bets");
     // Recorded on each bet, so later moves and rate changes never rewrite its commission.
     const team = await this.assertOnTeam(actor);
@@ -146,9 +155,9 @@ export class BetsService {
     const snapshot = { ownerId: team.ownerId, managerId: team.managerId, ownerRate: team.ownerRate, managerRate: team.managerRate };
     const singles = input.bets ?? [];
     const acca = input.accumulator;
-    if (singles.length === 0 && !acca && !input.builder) throw new BadRequestException("Your slip is empty");
+    if (singles.length === 0 && !acca && !input.builder && !input.system) throw new BadRequestException("Your slip is empty");
 
-    const ids = [...new Set([...singles.map((bet) => bet.selectionId), ...(acca?.legs.map((leg) => leg.selectionId) ?? [])])];
+    const ids = [...new Set([...singles.map((bet) => bet.selectionId), ...(acca?.legs.map((leg) => leg.selectionId) ?? []), ...(input.system?.legs.map((leg) => leg.selectionId) ?? [])])];
     const selections = await this.prisma.selection.findMany({
       where: { id: { in: ids } },
       select: { id: true, name: true, market: { select: { name: true, event: { select: { id: true, name: true } } } } },
@@ -198,6 +207,29 @@ export class BetsService {
       if (odds.greaterThan(MAX_ACCUMULATOR_ODDS)) throw new BadRequestException(`An accumulator's combined odds can't be more than ${MAX_ACCUMULATOR_ODDS}. Remove a pick.`);
       pricedAcca = { stake: new Prisma.Decimal(acca.stake.toFixed(2)), odds, legs };
     }
+    let pricedSystem: { stake: Prisma.Decimal; odds: Prisma.Decimal; legs: Priced[]; info: SystemInfo; maxReturn: Prisma.Decimal } | null = null;
+    if (input.system) {
+      const legs: Priced[] = [];
+      for (const leg of input.system.legs) legs.push(await price(leg));
+      if (legs.some((leg) => leg.sp !== null)) throw new BadRequestException("Greyhound picks can only be single bets. Take them out of the system.");
+      if (new Set(legs.map((leg) => leg.eventId)).size !== legs.length) throw new BadRequestException("A system bet can only have one pick from each match");
+      const sizes = normalSizes(legs.length, input.system.sizes);
+      if (!sizes) throw new BadRequestException("Choose a system: doubles, trebles or more from your picks");
+      const lineStake = new Prisma.Decimal(input.system.lineStake.toFixed(2));
+      const lines = systemLines(legs.length, sizes).length;
+      const { payout, topOdds } = systemMaxReturn(legs.map((leg) => leg.price!), sizes, lineStake);
+      if (topOdds.greaterThan(MAX_ACCUMULATOR_ODDS)) throw new BadRequestException(`A system's biggest line can't have odds of more than ${MAX_ACCUMULATOR_ODDS}. Remove a pick.`);
+      const stake = lineStake.mul(lines);
+      if (stake.lessThan(MIN_STAKE)) throw new BadRequestException(`A system bet has to cost at least $${MIN_STAKE} in all. Raise the stake per bet.`);
+      pricedSystem = {
+        stake,
+        // The most it returns over the stake, rounded up, for the team's open payouts.
+        odds: payout.div(stake).toDecimalPlaces(2, Prisma.Decimal.ROUND_UP),
+        legs,
+        maxReturn: payout,
+        info: { name: systemName(legs.length, sizes), sizes, lineStake: Number(lineStake), lines, maxReturn: Number(payout) },
+      };
+    }
     let pricedBuilder: (Awaited<ReturnType<BetsService["priceBuilderFor"]>> & { stake: Prisma.Decimal }) | null = null;
     if (input.builder) {
       const quote = await this.priceBuilderFor(actor.id, input.builder.legs.map((leg) => leg.selectionId));
@@ -207,9 +239,9 @@ export class BetsService {
     if (changed.length > 0 && !input.acceptOddsChanges) {
       throw new ConflictException(`The odds changed: ${changed.join(", ")}. Check your slip and place it again.`);
     }
-    await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? [])], actor.id);
+    await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id);
 
-    const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : []), ...(pricedBuilder ? [pricedBuilder.stake] : [])];
+    const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : []), ...(pricedBuilder ? [pricedBuilder.stake] : []), ...(pricedSystem ? [pricedSystem.stake] : [])];
     const total = stakes.reduce((sum, stake) => sum.add(stake), new Prisma.Decimal(0));
 
     // What each outcome would add to the team's open payouts, for the Owner's cap.
@@ -228,6 +260,8 @@ export class BetsService {
       const payout = payoutFor(BetStatus.WON, pricedBuilder.stake, pricedBuilder.odds);
       for (const leg of pricedBuilder.legs) add(leg.selectionId, payout, leg.label);
     }
+    // A system counts at the most it can return on each of its picks, like an accumulator.
+    if (pricedSystem) for (const leg of pricedSystem.legs) add(leg.selectionId, payoutFor(BetStatus.WON, pricedSystem.stake, pricedSystem.odds), leg.label);
 
     const created = await this.prisma.$transaction(async (tx) => {
       // One slip at a time per Player, so two slips can't both squeeze under
@@ -299,6 +333,27 @@ export class BetsService {
           }),
         );
         await tx.event.update({ where: { id: pricedBuilder.eventId }, data: { volume: { increment: pricedBuilder.stake } } });
+      }
+      if (pricedSystem) {
+        const { info } = pricedSystem;
+        rows.push(
+          await tx.bet.create({
+            data: {
+              playerId: actor.id,
+              kind: BetKind.SYSTEM,
+              stake: pricedSystem.stake,
+              odds: pricedSystem.odds,
+              system: info,
+              description: `${info.name} · ${pricedSystem.legs.length} picks · ${info.lines} bets`,
+              ...snapshot,
+              legs: {
+                create: pricedSystem.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price!, description: leg.description, sortOrder })),
+              },
+            },
+            select: betSelect,
+          }),
+        );
+        for (const leg of pricedSystem.legs) await tx.event.update({ where: { id: leg.eventId }, data: { volume: { increment: pricedSystem.stake } } });
       }
       // Every stake in the Player's balance ledger, so their statement adds up to their balance.
       await tx.balanceTransaction.createMany({

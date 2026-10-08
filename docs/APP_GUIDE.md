@@ -105,6 +105,14 @@ A **bet builder** joins several picks from **one football match** into one bet. 
 - It takes the markets settled by the score and the half-time score: result, double chance, total goals, both teams score, handicaps, correct score, halves, half time / full time, and the like. Corners, cards, goalscorers and draw no bet can't go in a builder.
 - Only before kick-off. On the Risk page a builder counts on each of its picks, like an accumulator.
 
+## System bets (with a number)
+
+A **system bet** turns 3 to 8 picks from different matches into every double, treble and so on, each one a small accumulator with the same stake. Maria picks Tirana (2.00), Vllaznia (3.00), Teuta (1.50) and Laçi (4.00), taps **System** and chooses a **Yankee**: the 6 doubles, 4 trebles and the fourfold, 11 bets. At $1 a bet it costs $11 and returns up to $138.50 if all four win. If only Laçi loses, the 4 bets without Laçi still pay: $22.50.
+
+- The systems: "2 from 4", "3 from 5" and so on, or the named ones: Trixie and Patent (3 picks), Yankee and Lucky 15 (4), Super Yankee and Lucky 31 (5), Heinz and Lucky 63 (6), Super Heinz (7), Goliath (8). The "Lucky" ones and the Patent add the singles.
+- A lost pick only loses the bets it's in. A void pick counts as 1.00 in its bets. If every pick is void, the stake comes back.
+- It counts as one bet with its whole stake for limits, commissions and reports. On the Risk page each pick counts at the most the system can return.
+
 ## Basketball (with a number)
 
 The **Basketball** switch on the Bet page lists NBA games and the main European leagues (Euroleague, ABA, Italy, Spain, Turkey, Greece, France, Germany, Kosovo). Players bet on:

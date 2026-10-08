@@ -2,6 +2,7 @@ import { Type } from "class-transformer";
 import { ArrayMaxSize, ArrayMinSize, IsBoolean, IsIn, IsISO8601, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 import { MAX_ODDS, MIN_ODDS } from "../odds/pricing";
 import { MAX_BUILDER_ODDS, MAX_BUILDER_PICKS } from "./builder";
+import { MAX_SYSTEM_PICKS, MIN_SYSTEM_LINE_STAKE, MIN_SYSTEM_PICKS } from "./system";
 
 export const MIN_STAKE = 1;
 export const MAX_STAKE = 100_000;
@@ -73,6 +74,30 @@ export class BuilderDto {
   stake!: number;
 }
 
+export class SystemDto {
+  @ValidateNested({ each: true })
+  @Type(() => AccumulatorLegDto)
+  @ArrayMinSize(MIN_SYSTEM_PICKS)
+  @ArrayMaxSize(MAX_SYSTEM_PICKS)
+  legs!: AccumulatorLegDto[];
+
+  /** The sizes of line: 2 for the doubles, 3 for the trebles; 1 for the singles. */
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(MAX_SYSTEM_PICKS, { each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_SYSTEM_PICKS)
+  sizes!: number[];
+
+  /** The stake on each line; the system costs this times the number of lines. */
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(MIN_SYSTEM_LINE_STAKE)
+  @Max(MAX_STAKE)
+  lineStake!: number;
+}
+
 export class BuilderQuoteDto {
   @IsString({ each: true })
   @MaxLength(64, { each: true })
@@ -100,6 +125,12 @@ export class PlaceBetsDto {
   @ValidateNested()
   @Type(() => BuilderDto)
   builder?: BuilderDto;
+
+  /** At most one system bet per slip. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SystemDto)
+  system?: SystemDto;
 
   @IsOptional()
   @IsBoolean()

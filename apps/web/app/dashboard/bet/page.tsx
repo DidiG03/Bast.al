@@ -21,10 +21,11 @@ import { breakPause, livePill } from "../../../lib/live";
 import { usePolling } from "../../../lib/use-polling";
 import { pickLabel } from "../../../lib/picks";
 import { isDaysFromToday } from "../../../lib/time";
+import { MIN_SYSTEM_LINE_STAKE, systemMaxReturn, systemOptions, type SystemOption } from "../../../lib/system-bets";
 
 type Tab = "matches" | "open" | "settled";
-/** "accumulator" combines the picks: an accumulator, or a bet builder when they're all from one match. */
-type SlipMode = "singles" | "accumulator";
+/** "accumulator" combines the picks: an accumulator, or a bet builder when they're all from one match. "system" makes every double, treble… of them. */
+type SlipMode = "singles" | "accumulator" | "system";
 
 type SlipItem = {
   selectionId: string;
@@ -68,6 +69,17 @@ function dayLabel(iso: string, { t, date: format }: I18n): string {
   // Albanian day names are lower case ("e premte"); as a heading it starts with a capital.
   const label = format(date, { weekday: "long", day: "numeric", month: "short" });
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/**
+ * The system the slip is set to, or null when its picks can't make one (fewer
+ * than 3 or more than 8, two from one match, a race pick). Without a choice
+ * yet, the named one that covers every size (a Trixie, a Yankee…).
+ */
+function chosenSystem(items: SlipItem[], key: string): SystemOption | null {
+  if (new Set(items.map((item) => item.eventId)).size !== items.length || items.some((item) => item.sp)) return null;
+  const options = systemOptions(items.length);
+  return options.find((option) => option.sizes.join(",") === key) ?? options.find((option) => option.name) ?? options[0] ?? null;
 }
 
 /** Stake x odds, rounded down to the cent like the server does. */
@@ -147,6 +159,8 @@ function BetPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mode, setMode] = useState<SlipMode>("singles");
   const [accaStake, setAccaStake] = useState("");
+  /** The system's line sizes, as "2,3,4". */
+  const [systemKey, setSystemKey] = useState("");
   const [league, setLeague] = useState("");
   const [search, setSearch] = useState("");
   /** "" = every day, "live" = playing now, otherwise a day's label (Today, Tomorrow, …). */
@@ -445,6 +459,8 @@ function BetPage() {
       onMode={setMode}
       accaStake={accaStake}
       onAccaStake={setAccaStake}
+      systemKey={systemKey}
+      onSystemKey={setSystemKey}
       onChange={setSlip}
       onPlaced={() => {
         setBetsVersion((v) => v + 1);
@@ -454,7 +470,12 @@ function BetPage() {
       onClose={() => setSheetOpen(false)}
     />
   );
-  const totalStake = mode === "accumulator" && slip.length >= 2 ? stakeValue(accaStake) : slip.reduce((sum, item) => sum + stakeValue(item.stake), 0);
+  const slipSystem = mode === "system" ? chosenSystem(slip, systemKey) : null;
+  const totalStake = slipSystem
+    ? Math.round(stakeValue(accaStake) * slipSystem.lines * 100) / 100
+    : mode !== "singles" && slip.length >= 2
+      ? stakeValue(accaStake)
+      : slip.reduce((sum, item) => sum + stakeValue(item.stake), 0);
 
   // The first time, only the spinner shows until the account and the matches have loaded.
   if (!info || (tab === "matches" && listed && events === null && sport === "football")) return failed ? null : <PageLoading label="Loading matches" />;
@@ -936,6 +957,8 @@ function BetSlip({
   onMode,
   accaStake,
   onAccaStake,
+  systemKey,
+  onSystemKey,
   onChange,
   onPlaced,
   onOddsChanged,
@@ -947,6 +970,8 @@ function BetSlip({
   onMode: (mode: SlipMode) => void;
   accaStake: string;
   onAccaStake: (stake: string) => void;
+  systemKey: string;
+  onSystemKey: (key: string) => void;
   onChange: (update: (items: SlipItem[]) => SlipItem[]) => void;
   onPlaced: () => void;
   onOddsChanged: () => void;
@@ -963,7 +988,10 @@ function BetSlip({
 
   // Combined picks all from one match are a bet builder, priced by the server; from different matches, an accumulator.
   const oneMatch = items.length >= 2 && new Set(items.map((item) => item.eventId)).size === 1;
-  const combined = mode === "accumulator";
+  // A system: every double, treble… of picks from different matches, the same stake on each line.
+  const systemChoice = chosenSystem(items, systemKey);
+  const system = mode === "system" && systemChoice !== null;
+  const combined = mode === "accumulator" || (mode === "system" && !system);
   const builder = combined && oneMatch;
   const acca = combined && !oneMatch;
   const [builderQuote, setBuilderQuote] = useState<{ key: string; odds: number | null; error: string | null } | null>(null);
@@ -993,14 +1021,17 @@ function BetSlip({
   const accaStakeValue = stakeValue(accaStake);
   const sameMatch = new Set(items.map((item) => item.eventId)).size < items.length;
 
-  const totalStake = combined ? accaStakeValue : items.reduce((sum, item) => sum + stakeValue(item.stake), 0);
+  const systemLines = system ? systemChoice.lines : 0;
+  const totalStake = system ? Math.round(accaStakeValue * systemLines * 100) / 100 : combined ? accaStakeValue : items.reduce((sum, item) => sum + stakeValue(item.stake), 0);
   // Race picks pay the starting price, so they add nothing known to the return.
-  const totalReturn = builder ? returns(accaStakeValue, builderOdds) : acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + (item.sp ? 0 : returns(stakeValue(item.stake), item.odds)), 0);
-  const missingStake = combined ? accaStakeValue < 1 : items.some((item) => stakeValue(item.stake) < 1);
+  const totalReturn = system
+    ? systemMaxReturn(items.map((item) => item.odds), systemChoice.sizes, accaStakeValue)
+    : builder ? returns(accaStakeValue, builderOdds) : acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + (item.sp ? 0 : returns(stakeValue(item.stake), item.odds)), 0);
+  const missingStake = system ? accaStakeValue < MIN_SYSTEM_LINE_STAKE || totalStake < 1 : combined ? accaStakeValue < 1 : items.some((item) => stakeValue(item.stake) < 1);
   const closed = items.filter((item) => item.closed);
   const paused = items.filter((item) => item.paused && !item.closed);
   const hasLive = items.some((item) => item.live);
-  const overMax = info?.maxStake != null ? (combined ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
+  const overMax = info?.maxStake != null ? (system ? totalStake > info.maxStake : combined ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
   const tooLittle = info ? totalStake > info.balance : false;
   const moved = items.some((item) => item.previousOdds !== undefined);
 
@@ -1013,6 +1044,7 @@ function BetSlip({
   else if (acca && hasSp) blocker = t("Greyhound picks can only be single bets. Switch to Singles or remove them.");
   else if (acca && sameMatch) blocker = t("An accumulator needs each pick from a different match. Remove one of the picks from the same match.");
   else if (acca && accaOdds > MAX_ACCUMULATOR_ODDS) blocker = t("Combined odds can be at most {max}. Remove a pick to continue.", { max: MAX_ACCUMULATOR_ODDS });
+  else if (missingStake && system) blocker = t("Enter a stake per bet so the system costs at least $1.");
   else if (missingStake) blocker = combined ? t("Enter a stake of at least $1.") : t("Enter a stake of at least $1 on each bet.");
   else if (overMax) blocker = t("The most you can stake on one bet is {amount}.", { amount: formatMoney(info!.maxStake!) });
   else if (tooLittle) blocker = t("Your balance is too low for this slip. Tap here to ask for a top-up.");
@@ -1047,7 +1079,9 @@ function BetSlip({
     setPlacing(true);
     if (hasLive) toast.info(t("Live bets take a few seconds to confirm. If the price or score changes meanwhile, you'll see the new price first."));
     const body = JSON.stringify(
-      builder
+      system
+        ? { system: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), sizes: systemChoice.sizes, lineStake: accaStakeValue } }
+        : builder
         ? { builder: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), odds: builderOdds, stake: accaStakeValue } }
         : acca
         ? { accumulator: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), stake: accaStakeValue } }
@@ -1061,6 +1095,8 @@ function BetSlip({
         result.bets.length === 1
           ? result.bets[0].kind === "ACCUMULATOR"
             ? t("Your accumulator is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
+            : result.bets[0].kind === "SYSTEM"
+              ? t("Your system bet is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
             : result.bets[0].kind === "BUILDER"
               ? t("Your bet builder is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
               : t("Your bet is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
@@ -1153,16 +1189,35 @@ function BetSlip({
               <button type="button" className={`bet-mode-option${combined ? " is-active" : ""}`} aria-pressed={combined} onClick={() => onMode("accumulator")}>
                 {oneMatch ? t("Bet builder") : t("Accumulator")}
               </button>
+              {systemOptions(items.length).length > 0 && !oneMatch ? (
+                <button type="button" className={`bet-mode-option${system ? " is-active" : ""}`} aria-pressed={system} disabled={!systemChoice} onClick={() => onMode("system")}>
+                  {t("System")}
+                </button>
+              ) : null}
             </div>
           ) : null}
-          <div className="bet-quick" role="group" aria-label={builder ? t("Bet builder stake") : acca ? t("Accumulator stake") : t("Same stake on every bet")}>
-            <span className="muted">{combined ? t("Stake") : t("Stake each")}</span>
+          {system ? (
+            <label className="bet-system-pick">
+              <span className="muted">{t("System")}</span>
+              <select value={systemChoice.sizes.join(",")} onChange={(e) => onSystemKey(e.target.value)}>
+                {systemOptions(items.length).map((option) => (
+                  <option key={option.sizes.join(",")} value={option.sizes.join(",")}>
+                    {option.name
+                      ? tn(option.lines, "{name} · {count} bet", "{name} · {count} bets", { name: t(option.name) })
+                      : tn(option.lines, "{size} from {picks} · {count} bet", "{size} from {picks} · {count} bets", { size: option.sizes[0], picks: items.length })}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <div className="bet-quick" role="group" aria-label={system ? t("Stake per bet") : builder ? t("Bet builder stake") : acca ? t("Accumulator stake") : t("Same stake on every bet")}>
+            <span className="muted">{system ? t("Per bet") : combined ? t("Stake") : t("Stake each")}</span>
             {QUICK_STAKES.map((amount) => (
               <button
                 key={amount}
                 type="button"
                 className="bet-chip"
-                onClick={() => (combined ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
+                onClick={() => (combined || system ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
               >
                 ${amount}
               </button>
@@ -1203,7 +1258,7 @@ function BetSlip({
                         </>
                       )}
                     </span>
-                    {builder ? null : acca ? (
+                    {builder || system ? null : acca ? (
                       <span className="bet-slip-return muted">{sameMatch && items.some((other) => other !== item && other.eventId === item.eventId) ? t("Same match as another pick") : ""}</span>
                     ) : (
                     <label className="bet-stake">
@@ -1221,7 +1276,7 @@ function BetSlip({
                       />
                     </label>
                     )}
-                    {combined ? null : (
+                    {combined || system ? null : (
                       <span className="bet-slip-return muted">
                         {item.sp ? t("Paid at the starting price") : stake > 0 ? t("Returns {amount}", { amount: formatMoney(returns(stake, item.odds)) }) : ""}
                       </span>
@@ -1232,6 +1287,36 @@ function BetSlip({
             })}
           </ul>
 
+          {system ? (
+            <div className="bet-slip-item bet-acca-stake">
+              <div className="bet-slip-item-bottom">
+                <span className="bet-slip-odds">
+                  <span className="muted">{t("Bets")}</span>
+                  <strong>{systemLines}</strong>
+                </span>
+                <label className="bet-stake">
+                  <span className="muted">$</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={MIN_SYSTEM_LINE_STAKE}
+                    step="0.01"
+                    placeholder={t("Per bet")}
+                    value={accaStake}
+                    onChange={(e) => onAccaStake(e.target.value)}
+                    aria-label={t("Stake per bet")}
+                  />
+                </label>
+              </div>
+              <p className="muted bet-slip-note" style={{ margin: 0 }}>
+                {t("{lines} bets × {stake} = {total}. Each double, treble… is its own small accumulator: a lost pick only loses the bets it's in, and a void pick counts as 1.00.", {
+                  lines: systemLines,
+                  stake: formatMoney(accaStakeValue),
+                  total: formatMoney(totalStake),
+                })}
+              </p>
+            </div>
+          ) : null}
           {combined ? (
             <div className="bet-slip-item bet-acca-stake">
               <div className="bet-slip-item-bottom">
@@ -1272,7 +1357,7 @@ function BetSlip({
               <dt className="muted">{t("Potential return")}</dt>
               <dd>
                 <strong>{formatMoney(totalReturn)}</strong>
-                {hasSp && !combined ? <span className="muted"> {t("+ SP bets")}</span> : null}
+                {hasSp && !combined && !system ? <span className="muted"> {t("+ SP bets")}</span> : null}
               </dd>
             </div>
             {info ? (
@@ -1287,7 +1372,9 @@ function BetSlip({
           <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing} aria-disabled={Boolean(blocker)}>
             {placing
               ? <LoadingSpinner label={hasLive ? "Confirming live bet" : "Placing"} size="small" />
-              : builder
+              : system
+                ? t("Place system bet · {amount}", { amount: formatMoney(totalStake) })
+                : builder
                 ? t("Place bet builder · {amount}", { amount: formatMoney(totalStake) })
                 : acca
                 ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
@@ -1450,6 +1537,11 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
   );
 }
 
+/** A system bet's name: "Yankee", "2 from 4", or "2/3 from 5". */
+function systemLabel(system: NonNullable<Bet["system"]>, picks: number, t: I18n["t"]): string {
+  return /from/.test(system.name) ? t("{sizes} from {picks}", { sizes: system.sizes.join("/"), picks }) : t(system.name);
+}
+
 function AccumulatorCard({ bet }: { bet: Bet }) {
   const { t, tn, ts, date } = useI18n();
   const decided = bet.legs.filter((leg) => leg.result !== null).length;
@@ -1463,8 +1555,11 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
     <li className={`card bet-card is-${bet.status.toLowerCase()}`}>
       <div className="bet-card-top">
         <div className="bet-card-name">
-          <strong>{bet.kind === "BUILDER" ? t("Bet builder") : t("Accumulator")}</strong>
-          <span className="muted">{tn(bet.legs.length, "{count} pick", "{count} picks")}</span>
+          <strong>{bet.system ? systemLabel(bet.system, bet.legs.length, t) : bet.kind === "BUILDER" ? t("Bet builder") : t("Accumulator")}</strong>
+          <span className="muted">
+            {tn(bet.legs.length, "{count} pick", "{count} picks")}
+            {bet.system ? ` · ${tn(bet.system.lines, "{count} bet of {stake}", "{count} bets of {stake}", { stake: formatMoney(bet.system.lineStake) })}` : ""}
+          </span>
         </div>
         <StatusPill status={bet.status} />
       </div>
@@ -1475,8 +1570,8 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
           <dd>{formatMoney(bet.stake)}</dd>
         </div>
         <div>
-          <dt className="muted">{t("Odds")}</dt>
-          <dd>{bet.odds?.toFixed(2) ?? "–"}</dd>
+          <dt className="muted">{bet.system ? t("Stake per bet") : t("Odds")}</dt>
+          <dd>{bet.system ? formatMoney(bet.system.lineStake) : bet.odds?.toFixed(2) ?? "–"}</dd>
         </div>
         <div>
           <dt className="muted">{bet.status === "OPEN" ? t("To return") : t("Returned")}</dt>
@@ -1497,7 +1592,7 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
 function BetCard({ bet }: { bet: Bet }) {
   const i18n = useI18n();
   const { t, ts, date } = i18n;
-  if (bet.kind === "ACCUMULATOR" || bet.kind === "BUILDER") return <AccumulatorCard bet={bet} />;
+  if (bet.kind !== "SINGLE") return <AccumulatorCard bet={bet} />;
   const event = bet.event;
   const score = event?.result ?? (event && event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING" ? { home: event.homeScore, away: event.awayScore } : null);
   let when = "";

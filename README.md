@@ -188,6 +188,22 @@ On the free plan (yesterday to tomorrow only, so a game is listed from the day b
 | `NFL_LEAGUES` | API-Sports league ids, comma-separated. Defaults to `1` (NFL); `2` is college football, which has many more games (each costs requests for its prices). |
 | `NFL_SYNC_INTERVAL_MS`, `NFL_RESULTS_INTERVAL_MS`, `NFL_BOOKMAKER` | Defaults 3 hours, 30 minutes, and 4 (bet365). |
 
+### Volleyball and handball
+
+Games, results and prices come from [API-Sports' volleyball](https://api-sports.io/documentation/volleyball/v1) and [handball](https://api-sports.io/documentation/handball/v1) APIs (same account, each its own daily quota), each market from bet365 first and otherwise the first bookmaker that prices it. Bets close when a game starts (no live prices) and settle on the result; Super Admin can enter a result on the Settlement page (the sets won for volleyball; the 60-minute score and half-time score for handball).
+
+- **Volleyball** (`src/odds/volleyball.ts`) settles on the sets won and every set's points: winner, set handicap, correct score in sets, total sets, a 4th or 5th set, each team to win a set, the 1st set and the match, points handicap and totals (match, each team, odd/even), and the 1st, 2nd and 3rd sets (winner, handicap, total points, each team's points, odd/even).
+- **Handball** (`src/odds/handball.ts`) is on 60 minutes (extra time and penalties don't count) and is stored like a football match, with football's market keys, so football's grading settles it: result, double chance, draw no bet, Asian and European handicaps, total goals and each team's, odd/even, result and total goals, half time / full time, highest scoring half, and the same for each half.
+
+Only half lines are offered on handicaps and totals. Same schedule as basketball: today's and tomorrow's games every 3 hours, each game's prices twice, results every 30 minutes while a started game has none. The default leagues are about 30 per sport, the top men's and women's leagues and the European cups and championships, which on a busy day is more games than the free plan's 100 requests can price; the rest are listed without prices until the quota allows. A paid API-Sports plan for each sport removes that limit.
+
+| Variable | Purpose |
+| --- | --- |
+| `VOLLEYBALL_API_KEY`, `HANDBALL_API_KEY` | API-Sports keys. Default to `API_FOOTBALL_KEY` (when that's a direct API-Sports key). `VOLLEYBALL_FEED=off`, `HANDBALL_FEED=off` turn a sport off. |
+| `VOLLEYBALL_LEAGUES`, `HANDBALL_LEAGUES` | API-Sports league ids, comma-separated. Default to the lists in `src/odds/team-sports-sync.service.ts`. |
+| `VOLLEYBALL_SYNC_INTERVAL_MS`, `VOLLEYBALL_RESULTS_INTERVAL_MS`, `HANDBALL_SYNC_INTERVAL_MS`, `HANDBALL_RESULTS_INTERVAL_MS` | Defaults 3 hours and 30 minutes. |
+| `VOLLEYBALL_BOOKMAKER`, `HANDBALL_BOOKMAKER` | The preferred bookmaker, 4 (bet365). |
+
 ### MMA
 
 Fights come from [API-Sports' MMA API](https://api-sports.io/documentation/mma/v1), the same account as API-Football with its own daily quota. Players bet at fixed prices (bet365's, less the team margin, like football) on **Fight winner** (a draw or no contest is void), **Fight result** (with the draw), **Total rounds over/under** ("Over 1.5" means past 2:30 of round 2) and, when priced, **Fight goes the distance**. Bets on every fight of a card close when the card's first fight starts. A no contest voids everything. Results settle once the feed has the method, round and time; if those haven't come six hours after the fight, the winner markets settle and the round bets wait on the Settlement page.

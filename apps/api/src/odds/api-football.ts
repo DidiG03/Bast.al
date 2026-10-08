@@ -136,12 +136,12 @@ export function parseFixture(raw: RawFixture): FeedFixture {
   };
 }
 
-type Namer = (home: string, away: string) => string;
-type FeedBet = { name: string; values: Array<{ value: string | number; odd: string }> };
-type Built = Omit<FeedMarket, "sortOrder">;
+export type Namer = (home: string, away: string) => string;
+export type FeedBet = { name: string; values: Array<{ value: string | number; odd: string }> };
+export type Built = Omit<FeedMarket, "sortOrder">;
 
 /** A market with a fixed set of outcomes. Feed value → our selection key and display name. */
-function fixed(key: string, name: Namer, values: Array<[feedValue: string, key: string, name: Namer]>) {
+export function fixed(key: string, name: Namer, values: Array<[feedValue: string, key: string, name: Namer]>) {
   return (bet: FeedBet, home: string, away: string): Built[] => [
     {
       key,
@@ -203,36 +203,36 @@ function priceOf(bet: FeedBet, feedValue: string): number {
   return Number(bet.values.find((v) => String(v.value) === feedValue)?.odd);
 }
 
-const outcomes: Array<[feed: string, key: string, name: Namer]> = [
+export const outcomes: Array<[feed: string, key: string, name: Namer]> = [
   ["Home", "home", (home) => home],
   ["Draw", "draw", () => "Draw"],
   ["Away", "away", (_home, away) => away],
 ];
-const yesNo: Array<[string, string, Namer]> = [
+export const yesNo: Array<[string, string, Namer]> = [
   ["Yes", "yes", () => "Yes"],
   ["No", "no", () => "No"],
 ];
-const eitherTeam: Array<[string, string, Namer]> = [
+export const eitherTeam: Array<[string, string, Namer]> = [
   ["Home", "home", (home) => home],
   ["Away", "away", (_home, away) => away],
 ];
-const doubleChance: Array<[string, string, Namer]> = [
+export const doubleChance: Array<[string, string, Namer]> = [
   ["Home/Draw", "home_draw", (home) => `${home} or draw`],
   ["Home/Away", "home_away", (home, away) => `${home} or ${away}`],
   ["Draw/Away", "draw_away", (_home, away) => `Draw or ${away}`],
 ];
-const oddEven: Array<[string, string, Namer]> = [
+export const oddEven: Array<[string, string, Namer]> = [
   ["Odd", "odd", () => "Odd"],
   ["Even", "even", () => "Even"],
 ];
-const halves: Array<[string, string, Namer]> = [
+export const halves: Array<[string, string, Namer]> = [
   ["1st Half", "first", () => "1st half"],
   ["2nd Half", "second", () => "2nd half"],
   ["Draw", "equal", () => "Equal"],
 ];
-const sideName = (side: string, home: string, away: string) => (side === "home" ? home : side === "away" ? away : "Draw");
-const pairs = (left: string[], right: string[]) => left.flatMap((l) => right.map((r) => [l, r] as const));
-const cap = (word: string) => word[0].toUpperCase() + word.slice(1);
+export const sideName = (side: string, home: string, away: string) => (side === "home" ? home : side === "away" ? away : "Draw");
+export const pairs = (left: string[], right: string[]) => left.flatMap((l) => right.map((r) => [l, r] as const));
+export const cap = (word: string) => word[0].toUpperCase() + word.slice(1);
 
 /**
  * A count's exact value ("0", "1", "2", "more 3"), keyed "0", "1", "2", "3+".
@@ -250,7 +250,7 @@ function exactCount(key: string, name: Namer, top: number) {
  * feed prices, keyed `{prefix}_X_5`, with an outcome for every pair.
  * `parse` reads a feed value into [left key, right key, line].
  */
-function comboLines(
+export function comboLines(
   prefix: string,
   name: (line: string) => string,
   parse: (value: string) => [left: string, right: string, line: string] | null,
@@ -292,7 +292,7 @@ const handicapKey = (line: number) => `${line < 0 ? "m" : line > 0 ? "p" : ""}${
  * Result": "Home -1", "Draw -1", "Away -1") whole lines with a draw. Up to
  * `max` lines, the most evenly priced and those nearest it.
  */
-function handicaps(prefix: string, name: (home: string, line: string) => string, european: boolean, max = 3) {
+export function handicaps(prefix: string, name: (home: string, line: string) => string, european: boolean, max = 3) {
   return (bet: FeedBet, home: string, away: string): Built[] => {
     const byLine = new Map<number, Map<string, number>>();
     for (const v of bet.values) {

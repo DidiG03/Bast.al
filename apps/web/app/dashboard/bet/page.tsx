@@ -143,7 +143,7 @@ function BetPage() {
   const tabParam = params.get("tab");
   const tab: Tab = tabParam === "open" || tabParam === "settled" ? tabParam : "matches";
   const sportParam = params.get("sport");
-  const sport: Sport = sportParam === "greyhounds" || sportParam === "mma" || sportParam === "basketball" || sportParam === "nfl" || sportParam === "tennis" ? sportParam : "football";
+  const sport: Sport = (["greyhounds", "mma", "basketball", "nfl", "tennis", "volleyball", "handball"] as const).find((name) => name === sportParam) ?? "football";
   /** Football and MMA share the match list; greyhound races have their own. */
   const listed = sport !== "greyhounds";
   // Opened from a match on the Overview: scroll to it and light it up.
@@ -512,6 +512,8 @@ function BetPage() {
               ["greyhounds", t("Greyhounds")],
               ["tennis", t("Tennis")],
               ["basketball", t("Basketball")],
+              ["volleyball", t("Volleyball")],
+              ["handball", t("Handball")],
               ["nfl", t("NFL")],
               ["mma", t("MMA")],
             ] as Array<[Sport, string]>
@@ -594,6 +596,10 @@ function BetPage() {
                       ? t("No basketball games are open for bets right now. Check back soon.")
                       : sport === "nfl"
                       ? t("No NFL games are open for bets right now. Check back soon.")
+                      : sport === "volleyball"
+                      ? t("No volleyball matches are open for bets right now. Check back soon.")
+                      : sport === "handball"
+                      ? t("No handball games are open for bets right now. Check back soon.")
                       : sport === "tennis"
                       ? t("No tennis matches are open for bets right now. Check back soon.")
                       : t("No matches are open for bets right now. Check back soon.")
@@ -683,6 +689,10 @@ function marketGroup(key: string): MarketGroup {
   if (/^bb_(total_|home_total_|away_total_|odd_even)/.test(key)) return "points";
   if (/^bb_(h1|h2)_/.test(key) || key === "bb_highest_half") return "halves";
   if (/^bb_q[1-4]_/.test(key)) return "quarters";
+  // Volleyball: the match in sets, then the points lines, then the 1st, 2nd and 3rd sets. (Handball uses football's keys.)
+  if (key === "vb_winner" || key === "vb_correct_score" || key === "vb_s1_match" || /^vb_(sets_|4th_set|5th_set|home_wins_set|away_wins_set)/.test(key)) return "main";
+  if (/^vb_(points_handicap|points_total|home_points|away_points|odd_even)/.test(key)) return "points";
+  if (/^vb_s[1-3]_/.test(key)) return "sets";
   // Tennis: who wins the match, then the sets (the 1st set and the score in sets), then games.
   if (key === "tn_winner" || key === "tn_set_match" || /^tn_(straight|one_set|behind)_/.test(key)) return "main";
   if (/^tn_(games|handicap|home_games|away_games)_/.test(key) || key === "tn_odd_even") return "games";
@@ -917,6 +927,24 @@ function SportIcon({ sport }: { sport: Sport }) {
         <ellipse cx="12" cy="12" rx="10" ry="5.8" transform="rotate(-45 12 12)" />
         {/* The laces along the seam, and a stripe near each end. */}
         <path d="M9.2 14.8 14.8 9.2M9.6 12.6l1.8 1.8M11.1 11.1l1.8 1.8M12.6 9.6l1.8 1.8M5.4 14.2l4.4 4.4M14.2 5.4l4.4 4.4" />
+      </svg>
+    );
+  if (sport === "volleyball")
+    // A volleyball: three curved panels meeting in the middle.
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.5" fill="currentColor" fillOpacity="0.16" />
+        <circle cx="12" cy="12" r="9.5" />
+        <path d="M12 12c0-4 1.6-7.2 4.4-9M12 12c-3.5 2-7.1 2.2-10.2 1.1M12 12c3.5 2 5.4 5.1 5.9 8.3M7.6 3.6c2.6 2.4 3.8 5.3 3.4 8.6M21.4 11.2c-3.2-1.4-6.3-1.1-9 .8M5 18.6c2.4-2.6 5.3-4.1 7-6.6" />
+      </svg>
+    );
+  if (sport === "handball")
+    // A handball: its panels, a size smaller than a football.
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.5" fill="currentColor" fillOpacity="0.16" />
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 3.5v17M3.5 12h17M6 6c2.5 1.8 3.8 3.8 3.8 6S8.5 16.2 6 18M18 6c-2.5 1.8-3.8 3.8-3.8 6s1.3 4.2 3.8 6" />
       </svg>
     );
   if (sport === "tennis")

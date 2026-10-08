@@ -5,6 +5,7 @@ import { SecurityModule } from "../security/security.module";
 import { GreyhoundSyncService } from "./greyhound-sync.service";
 import { BasketballSyncService } from "./basketball-sync.service";
 import { NflSyncService } from "./nfl-sync.service";
+import { HandballSyncService, VolleyballSyncService } from "./team-sports-sync.service";
 import { MmaSyncService } from "./mma-sync.service";
 import { TennisSyncService } from "./tennis-sync.service";
 import { OddsSyncService } from "./odds-sync.service";
@@ -14,7 +15,7 @@ import { OddsService } from "./odds.service";
 @Module({
   imports: [AuthModule, SecurityModule, AuditModule],
   controllers: [OddsController],
-  providers: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService],
-  exports: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService],
+  providers: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService, VolleyballSyncService, HandballSyncService],
+  exports: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService, VolleyballSyncService, HandballSyncService],
 })
 export class OddsModule {}

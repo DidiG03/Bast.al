@@ -71,12 +71,12 @@ export function gradeSelection(
   }
 
   // Handicaps: ah_m1_5 (Asian, home/away), eh_p1 (European, home/draw/away), on the
-  // 90 minutes, the 1st half (h1_) or corners. The line is the home team's.
-  const handicap = /^(ah|eh|h1_ah|h1_eh|corners_ah)_(m|p)?(\d+)(?:_(\d))?$/.exec(marketKey);
+  // 90 minutes, the 1st half (h1_), the 2nd half (h2_, handball) or corners. The line is the home team's.
+  const handicap = /^(ah|eh|h1_ah|h1_eh|h2_ah|h2_eh|corners_ah)_(m|p)?(\d+)(?:_(\d))?$/.exec(marketKey);
   if (handicap) {
     const [, kind, sign, whole, tenth] = handicap;
     const line = (sign === "m" ? -1 : 1) * Number(`${whole}.${tenth ?? 0}`);
-    const score = kind.startsWith("h1") ? half : kind === "corners_ah" ? (stats ? { home: stats.cornersHome, away: stats.cornersAway } : null) : full;
+    const score = kind.startsWith("h1") ? half : kind.startsWith("h2") ? second : kind === "corners_ah" ? (stats ? { home: stats.cornersHome, away: stats.cornersAway } : null) : full;
     if (!score) return null;
     const margin = score.home + line - score.away;
     if (kind.endsWith("eh")) return result(selectionKey, { home: margin, away: 0 });
@@ -163,6 +163,12 @@ export function gradeSelection(
   switch (marketKey) {
     case "h1_winner":
       return result(selectionKey, half);
+    case "h1_draw_no_bet":
+    case "h2_draw_no_bet": {
+      if (selectionKey !== "home" && selectionKey !== "away") return null;
+      const score = marketKey === "h1_draw_no_bet" ? half : second;
+      return sideOf(score) === "draw" ? SelectionResult.VOID : won(sideOf(score) === selectionKey);
+    }
     case "h1_double_chance":
       return doubleChance(selectionKey, half);
     case "h1_btts":

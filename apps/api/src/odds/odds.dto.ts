@@ -19,10 +19,10 @@ export class EventsQueryDto extends TeamQueryDto {
   @IsIn(["list"])
   view?: "list";
 
-  /** "greyhounds" for races, "mma" for fights, "basketball", "nfl", "tennis"; football by default. */
+  /** "greyhounds" for races, "mma" for fights, "basketball", "nfl", "tennis", "volleyball", "handball"; football by default. */
   @IsOptional()
-  @IsIn(["football", "greyhounds", "mma", "basketball", "nfl", "tennis"])
-  sport?: "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "tennis";
+  @IsIn(["football", "greyhounds", "mma", "basketball", "nfl", "tennis", "volleyball", "handball"])
+  sport?: "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "tennis" | "volleyball" | "handball";
 }
 
 export class TopEventsQueryDto {

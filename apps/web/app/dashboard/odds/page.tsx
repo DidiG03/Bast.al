@@ -187,6 +187,8 @@ export default function OddsPage() {
             ["greyhounds", t("Greyhounds")],
             ["tennis", t("Tennis")],
             ["basketball", t("Basketball")],
+            ["volleyball", t("Volleyball")],
+            ["handball", t("Handball")],
             ["nfl", t("NFL")],
             ["mma", t("MMA")],
           ] as Array<[Sport, string]>
@@ -236,6 +238,14 @@ export default function OddsPage() {
               ? filter === "finished"
                 ? t("No NFL games finished in the last three days.")
                 : t("No NFL games yet. They're fetched every 3 hours, from the day before they're played.")
+              : sport === "volleyball"
+              ? filter === "finished"
+                ? t("No volleyball matches finished in the last three days.")
+                : t("No volleyball matches yet. They're fetched every 3 hours, from the day before they're played.")
+              : sport === "handball"
+              ? filter === "finished"
+                ? t("No handball games finished in the last three days.")
+                : t("No handball games yet. They're fetched every 3 hours, from the day before they're played.")
               : sport === "tennis"
               ? filter === "finished"
                 ? t("No tennis matches finished in the last three days.")

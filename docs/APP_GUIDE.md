@@ -135,6 +135,25 @@ The **NFL** switch on the Bet page lists NFL games, with the same bets as basket
 
 Bets close at kick-off and settle on the final score. NFL picks can go in an accumulator with the other sports (not greyhounds). Like basketball, the free plan shows games from the day before they're played, so Sunday's games appear on Saturday.
 
+## Volleyball (with a number)
+
+The **Volleyball** switch on the Bet page lists the top men's and women's leagues (Italy, Poland, Turkey, Russia, Brazil, Germany, France, Greece, Japan), the CEV cups and the world and European championships. Players bet on:
+- **The match:** the winner, a set handicap (like "Altekma −1.5": Altekma win 3–0 or 3–1), the correct score in sets, total sets (3.5, 4.5), whether there's a 4th or a 5th set, each team to win a set, and who wins the 1st set and the match.
+- **Points:** a points handicap, total points, each team's points, and odd/even, over the whole match.
+- **The 1st, 2nd and 3rd sets:** who wins it, handicap, total points, each team's points, odd/even.
+
+Example: Altekma beat Gaziantep 3–1 (25–20, 22–25, 25–23, 25–18). "Total sets over 3.5" wins (4 sets); "Total points over 180.5" wins (183); "2nd set winner: Gaziantep" wins.
+
+Bets close at the start and settle on the result. If the feed's set points don't fit the sets won, the points bets wait on the Settlement page.
+
+## Handball (with a number)
+
+The **Handball** switch lists the EHF Champions League and European League, the top men's and women's leagues (Germany, France, Spain, Denmark, Hungary, Poland, Norway, Sweden, Portugal, Slovenia, Croatia, North Macedonia, Romania), the SEHA League and the championships. Every bet is on **60 minutes**: extra time and penalties in a cup tie don't count. Players bet on the result, double chance, draw no bet (a draw gives the stake back), handicaps, total goals and each team's goals, odd/even, result and total goals, half time / full time, the highest scoring half, and the same bets on each half.
+
+Example: CSM Bucuresti 30–28 Minaur Baia Mare, 15–14 at half time (so 15–14 in the 2nd half too). "CSM Bucuresti −0.5" wins, "Total goals over 55.5" wins (58), and "Half time / full time: CSM Bucuresti / CSM Bucuresti" wins. Had it ended 28–28, "Draw no bet" would give the stake back.
+
+Volleyball and handball picks can go in an accumulator or a system bet with the other sports (not in a bet builder, which is football only). Margins, Owners' own prices, payout caps and commissions work as for every other sport.
+
 ## Tennis (with a number)
 
 The **Tennis** switch on the Bet page lists ATP and WTA matches for today and tomorrow, with the tournament and round. Players bet on:

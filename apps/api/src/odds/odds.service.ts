@@ -9,7 +9,7 @@ import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMar
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
 export type EventFilter = "upcoming" | "live" | "finished";
-export type Sport = "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "tennis";
+export type Sport = "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "tennis" | "volleyball" | "handball";
 
 /** How long a finished match stays on the live list, marked full time. */
 const JUST_FINISHED_MS = 10 * 60_000;

@@ -199,6 +199,10 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
   const started = new Date(event.startsAt).getTime() <= Date.now();
   /** A basketball or NFL game has only a final score, in points. */
   const basketball = event.sport === "basketball" || event.sport === "nfl";
+  /** A volleyball match's result is the sets won; its set points come from the feed. */
+  const volleyball = event.sport === "volleyball";
+  /** Handball is settled on 60 minutes and has a half-time score, but no corners or cards. */
+  const handball = event.sport === "handball";
 
   function saveResult(formEvent: FormEvent) {
     formEvent.preventDefault();
@@ -308,14 +312,15 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
       {mode === "result" ? (
         <form className="odds-editor" onSubmit={saveResult}>
           <label>
-            <span>{basketball ? t("Final score (overtime included)") : t("Score after 90 minutes")}</span>
+            <span>{basketball ? t("Final score (overtime included)") : volleyball ? t("Sets won") : handball ? t("Score after 60 minutes") : t("Score after 90 minutes")}</span>
             <span className="settle-score-inputs">
-              <input type="number" inputMode="numeric" min={0} max={basketball ? 300 : 99} value={home} onChange={(e) => setHome(e.target.value)} aria-label={basketball ? t("Home points") : t("Home goals")} required />
+              <input type="number" inputMode="numeric" min={0} max={basketball ? 300 : volleyball ? 3 : 99} value={home} onChange={(e) => setHome(e.target.value)} aria-label={basketball ? t("Home points") : volleyball ? t("Home sets") : t("Home goals")} required />
               <span>–</span>
-              <input type="number" inputMode="numeric" min={0} max={basketball ? 300 : 99} value={away} onChange={(e) => setAway(e.target.value)} aria-label={basketball ? t("Away points") : t("Away goals")} required />
+              <input type="number" inputMode="numeric" min={0} max={basketball ? 300 : volleyball ? 3 : 99} value={away} onChange={(e) => setAway(e.target.value)} aria-label={basketball ? t("Away points") : volleyball ? t("Away sets") : t("Away goals")} required />
             </span>
           </label>
-          {basketball ? null : (
+          {volleyball ? <p className="muted odds-note">{t("The points bets settle on the sets' points from the feed. If those no longer fit the sets won, settle them one by one.")}</p> : null}
+          {basketball || volleyball ? null : (
           <>
           <label>
             <span>{t("Half-time score (for 1st and 2nd half bets)")}</span>
@@ -325,6 +330,8 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
               <input type="number" inputMode="numeric" min={0} max={99} value={halfAway} onChange={(e) => setHalfAway(e.target.value)} aria-label={t("Away goals at half time")} />
             </span>
           </label>
+          {handball ? null : (
+          <>
           <label>
             <span>{t("Corners after 90 minutes")}</span>
             <span className="settle-score-inputs">
@@ -341,6 +348,8 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
               <input type="number" inputMode="numeric" min={0} max={99} value={cardsAway} onChange={(e) => setCardsAway(e.target.value)} aria-label={t("Away cards")} />
             </span>
           </label>
+          </>
+          )}
           </>
           )}
           <div className="odds-editor-actions">

@@ -208,6 +208,8 @@ for (const file of apiSources(apiRoot)) {
     if (/@?Api\w+\(\{[^}]*description:\s*$/.test(literal.before)) continue;
     // API-Football's own names, which the odds code matches on, not text anyone sees.
     if (name === "odds/api-football.ts" && /(\[\s*|read\(\w+,\s*|throw new Error\(\s*|order:\s*)$/.test(literal.before)) continue;
+    // The same for API-Sports' volleyball and handball bet names, looked up with bet(…) or listed as [["Name"], …].
+    if (/^odds\/(volleyball|handball)\.ts$/.test(name) && /(\[\s*\[\s*|\bbet\(\s*)$/.test(literal.before)) continue;
     apiCount++;
     const covered =
       literal.kind === "string"

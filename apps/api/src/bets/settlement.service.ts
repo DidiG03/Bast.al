@@ -5,6 +5,7 @@ import { Actor } from "../auth/permissions";
 import { NotificationsService } from "../notifications/notifications.service";
 import { RACE_TRICAST, RACE_WINNER, gradeRace, raceResultOf, raceSettlePrice } from "../odds/greyhounds";
 import { POINTS_SPORTS, gradeBasketball, periodsResultOf } from "../odds/basketball";
+import { gradeVolleyball, volleyballResultOf } from "../odds/volleyball";
 import { fightResultOf, gradeFight } from "../odds/mma";
 import { gradeTennis, tennisResultOf } from "../odds/tennis";
 import { UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
@@ -320,6 +321,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         else if (race) grade = event.status === EventStatus.COMPLETED ? gradeRace(market.key, selection.key, raceResult, selection.withdrawn) : null;
         else if (event.sport === "mma") grade = event.status === EventStatus.COMPLETED ? gradeFight(market.key, selection.key, fightResultOf(event.fightResult)) : null;
         else if (event.sport === "tennis") grade = event.status === EventStatus.COMPLETED ? gradeTennis(market.key, selection.key, tennisResultOf(event.fightResult)) : null;
+        // Volleyball settles on the sets won, and the points markets on every set's points.
+        else if (event.sport === "volleyball") grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeVolleyball(market.key, selection.key, event.resultHome, event.resultAway, volleyballResultOf(event.fightResult)) : null;
         // Basketball and the NFL settle on the final score, overtime included.
         else if (POINTS_SPORTS.has(event.sport)) grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeBasketball(market.key, selection.key, event.resultHome, event.resultAway, periodsResultOf(event.fightResult)) : null;
         else if (event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null) {
@@ -452,7 +455,15 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       const periods = periodsResultOf(event.fightResult);
       const sum = periods ? [...periods.quarters, periods.overtime ?? [0, 0]].reduce((t, [h, a]) => ({ home: t.home + h, away: t.away + a }), { home: 0, away: 0 }) : null;
       periodsStale = sum !== null && (sum.home !== home || sum.away !== away);
-    } else if (home > 99 || away > 99) throw new BadRequestException("A football score can't be more than 99");
+    } else if (event.sport === "volleyball") {
+      // A volleyball result is the sets won. The set points the feed sent stay while their winners still add up to it.
+      half = null;
+      stats = null;
+      if (home === away || Math.max(home, away) !== 3 || home > 3 || away > 3) throw new BadRequestException("A volleyball result is the sets won: 3–0, 3–1, 3–2, or the other way round");
+      const sets = volleyballResultOf(event.fightResult)?.sets ?? null;
+      const homeSets = sets ? sets.filter(([h, a]) => h > a).length : 0;
+      periodsStale = sets !== null && (homeSets !== home || sets.length - homeSets !== away);
+    } else if (home > 99 || away > 99) throw new BadRequestException("A football or handball score can't be more than 99");
     if (event.startsAt > new Date()) throw new BadRequestException("This match hasn't started yet");
     if (event.status === EventStatus.CANCELLED) throw new BadRequestException("This match was cancelled and its bets refunded");
     await this.prisma.event.update({

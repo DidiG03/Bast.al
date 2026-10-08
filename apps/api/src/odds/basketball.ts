@@ -103,23 +103,23 @@ export function parseGame(raw: RawGame): FeedGame | null {
   };
 }
 
-const price = (value: unknown) => {
+export const price = (value: unknown) => {
   const n = Number(value);
   return Number.isFinite(n) && n > 1 ? Math.round(n * 100) / 100 : null;
 };
-const isHalf = (line: number) => Math.abs((Math.abs(line) % 1) - 0.5) < 1e-9;
+export const isHalf = (line: number) => Math.abs((Math.abs(line) % 1) - 0.5) < 1e-9;
 /** "-1.5" → "m1_5", "8.5" → "8_5", for a market key. */
-const lineKey = (line: number) => `${line < 0 ? "m" : ""}${Math.abs(line).toFixed(1).replace(".", "_")}`;
-const signed = (line: number) => `${line > 0 ? "+" : line < 0 ? "−" : ""}${Math.abs(line)}`;
+export const lineKey = (line: number) => `${line < 0 ? "m" : ""}${Math.abs(line).toFixed(1).replace(".", "_")}`;
+export const signed = (line: number) => `${line > 0 ? "+" : line < 0 ? "−" : ""}${Math.abs(line)}`;
 
-type Line = { line: number; a: number; b: number };
+export type Line = { line: number; a: number; b: number };
 
 /** The lines nearest the even one (where both prices are closest), in order; half-point ones only when there's a choice. */
-function mainLines(lines: Line[], halfOnly: boolean): Line[] {
+export function mainLines(lines: Line[], halfOnly: boolean, shown = LINES_SHOWN): Line[] {
   const half = halfOnly ? lines.filter((l) => isHalf(l.line)) : lines;
   if (half.length === 0) return [];
   const even = half.reduce((best, l) => (Math.abs(l.a - l.b) < Math.abs(best.a - best.b) ? l : best));
-  return [...half].sort((x, y) => Math.abs(x.line - even.line) - Math.abs(y.line - even.line)).slice(0, LINES_SHOWN).sort((x, y) => x.line - y.line);
+  return [...half].sort((x, y) => Math.abs(x.line - even.line) - Math.abs(y.line - even.line)).slice(0, shown).sort((x, y) => x.line - y.line);
 }
 
 /** The three bet types from a winner price pair and handicap and total lines. */
@@ -151,7 +151,7 @@ export function gameMarkets(home: string, away: string, winner: { home: number; 
   return markets;
 }
 
-type RawBookmaker = { id: number; name?: string; bets?: Array<{ name: string | null; values?: Array<{ value: string; odd: string }> }> };
+export type RawBookmaker = { id: number; name?: string; bets?: Array<{ name: string | null; values?: Array<{ value: string; odd: string }> }> };
 
 /**
  * API-Sports' prices for a game (European leagues), from the chosen
@@ -171,10 +171,10 @@ export function parseApiSportsOdds(raw: { bookmakers?: RawBookmaker[] }, home: s
   ];
 }
 
-type Values = Array<{ value: string; odd: string }> | null;
+export type Values = Array<{ value: string; odd: string }> | null;
 
 /** Lines from "Over 161.5"/"Under 161.5", or "Home -1.5"/"Away -1.5" (both the home team's handicap). */
-function linePairs(values: Values, a: string, b: string): Line[] {
+export function linePairs(values: Values, a: string, b: string): Line[] {
   const byLine = new Map<number, Partial<Line>>();
   for (const v of values ?? []) {
     const match = new RegExp(`^(${a}|${b}) ([+-]?\\d+(?:\\.\\d+)?)$`).exec(v.value);

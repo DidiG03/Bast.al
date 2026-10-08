@@ -10,7 +10,7 @@ import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner
 import { useToast } from "../../../components/toaster";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
-import { ApiError, apiFetch, type Bet, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
+import { ApiError, apiFetch, type Bet, type BuilderQuote, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
@@ -23,6 +23,7 @@ import { pickLabel } from "../../../lib/picks";
 import { isDaysFromToday } from "../../../lib/time";
 
 type Tab = "matches" | "open" | "settled";
+/** "accumulator" combines the picks: an accumulator, or a bet builder when they're all from one match. */
 type SlipMode = "singles" | "accumulator";
 
 type SlipItem = {
@@ -960,20 +961,46 @@ function BetSlip({
   const toast = useToast();
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
 
-  const acca = mode === "accumulator";
+  // Combined picks all from one match are a bet builder, priced by the server; from different matches, an accumulator.
+  const oneMatch = items.length >= 2 && new Set(items.map((item) => item.eventId)).size === 1;
+  const combined = mode === "accumulator";
+  const builder = combined && oneMatch;
+  const acca = combined && !oneMatch;
+  const [builderQuote, setBuilderQuote] = useState<{ key: string; odds: number | null; error: string | null } | null>(null);
+  const [requote, setRequote] = useState(0);
+  const builderKey = builder ? `${items.map((item) => `${item.selectionId}:${item.odds}`).join(",")}#${requote}` : "";
+  useEffect(() => {
+    if (!builderKey) return;
+    let cancelled = false;
+    void (async () => {
+      const token = await getToken();
+      if (!token || cancelled) return;
+      try {
+        const quote = await apiFetch<BuilderQuote>("/bets/builder/quote", token, { method: "POST", body: JSON.stringify({ selectionIds: builderKey.split("#")[0].split(",").map((part) => part.split(":")[0]) }) });
+        if (!cancelled) setBuilderQuote({ key: builderKey, odds: quote.odds, error: null });
+      } catch (err) {
+        if (!cancelled) setBuilderQuote({ key: builderKey, odds: null, error: err instanceof Error ? err.message : t("Couldn't price this bet builder") });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [builderKey, getToken, t]);
+  const quote = builder && builderQuote?.key === builderKey ? builderQuote : null;
+  const builderOdds = quote?.odds ?? 0;
   const hasSp = items.some((item) => item.sp);
   const accaOdds = combinedOdds(items.map((item) => item.odds));
   const accaStakeValue = stakeValue(accaStake);
   const sameMatch = new Set(items.map((item) => item.eventId)).size < items.length;
 
-  const totalStake = acca ? accaStakeValue : items.reduce((sum, item) => sum + stakeValue(item.stake), 0);
+  const totalStake = combined ? accaStakeValue : items.reduce((sum, item) => sum + stakeValue(item.stake), 0);
   // Race picks pay the starting price, so they add nothing known to the return.
-  const totalReturn = acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + (item.sp ? 0 : returns(stakeValue(item.stake), item.odds)), 0);
-  const missingStake = acca ? accaStakeValue < 1 : items.some((item) => stakeValue(item.stake) < 1);
+  const totalReturn = builder ? returns(accaStakeValue, builderOdds) : acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + (item.sp ? 0 : returns(stakeValue(item.stake), item.odds)), 0);
+  const missingStake = combined ? accaStakeValue < 1 : items.some((item) => stakeValue(item.stake) < 1);
   const closed = items.filter((item) => item.closed);
   const paused = items.filter((item) => item.paused && !item.closed);
   const hasLive = items.some((item) => item.live);
-  const overMax = info?.maxStake != null ? (acca ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
+  const overMax = info?.maxStake != null ? (combined ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
   const tooLittle = info ? totalStake > info.balance : false;
   const moved = items.some((item) => item.previousOdds !== undefined);
 
@@ -981,13 +1008,15 @@ function BetSlip({
   if (info?.blocked) blocker = ts(info.blocked);
   else if (closed.length > 0) blocker = closed.length === 1 ? t("Remove the match that has closed to continue.") : t("Remove the matches that have closed to continue.");
   else if (paused.length > 0) blocker = paused.length === 1 ? t("Live betting is paused on {match}. Wait a moment or remove it.", { match: paused[0].eventName }) : t("Live betting is paused on some of your picks. Wait a moment or remove them.");
+  else if (builder && quote?.error) blocker = quote.error;
+  else if (builder && !quote) blocker = t("Working out the bet builder's price. One moment.");
   else if (acca && hasSp) blocker = t("Greyhound picks can only be single bets. Switch to Singles or remove them.");
   else if (acca && sameMatch) blocker = t("An accumulator needs each pick from a different match. Remove one of the picks from the same match.");
   else if (acca && accaOdds > MAX_ACCUMULATOR_ODDS) blocker = t("Combined odds can be at most {max}. Remove a pick to continue.", { max: MAX_ACCUMULATOR_ODDS });
-  else if (missingStake) blocker = acca ? t("Enter a stake of at least $1.") : t("Enter a stake of at least $1 on each bet.");
+  else if (missingStake) blocker = combined ? t("Enter a stake of at least $1.") : t("Enter a stake of at least $1 on each bet.");
   else if (overMax) blocker = t("The most you can stake on one bet is {amount}.", { amount: formatMoney(info!.maxStake!) });
   else if (tooLittle) blocker = t("Your balance is too low for this slip. Tap here to ask for a top-up.");
-  const needsMoney = Boolean(blocker) && !info?.blocked && closed.length === 0 && paused.length === 0 && !(acca && (hasSp || sameMatch || accaOdds > MAX_ACCUMULATOR_ODDS)) && !missingStake && !overMax && tooLittle;
+  const needsMoney = Boolean(blocker) && !info?.blocked && closed.length === 0 && paused.length === 0 && !(acca && (hasSp || sameMatch || accaOdds > MAX_ACCUMULATOR_ODDS)) && !(builder && !quote?.odds) && !missingStake && !overMax && tooLittle;
 
   // Prices that moved since they were added: say so once per slip. The slip itself shows which ones.
   const movedShown = useRef(false);
@@ -1018,7 +1047,9 @@ function BetSlip({
     setPlacing(true);
     if (hasLive) toast.info(t("Live bets take a few seconds to confirm. If the price or score changes meanwhile, you'll see the new price first."));
     const body = JSON.stringify(
-      acca
+      builder
+        ? { builder: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), odds: builderOdds, stake: accaStakeValue } }
+        : acca
         ? { accumulator: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), stake: accaStakeValue } }
         : { bets: items.map((item) => ({ selectionId: item.selectionId, stake: stakeValue(item.stake), odds: item.odds })) },
     );
@@ -1030,7 +1061,9 @@ function BetSlip({
         result.bets.length === 1
           ? result.bets[0].kind === "ACCUMULATOR"
             ? t("Your accumulator is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
-            : t("Your bet is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
+            : result.bets[0].kind === "BUILDER"
+              ? t("Your bet builder is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
+              : t("Your bet is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
           : t("Your {count} bets are on. {amount} was taken from your balance.", { count: result.bets.length, amount: formatMoney(result.total) }),
       );
       onChange(() => []);
@@ -1041,7 +1074,10 @@ function BetSlip({
       const message = err instanceof Error ? err.message : t("Couldn't place your bets");
       toast.error(message);
       // A price moved or a match closed: fetch the latest so the slip shows it. The API's English says which.
-      if (/odds changed|closed|no longer exists|paused|score changed/i.test(err instanceof ApiError ? err.original : message)) onOddsChanged();
+      if (/odds changed|closed|no longer exists|paused|score changed/i.test(err instanceof ApiError ? err.original : message)) {
+        onOddsChanged();
+        if (builder) setRequote((n) => n + 1);
+      }
     } finally {
       setPlacing(false);
     }
@@ -1105,7 +1141,7 @@ function BetSlip({
             <path d="M13 5v2M13 11v2M13 17v0" />
           </svg>
           <strong>{t("Your slip is empty")}</strong>
-          <p className="muted">{t("Tap a price to add a bet. Add two or more picks from different matches to combine them into an accumulator.")}</p>
+          <p className="muted">{t("Tap a price to add a bet. Combine picks from different matches into an accumulator, or picks from one match into a bet builder.")}</p>
         </div>
       ) : (
         <>
@@ -1114,19 +1150,19 @@ function BetSlip({
               <button type="button" className={`bet-mode-option${!acca ? " is-active" : ""}`} aria-pressed={!acca} onClick={() => onMode("singles")}>
                 {t("Singles")}
               </button>
-              <button type="button" className={`bet-mode-option${acca ? " is-active" : ""}`} aria-pressed={acca} onClick={() => onMode("accumulator")}>
-                {t("Accumulator")}
+              <button type="button" className={`bet-mode-option${combined ? " is-active" : ""}`} aria-pressed={combined} onClick={() => onMode("accumulator")}>
+                {oneMatch ? t("Bet builder") : t("Accumulator")}
               </button>
             </div>
           ) : null}
-          <div className="bet-quick" role="group" aria-label={acca ? t("Accumulator stake") : t("Same stake on every bet")}>
-            <span className="muted">{acca ? t("Stake") : t("Stake each")}</span>
+          <div className="bet-quick" role="group" aria-label={builder ? t("Bet builder stake") : acca ? t("Accumulator stake") : t("Same stake on every bet")}>
+            <span className="muted">{combined ? t("Stake") : t("Stake each")}</span>
             {QUICK_STAKES.map((amount) => (
               <button
                 key={amount}
                 type="button"
                 className="bet-chip"
-                onClick={() => (acca ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
+                onClick={() => (combined ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
               >
                 ${amount}
               </button>
@@ -1167,7 +1203,7 @@ function BetSlip({
                         </>
                       )}
                     </span>
-                    {acca ? (
+                    {builder ? null : acca ? (
                       <span className="bet-slip-return muted">{sameMatch && items.some((other) => other !== item && other.eventId === item.eventId) ? t("Same match as another pick") : ""}</span>
                     ) : (
                     <label className="bet-stake">
@@ -1185,7 +1221,7 @@ function BetSlip({
                       />
                     </label>
                     )}
-                    {acca ? null : (
+                    {combined ? null : (
                       <span className="bet-slip-return muted">
                         {item.sp ? t("Paid at the starting price") : stake > 0 ? t("Returns {amount}", { amount: formatMoney(returns(stake, item.odds)) }) : ""}
                       </span>
@@ -1196,12 +1232,12 @@ function BetSlip({
             })}
           </ul>
 
-          {acca ? (
+          {combined ? (
             <div className="bet-slip-item bet-acca-stake">
               <div className="bet-slip-item-bottom">
                 <span className="bet-slip-odds">
-                  <span className="muted">{t("Combined")}</span>
-                  <strong>{accaOdds.toFixed(2)}</strong>
+                  <span className="muted">{builder ? t("Bet builder") : t("Combined")}</span>
+                  <strong>{builder ? (quote?.odds ? quote.odds.toFixed(2) : "–") : accaOdds.toFixed(2)}</strong>
                 </span>
                 <label className="bet-stake">
                   <span className="muted">$</span>
@@ -1213,12 +1249,16 @@ function BetSlip({
                     placeholder={t("Stake")}
                     value={accaStake}
                     onChange={(e) => onAccaStake(e.target.value)}
-                    aria-label={t("Accumulator stake")}
+                    aria-label={builder ? t("Bet builder stake") : t("Accumulator stake")}
                   />
                 </label>
               </div>
               <p className="muted bet-slip-note" style={{ margin: 0 }}>
-                {t("Every pick has to win. A pick on a match that is called off drops out and the rest still count.")}
+                {builder
+                  ? quote?.error
+                    ? <span className="error-text">{quote.error}</span>
+                    : t("Picks from one match, priced together: they often happen together, so this pays less than multiplying them. Every pick has to win. If a pick is void, the bet is refunded.")
+                  : t("Every pick has to win. A pick on a match that is called off drops out and the rest still count.")}
               </p>
             </div>
           ) : null}
@@ -1232,7 +1272,7 @@ function BetSlip({
               <dt className="muted">{t("Potential return")}</dt>
               <dd>
                 <strong>{formatMoney(totalReturn)}</strong>
-                {hasSp && !acca ? <span className="muted"> {t("+ SP bets")}</span> : null}
+                {hasSp && !combined ? <span className="muted"> {t("+ SP bets")}</span> : null}
               </dd>
             </div>
             {info ? (
@@ -1247,7 +1287,9 @@ function BetSlip({
           <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing} aria-disabled={Boolean(blocker)}>
             {placing
               ? <LoadingSpinner label={hasLive ? "Confirming live bet" : "Placing"} size="small" />
-              : acca
+              : builder
+                ? t("Place bet builder · {amount}", { amount: formatMoney(totalStake) })
+                : acca
                 ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
                 : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
           </button>
@@ -1421,7 +1463,7 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
     <li className={`card bet-card is-${bet.status.toLowerCase()}`}>
       <div className="bet-card-top">
         <div className="bet-card-name">
-          <strong>{t("Accumulator")}</strong>
+          <strong>{bet.kind === "BUILDER" ? t("Bet builder") : t("Accumulator")}</strong>
           <span className="muted">{tn(bet.legs.length, "{count} pick", "{count} picks")}</span>
         </div>
         <StatusPill status={bet.status} />
@@ -1455,7 +1497,7 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
 function BetCard({ bet }: { bet: Bet }) {
   const i18n = useI18n();
   const { t, ts, date } = i18n;
-  if (bet.kind === "ACCUMULATOR") return <AccumulatorCard bet={bet} />;
+  if (bet.kind === "ACCUMULATOR" || bet.kind === "BUILDER") return <AccumulatorCard bet={bet} />;
   const event = bet.event;
   const score = event?.result ?? (event && event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING" ? { home: event.homeScore, away: event.awayScore } : null);
   let when = "";

@@ -531,8 +531,8 @@ export type BetLeg = {
 
 export type Bet = {
   id: string;
-  kind: "SINGLE" | "ACCUMULATOR";
-  /** An accumulator's picks, in slip order. Empty for singles. */
+  kind: "SINGLE" | "ACCUMULATOR" | "BUILDER";
+  /** An accumulator's or a bet builder's picks, in slip order. Empty for singles. */
   legs: BetLeg[];
   description: string | null;
   stake: number;
@@ -570,6 +570,9 @@ export type SlipInfo = {
 };
 
 export type PlaceBetsResponse = { bets: Bet[]; total: number };
+
+/** The bet builder's price for picks from one match, and each pick's own price in it. */
+export type BuilderQuote = { odds: number; legs: Array<{ selectionId: string; odds: number }> };
 
 export type AdminBet = Bet & { player: { id: string; username: string } };
 

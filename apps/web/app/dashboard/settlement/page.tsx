@@ -417,7 +417,7 @@ function AdminBetRow({ bet, run, canSettle }: { bet: AdminBet; run: Run; canSett
         </div>
         <span className={`status-pill bet-status-${bet.status.toLowerCase()}`}>{t(BET_STATUS[bet.status])}</span>
       </div>
-      {bet.kind === "ACCUMULATOR" ? <BetLegs legs={bet.legs} /> : null}
+      {bet.kind !== "SINGLE" ? <BetLegs legs={bet.legs} /> : null}
       <dl className="bet-card-numbers">
         <div>
           <dt className="muted">{t("Stake")}</dt>

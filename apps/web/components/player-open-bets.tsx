@@ -14,7 +14,7 @@ import { HelpTip } from "./help-tip";
 
 /** A single shown the same way as an accumulator's pick: selection, market, match, live score or kick-off. */
 function picksOf(bet: AdminBet): BetLeg[] {
-  if (bet.kind === "ACCUMULATOR") return bet.legs;
+  if (bet.kind !== "SINGLE") return bet.legs;
   if (!bet.selection || !bet.event) return [];
   return [{ name: bet.selection.name, market: bet.selection.market, odds: bet.odds ?? 0, result: null, voidReason: null, event: bet.event }];
 }
@@ -92,7 +92,7 @@ export function PlayerOpenBetsModal({ player, onClose }: { player: { id: string;
                 <li key={bet.id} className="card bet-card is-open">
                   <div className="bet-card-top">
                     <div className="bet-card-name">
-                      <strong>{bet.kind === "ACCUMULATOR" ? tn(bet.legs.length, "Accumulator · {count} pick", "Accumulator · {count} picks") : t("Single")}</strong>
+                      <strong>{bet.kind === "ACCUMULATOR" ? tn(bet.legs.length, "Accumulator · {count} pick", "Accumulator · {count} picks") : bet.kind === "BUILDER" ? tn(bet.legs.length, "Bet builder · {count} pick", "Bet builder · {count} picks") : t("Single")}</strong>
                       <span className="muted">{t("Placed {when}", { when: date(bet.placedAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) })}</span>
                     </div>
                     <span className="status-pill bet-status-open">{t("Open")}</span>

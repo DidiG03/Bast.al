@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { BalanceTransactionType, BetStatus, EventStatus, NotificationSeverity, NotificationType, Prisma, Role, SelectionResult } from "@prisma/client";
+import { BalanceTransactionType, BetKind, BetStatus, EventStatus, NotificationSeverity, NotificationType, Prisma, Role, SelectionResult } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -13,10 +13,11 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { betSelect, betView } from "./bets.service";
 import { GoalRecord, isGoalMarket } from "./goals";
+import { builderOutcome } from "./builder";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
 import { teamOf } from "./team";
 
-type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean };
+type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean; builder?: boolean };
 
 const money = (value: Prisma.Decimal | number) => `$${Number(value).toFixed(2)}`;
 
@@ -395,22 +396,23 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Settles accumulators from their legs. Without `regrade` only open ones
-   * move (a lost one is final until a result is corrected); with it, a
-   * settled one can move again, even back to open.
+   * Settles accumulators and bet builders from their legs. Without `regrade`
+   * only open ones move (a lost one is final until a result is corrected);
+   * with it, a settled one can move again, even back to open. A builder pays
+   * at its own locked price, and a void pick refunds it (see builder.ts).
    */
   private async resettleAccumulators(betIds: string[], regrade: boolean, actorId: string | null = null): Promise<Change[]> {
     if (betIds.length === 0) return [];
     const bets = await this.prisma.bet.findMany({
       where: { id: { in: betIds }, voidReason: null, ...(regrade ? {} : { status: BetStatus.OPEN }) },
-      select: { ...movable, legs: { select: { odds: true, result: true } } },
+      select: { ...movable, kind: true, odds: true, legs: { select: { odds: true, result: true } } },
     });
     const changes: Change[] = [];
     for (const bet of bets) {
-      const outcome = accumulatorOutcome(bet.legs);
+      const outcome = bet.kind === BetKind.BUILDER ? { status: BetStatus[builderOutcome(bet.legs)], odds: bet.odds ?? new Prisma.Decimal(1) } : accumulatorOutcome(bet.legs);
       const payout = outcome.status === BetStatus.OPEN ? new Prisma.Decimal(0) : payoutFor(outcome.status, bet.stake, outcome.odds);
       const change = await this.move(bet, outcome.status, payout, null, actorId);
-      if (change) changes.push({ ...change, eventName: bet.description ?? "Accumulator", accumulator: true });
+      if (change) changes.push({ ...change, eventName: bet.description ?? "Accumulator", accumulator: true, builder: bet.kind === BetKind.BUILDER });
     }
     return changes;
   }
@@ -736,12 +738,19 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     await this.realtime.publishBalances(players);
     for (const playerId of players) await this.realtime.publish(playerId, { type: "bets.changed" });
 
-    // Accumulators get a message of their own, from where the whole bet now stands.
+    // Accumulators and bet builders get a message of their own, from where the whole bet now stands.
     for (const change of changes.filter((c) => c.accumulator)) {
       const { playerId, delta, status } = change;
       const back = delta.isNegative() ? ` ${money(delta.abs())} was taken back from your balance.` : "";
-      const [title, message] =
-        status === BetStatus.WON
+      const [title, message] = change.builder
+        ? status === BetStatus.WON
+          ? ["Your bet builder won", delta.isPositive() ? `${money(delta)} was added to your balance.` : back.trim() || "Your bet builder won."]
+          : status === BetStatus.LOST
+            ? ["Bet builder settled", `Your bet builder lost.${back}`]
+            : status === BetStatus.VOID
+              ? ["Bet builder refunded", `A pick in your bet builder was void, so your stake went back to your balance.${back}`]
+              : ["Result corrected", `A result in your bet builder was corrected, so it's open again.${back}`]
+        : status === BetStatus.WON
           ? ["Your accumulator won", delta.isPositive() ? `${money(delta)} was added to your balance.` : back.trim() || "Your accumulator won."]
           : status === BetStatus.LOST
             ? ["Accumulator settled", `Your accumulator lost.${back}`]

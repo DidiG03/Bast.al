@@ -1,6 +1,7 @@
 import { Type } from "class-transformer";
 import { ArrayMaxSize, ArrayMinSize, IsBoolean, IsIn, IsISO8601, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 import { MAX_ODDS, MIN_ODDS } from "../odds/pricing";
+import { MAX_BUILDER_ODDS, MAX_BUILDER_PICKS } from "./builder";
 
 export const MIN_STAKE = 1;
 export const MAX_STAKE = 100_000;
@@ -51,6 +52,35 @@ export class AccumulatorDto {
   stake!: number;
 }
 
+export class BuilderDto {
+  @ValidateNested({ each: true })
+  @Type(() => AccumulatorLegDto)
+  @ArrayMinSize(2)
+  @ArrayMaxSize(MAX_BUILDER_PICKS)
+  legs!: AccumulatorLegDto[];
+
+  /** The builder's price the Player saw. */
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(MIN_ODDS)
+  @Max(MAX_BUILDER_ODDS)
+  odds!: number;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(MIN_STAKE)
+  @Max(MAX_STAKE)
+  stake!: number;
+}
+
+export class BuilderQuoteDto {
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  @ArrayMinSize(2)
+  @ArrayMaxSize(MAX_BUILDER_PICKS)
+  selectionIds!: string[];
+}
+
 export class PlaceBetsDto {
   /** Singles. */
   @IsOptional()
@@ -64,6 +94,12 @@ export class PlaceBetsDto {
   @ValidateNested()
   @Type(() => AccumulatorDto)
   accumulator?: AccumulatorDto;
+
+  /** At most one bet builder per slip. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BuilderDto)
+  builder?: BuilderDto;
 
   @IsOptional()
   @IsBoolean()

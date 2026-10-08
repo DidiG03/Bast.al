@@ -95,6 +95,16 @@ Everything settles on the 90 minutes, never extra time. Goalscorer bets follow t
 
 The feed spells players' names differently in different places ("Memphis Depay" and "M. Depay"). When the app can't tell for sure which player a bet means, it doesn't guess: the pick waits on the **Settlement** page, where you mark it Won, Lost or Void.
 
+## The bet builder (with a number)
+
+A **bet builder** joins several picks from **one football match** into one bet. Maria adds "Man City to win", "Over 2.5 goals" and "Both teams score" from City v Arsenal to her slip and taps **Bet builder**. Multiplied, the three prices (1.80 × 1.70 × 1.75) would make 5.36, but they're linked: when City win a game with three goals, Arsenal have usually scored too. So the app works out the chance of all three together from a goals model fitted to that match's own result and total goals prices, and offers about **3.25**. A $10 builder returns about $32.50 if all three win.
+
+- Every pick has to win. If one pick is void, the whole bet is refunded.
+- Each pick starts from the price Maria's team sees (the team's margin, or the Owner's own price), and the builder adds a 5% margin of its own.
+- Picks that can't all happen ("City to win" with "0–0") are refused, and so is a pick that adds nothing ("City to win" with "City win or draw").
+- It takes the markets settled by the score and the half-time score: result, double chance, total goals, both teams score, handicaps, correct score, halves, half time / full time, and the like. Corners, cards, goalscorers and draw no bet can't go in a builder.
+- Only before kick-off. On the Risk page a builder counts on each of its picks, like an accumulator.
+
 ## Basketball (with a number)
 
 The **Basketball** switch on the Bet page lists NBA games and the main European leagues (Euroleague, ABA, Italy, Spain, Turkey, Greece, France, Germany, Kosovo). Players bet on:

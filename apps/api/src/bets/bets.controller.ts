@@ -10,7 +10,7 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { Idempotent } from "../idempotency/idempotency.interceptor";
 import { clientIp } from "../security/client-ip";
-import { AdminBetsQueryDto, MyBetsQueryDto, PlaceBetsDto, ResultDto, SelectionResultDto, VoidDto } from "./bets.dto";
+import { AdminBetsQueryDto, BuilderQuoteDto, MyBetsQueryDto, PlaceBetsDto, ResultDto, SelectionResultDto, VoidDto } from "./bets.dto";
 import { BetsService } from "./bets.service";
 import { SettlementService } from "./settlement.service";
 
@@ -31,6 +31,14 @@ export class BetsController {
   @Idempotent()
   place(@CurrentActor() actor: Actor, @Body() body: PlaceBetsDto, @Req() req: AuthenticatedRequest) {
     return this.bets.place(actor, body, clientIp(req));
+  }
+
+  /** The bet builder's price for picks from one match, as the Player adds them to the slip. */
+  @Post("builder/quote")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  quoteBuilder(@CurrentActor() actor: Actor, @Body() body: BuilderQuoteDto) {
+    return this.bets.quoteBuilder(actor, body.selectionIds);
   }
 
   @Get("mine")

@@ -9,12 +9,14 @@ import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { RACE_CAP } from "../odds/greyhounds";
+import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
 import { RiskService } from "./risk.service";
 import { assertOnTeam, type TeamSnapshot } from "./team";
 
 type SlipBet = { selectionId: string; stake: number; odds: number };
 type SlipAccumulator = { legs: Array<{ selectionId: string; odds: number }>; stake: number };
+type SlipBuilder = { legs: Array<{ selectionId: string; odds: number }>; stake: number; odds: number };
 
 /** Highest combined price an accumulator can have. */
 export const MAX_ACCUMULATOR_ODDS = 5000;
@@ -133,10 +135,10 @@ export class BetsService {
   ) {}
 
   /**
-   * Places a slip: any number of singles, plus at most one accumulator.
-   * Everything goes on or nothing does.
+   * Places a slip: any number of singles, plus at most one accumulator and
+   * one bet builder. Everything goes on or nothing does.
    */
-  async place(actor: Actor, input: { bets?: SlipBet[]; accumulator?: SlipAccumulator; acceptOddsChanges?: boolean }, ipAddress?: string) {
+  async place(actor: Actor, input: { bets?: SlipBet[]; accumulator?: SlipAccumulator; builder?: SlipBuilder; acceptOddsChanges?: boolean }, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players can place bets");
     // Recorded on each bet, so later moves and rate changes never rewrite its commission.
     const team = await this.assertOnTeam(actor);
@@ -144,7 +146,7 @@ export class BetsService {
     const snapshot = { ownerId: team.ownerId, managerId: team.managerId, ownerRate: team.ownerRate, managerRate: team.managerRate };
     const singles = input.bets ?? [];
     const acca = input.accumulator;
-    if (singles.length === 0 && !acca) throw new BadRequestException("Your slip is empty");
+    if (singles.length === 0 && !acca && !input.builder) throw new BadRequestException("Your slip is empty");
 
     const ids = [...new Set([...singles.map((bet) => bet.selectionId), ...(acca?.legs.map((leg) => leg.selectionId) ?? [])])];
     const selections = await this.prisma.selection.findMany({
@@ -196,12 +198,18 @@ export class BetsService {
       if (odds.greaterThan(MAX_ACCUMULATOR_ODDS)) throw new BadRequestException(`An accumulator's combined odds can't be more than ${MAX_ACCUMULATOR_ODDS}. Remove a pick.`);
       pricedAcca = { stake: new Prisma.Decimal(acca.stake.toFixed(2)), odds, legs };
     }
+    let pricedBuilder: (Awaited<ReturnType<BetsService["priceBuilderFor"]>> & { stake: Prisma.Decimal }) | null = null;
+    if (input.builder) {
+      const quote = await this.priceBuilderFor(actor.id, input.builder.legs.map((leg) => leg.selectionId));
+      if (Math.abs(Number(quote.odds) - input.builder.odds) > 0.001) changed.push(`the bet builder is now ${Number(quote.odds).toFixed(2)}`);
+      pricedBuilder = { ...quote, stake: new Prisma.Decimal(input.builder.stake.toFixed(2)) };
+    }
     if (changed.length > 0 && !input.acceptOddsChanges) {
       throw new ConflictException(`The odds changed: ${changed.join(", ")}. Check your slip and place it again.`);
     }
     await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? [])], actor.id);
 
-    const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : [])];
+    const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : []), ...(pricedBuilder ? [pricedBuilder.stake] : [])];
     const total = stakes.reduce((sum, stake) => sum.add(stake), new Prisma.Decimal(0));
 
     // What each outcome would add to the team's open payouts, for the Owner's cap.
@@ -215,6 +223,10 @@ export class BetsService {
     if (pricedAcca) {
       const payout = payoutFor(BetStatus.WON, pricedAcca.stake, pricedAcca.odds);
       for (const leg of pricedAcca.legs) add(leg.selectionId, payout, leg.label);
+    }
+    if (pricedBuilder) {
+      const payout = payoutFor(BetStatus.WON, pricedBuilder.stake, pricedBuilder.odds);
+      for (const leg of pricedBuilder.legs) add(leg.selectionId, payout, leg.label);
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -269,6 +281,25 @@ export class BetsService {
         );
         for (const leg of pricedAcca.legs) await tx.event.update({ where: { id: leg.eventId }, data: { volume: { increment: pricedAcca.stake } } });
       }
+      if (pricedBuilder) {
+        rows.push(
+          await tx.bet.create({
+            data: {
+              playerId: actor.id,
+              kind: BetKind.BUILDER,
+              stake: pricedBuilder.stake,
+              odds: pricedBuilder.odds,
+              description: `Bet builder · ${pricedBuilder.eventName} · ${pricedBuilder.legs.length} picks`.slice(0, 200),
+              ...snapshot,
+              legs: {
+                create: pricedBuilder.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price, description: leg.description, sortOrder })),
+              },
+            },
+            select: betSelect,
+          }),
+        );
+        await tx.event.update({ where: { id: pricedBuilder.eventId }, data: { volume: { increment: pricedBuilder.stake } } });
+      }
       // Every stake in the Player's balance ledger, so their statement adds up to their balance.
       await tx.balanceTransaction.createMany({
         data: rows.map((bet) => ({
@@ -294,6 +325,85 @@ export class BetsService {
     await this.realtime.publish(actor.id, { type: "bets.changed" });
     await this.users.alertLowBalance(actor.id, Number(total));
     return { bets: created.map(betView), total: Number(total) };
+  }
+
+  /** The bet builder's price for these picks, for the slip while the Player picks them. */
+  async quoteBuilder(actor: Actor, selectionIds: string[]) {
+    if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players can place bets");
+    const quote = await this.priceBuilderFor(actor.id, selectionIds);
+    return { odds: Number(quote.odds), legs: quote.legs.map((leg) => ({ selectionId: leg.selectionId, odds: Number(leg.price) })) };
+  }
+
+  /**
+   * Prices a bet builder for a Player (see builder.ts): picks from one
+   * football match that hasn't started, one from each market, each at the
+   * price the Player's team sees. Refuses picks the builder can't price or
+   * that can't all happen together, saying which.
+   */
+  private async priceBuilderFor(playerId: string, selectionIds: string[]) {
+    if (selectionIds.length < 2) throw new BadRequestException("A bet builder needs at least 2 picks");
+    if (new Set(selectionIds).size !== selectionIds.length) throw new BadRequestException("The same pick is in your bet builder twice. Remove one.");
+    const rows = await this.prisma.selection.findMany({
+      where: { id: { in: selectionIds } },
+      select: { id: true, key: true, name: true, market: { select: { id: true, key: true, name: true, event: { select: { id: true, name: true, sport: true } } } } },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const picks = selectionIds.map((id) => byId.get(id));
+    if (picks.some((pick) => !pick)) throw new BadRequestException("One of the bets on your slip no longer exists. Remove it and try again.");
+    const legs = picks as NonNullable<(typeof picks)[number]>[];
+    const event = legs[0].market.event;
+    if (legs.some((leg) => leg.market.event.id !== event.id)) throw new BadRequestException("A bet builder's picks all have to be from the same match.");
+    if (event.sport !== "football") throw new BadRequestException("The bet builder is for football matches.");
+    if (new Set(legs.map((leg) => leg.market.id)).size !== legs.length) throw new BadRequestException("Only one pick from each market can go in a bet builder.");
+
+    // The match's result and total goals prices, to fit the builder's goals model to.
+    const anchors = await this.prisma.selection.findMany({
+      where: { market: { eventId: event.id, key: { in: ["match_winner", "goals_2_5"] } } },
+      select: { key: true, feedOdds: true, market: { select: { key: true } } },
+    });
+    const anchorPrice = (market: string, key: string) => Number(anchors.find((row) => row.market.key === market && row.key === key)?.feedOdds ?? 0);
+    const anchor = {
+      home: anchorPrice("match_winner", "home"),
+      draw: anchorPrice("match_winner", "draw"),
+      away: anchorPrice("match_winner", "away"),
+      over: anchorPrice("goals_2_5", "over"),
+      under: anchorPrice("goals_2_5", "under"),
+    };
+
+    const priced = [];
+    for (const leg of legs) {
+      const now = await this.odds.priceForPlayer(playerId, leg.id);
+      if (now.live) throw new BadRequestException(`The bet builder is for matches that haven't started. ${event.name} is live.`);
+      if (!now.bettable) throw new BadRequestException(`Bets are closed on ${leg.name} (${event.name}). Remove it from your slip.`);
+      priced.push({
+        selectionId: leg.id,
+        marketKey: leg.market.key,
+        selectionKey: leg.key,
+        price: new Prisma.Decimal(now.odds.toFixed(2)),
+        label: `${leg.name} (${event.name})`,
+        description: `${event.name} · ${leg.market.name}: ${leg.name}`.slice(0, 200),
+      });
+    }
+    const quote = priceBuilder(
+      priced.map((leg) => ({ marketKey: leg.marketKey, selectionKey: leg.selectionKey, price: Number(leg.price) })),
+      anchor,
+    );
+    if (!quote.ok) {
+      const named = quote.leg === undefined ? null : `${legs[quote.leg].market.name}: ${legs[quote.leg].name}`;
+      switch (quote.reason) {
+        case "unsupported":
+          throw new BadRequestException(named ? `${named} can't go in a bet builder. Remove it.` : `The bet builder isn't available for ${event.name}.`);
+        case "impossible":
+          throw new BadRequestException("These picks can't all happen together. Remove one of them.");
+        case "covered":
+          throw new BadRequestException(`${named} adds nothing: another pick already includes it. Remove it.`);
+        case "too-low":
+          throw new BadRequestException("These picks together are too likely to be priced. Change or add a pick.");
+        case "too-high":
+          throw new BadRequestException(`A bet builder's odds can't be more than ${MAX_BUILDER_ODDS}. Remove a pick.`);
+      }
+    }
+    return { odds: new Prisma.Decimal(quote.odds.toFixed(2)), eventId: event.id, eventName: event.name, legs: priced };
   }
 
   /**

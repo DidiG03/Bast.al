@@ -22,6 +22,8 @@ import { BookService } from "./book.service";
 import { MinesService } from "./mines.service";
 import { PenaltyService } from "./penalty.service";
 import { PlinkoService } from "./plinko.service";
+import { DiceService } from "./dice.service";
+import { DIRECTIONS as DICE_DIRECTIONS, MAX_BET as DICE_MAX_BET, MIN_BET as DICE_MIN_BET } from "./dice";
 import { BETS as BOOK_BETS } from "./book";
 import { MINE_COUNTS, TILES } from "./mines";
 import { DIRECTIONS } from "./penalty";
@@ -124,6 +126,32 @@ class PlinkoDropDto {
   risk!: "LOW" | "MEDIUM" | "HIGH";
 }
 
+class DiceRollDto {
+  @ApiProperty({ minimum: DICE_MIN_BET, maximum: DICE_MAX_BET, description: "The stake, in dollars and whole cents" })
+  @IsNumber()
+  @Min(DICE_MIN_BET)
+  @Max(DICE_MAX_BET)
+  bet!: number;
+
+  @ApiProperty({ description: "The target, 0.00 to 99.99, in hundredths" })
+  @IsNumber()
+  @Min(0)
+  @Max(99.99)
+  target!: number;
+
+  @ApiProperty({ enum: DICE_DIRECTIONS, description: "UNDER wins on rolls below the target, OVER on rolls above it" })
+  @IsIn([...DICE_DIRECTIONS])
+  direction!: "UNDER" | "OVER";
+}
+
+class DiceSeedDto {
+  @ApiProperty({ required: false, description: "The new client seed: 1 to 32 letters, digits, dashes or underscores. Left out, a random one." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  clientSeed?: string;
+}
+
 class BlackjackActionDto {
   @ApiProperty({ enum: ["hit", "stand", "double", "split", "insure", "noInsurance"] })
   @IsIn(["hit", "stand", "double", "split", "insure", "noInsurance"])
@@ -165,6 +193,7 @@ export class CasinoController {
     private readonly mines: MinesService,
     private readonly penalty: PenaltyService,
     private readonly plinko: PlinkoService,
+    private readonly dice: DiceService,
   ) {}
 
   /** The Player's Casino: can they play, the rules, free spins, recent spins. */
@@ -338,6 +367,30 @@ export class CasinoController {
   @Idempotent()
   plinkoDrop(@CurrentActor() actor: Actor, @Body() body: PlinkoDropDto, @Req() req: AuthenticatedRequest) {
     return this.plinko.drop(actor, body.bet, body.rows, body.risk, clientIp(req));
+  }
+
+  /** The Player's dice table: can they play, the rules, their seed pair, their last rolls. */
+  @Get("dice")
+  @Roles(Role.PLAYER)
+  diceState(@CurrentActor() actor: Actor) {
+    return this.dice.state(actor);
+  }
+
+  /** One roll. Autoplay rolls quickly, hence the higher limit. A repeated request with the same Idempotency-Key gets the first answer back. */
+  @Post("dice/roll")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 240, ttl: 60_000 } })
+  @Idempotent()
+  diceRoll(@CurrentActor() actor: Actor, @Body() body: DiceRollDto, @Req() req: AuthenticatedRequest) {
+    return this.dice.roll(actor, body.bet, body.target, body.direction, clientIp(req));
+  }
+
+  /** Changes the Player's seed pair, showing the old server seed so its rolls can be checked. */
+  @Post("dice/seed")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  diceSeed(@CurrentActor() actor: Actor, @Body() body: DiceSeedDto) {
+    return this.dice.changeSeed(actor, body.clientSeed);
   }
 
   /** Whether the Casino is open, and how it did in a period, per Player. */

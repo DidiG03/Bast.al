@@ -736,8 +736,8 @@ export type CasinoAdmin = {
   /** A Manager's team: whether their Owner has the Casino open. Null for others. */
   teamOpen: boolean | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
-  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), and Plinko (`spins` are its balls). */
-  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
+  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), Plinko (`spins` are its balls) and Dice (`spins` are its rolls). */
+  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
     /** Book of Ra: paid spins and free ones, with double or nothing on its wins. */
     book: { spins: number; freeSpins: number; staked: number; won: number; payoutRate: number | null };
   };
@@ -751,6 +751,7 @@ export type CasinoAdmin = {
     mines: { rounds: number; staked: number; won: number };
     penalty: { rounds: number; staked: number; won: number };
     plinko: { balls: number; staked: number; won: number };
+    dice: { rolls: number; staked: number; won: number };
     staked: number;
     won: number;
     net: number;
@@ -1052,4 +1053,62 @@ export type PlinkoState = {
 export type PlinkoDropResult = {
   round: PlinkoBall;
   balance: number;
+};
+
+/** A Player's dice seed pair. The server seed stays null until the Player changes seeds. */
+export type DiceSeed = {
+  serverSeedHash: string;
+  clientSeed: string;
+  /** The next roll's nonce: how many rolls the pair has made. */
+  nonce: number;
+  serverSeed: string | null;
+};
+
+/** One dice roll. Target and roll are in points (42.73); chance in percent. */
+export type DiceRoll = {
+  id: string;
+  target: number;
+  direction: "UNDER" | "OVER";
+  roll: number;
+  chance: number;
+  multiplier: number;
+  won: boolean;
+  bet: number;
+  win: number;
+  serverSeedHash: string;
+  clientSeed: string;
+  nonce: number;
+  serverSeed: string | null;
+  createdAt: string;
+};
+
+export type DiceState = {
+  closed: string | null;
+  balance: number;
+  /** The most one roll can cost: the Player's max stake, or the game's top without one. */
+  tableMax: number;
+  recent: DiceRoll[];
+  seed: DiceSeed;
+  previousSeed: DiceSeed | null;
+  game: {
+    name: string;
+    outcomes: number;
+    payoutRate: number;
+    minChance: number;
+    maxChance: number;
+    minBet: number;
+    maxBet: number;
+    maxMultiplier: number;
+  };
+};
+
+export type DiceRollResult = {
+  round: DiceRoll;
+  balance: number;
+  seed: DiceSeed;
+};
+
+export type DiceSeedChange = {
+  seed: DiceSeed;
+  previousSeed: DiceSeed;
 };

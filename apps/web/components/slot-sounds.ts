@@ -345,6 +345,33 @@ export const slotSound = {
     tone(220, 0, 0.09, { type: "sine", gain: 0.14, slideTo: 140 });
   },
 
+  /** Dice: the dice shaken and thrown, a quick rattle of clicks. */
+  diceRoll() {
+    for (let i = 0; i < 6; i += 1) noise(i * 0.035 + Math.random() * 0.012, 0.03, { filter: "bandpass", freq: 2200 + Math.random() * 1600, gain: 0.12 - i * 0.012 });
+    tone(300, 0.2, 0.05, { type: "sine", gain: 0.08, slideTo: 180 });
+  },
+
+  /** Dice: one die landing on the tray, a short wooden knock, a little higher for each die to the right. */
+  dieLand(index: number) {
+    noise(0, 0.035, { filter: "bandpass", freq: 1700 + index * 180, gain: 0.2 });
+    tone(360 + index * 40, 0, 0.07, { type: "sine", gain: 0.16, slideTo: 210 });
+  },
+
+  /** Dice: the result. A win chimes, higher and longer the more it pays; a loss is a short low knock. */
+  diceResult(won: boolean, multiplier: number) {
+    if (!won) {
+      tone(190, 0, 0.12, { type: "sine", gain: 0.16, slideTo: 120 });
+      noise(0, 0.04, { filter: "lowpass", freq: 600, gain: 0.1 });
+      return;
+    }
+    if (multiplier >= 10) {
+      this.win(multiplier >= 50);
+      return;
+    }
+    tone(988, 0, 0.1, { type: "triangle", gain: 0.13 });
+    tone(1319, 0.07, 0.16, { type: "triangle", gain: 0.11 });
+  },
+
   /** Book of Ra: the special symbol growing to fill a reel, a rising shimmer. */
   expand(reel: number) {
     const base = 330 * 2 ** (reel / 6);

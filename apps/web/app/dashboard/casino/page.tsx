@@ -134,6 +134,15 @@ function CasinoLobby() {
               <span>{t("Drop the ball through the pegs. The middle pays a little, the edges pay up to 1000 times the stake.")}</span>
             </span>
           </Link>
+          <Link className="casino-tile is-dice" href="/dashboard/casino/dice">
+            <span className="casino-tile-art" aria-hidden="true">
+              <DiceTileArt />
+            </span>
+            <span className="casino-tile-body">
+              <strong>{t("Dice")}</strong>
+              <span>{t("Set your own odds: roll over or under a target, from a sure thing to 97 times the stake. Every roll can be checked.")}</span>
+            </span>
+          </Link>
         </div>
       )}
     </div>
@@ -220,6 +229,59 @@ function PlinkoTileArt() {
           </g>
         );
       })}
+    </svg>
+  );
+}
+
+/** The Dice tile: two of the game's white pip dice seen from a corner, over its slider, the roll landing in the green. */
+function DiceTileArt() {
+  const pipCells: Record<number, Array<[number, number]>> = {
+    2: [[0.78, 0.22], [0.22, 0.78]],
+    3: [[0.78, 0.22], [0.5, 0.5], [0.22, 0.78]],
+    5: [[0.22, 0.22], [0.78, 0.22], [0.5, 0.5], [0.22, 0.78], [0.78, 0.78]],
+    6: [[0.22, 0.22], [0.22, 0.5], [0.22, 0.78], [0.78, 0.22], [0.78, 0.5], [0.78, 0.78]],
+  };
+  // A cube drawn from above one corner: k is half an edge's rise. Each face is the unit square mapped onto it, so its pips foreshorten with it.
+  const die = (cx: number, cy: number, k: number, faces: [number, number, number], id: string) => {
+    const w = 1.732 * k;
+    const face = (ox: number, oy: number, ux: number, uy: number, vx: number, vy: number, pips: number, fill: string) => (
+      <g>
+        <path d={`M${ox} ${oy} l${ux} ${uy} l${vx} ${vy} l${-ux} ${-uy} Z`} fill={fill} stroke="#cfd5de" strokeWidth="1.2" strokeLinejoin="round" />
+        <g transform={`matrix(${ux} ${uy} ${vx} ${vy} ${ox} ${oy})`}>
+          {pipCells[pips].map(([u, v], index) => (
+            <circle key={index} cx={u} cy={v} r="0.1" fill="#0b0c0e" />
+          ))}
+        </g>
+      </g>
+    );
+    return (
+      <g>
+        <ellipse cx={cx + 4} cy={cy + 2 * k + 5} rx={w * 1.05} ry={k * 0.55} fill="rgba(0,0,0,0.38)" />
+        {face(cx - w, cy - k, w, k, 0, 2 * k, faces[1], `url(#${id}-left)`)}
+        {face(cx, cy, w, -k, 0, 2 * k, faces[2], `url(#${id}-right)`)}
+        {face(cx - w, cy - k, w, -k, w, k, faces[0], "#ffffff")}
+      </g>
+    );
+  };
+  return (
+    <svg viewBox="0 0 300 150" className="dice-tile-scene">
+      <defs>
+        <linearGradient id="dt-a-left" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f2f4f7" />
+          <stop offset="1" stopColor="#d9dee6" />
+        </linearGradient>
+        <linearGradient id="dt-a-right" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#e1e5ec" />
+          <stop offset="1" stopColor="#c3cad5" />
+        </linearGradient>
+      </defs>
+      {die(118, 50, 15, [6, 5, 3], "dt-a")}
+      {die(186, 46, 13, [5, 2, 6], "dt-a")}
+      <g transform="translate(30 110)">
+        <rect width="240" height="12" rx="6" fill="#ff4d5e" />
+        <rect width="132" height="12" rx="6" fill="#2fd47e" />
+        <rect x="126" y="-5" width="12" height="22" rx="3" fill="#f4f7fb" stroke="#1b2433" strokeWidth="0.8" />
+      </g>
     </svg>
   );
 }
@@ -472,7 +534,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
       </div>
 
       <div className="report-grid">
-        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
+        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins + data.games.dice.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
         <Stat label={t("Staked")} value={formatMoney(data.totals.staked)} hint={t("What spins and rounds cost")} />
         <Stat label={t("Paid out")} value={formatMoney(data.totals.won)} hint={data.totals.payoutRate === null ? t("No spins yet") : t("{rate}% of what was staked", { rate: data.totals.payoutRate })} />
         <Stat label={t("Casino profit")} help="What Players lost in the Casino minus what they won. It's part of the team's profit in Commissions." value={formatSignedMoney(data.totals.net)} highlight={data.totals.net < 0 ? "bad" : "good"} />
@@ -490,6 +552,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
               ["mines", t("Mines"), tn(data.games.mines.spins, "{count} round", "{count} rounds")],
               ["penalty", t("Penalty"), tn(data.games.penalty.spins, "{count} round", "{count} rounds")],
               ["plinko", "Plinko", tn(data.games.plinko.spins, "{count} ball", "{count} balls")],
+              ["dice", t("Dice"), tn(data.games.dice.spins, "{count} roll", "{count} rolls")],
             ] as const
           ).map(([key, name, count]) => {
             const game = data.games[key];
@@ -527,7 +590,8 @@ function CasinoOverview({ me }: { me: MeResponse }) {
                     {player.book.spins > 0 ? ` · ${tn(player.book.spins, "{count} Book of Ra spin", "{count} Book of Ra spins")}` : ""}
                     {player.mines.rounds > 0 ? ` · ${tn(player.mines.rounds, "{count} Mines round", "{count} Mines rounds")}` : ""}
                     {player.penalty.rounds > 0 ? ` · ${tn(player.penalty.rounds, "{count} Penalty round", "{count} Penalty rounds")}` : ""}
-                    {player.plinko.balls > 0 ? ` · ${tn(player.plinko.balls, "{count} Plinko ball", "{count} Plinko balls")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
+                    {player.plinko.balls > 0 ? ` · ${tn(player.plinko.balls, "{count} Plinko ball", "{count} Plinko balls")}` : ""}
+                    {player.dice.rolls > 0 ? ` · ${tn(player.dice.rolls, "{count} dice roll", "{count} dice rolls")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
                   </span>
                 </div>
                 <strong className={player.net < 0 ? "is-bad" : undefined}>{formatSignedMoney(player.net)}</strong>

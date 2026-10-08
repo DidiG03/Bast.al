@@ -151,6 +151,7 @@ model User {
   bookFeature            CasinoBookFeature?
   minesRound             MinesRound?
   penaltyRound           PenaltyRound?
+  diceSeeds              DiceSeed[]
 
   @@index([parentId])
   @@index([role])
@@ -681,7 +682,8 @@ model CommissionPayout {
 /// a round of blackjack (kind BLACKJACK: bet is the first bet, stake everything put down, doubles, splits and insurance included),
 /// a round of Mines (kind MINES: bet and stake are the stake; `mines` is the field, hidden until the round ended),
 /// a penalty shootout (kind PENALTY: bet and stake are the stake; `penalty` is every kick, the keeper's dive included),
-/// or a Plinko ball (kind PLINKO: bet and stake are the stake; `plinko` is the board and the ball's path, stops holds the bucket).
+/// a Plinko ball (kind PLINKO: bet and stake are the stake; `plinko` is the board and the ball's path, stops holds the bucket),
+/// or a dice roll (kind DICE: bet and stake are the stake; `dice` is the target, the roll and the seeds that made it).
 model CasinoSpin {
   id           String            @id @default(cuid())
   kind         CasinoPlayKind    @default(SPIN)
@@ -714,6 +716,8 @@ model CasinoSpin {
   penalty      Json?
   /// A Plinko ball: the rows, the risk, each row's bounce (0 left, 1 right), the bucket and its multiplier.
   plinko       Json?
+  /// A dice roll: the target and its side, the roll, the multiplier, and the seed pair and nonce it came from.
+  dice         Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -736,6 +740,29 @@ enum CasinoPlayKind {
   PENALTY
   /// One Plinko ball.
   PLINKO
+  /// One dice roll.
+  DICE
+}
+
+/// A Player's provably fair seed pair for dice. Each roll is the HMAC-SHA256
+/// of the server seed and "clientSeed:nonce". While a pair is active only its
+/// server seed's hash is shown; changing the pair reveals the server seed, so
+/// the Player can check every roll made with it. One active pair per Player.
+model DiceSeed {
+  id             String    @id @default(cuid())
+  playerId       String    @map("player_id")
+  player         User      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  serverSeed     String    @map("server_seed")
+  serverSeedHash String    @map("server_seed_hash")
+  clientSeed     String    @map("client_seed")
+  /// The next roll's nonce: how many rolls this pair has made.
+  nonce          Int       @default(0)
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  revealedAt     DateTime? @map("revealed_at")
+
+  @@index([playerId, active])
+  @@map("dice_seeds")
 }
 
 /// A blackjack round still being played: one per Player at most. The stakes

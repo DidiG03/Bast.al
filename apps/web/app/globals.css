@@ -10683,3 +10683,1003 @@ button.is-blocked {
     animation: none;
   }
 }
+
+/* Dice: a slate cabinet, a green-and-red slider, and fields that work like a trading ticket. */
+.casino-tile.is-dice .casino-tile-art {
+  padding: 0.3rem 0.5rem;
+  background: radial-gradient(ellipse at 50% 15%, #2a3a52, #141c2b 62%, #0b111b);
+}
+
+.dice-tile-scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dice-cabinet {
+  --dice-win: #2fd47e;
+  --dice-loss: #ff4d5e;
+  --dice-panel: rgba(8, 12, 20, 0.45);
+  --dice-line: rgba(255, 255, 255, 0.1);
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 60% 0%, #26344a, #141c2b 60%, #0b111b);
+  box-shadow: 0 0 0 4px #1a140c, 0 18px 40px rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+.dice-cabinet.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  overflow-y: auto;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.dice-cabinet:fullscreen {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.dice-marquee {
+  background: linear-gradient(180deg, #3a4d6b, #1d2940 60%, #141c2b);
+}
+
+.dice-cabinet .dice-rules {
+  right: 3.4rem;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.dice-cabinet .dice-sound {
+  right: 6.2rem;
+}
+
+.dice-cabinet .dice-fair-button {
+  right: 9rem;
+  color: #7dffb5;
+}
+
+@media (max-width: 560px) {
+  .dice-marquee {
+    padding-right: 12.2rem;
+  }
+}
+
+.dice-cabinet.is-full .slot-exit,
+.dice-cabinet:fullscreen .slot-exit {
+  display: grid;
+}
+
+.dice-title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dice-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dice-cabinet.is-full .dice-body {
+  flex: 1;
+}
+
+.dice-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1rem 1.2rem;
+}
+
+.dice-cabinet.is-full .dice-stage {
+  justify-content: center;
+}
+
+.dice-readout {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.dice-readout span {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: var(--dice-panel);
+  text-align: center;
+}
+
+.dice-readout small,
+.dice-field small,
+.dice-profit small,
+.dice-seed-line small {
+  color: #9fb0c8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dice-readout strong {
+  font-size: 1.02rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dice-cabinet .is-win {
+  color: var(--dice-win);
+}
+
+.dice-cabinet .is-loss {
+  color: var(--dice-loss);
+}
+
+.dice-history {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.3rem;
+  min-height: 1.75rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 2.5rem);
+  mask-image: linear-gradient(90deg, transparent, #000 2.5rem);
+  flex-direction: row-reverse;
+}
+
+.dice-chip {
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.22rem 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.dice-cabinet .dice-chip.is-win {
+  background: var(--dice-win);
+  color: #052616;
+}
+
+.dice-cabinet .dice-chip.is-loss {
+  background: rgba(255, 255, 255, 0.1);
+  color: #d9e1ee;
+}
+
+.dice-chip:first-child {
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.dice-result {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0 0.2rem;
+}
+
+.dice-result-number {
+  margin-top: 0.5rem;
+  color: #eef3fb;
+  font-size: clamp(2rem, 7cqw, 3.2rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  transition: color 200ms ease, opacity 200ms ease;
+}
+
+.dice-cabinet .dice-result.is-rolling .dice-result-number {
+  opacity: 0.3;
+}
+
+.dice-cabinet .dice-result.is-win:not(.is-rolling) .dice-result-number {
+  color: var(--dice-win);
+  text-shadow: 0 0 24px rgba(47, 212, 126, 0.4);
+}
+
+.dice-cabinet .dice-result.is-loss:not(.is-rolling) .dice-result-number {
+  color: var(--dice-loss);
+}
+
+.dice-result-note {
+  min-height: 1.3em;
+  color: #c4cfdf;
+  font-weight: 650;
+}
+
+.dice-cabinet .dice-result.is-win:not(.is-rolling) .dice-result-note {
+  color: var(--dice-win);
+}
+
+.dice-cabinet .dice-result.is-rolling .dice-result-note {
+  visibility: hidden;
+}
+
+.dice-track-wrap {
+  padding: 2.9rem 0.9rem 0.5rem;
+  border-radius: 14px;
+  background: var(--dice-panel);
+}
+
+.dice-scale {
+  position: relative;
+  height: 1.2rem;
+  margin: 0.35rem 0 0;
+  color: #9fb0c8;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.dice-scale span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.dice-track {
+  position: relative;
+  height: 2.6rem;
+}
+
+.dice-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.75rem;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.dice-bar.is-under {
+  background: linear-gradient(90deg, var(--dice-win) 0 var(--split), var(--dice-loss) var(--split) 100%);
+}
+
+.dice-bar.is-over {
+  background: linear-gradient(90deg, var(--dice-loss) 0 var(--split), var(--dice-win) var(--split) 100%);
+}
+
+/* The slider sits over the bar: its track is invisible, its handle a grip the Player drags. */
+.dice-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.dice-range:disabled {
+  cursor: default;
+}
+
+.dice-range::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+
+.dice-range::-moz-range-track {
+  height: 100%;
+  background: transparent;
+}
+
+.dice-range::-webkit-slider-thumb {
+  width: 1.6rem;
+  height: 2.3rem;
+  margin-top: 0.15rem;
+  border: 0;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, transparent 34%, #9aa7ba 34% 40%, transparent 40% 60%, #9aa7ba 60% 66%, transparent 66%) center / 70% 45% no-repeat,
+    linear-gradient(180deg, #ffffff, #dfe6f1);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.dice-range::-moz-range-thumb {
+  width: 1.6rem;
+  height: 2.3rem;
+  border: 0;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, transparent 34%, #9aa7ba 34% 40%, transparent 40% 60%, #9aa7ba 60% 66%, transparent 66%) center / 70% 45% no-repeat,
+    linear-gradient(180deg, #ffffff, #dfe6f1);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+.dice-range:focus-visible::-webkit-slider-thumb {
+  outline: 3px solid #7dffb5;
+  outline-offset: 2px;
+}
+
+.dice-range:focus-visible::-moz-range-thumb {
+  outline: 3px solid #7dffb5;
+  outline-offset: 2px;
+}
+
+/* Where the roll landed: a tag above the bar pointing at the number. */
+.dice-marker {
+  position: absolute;
+  bottom: calc(100% + 0.15rem);
+  z-index: 1;
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: left 380ms cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+
+.dice-marker span {
+  position: relative;
+  display: block;
+  padding: 0.25rem 0.55rem;
+  border-radius: 7px;
+  background: #e6ecf5;
+  color: #111a28;
+  font-size: 0.86rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.dice-marker span::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  border: 6px solid transparent;
+  border-top-color: #e6ecf5;
+  transform: translateX(-50%);
+}
+
+.dice-cabinet .dice-marker.is-win span {
+  background: var(--dice-win);
+  color: #052616;
+}
+
+.dice-cabinet .dice-marker.is-win span::after {
+  border-top-color: var(--dice-win);
+}
+
+.dice-cabinet .dice-marker.is-loss span {
+  background: var(--dice-loss);
+  color: #fff;
+}
+
+.dice-cabinet .dice-marker.is-loss span::after {
+  border-top-color: var(--dice-loss);
+}
+
+.dice-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+/* A label that wraps on a phone mustn't push its box out of line with the others. */
+.dice-stats .dice-field {
+  align-content: end;
+}
+
+.dice-field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.dice-input {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0 0.3rem 0 0.65rem;
+  border: 1px solid var(--dice-line);
+  border-radius: 10px;
+  background: rgba(4, 7, 12, 0.55);
+  transition: border-color 120ms ease;
+}
+
+.dice-input:focus-within {
+  border-color: #7dffb5;
+}
+
+.dice-input.is-bad {
+  border-color: var(--dice-loss);
+}
+
+.dice-input input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dice-input em {
+  color: #9fb0c8;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.dice-input button {
+  min-width: 0;
+  min-height: 0;
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e8eef6;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.dice-input button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.dice-input .dice-swap {
+  font-size: 1rem;
+  color: #7dffb5;
+}
+
+.dice-controls {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-top: 1px solid var(--dice-line);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.dice-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgba(4, 7, 12, 0.55);
+}
+
+.dice-tabs button {
+  min-height: 0;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #b8c4d6;
+  font-weight: 800;
+}
+
+.dice-tabs button.is-on {
+  background: #33445f;
+  color: #fff;
+}
+
+.dice-profit {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.dice-profit strong {
+  color: var(--dice-win);
+  font-variant-numeric: tabular-nums;
+}
+
+.dice-auto {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.dice-auto-limits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.dice-auto-progress {
+  margin: 0;
+  color: #c4cfdf;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.dice-go {
+  width: 100%;
+  padding: 0.85rem 1.2rem;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #4cf09a, #1fae62);
+  box-shadow: 0 6px 18px rgba(31, 174, 98, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: #032312;
+  font-size: 1.08rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.dice-go:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.dice-go:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.dice-go:disabled {
+  opacity: 0.5;
+}
+
+.dice-go.is-stop {
+  background: linear-gradient(180deg, #ff7a86, #e03445);
+  box-shadow: 0 6px 18px rgba(224, 52, 69, 0.35);
+  color: #fff;
+}
+
+.dice-hint,
+.dice-problem {
+  margin: 0;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.dice-hint {
+  display: none;
+  color: #8f9fb8;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .dice-hint {
+    display: block;
+  }
+}
+
+.dice-problem {
+  color: #ffb4a8;
+}
+
+/* Rows of the last rolls open their details. */
+.dice-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dice-row .is-good {
+  color: #1fae62;
+}
+
+/* The sheets: rules, provably fair, and a roll's details. */
+.dice-sheet {
+  max-width: 34rem;
+}
+
+.dice-sheet-heading {
+  margin: 0.6rem 0 0;
+  font-size: 1rem;
+}
+
+.dice-seed-line {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dice-seed-line small {
+  color: var(--muted);
+}
+
+.dice-seed-line span {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.dice-seed-line code,
+.dice-verify-out code {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.dice-copy {
+  flex: none;
+  min-width: 2.2rem;
+  min-height: 2.2rem;
+  padding: 0;
+}
+
+.dice-sheet .dice-field small {
+  color: var(--muted);
+}
+
+.dice-sheet .dice-input {
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.dice-sheet .dice-input input {
+  color: var(--text);
+}
+
+.dice-verify {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 0.8fr;
+  gap: 0.5rem;
+}
+
+.dice-verify-out {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.dice-verify-out span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dice-verify-out strong {
+  font-size: 1.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dice-formula {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+}
+
+.dice-detail-head {
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  padding: 0.8rem;
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.dice-detail-head strong {
+  font-size: 2.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dice-detail-head.is-win strong {
+  color: #1fae62;
+}
+
+.dice-detail-head.is-loss strong {
+  color: #e03445;
+}
+
+.dice-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+@media (max-width: 560px) {
+  .dice-verify,
+  .dice-detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dice-verify .dice-field:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .dice-stats {
+    gap: 0.4rem;
+  }
+
+  .dice-input {
+    padding-left: 0.5rem;
+  }
+}
+
+/*
+ * The dice tray: green baize in a dark rim, four ivory dice on it. Each die is a cube of six
+ * faces turned in 3D (with three inner planes so its rounded corners never show through), seen a
+ * little from above. A throw spins it in from above the tray and settles it on its front face,
+ * hopping twice as it lands, its shadow tightening under it.
+ */
+.dice-tray {
+  --die: clamp(2.3rem, 10cqw, 5rem);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* Seen from a corner, a die is about 1.4 times its own width: room for that on both sides. */
+  gap: calc(var(--die) * 0.55);
+  width: 100%;
+  padding: calc(var(--die) * 0.7) 0.8rem calc(var(--die) * 0.45);
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(255, 255, 255, 0.07), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 4px),
+    radial-gradient(ellipse at 50% 40%, #1f5a43, #123a2c 62%, #0a241b);
+  box-shadow:
+    inset 0 0 0 3px #2b2116,
+    inset 0 0 0 6px #4a3822,
+    inset 0 0 0 7px rgba(255, 220, 160, 0.18),
+    inset 0 14px 30px rgba(0, 0, 0, 0.55),
+    0 10px 28px rgba(0, 0, 0, 0.35);
+  perspective: 900px;
+  transition: box-shadow 260ms ease;
+}
+
+.dice-tray.is-win {
+  box-shadow:
+    inset 0 0 0 3px #2b2116,
+    inset 0 0 0 6px #4a3822,
+    inset 0 0 0 7px rgba(125, 255, 181, 0.55),
+    inset 0 14px 30px rgba(0, 0, 0, 0.55),
+    0 0 34px rgba(47, 212, 126, 0.35),
+    0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.dice-tray.is-loss {
+  box-shadow:
+    inset 0 0 0 3px #2b2116,
+    inset 0 0 0 6px #4a3822,
+    inset 0 0 0 7px rgba(255, 77, 94, 0.45),
+    inset 0 14px 30px rgba(0, 0, 0, 0.55),
+    0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.dice-slot {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(var(--die) * 0.55);
+}
+
+/* The decimal point between the second and third dice. */
+.dice-point {
+  width: calc(var(--die) * 0.16);
+  height: calc(var(--die) * 0.16);
+  margin-bottom: calc(var(--die) * 0.04);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #cfd7e4);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+.dice-scene {
+  position: relative;
+  display: block;
+  width: var(--die);
+  height: var(--die);
+  transform-style: preserve-3d;
+  animation: dice-hop var(--dur) cubic-bezier(0.3, 0.6, 0.35, 1) both;
+}
+
+/* Seen from above one corner, like a die on a table: the top face (the digit) and two sides show. */
+.dice-cube {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateX(-34deg) rotateY(-45deg);
+  animation: dice-tumble var(--dur) cubic-bezier(0.15, 0.75, 0.25, 1) both;
+}
+
+.dice-scene.is-still,
+.dice-scene.is-still .dice-cube,
+.dice-scene.is-still .dice-shadow {
+  animation: none;
+}
+
+@keyframes dice-tumble {
+  0% {
+    transform: rotateX(var(--rx)) rotateY(var(--ry)) rotateZ(var(--rz));
+  }
+  100% {
+    transform: rotateX(-34deg) rotateY(-45deg) rotateZ(0deg);
+  }
+}
+
+@keyframes dice-hop {
+  0% {
+    opacity: 0;
+    transform: translate3d(-1.4rem, calc(var(--die) * -1.5), 0) scale(0.9);
+  }
+  12% {
+    opacity: 1;
+  }
+  45% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  60% {
+    transform: translate3d(0, calc(var(--die) * -0.24), 0);
+  }
+  74% {
+    transform: translate3d(0, 0, 0);
+  }
+  85% {
+    transform: translate3d(0, calc(var(--die) * -0.06), 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.dice-shadow {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: calc(var(--die) * -0.2);
+  height: calc(var(--die) * 0.22);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55), transparent 70%);
+  transform: translateZ(calc(var(--die) * -0.6));
+  animation: dice-shadow var(--dur) cubic-bezier(0.3, 0.6, 0.35, 1) both;
+}
+
+@keyframes dice-shadow {
+  0% {
+    opacity: 0.15;
+    transform: translateZ(calc(var(--die) * -0.6)) scale(0.5);
+  }
+  45%,
+  74%,
+  100% {
+    opacity: 1;
+    transform: translateZ(calc(var(--die) * -0.6)) scale(1);
+  }
+  60% {
+    opacity: 0.6;
+    transform: translateZ(calc(var(--die) * -0.6)) scale(0.8);
+  }
+}
+
+.dice-face,
+.dice-solid {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+.dice-face {
+  border-radius: 16%;
+  background: radial-gradient(circle at 30% 24%, #ffffff, #f7f8fa 50%, #eceef2 100%);
+  box-shadow:
+    inset 0 calc(var(--die) * -0.05) calc(var(--die) * 0.12) rgba(60, 70, 90, 0.1),
+    inset 0 calc(var(--die) * 0.04) calc(var(--die) * 0.07) rgba(255, 255, 255, 0.95);
+}
+
+/* Light from above: the top brightest, the sides in a little shade, the right more than the left. */
+.dice-face.is-top {
+  background: radial-gradient(circle at 40% 35%, #ffffff, #fbfcfd 50%, #eceff3 100%);
+}
+
+.dice-face.is-front {
+  filter: brightness(0.95);
+}
+
+.dice-face.is-right {
+  filter: brightness(0.86);
+}
+
+/* The pips: a 3 by 3 grid, each pip drilled into the face, dark with a soft rim of light below. */
+.dice-number {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #0b0c0e;
+  font: 700 calc(var(--die) * 0.5) / 1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.dice-number.is-marked {
+  text-decoration: underline;
+  text-decoration-thickness: calc(var(--die) * 0.04);
+  text-underline-offset: calc(var(--die) * 0.05);
+}
+
+.dice-face.is-front { transform: translateZ(calc(var(--die) / 2)); }
+.dice-face.is-back { transform: rotateY(180deg) translateZ(calc(var(--die) / 2)); }
+.dice-face.is-right { transform: rotateY(90deg) translateZ(calc(var(--die) / 2)); }
+.dice-face.is-left { transform: rotateY(-90deg) translateZ(calc(var(--die) / 2)); }
+.dice-face.is-top { transform: rotateX(90deg) translateZ(calc(var(--die) / 2)); }
+.dice-face.is-bottom { transform: rotateX(-90deg) translateZ(calc(var(--die) / 2)); }
+
+/*
+ * The die's solid: a square cube set a little inside the rounded faces, in the colour of a rounded
+ * edge. Where two faces' rounded corners leave a notch, the solid shows there instead of the tray,
+ * so the edges and corners read as one solid, rounded die.
+ */
+.dice-solid {
+  background: linear-gradient(180deg, #f1f3f6, #dde1e7);
+}
+
+.dice-solid.is-top { transform: rotateX(90deg) translateZ(calc(var(--die) * 0.42)); background: #f4f6f8; }
+.dice-solid.is-bottom { transform: rotateX(-90deg) translateZ(calc(var(--die) * 0.42)); }
+.dice-solid.is-front { transform: translateZ(calc(var(--die) * 0.42)); }
+.dice-solid.is-back { transform: rotateY(180deg) translateZ(calc(var(--die) * 0.42)); }
+.dice-solid.is-right { transform: rotateY(90deg) translateZ(calc(var(--die) * 0.42)); background: linear-gradient(180deg, #e3e7ec, #cfd5dd); }
+.dice-solid.is-left { transform: rotateY(-90deg) translateZ(calc(var(--die) * 0.42)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dice-scene,
+  .dice-cube,
+  .dice-shadow {
+    animation: none;
+  }
+
+  .dice-marker {
+    transition: none;
+  }
+}
+
+/* The tray in 3D: the same felt and rim, with the dice drawn on a canvas that fills it. */
+.dice-tray.is-3d {
+  display: block;
+  position: relative;
+  padding: 0;
+  aspect-ratio: 3 / 1;
+  overflow: hidden;
+}
+
+.dice-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 560px) {
+  .dice-tray.is-3d {
+    aspect-ratio: 2.6 / 1;
+  }
+}
+
+/* A wide cabinet (a computer, or full screen): the controls in a column on the left, the table on the right. */
+@container (min-width: 760px) {
+  .dice-body {
+    display: grid;
+    grid-template-columns: 19rem 1fr;
+  }
+
+  .dice-controls {
+    order: -1;
+    align-content: center;
+    padding: 1.3rem;
+    border-top: 0;
+    border-right: 1px solid var(--dice-line);
+  }
+
+  .dice-stage {
+    justify-content: center;
+    gap: 1.2rem;
+    padding: 1.4rem 1.8rem 1.6rem;
+  }
+
+  .dice-track-wrap {
+    padding: 3.2rem 1.4rem 0.7rem;
+  }
+}

@@ -212,7 +212,7 @@ The next three races also show on a Player's home page. **Latest results** on th
 
 ## What the Casino is (with a number)
 
-The Casino tab opens on a lobby of games: a fruit slot, Book of Ra, roulette, blackjack, Penalty, Mines and Plinko. The slot is a classic fruit game: 5 reels, 5 lines, fruit and sevens, and a star that pays anywhere. Cherries pay from 2 in a row. Players spin it with the same balance they bet with, at $0.50 to $100 a spin ($0.50, $1, $2, $5, $10, $50 or $100). It stays hidden until **you** open it for the site and the **Owner** opens it for their team. Its name is set in one place, `GAME_NAME` in `apps/api/src/casino/game.ts`.
+The Casino tab opens on a lobby of games: a fruit slot, Book of Ra, roulette, blackjack, Penalty, Mines, Plinko and Dice. The slot is a classic fruit game: 5 reels, 5 lines, fruit and sevens, and a star that pays anywhere. Cherries pay from 2 in a row. Players spin it with the same balance they bet with, at $0.50 to $100 a spin ($0.50, $1, $2, $5, $10, $50 or $100). It stays hidden until **you** open it for the site and the **Owner** opens it for their team. Its name is set in one place, `GAME_NAME` in `apps/api/src/casino/game.ts`.
 
 On a computer every game plays from the keyboard too: **Space** spins, deals, rolls or drops a ball, and in Mines and Penalty starts a round or cashes out. Blackjack also takes H (hit), S (stand), D (double), P (split), and Y or N for insurance; Penalty shoots with ← ↑ →. A key does exactly what its button does, so nothing happens while that button is greyed out, and keys do nothing while the Player types in a field.
 
@@ -236,6 +236,12 @@ Its pictures are drawn in code, except the explorer, which is a picture in that 
 
 **Example:** Maria drops 50 balls at $1 on 12 rows, medium risk. Most land near the middle and pay $0.30 to $2; one lands next to the edge and pays $11. She gets $47 back, so her balance is $3 lower and the $3 counts in Alex's team profit.
 
+**Dice** rolls a number from 0.00 to 99.99, shown as four white ten-sided dice (d10s, the real dice numbered 0 to 9) in 3D, thrown onto the felt, one for each digit and read from the top like real dice (42.73 lands with 4, 2, 7 and 3 up). The Player picks a target and a side: "under 50.00" wins on 0.00 to 49.99. They set the odds themselves, from a 95% chance (pays 1.021×) to a 1% chance (pays 97×), by dragging the slider or typing the target, the multiplier or the win chance. The multiplier is always 97% divided by the chance, so every roll pays back **$97 for every $100** on average, whatever they pick. A roll costs $0.10 to $50, never more than the Player's max stake. Autoplay rolls up to 1,000 times (or until stopped) and can stop on a profit or a loss the Player sets. It has its own line a day in **My money** ("Dice: 120 rolls") and counts in Commissions like the other games.
+
+Dice is **provably fair**: each roll is worked out from a secret server seed, the Player's own client seed and a count of their rolls (HMAC-SHA256). Before rolling, the Player sees a fingerprint of the server seed, so it can't be changed behind their back; when they change seeds, the old one is shown and they can check every roll it made, on the page or with any outside tool.
+
+**Example:** Maria sets "under 25.00" (25% chance, 3.88×) and rolls at $2. The roll is 17.42, so she wins $7.76. Later she changes seeds, opens that roll, and taps "Check this roll": the page works out 17.42 again from the seeds.
+
 ---
 
 ## The pages, one line each
@@ -245,7 +251,7 @@ Its pictures are drawn in code, except the explorer, which is a picture in that 
 | **Overview** | Everyone | Your home screen — balance, quick stats, shortcuts. Looks totally different for Players (it's their "app"). |
 | **Users** | Super Admin, Owner, Manager | Create people under you, give/take credit, suspend/delete, set limits. |
 | **Bet** | Player | Browse matches, place bets, see your bet history. |
-| **Casino** | Everyone (when it's open) | Players play the slots, roulette, blackjack, Penalty, Mines and Plinko with their balance. Super Admin and Owners open or close it; staff see how it's doing per Player. |
+| **Casino** | Everyone (when it's open) | Players play the slots, roulette, blackjack, Penalty, Mines, Plinko and Dice with their balance. Super Admin and Owners open or close it; staff see how it's doing per Player. |
 | **Reports** | Super Admin, Owner, Manager | Who's under you, and a searchable history log of every action taken. |
 | **Finance** | Super Admin, Owner | Approve/reject big money transfers; see how much moved where. |
 | **Commissions** | Super Admin, Owner, Manager | Your paycheck — what you've earned from results, this week/month/custom range. |

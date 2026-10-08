@@ -736,8 +736,8 @@ export type CasinoAdmin = {
   /** A Manager's team: whether their Owner has the Casino open. Null for others. */
   teamOpen: boolean | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
-  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds). */
-  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
+  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), and Plinko (`spins` are its balls). */
+  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
     /** Book of Ra: paid spins and free ones, with double or nothing on its wins. */
     book: { spins: number; freeSpins: number; staked: number; won: number; payoutRate: number | null };
   };
@@ -750,6 +750,7 @@ export type CasinoAdmin = {
     book: { spins: number; freeSpins: number; staked: number; won: number };
     mines: { rounds: number; staked: number; won: number };
     penalty: { rounds: number; staked: number; won: number };
+    plinko: { balls: number; staked: number; won: number };
     staked: number;
     won: number;
     net: number;
@@ -1008,5 +1009,47 @@ export type PenaltyState = {
 
 export type PenaltyStepResult = {
   round: PenaltyRoundView;
+  balance: number;
+};
+
+export type PlinkoRows = 8 | 12 | 16;
+export type PlinkoRisk = "LOW" | "MEDIUM" | "HIGH";
+
+/** One Plinko ball: the board it fell through, each row's bounce (0 left, 1 right), and the bucket it landed in. */
+export type PlinkoBall = {
+  id: string;
+  rows: PlinkoRows;
+  risk: PlinkoRisk;
+  path: number[];
+  bucket: number;
+  multiplier: number;
+  bet: number;
+  win: number;
+  createdAt: string;
+};
+
+export type PlinkoState = {
+  closed: string | null;
+  balance: number;
+  /** The most one ball can cost: the Player's max stake, or the top chip without one. */
+  tableMax: number;
+  recent: PlinkoBall[];
+  game: {
+    name: string;
+    bets: number[];
+    rows: PlinkoRows[];
+    risks: PlinkoRisk[];
+    /** Every bucket's multiplier, left to right, by rows and then risk. */
+    pays: Record<PlinkoRows, Record<PlinkoRisk, number[]>>;
+    /** What each board pays back on average, in percent. */
+    payoutRates: Record<PlinkoRows, Record<PlinkoRisk, number>>;
+    payoutRate: number;
+    /** The most a ball pays, in times its stake. */
+    maxWin: number;
+  };
+};
+
+export type PlinkoDropResult = {
+  round: PlinkoBall;
   balance: number;
 };

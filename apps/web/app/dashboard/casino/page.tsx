@@ -125,6 +125,15 @@ function CasinoLobby() {
               <span>{t("A field of 25 tiles hides the mines you choose. Every gem raises the payout. Cash out before one blows.")}</span>
             </span>
           </Link>
+          <Link className="casino-tile is-plinko" href="/dashboard/casino/plinko">
+            <span className="casino-tile-art" aria-hidden="true">
+              <PlinkoTileArt />
+            </span>
+            <span className="casino-tile-body">
+              <strong>Plinko</strong>
+              <span>{t("Drop the ball through the pegs. The middle pays a little, the edges pay up to 1000 times the stake.")}</span>
+            </span>
+          </Link>
         </div>
       )}
     </div>
@@ -158,6 +167,60 @@ function MinesTileArt() {
         <span key={index} className={`mines-tile-cell is-${cell}`} />
       ))}
     </span>
+  );
+}
+
+/** The Plinko tile: a small board of pegs, a ball on its way down, and the buckets glowing from gold to red. */
+function PlinkoTileArt() {
+  const rows = 8;
+  const gap = 22;
+  const rise = 13.5;
+  const cx = 150;
+  const top = 18;
+  const pays = [29, 4, 1.4, 0.3, 0.2, 0.3, 1.4, 4, 29];
+  // The ball's way down so far: right, left, right, right.
+  const path = [1, 0, 1, 1];
+  const ballAt = (row: number) => {
+    const rights = path.slice(0, row).reduce((sum, side) => sum + side, 0);
+    return [cx + (rights - row / 2) * gap, top + row * rise - 7.5] as const;
+  };
+  const [bx, by] = ballAt(path.length);
+  return (
+    <svg viewBox="0 0 300 150" className="plinko-tile-scene">
+      <defs>
+        <radialGradient id="pt-ball" cx="35%" cy="30%" r="70%">
+          <stop offset="0" stopColor="#fff7d6" />
+          <stop offset="0.5" stopColor="#ff5d8f" />
+          <stop offset="1" stopColor="#b0174a" />
+        </radialGradient>
+      </defs>
+      {Array.from({ length: rows }, (_, row) =>
+        Array.from({ length: row + 3 }, (_, peg) => {
+          const x = cx + (peg - (row + 2) / 2) * gap;
+          const y = top + row * rise;
+          // The pegs the ball has already bounced off.
+          const lit = row < path.length && Math.abs(ballAt(row)[0] - x) < 1;
+          return <circle key={`${row}-${peg}`} cx={x} cy={y} r={lit ? 3 : 2.4} fill={lit ? "#ffe39a" : "#dfe7f2"} />;
+        }),
+      )}
+      {path.map((_, step) => {
+        const [x, y] = ballAt(step);
+        return <circle key={step} cx={x} cy={y} r={6.5 - (path.length - step) * 0.9} fill="#ff5d8f" opacity={0.12 + step * 0.06} />;
+      })}
+      <circle cx={bx} cy={by} r="6.5" fill="url(#pt-ball)" />
+      {pays.map((pay, bucket) => {
+        const hue = 46 - (Math.abs(bucket - rows / 2) / (rows / 2)) * 56;
+        const x = cx + (bucket - rows / 2) * gap;
+        return (
+          <g key={bucket}>
+            <rect x={x - gap / 2 + 1.5} y={top + rows * rise - 2} width={gap - 3} height="15" rx="3.5" fill={`hsl(${hue} 92% 55%)`} />
+            <text x={x} y={top + rows * rise + 8.6} textAnchor="middle" fontSize="7.2" fontWeight="800" fill="#1d1206">
+              {pay}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -409,7 +472,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
       </div>
 
       <div className="report-grid">
-        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
+        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
         <Stat label={t("Staked")} value={formatMoney(data.totals.staked)} hint={t("What spins and rounds cost")} />
         <Stat label={t("Paid out")} value={formatMoney(data.totals.won)} hint={data.totals.payoutRate === null ? t("No spins yet") : t("{rate}% of what was staked", { rate: data.totals.payoutRate })} />
         <Stat label={t("Casino profit")} help="What Players lost in the Casino minus what they won. It's part of the team's profit in Commissions." value={formatSignedMoney(data.totals.net)} highlight={data.totals.net < 0 ? "bad" : "good"} />
@@ -426,6 +489,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
               ["book", "Book of Ra", `${tn(data.games.book.spins, "{count} spin", "{count} spins")} · ${tn(data.games.book.freeSpins, "{count} free spin", "{count} free spins")}`],
               ["mines", t("Mines"), tn(data.games.mines.spins, "{count} round", "{count} rounds")],
               ["penalty", t("Penalty"), tn(data.games.penalty.spins, "{count} round", "{count} rounds")],
+              ["plinko", "Plinko", tn(data.games.plinko.spins, "{count} ball", "{count} balls")],
             ] as const
           ).map(([key, name, count]) => {
             const game = data.games[key];
@@ -462,7 +526,8 @@ function CasinoOverview({ me }: { me: MeResponse }) {
                     {player.blackjack.hands > 0 ? ` · ${tn(player.blackjack.hands, "{count} blackjack hand", "{count} blackjack hands")}` : ""}
                     {player.book.spins > 0 ? ` · ${tn(player.book.spins, "{count} Book of Ra spin", "{count} Book of Ra spins")}` : ""}
                     {player.mines.rounds > 0 ? ` · ${tn(player.mines.rounds, "{count} Mines round", "{count} Mines rounds")}` : ""}
-                    {player.penalty.rounds > 0 ? ` · ${tn(player.penalty.rounds, "{count} Penalty round", "{count} Penalty rounds")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
+                    {player.penalty.rounds > 0 ? ` · ${tn(player.penalty.rounds, "{count} Penalty round", "{count} Penalty rounds")}` : ""}
+                    {player.plinko.balls > 0 ? ` · ${tn(player.plinko.balls, "{count} Plinko ball", "{count} Plinko balls")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
                   </span>
                 </div>
                 <strong className={player.net < 0 ? "is-bad" : undefined}>{formatSignedMoney(player.net)}</strong>

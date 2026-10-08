@@ -10222,3 +10222,330 @@ button.is-blocked {
 
 .penalty-call.is-goal { color: #ffe56a; }
 .penalty-call.is-save { color: #ffd0c8; }
+
+/* Plinko: a night-blue cabinet, white pegs, buckets from gold in the middle to red at the edges. */
+.casino-tile.is-plinko .casino-tile-art {
+  padding: 0.3rem 0.5rem;
+  background: radial-gradient(ellipse at 50% 20%, #2b2f6b, #14163a 60%, #0a0b20);
+}
+
+.plinko-tile-scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.plinko-cabinet {
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 50% 0%, #2b2f6b, #14163a 60%, #0a0b20);
+  box-shadow: 0 0 0 4px #1a140c, 0 18px 40px rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+.plinko-cabinet.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  overflow-y: auto;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.plinko-cabinet:fullscreen {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.plinko-marquee {
+  background: linear-gradient(180deg, #4a4f9e, #1c1f4f 60%, #14163a);
+}
+
+/* On a phone the three buttons on the right would touch the title: keep it clear of them. */
+@media (max-width: 560px) {
+  .plinko-marquee {
+    padding-right: 9.4rem;
+  }
+}
+
+.plinko-cabinet .plinko-sound {
+  right: 6.2rem;
+}
+
+.plinko-cabinet .plinko-rules {
+  right: 3.4rem;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.plinko-cabinet.is-full .slot-exit,
+.plinko-cabinet:fullscreen .slot-exit {
+  display: grid;
+}
+
+.plinko-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 1rem 0.2rem;
+}
+
+.plinko-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.plinko-cabinet.is-full .plinko-body {
+  flex: 1;
+}
+
+.plinko-cabinet.is-full .plinko-stage {
+  flex: 1;
+  justify-content: center;
+}
+
+/* Only a computer has a Space bar to press. */
+.plinko-hint {
+  display: none;
+  margin: 0;
+  color: #9aa3c7;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .plinko-hint {
+    display: block;
+  }
+}
+
+.plinko-history {
+  display: flex;
+  justify-content: safe center;
+  gap: 0.3rem;
+  min-height: 1.6rem;
+  width: min(100%, 34rem);
+  overflow: hidden;
+}
+
+.plinko-chip {
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  background: hsl(var(--hue) 92% 55%);
+  color: #1d1206;
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.plinko-chip:first-child {
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.plinko-board {
+  container-type: inline-size;
+  width: min(100%, 34rem);
+}
+
+.plinko-cabinet.is-full .plinko-board {
+  width: min(100%, calc((100dvh - 24rem) / 0.86));
+}
+
+.plinko-canvas {
+  display: block;
+  width: 100%;
+}
+
+.plinko-buckets {
+  display: grid;
+  gap: 2px;
+}
+
+.plinko-bucket {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: clamp(0.3rem, 1cqw, 0.65rem) 0;
+  border-radius: 5px;
+  background: hsl(var(--hue) 92% 55%);
+  box-shadow: inset 0 -3px 0 hsl(var(--hue) 80% 36%);
+  color: #1d1206;
+  font-size: clamp(0.5rem, 2.4cqw, 1.1rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.plinko-bucket.is-small {
+  font-size: clamp(0.42rem, 1.95cqw, 0.95rem);
+  letter-spacing: -0.02em;
+}
+
+.plinko-bucket.is-hit {
+  animation: plinko-bump 0.32s ease-out;
+}
+
+@keyframes plinko-bump {
+  0% {
+    transform: translateY(0);
+    filter: brightness(1);
+  }
+  35% {
+    transform: translateY(5px);
+    filter: brightness(1.35);
+  }
+  100% {
+    transform: translateY(0);
+    filter: brightness(1);
+  }
+}
+
+.plinko-label,
+.plinko-rows-number {
+  display: none;
+}
+
+.plinko-settings {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 1rem;
+}
+
+.plinko-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.plinko-actions .mines-go {
+  justify-self: auto;
+  min-width: min(100%, 14rem);
+}
+
+.plinko-auto {
+  padding: 0.7rem 1rem;
+}
+
+.plinko-paytable {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.2rem, 1fr));
+  gap: 0.35rem;
+}
+
+.plinko-paytable span {
+  display: grid;
+  gap: 0.1rem;
+  text-align: center;
+}
+
+.plinko-paytable strong {
+  padding: 0.25rem 0;
+  border-radius: 6px;
+  background: hsl(var(--hue) 92% 55%);
+  color: #1d1206;
+  font-variant-numeric: tabular-nums;
+}
+
+.plinko-paytable small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A wide cabinet (a computer, or full screen): the controls in a column on the left, and the
+ * board as big as the screen's height allows on the right. The canvas is about 0.86 times as
+ * tall as it's wide; the readout, the last results, the buckets and the title bar take ~15rem.
+ */
+@container (min-width: 760px) {
+  .plinko-body {
+    display: grid;
+    grid-template-columns: 17rem 1fr;
+  }
+
+  .plinko-controls {
+    order: -1;
+    align-content: center;
+    gap: 0.8rem;
+    padding: 1.2rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.16);
+  }
+
+  .plinko-controls .mines-picks,
+  .plinko-settings {
+    justify-content: stretch;
+  }
+
+  .plinko-settings {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .plinko-controls .mines-picks {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .plinko-controls .mines-pick {
+    min-width: 0;
+    padding-inline: 0.3rem;
+    white-space: nowrap;
+  }
+
+  .plinko-label {
+    display: block;
+    margin: 0 0 -0.4rem;
+    color: #9aa3c7;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .plinko-rows-word {
+    display: none;
+  }
+
+  .plinko-rows-number {
+    display: inline;
+  }
+
+  .plinko-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .plinko-actions .mines-go {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .plinko-stage {
+    justify-content: center;
+    padding: 1rem 1.5rem 1.2rem;
+  }
+
+  .plinko-board,
+  .plinko-cabinet.is-full .plinko-board {
+    width: min(100%, calc((100dvh - 15rem) / 0.86));
+  }
+
+  .plinko-history {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plinko-bucket.is-hit {
+    animation: none;
+  }
+}

@@ -212,7 +212,7 @@ The next three races also show on a Player's home page. **Latest results** on th
 
 ## What the Casino is (with a number)
 
-The Casino tab opens on a lobby with four games: a fruit slot, Book of Ra, roulette and blackjack. The slot is a classic fruit game: 5 reels, 5 lines, fruit and sevens, and a star that pays anywhere. Cherries pay from 2 in a row. Players spin it with the same balance they bet with, at $0.50 to $10 a spin. It stays hidden until **you** open it for the site and the **Owner** opens it for their team. Its name is set in one place, `GAME_NAME` in `apps/api/src/casino/game.ts`.
+The Casino tab opens on a lobby of games: a fruit slot, Book of Ra, roulette, blackjack, Penalty, Mines and Plinko. The slot is a classic fruit game: 5 reels, 5 lines, fruit and sevens, and a star that pays anywhere. Cherries pay from 2 in a row. Players spin it with the same balance they bet with, at $0.50 to $10 a spin. It stays hidden until **you** open it for the site and the **Owner** opens it for their team. Its name is set in one place, `GAME_NAME` in `apps/api/src/casino/game.ts`.
 
 Every spin is decided on the server, never on the Player's phone. On average it pays back **$95.70 for every $100** spun (measured over 10 million spins), so the team keeps about 4.3%. About 1 spin in 4 wins something.
 
@@ -230,6 +230,10 @@ After a win, a Player can try **double or nothing**: guess whether a card is red
 
 Its pictures are drawn in code, except the explorer, which is a picture in that folder. To use your own, put the images in `apps/web/public/casino/book-of-ra/` and name each one in that folder's `manifest.json` (for example `"EXPLORER": "explorer.webp"`, and `"cover"` for the lobby tile). Any symbol left empty stays drawn.
 
+**Plinko** drops a ball through a triangle of pegs. At every peg it goes left or right, each just as likely, and it lands in one of the buckets along the bottom. Each bucket pays the stake times its number: the middle ones are hit most and pay least (0.2 to 1×), the edges are rare and pay most. The Player picks 8, 12 or 16 rows and low, medium or high risk; more of either makes the edges bigger and the middle smaller. The top is **1000 times the stake**, on the edge of 16 rows at high risk (about 1 ball in 32,768). Whatever they pick, a ball pays back about **$97 for every $100** (worked out exactly from the chances, 96.9% to 97.1% depending on the board), so the team keeps about 3%. A ball costs $0.20 to $10, never more than the Player's max stake; the path is drawn on the server and the Player's screen only shows it falling. Players can drop several balls at once or turn on Auto. It has its own line a day in **My money** ("Plinko: 60 balls") and counts in Commissions like the other games.
+
+**Example:** Maria drops 50 balls at $1 on 12 rows, medium risk. Most land near the middle and pay $0.30 to $2; one lands next to the edge and pays $11. She gets $47 back, so her balance is $3 lower and the $3 counts in Alex's team profit.
+
 ---
 
 ## The pages, one line each
@@ -239,7 +243,7 @@ Its pictures are drawn in code, except the explorer, which is a picture in that 
 | **Overview** | Everyone | Your home screen — balance, quick stats, shortcuts. Looks totally different for Players (it's their "app"). |
 | **Users** | Super Admin, Owner, Manager | Create people under you, give/take credit, suspend/delete, set limits. |
 | **Bet** | Player | Browse matches, place bets, see your bet history. |
-| **Casino** | Everyone (when it's open) | Players play the fruit slot, roulette and blackjack with their balance. Super Admin and Owners open or close it; staff see how it's doing per Player. |
+| **Casino** | Everyone (when it's open) | Players play the slots, roulette, blackjack, Penalty, Mines and Plinko with their balance. Super Admin and Owners open or close it; staff see how it's doing per Player. |
 | **Reports** | Super Admin, Owner, Manager | Who's under you, and a searchable history log of every action taken. |
 | **Finance** | Super Admin, Owner | Approve/reject big money transfers; see how much moved where. |
 | **Commissions** | Super Admin, Owner, Manager | Your paycheck — what you've earned from results, this week/month/custom range. |

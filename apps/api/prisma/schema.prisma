@@ -680,7 +680,8 @@ model CommissionPayout {
 /// a round of roulette (kind ROULETTE: bet and stake are all the chips on the table),
 /// a round of blackjack (kind BLACKJACK: bet is the first bet, stake everything put down, doubles, splits and insurance included),
 /// a round of Mines (kind MINES: bet and stake are the stake; `mines` is the field, hidden until the round ended),
-/// or a penalty shootout (kind PENALTY: bet and stake are the stake; `penalty` is every kick, the keeper's dive included).
+/// a penalty shootout (kind PENALTY: bet and stake are the stake; `penalty` is every kick, the keeper's dive included),
+/// or a Plinko ball (kind PLINKO: bet and stake are the stake; `plinko` is the board and the ball's path, stops holds the bucket).
 model CasinoSpin {
   id           String            @id @default(cuid())
   kind         CasinoPlayKind    @default(SPIN)
@@ -711,6 +712,8 @@ model CasinoSpin {
   mines        Json?
   /// A penalty shootout: every kick, where the keeper dived, and what it paid.
   penalty      Json?
+  /// A Plinko ball: the rows, the risk, each row's bounce (0 left, 1 right), the bucket and its multiplier.
+  plinko       Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -731,6 +734,8 @@ enum CasinoPlayKind {
   MINES
   /// A penalty shootout, cashed out or saved.
   PENALTY
+  /// One Plinko ball.
+  PLINKO
 }
 
 /// A blackjack round still being played: one per Player at most. The stakes

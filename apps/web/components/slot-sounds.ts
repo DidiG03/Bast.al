@@ -325,6 +325,26 @@ export const slotSound = {
     tone(160, 0.02, 0.28, { type: "sine", gain: 0.22, slideTo: 70 });
   },
 
+  /** Plinko: the ball tapping a peg, a little higher for each row it falls. */
+  peg(row: number, rows: number) {
+    tone(1100 + (row / Math.max(1, rows)) * 900 + Math.random() * 60, 0, 0.035, { type: "triangle", gain: 0.05 });
+  },
+
+  /** Plinko: the ball dropping into a bucket. Under the stake a dull thud, over it a chime, a big one a fanfare. */
+  bucket(multiplier: number) {
+    if (multiplier >= 10) {
+      this.win(multiplier >= 100);
+      return;
+    }
+    if (multiplier > 1) {
+      tone(1320, 0, 0.09, { type: "triangle", gain: 0.13 });
+      tone(1760, 0.06, 0.14, { type: "triangle", gain: 0.1 });
+      return;
+    }
+    noise(0, 0.05, { filter: "lowpass", freq: 700, gain: 0.16 });
+    tone(220, 0, 0.09, { type: "sine", gain: 0.14, slideTo: 140 });
+  },
+
   /** Book of Ra: the special symbol growing to fill a reel, a rising shimmer. */
   expand(reel: number) {
     const base = 330 * 2 ** (reel / 6);

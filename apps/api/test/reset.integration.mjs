@@ -44,7 +44,7 @@ async function user(role, parentId, extra = {}) {
 let sa, owner, manager, player, event;
 
 test("setup: a platform full of test data", async () => {
-  for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "bet_legs", "bets", "odds_overrides", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "login_history", "users"]) {
+  for (const table of ["settlement_entries", "casino_spins", "casino_free_spins", "casino_gambles", "blackjack_hands", "mines_rounds", "penalty_rounds", "commission_payouts", "balance_transactions", "bet_legs", "bets", "odds_overrides", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "login_history", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
   sa = await user("SUPER_ADMIN", null);

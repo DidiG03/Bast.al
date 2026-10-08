@@ -351,7 +351,7 @@ export class CasinoService {
     const period = this.commissions.period(fromInput, toInput);
     const scope = actor.role === Role.OWNER ? Prisma.sql`s.owner_id = ${actor.id}` : actor.role === Role.MANAGER ? Prisma.sql`s.manager_id = ${actor.id}` : Prisma.sql`TRUE`;
     const rows = await this.prisma.$queryRaw<
-      Array<{ player_id: string; username: string; spins: bigint; roulette_spins: bigint; staked: Prisma.Decimal; won: Prisma.Decimal; roulette_staked: Prisma.Decimal | null; roulette_won: Prisma.Decimal | null; blackjack_spins: bigint; blackjack_staked: Prisma.Decimal | null; blackjack_won: Prisma.Decimal | null; book_spins: bigint; book_free_spins: bigint; book_staked: Prisma.Decimal | null; book_won: Prisma.Decimal | null; mines_spins: bigint; mines_staked: Prisma.Decimal | null; mines_won: Prisma.Decimal | null; penalty_spins: bigint; penalty_staked: Prisma.Decimal | null; penalty_won: Prisma.Decimal | null }>
+      Array<{ player_id: string; username: string; spins: bigint; roulette_spins: bigint; staked: Prisma.Decimal; won: Prisma.Decimal; roulette_staked: Prisma.Decimal | null; roulette_won: Prisma.Decimal | null; blackjack_spins: bigint; blackjack_staked: Prisma.Decimal | null; blackjack_won: Prisma.Decimal | null; book_spins: bigint; book_free_spins: bigint; book_staked: Prisma.Decimal | null; book_won: Prisma.Decimal | null; mines_spins: bigint; mines_staked: Prisma.Decimal | null; mines_won: Prisma.Decimal | null; penalty_spins: bigint; penalty_staked: Prisma.Decimal | null; penalty_won: Prisma.Decimal | null; plinko_spins: bigint; plinko_staked: Prisma.Decimal | null; plinko_won: Prisma.Decimal | null }>
     >`
       SELECT s.player_id, u.username,
         COUNT(*) FILTER (WHERE s.kind = 'SPIN') AS spins,
@@ -372,7 +372,10 @@ export class CasinoService {
         SUM(s.win) FILTER (WHERE s.kind = 'MINES') AS mines_won,
         COUNT(*) FILTER (WHERE s.kind = 'PENALTY') AS penalty_spins,
         SUM(s.stake) FILTER (WHERE s.kind = 'PENALTY') AS penalty_staked,
-        SUM(s.win) FILTER (WHERE s.kind = 'PENALTY') AS penalty_won
+        SUM(s.win) FILTER (WHERE s.kind = 'PENALTY') AS penalty_won,
+        COUNT(*) FILTER (WHERE s.kind = 'PLINKO') AS plinko_spins,
+        SUM(s.stake) FILTER (WHERE s.kind = 'PLINKO') AS plinko_staked,
+        SUM(s.win) FILTER (WHERE s.kind = 'PLINKO') AS plinko_won
       FROM casino_spins s JOIN users u ON u.id = s.player_id
       WHERE ${scope} AND s.created_at >= ${period.from} AND s.created_at < ${period.to}
       GROUP BY s.player_id, u.username
@@ -386,20 +389,22 @@ export class CasinoService {
         const book = { spins: Number(row.book_spins), freeSpins: Number(row.book_free_spins), staked: Number(row.book_staked ?? 0), won: Number(row.book_won ?? 0) };
         const mines = { rounds: Number(row.mines_spins), staked: Number(row.mines_staked ?? 0), won: Number(row.mines_won ?? 0) };
         const penalty = { rounds: Number(row.penalty_spins), staked: Number(row.penalty_staked ?? 0), won: Number(row.penalty_won ?? 0) };
-        return { id: row.player_id, username: row.username, spins: Number(row.spins), roulette, blackjack, book, mines, penalty, staked, won, net: Math.round((staked - won) * 100) / 100 };
+        const plinko = { balls: Number(row.plinko_spins), staked: Number(row.plinko_staked ?? 0), won: Number(row.plinko_won ?? 0) };
+        return { id: row.player_id, username: row.username, spins: Number(row.spins), roulette, blackjack, book, mines, penalty, plinko, staked, won, net: Math.round((staked - won) * 100) / 100 };
       })
       .sort((a, b) => b.staked - a.staked || a.username.localeCompare(b.username));
     const totals = players.reduce((sum, player) => ({ spins: sum.spins + player.spins, staked: sum.staked + player.staked, won: sum.won + player.won }), { spins: 0, staked: 0, won: 0 });
     const round = (value: number) => Math.round(value * 100) / 100;
     const rate = (staked: number, won: number) => (staked > 0 ? Math.round((won / staked) * 1000) / 10 : null);
-    /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack, Book of Ra (with its double or nothing), Mines and Penalty. */
+    /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack, Book of Ra (with its double or nothing), Mines, Penalty and Plinko. */
     const rouletteTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.roulette.spins, staked: sum.staked + player.roulette.staked, won: sum.won + player.roulette.won }), { spins: 0, staked: 0, won: 0 });
     const blackjackTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.blackjack.hands, staked: sum.staked + player.blackjack.staked, won: sum.won + player.blackjack.won }), { spins: 0, staked: 0, won: 0 });
     const bookTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.book.spins, freeSpins: sum.freeSpins + player.book.freeSpins, staked: sum.staked + player.book.staked, won: sum.won + player.book.won }), { spins: 0, freeSpins: 0, staked: 0, won: 0 });
     const minesTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.mines.rounds, staked: sum.staked + player.mines.staked, won: sum.won + player.mines.won }), { spins: 0, staked: 0, won: 0 });
     const penaltyTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.penalty.rounds, staked: sum.staked + player.penalty.staked, won: sum.won + player.penalty.won }), { spins: 0, staked: 0, won: 0 });
-    const slotStaked = totals.staked - rouletteTotals.staked - blackjackTotals.staked - bookTotals.staked - minesTotals.staked - penaltyTotals.staked;
-    const slotWon = totals.won - rouletteTotals.won - blackjackTotals.won - bookTotals.won - minesTotals.won - penaltyTotals.won;
+    const plinkoTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.plinko.balls, staked: sum.staked + player.plinko.staked, won: sum.won + player.plinko.won }), { spins: 0, staked: 0, won: 0 });
+    const slotStaked = totals.staked - rouletteTotals.staked - blackjackTotals.staked - bookTotals.staked - minesTotals.staked - penaltyTotals.staked - plinkoTotals.staked;
+    const slotWon = totals.won - rouletteTotals.won - blackjackTotals.won - bookTotals.won - minesTotals.won - penaltyTotals.won - plinkoTotals.won;
     const games = {
       slot: { spins: totals.spins, staked: round(slotStaked), won: round(slotWon), payoutRate: rate(slotStaked, slotWon) },
       roulette: { spins: rouletteTotals.spins, staked: round(rouletteTotals.staked), won: round(rouletteTotals.won), payoutRate: rate(rouletteTotals.staked, rouletteTotals.won) },
@@ -407,6 +412,7 @@ export class CasinoService {
       book: { spins: bookTotals.spins, freeSpins: bookTotals.freeSpins, staked: round(bookTotals.staked), won: round(bookTotals.won), payoutRate: rate(bookTotals.staked, bookTotals.won) },
       mines: { spins: minesTotals.spins, staked: round(minesTotals.staked), won: round(minesTotals.won), payoutRate: rate(minesTotals.staked, minesTotals.won) },
       penalty: { spins: penaltyTotals.spins, staked: round(penaltyTotals.staked), won: round(penaltyTotals.won), payoutRate: rate(penaltyTotals.staked, penaltyTotals.won) },
+      plinko: { spins: plinkoTotals.spins, staked: round(plinkoTotals.staked), won: round(plinkoTotals.won), payoutRate: rate(plinkoTotals.staked, plinkoTotals.won) },
     };
 
     const platform = await this.prisma.platformSettings.findUnique({ where: { id: "default" }, select: { casinoEnabled: true } });

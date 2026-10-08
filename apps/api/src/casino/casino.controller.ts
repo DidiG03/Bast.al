@@ -21,9 +21,11 @@ import { BlackjackService } from "./blackjack.service";
 import { BookService } from "./book.service";
 import { MinesService } from "./mines.service";
 import { PenaltyService } from "./penalty.service";
+import { PlinkoService } from "./plinko.service";
 import { BETS as BOOK_BETS } from "./book";
 import { MINE_COUNTS, TILES } from "./mines";
 import { DIRECTIONS } from "./penalty";
+import { BETS as PLINKO_BETS, RISKS as PLINKO_RISKS, ROWS as PLINKO_ROWS } from "./plinko";
 
 class SpinDto {
   @ApiProperty({ enum: BETS, description: "What the spin costs, in dollars. Ignored while the Player has free spins left from the old game." })
@@ -105,6 +107,23 @@ class PenaltyKickDto {
   aim!: "LEFT" | "CENTER" | "RIGHT";
 }
 
+class PlinkoDropDto {
+  @ApiProperty({ enum: PLINKO_BETS, description: "What the ball costs, in dollars" })
+  @IsNumber()
+  @IsIn([...PLINKO_BETS])
+  bet!: number;
+
+  @ApiProperty({ enum: PLINKO_ROWS, description: "How many rows of pegs the board has" })
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([...PLINKO_ROWS])
+  rows!: number;
+
+  @ApiProperty({ enum: PLINKO_RISKS, description: "Which pay table: low keeps most of the stake on most balls, high pays big at the edges" })
+  @IsIn([...PLINKO_RISKS])
+  risk!: "LOW" | "MEDIUM" | "HIGH";
+}
+
 class BlackjackActionDto {
   @ApiProperty({ enum: ["hit", "stand", "double", "split", "insure", "noInsurance"] })
   @IsIn(["hit", "stand", "double", "split", "insure", "noInsurance"])
@@ -145,6 +164,7 @@ export class CasinoController {
     private readonly book: BookService,
     private readonly mines: MinesService,
     private readonly penalty: PenaltyService,
+    private readonly plinko: PlinkoService,
   ) {}
 
   /** The Player's Casino: can they play, the rules, free spins, recent spins. */
@@ -302,6 +322,22 @@ export class CasinoController {
   @Idempotent()
   penaltyCashOut(@CurrentActor() actor: Actor) {
     return this.penalty.collect(actor);
+  }
+
+  /** The Player's Plinko board: can they play, the pay tables, their last balls. */
+  @Get("plinko")
+  @Roles(Role.PLAYER)
+  plinkoState(@CurrentActor() actor: Actor) {
+    return this.plinko.state(actor);
+  }
+
+  /** Drops one ball. Players drop them quickly, hence the higher limit. A repeated request with the same Idempotency-Key gets the first answer back. */
+  @Post("plinko/drop")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 180, ttl: 60_000 } })
+  @Idempotent()
+  plinkoDrop(@CurrentActor() actor: Actor, @Body() body: PlinkoDropDto, @Req() req: AuthenticatedRequest) {
+    return this.plinko.drop(actor, body.bet, body.rows, body.risk, clientIp(req));
   }
 
   /** Whether the Casino is open, and how it did in a period, per Player. */

@@ -24,9 +24,9 @@ export const REELS = 5;
 export const ROWS = 3;
 export const LINES = 10;
 /** What a spin can cost, in dollars. A line bet is a tenth of it. */
-export const BETS = [0.5, 1, 2, 5, 10] as const;
+export const BETS = [0.5, 1, 2, 5, 10, 50, 100] as const;
 /** What spins pay back on average, in percent of what they cost, as measured by scripts/book-rtp.mjs. */
-export const PAYOUT_RATE = 94.9;
+export const PAYOUT_RATE = 94.3;
 export const FREE_SPINS = 10;
 /** The most a spin, or a round of free spins with the spin that started it, pays: this many times the bet. */
 export const MAX_WIN = 5000;
@@ -39,7 +39,7 @@ export const PAYING: Paying[] = SYMBOLS.filter((symbol): symbol is Paying => sym
 
 /** Line wins in line bets for [2, 3, 4, 5] of a kind from the first reel; 0 doesn't pay. */
 export const LINE_PAYS: Record<Paying, [number, number, number, number]> = {
-  EXPLORER: [10, 100, 1000, 5000],
+  EXPLORER: [10, 100, 1000, 0],
   PHARAOH: [5, 40, 400, 2000],
   STATUE: [5, 30, 100, 750],
   SCARAB: [5, 30, 100, 750],
@@ -178,10 +178,26 @@ export function evaluate(grid: BookSymbol[][], special: Paying | null = null): O
   return { grid, lines, scatter, expansion, freeSpinsWon: scatter ? FREE_SPINS : 0, win };
 }
 
+/** How many times the reels may land again before a spin is given up. */
+const LANDINGS = 1000;
+
+/** Five explorers on a line (books standing in), or in a free spin the explorer on all 5 reels: the reels never stop that way. */
+function fiveExplorers(grid: BookSymbol[][], special: Paying | null): boolean {
+  const onLine = LINE_SHAPES.some((shape) => {
+    const symbols = shape.map((row, reel) => grid[reel][row]);
+    return symbols.includes("EXPLORER") && symbols.every((symbol) => symbol === "EXPLORER" || symbol === BOOK);
+  });
+  return onLine || (special === "EXPLORER" && grid.every((column) => column.includes("EXPLORER")));
+}
+
 /** One spin: a paid one, or (with `special`) a free one. crypto.randomInt unless a test or the simulation passes its own draw. */
 export function spin(special: Paying | null = null, draw: Draw = randomInt): Spin {
-  const { grid, stops } = land(draw);
-  return { ...evaluate(grid, special), stops };
+  let landed = land(draw);
+  for (let landing = 1; fiveExplorers(landed.grid, special); landing++) {
+    if (landing >= LANDINGS) throw new Error("The reels couldn't land");
+    landed = land(draw);
+  }
+  return { ...evaluate(landed.grid, special), stops: landed.stops };
 }
 
 /** Draws the special symbol for a round of free spins: any symbol but the book, each as likely. */

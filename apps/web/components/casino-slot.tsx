@@ -12,6 +12,7 @@ import { slotSound } from "./slot-sounds";
 import { symbolImage } from "./slot-symbols";
 import { useToast } from "./toaster";
 import { FullScreenIcon, RotatePhoneIcon, useFullScreen, usePrefersReducedMotion } from "./use-full-screen";
+import { useGameKeys } from "./use-game-keys";
 import {
   apiFetch,
   type CasinoGamble,
@@ -336,6 +337,8 @@ export function SlotGame() {
     reels.current?.present([combos[index].reel], () => setShowing(index));
   }
 
+  useGameKeys(rulesOpen);
+
   if (!state || !grid) return <PageLoading label="Loading the Casino" />;
   const playingFree = freeSpins !== null && freeSpins.remaining > 0;
   const tooBig = (value: number) => (state.maxStake !== null && value > state.maxStake) || value > balance;
@@ -383,6 +386,7 @@ export function SlotGame() {
         <div>
           <h1 style={{ margin: 0 }}>{state.game.name}</h1>
           <p className="muted report-subtitle">{t("5 reels, 5 lines, played with your balance.")}</p>
+          <p className="game-keys-hint">{t("Press Space to spin.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
           {t("Pays and rules")}
@@ -496,7 +500,7 @@ export function SlotGame() {
                 <small>{t("Auto")}</small>
                 <span className="slot-switch" aria-hidden="true" />
               </button>
-              <button type="button" className="slot-btn slot-start" onClick={() => (auto ? setAuto(false) : spin())} disabled={!auto && !canSpin}>
+              <button type="button" className="slot-btn slot-start" data-key="Space" onClick={() => (auto ? setAuto(false) : spin())} disabled={!auto && !canSpin}>
                 <span aria-hidden="true">⟳</span> {auto ? t("Stop") : t("Start")}
               </button>
             </footer>
@@ -683,9 +687,6 @@ function Rules({ game, bet, onClose, i18n }: { game: CasinoState["game"]; bet: n
             })}
           </p>
         </div>
-        <p style={{ margin: 0 }}>
-          {t("On average spins pay back {rate}% of what they cost. Each spin is decided on our server, never on your phone.", { rate: game.payoutRate })}
-        </p>
       </section>
     </div>
   );

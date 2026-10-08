@@ -11,6 +11,7 @@ import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
 import { FullScreenIcon, useFullScreen } from "./use-full-screen";
+import { useGameKeys } from "./use-game-keys";
 import { apiFetch, type PenaltyDirection, type PenaltyRoundView, type PenaltyState, type PenaltyStepResult } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
@@ -110,7 +111,7 @@ export function PenaltyGame() {
       slotSound.coins(Math.min(1400, 400 + next.cashout * 20));
     } else if (next.phase === "PLAY" && next.goals === 0) slotSound.whistle();
     if (next.phase !== "PLAY") {
-      setRecent((rows) => [{ ...next, id: `${next.phase}-${rows.length}-${next.cashout}`, createdAt: new Date().toISOString() }, ...rows].slice(0, 10));
+      setRecent((rows) => [{ ...next, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...rows].slice(0, 10));
     }
   }
 
@@ -159,6 +160,8 @@ export function PenaltyGame() {
     }
   }
 
+  useGameKeys(rulesOpen);
+
   if (!state) return <PageLoading label="Loading the Casino" />;
 
   const last = round?.kicks.at(-1) ?? null;
@@ -180,6 +183,7 @@ export function PenaltyGame() {
         <div>
           <h1 style={{ margin: 0 }}>{t("Penalty")}</h1>
           <p className="muted report-subtitle">{t("Take the penalties, cash out before the keeper saves one. Played with your balance.")}</p>
+          <p className="game-keys-hint">{t("Keys: Space starts a round or cashes out, and ← ↑ → shoot left, centre and right.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
           {t("Pays and rules")}
@@ -261,11 +265,11 @@ export function PenaltyGame() {
               ))}
             </div>
             {playing ? (
-              <button type="button" className="mines-go" disabled={busy || round.goals === 0} onClick={() => void cashOut()}>
+              <button type="button" className="mines-go" data-key="Space" disabled={busy || round.goals === 0} onClick={() => void cashOut()}>
                 {round.goals === 0 ? t("Score a goal") : t("Cash out {amount}", { amount: formatMoney(round.cashout) })}
               </button>
             ) : (
-              <button type="button" className="mines-go" disabled={busy || bet <= 0 || bet > balance || bet > state.tableMax} onClick={() => void start()}>
+              <button type="button" className="mines-go" data-key="Space" disabled={busy || bet <= 0 || bet > balance || bet > state.tableMax} onClick={() => void start()}>
                 {t("Start {amount}", { amount: formatMoney(bet) })}
               </button>
             )}
@@ -310,8 +314,7 @@ export function PenaltyGame() {
               {t("You aim left, center or right, and the keeper dives one of those ways. A different way is a goal and raises what the round pays. The same way is a save and loses the stake. Cash out after the first goal, or keep taking them. The round ends on its own if it reaches {times} times the stake.", { times: state.game.maxWin.toLocaleString() })}
             </p>
             <p>
-              {t("The first {full} goals pay the fair chance of having scored that many, less {edge}%, so stopping there pays back {rate}% on average. Every goal after that multiplies what the round pays by {step} instead of the fair 1.5. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't scored. Every kick is decided on our server.", {
-                rate: state.game.payoutRate,
+              {t("The first {full} goals pay the fair chance of having scored that many, less {edge}%. Every goal after that multiplies what the round pays by {step} instead of the fair 1.5. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't scored.", {
                 edge: Math.round((100 - state.game.payoutRate) * 10) / 10,
                 full: state.game.fullPriceGoals,
                 step: state.game.laterStep,

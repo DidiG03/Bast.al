@@ -38,19 +38,28 @@ test("the reels, lines and bets are what the rules say", () => {
   assert.equal(LINES, 5);
   assert.equal(LINE_SHAPES.length, LINES);
   assert.ok(LINE_SHAPES.every((shape) => shape.length === 5 && shape.every((row) => row >= 0 && row < ROWS)));
-  assert.deepEqual([...BETS], [0.5, 1, 2, 5, 10]);
+  assert.deepEqual([...BETS], [0.5, 1, 2, 5, 10, 50, 100]);
   for (const strip of REEL_STRIPS) assert.ok(strip.includes(SCATTER));
   for (const [symbol, pays] of Object.entries(LINE_PAYS)) assert.equal(pays[0] > 0, symbol === "CHERRY", `only cherries pay for 2 (${symbol})`);
 });
 
-test("five sevens on the middle line pay the top prize", () => {
-  const stops = REEL_STRIPS.map((_, reel) => stopFor(reel, "SEVEN", 1));
+test("four sevens on the middle line pay", () => {
+  const stops = [...[0, 1, 2, 3].map((reel) => stopFor(reel, "SEVEN", 1)), stopWithout(4, "SEVEN")];
   const round = playRound(stopsAt(...stops));
   assert.deepEqual(round.stops, stops);
   const middle = round.lines.find((line) => line.line === 0);
-  assert.deepEqual([middle.symbol, middle.count, middle.win], ["SEVEN", 5, LINE_PAYS.SEVEN[3]]);
-  assert.deepEqual(middle.cells, [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1]]);
+  assert.deepEqual([middle.symbol, middle.count, middle.win], ["SEVEN", 4, LINE_PAYS.SEVEN[2]]);
+  assert.deepEqual(middle.cells, [[0, 1], [1, 1], [2, 1], [3, 1]]);
   assert.equal(round.win, round.lines.reduce((sum, line) => sum + line.win, 0) + (round.scatter?.win ?? 0));
+});
+
+test("five sevens never land on a line: the reels land again", () => {
+  const sevens = REEL_STRIPS.map((_, reel) => stopFor(reel, "SEVEN", 1));
+  const next = [0, 1, 2, 3, 4].map((reel) => stopWithout(reel, "SEVEN"));
+  const round = playRound(stopsAt(...sevens, ...next));
+  assert.deepEqual(round.stops, next);
+  assert.ok(!round.lines.some((line) => line.symbol === "SEVEN"));
+  assert.throws(() => playRound(stopsAt(...sevens)), /couldn't land/);
 });
 
 test("2 cherries pay; 2 of anything else doesn't", () => {

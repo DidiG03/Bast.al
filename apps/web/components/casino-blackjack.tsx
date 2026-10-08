@@ -10,6 +10,7 @@ import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
 import { FullScreenIcon, RotatePhoneIcon, useFullScreen, usePrefersReducedMotion } from "./use-full-screen";
+import { useGameKeys } from "./use-game-keys";
 import { apiFetch, type BlackjackAction, type BlackjackMoveResult, type BlackjackRoundView, type BlackjackState } from "../lib/api";
 import { SUIT_SYMBOLS, handTotal, isRedSuit, rankLabel } from "../lib/blackjack";
 import { formatMoney } from "../lib/format";
@@ -20,6 +21,12 @@ const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 const TRAY = ["#1f9d55", "#2f6fd6", "#d8262c", "#f3c33b", "#f2f2f2", "#7fb8e6", "#f2f2f2", "#d8262c", "#2f6fd6", "#1f9d55"];
 /** How long between the dealer's cards turning up at the end of a round. */
 const REVEAL_MS = 650;
+/** Insurance: the chips going down, then the dealer lifting the face-down card to look for blackjack. */
+const INSURE_MS = 650;
+const PEEK_MS = 1300;
+/** The dealer taking lost insurance chips away. */
+const COLLECT_MS = 700;
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const CHIP_COLORS: Record<string, string> = { "0.5": "#7fb8e6", "1": "#f2f2f2", "2": "#f3c33b", "5": "#d8262c", "10": "#2f6fd6", "25": "#1f9d55" };
 const chipText = (amount: number) => (amount % 1 === 0 ? String(amount) : amount.toFixed(1));
@@ -46,6 +53,10 @@ export function BlackjackGame() {
   const [revealed, setRevealed] = useState(1);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  /** Insurance on the table: going down, paid against a blackjack, or taken by the dealer. */
+  const [insuranceChips, setInsuranceChips] = useState<{ amount: number; stage: "in" | "won" | "lost" } | null>(null);
+  /** The dealer looking at the face-down card, and once they have. */
+  const [peek, setPeek] = useState<"peeking" | "peeked" | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   useEffect(() => setSoundOn(slotSound.on), []);
@@ -146,6 +157,8 @@ export function BlackjackGame() {
     setBusy(true);
     try {
       const result = await send<BlackjackMoveResult>("/casino/blackjack/deal", { bet }, dealKey);
+      setInsuranceChips(null);
+      setPeek(null);
       setBalance(result.round.phase === "DONE" ? result.balance - (result.round.payout ?? 0) : result.balance);
       show(result.round, true);
       if (result.round.phase === "DONE") setTimeout(() => setBalance(result.balance), instant ? 0 : REVEAL_MS * result.round.dealer.length);
@@ -161,15 +174,47 @@ export function BlackjackGame() {
     if (!round || busy) return;
     slotSound.unlock();
     setBusy(true);
+    const answeringInsurance = action === "insure" || action === "noInsurance";
+    const insured = action === "insure" ? round.hands[0].bet / 2 : 0;
     try {
-      const result = await send<BlackjackMoveResult>("/casino/blackjack/action", { action }, moveKey);
+      const request = send<BlackjackMoveResult>("/casino/blackjack/action", { action }, moveKey);
+      // Handled below, once the animations are done.
+      request.catch(() => undefined);
+      if (answeringInsurance && !instant) {
+        // The insurance goes down, then the dealer lifts the face-down card to look for blackjack.
+        if (insured > 0) {
+          setInsuranceChips({ amount: insured, stage: "in" });
+          slotSound.chip();
+          await wait(INSURE_MS);
+        }
+        setPeek("peeking");
+        slotSound.cardFlip();
+        await wait(PEEK_MS);
+      }
+      const result = await request;
+      if (answeringInsurance) {
+        setPeek("peeked");
+        const dealerCardsNow = result.round.dealer.filter((card): card is string => card !== null);
+        const dealerBlackjack = result.round.phase === "DONE" && dealerCardsNow.length === 2 && handTotal(dealerCardsNow).total === 21;
+        if (insured > 0) setInsuranceChips({ amount: insured, stage: dealerBlackjack ? "won" : "lost" });
+        // Lost insurance goes to the dealer, then off the table.
+        if (insured > 0 && !dealerBlackjack) setTimeout(() => setInsuranceChips(null), instant ? 0 : COLLECT_MS);
+        if (result.round.phase === "PLAYER") setHint(t("No blackjack. Play on."));
+      }
       if (result.round.phase === "DONE") {
         // The pay-out arrives in the balance once the dealer's cards are up.
         setBalance(result.balance - (result.round.payout ?? 0));
         setTimeout(() => setBalance(result.balance), instant ? 0 : REVEAL_MS * result.round.dealer.length);
       } else setBalance(result.balance);
       show(result.round, false);
+      // A blackjack found by looking is turned over at once.
+      if (answeringInsurance && result.round.phase === "DONE") {
+        setRevealed(2);
+        slotSound.cardFlip();
+      }
     } catch (err) {
+      setPeek(null);
+      setInsuranceChips(null);
       toast.error(err instanceof Error ? err.message : t("That didn't go through. Try again."));
       load().catch(() => undefined);
     } finally {
@@ -210,6 +255,8 @@ export function BlackjackGame() {
     setBetHistory((list) => list.slice(0, -1));
   }
 
+  useGameKeys(rulesOpen);
+
   if (!state) return <PageLoading label="Loading the Casino" />;
   const inPlay = round !== null && round.phase !== "DONE";
   const betting = !inPlay;
@@ -225,6 +272,7 @@ export function BlackjackGame() {
 
   const message = (() => {
     if (busy && !round) return t("Dealing…");
+    if (peek === "peeking") return t("The dealer checks for blackjack…");
     if (hint) return hint;
     if (round?.phase === "INSURANCE") return t("Insurance? It costs {amount}", { amount: formatMoney(round.hands[0].bet / 2) });
     if (round?.phase === "PLAYER") {
@@ -247,6 +295,7 @@ export function BlackjackGame() {
         <div>
           <h1 style={{ margin: 0 }}>{t("Blackjack")}</h1>
           <p className="muted report-subtitle">{t("Beat the dealer to 21, played with your balance.")}</p>
+          <p className="game-keys-hint">{t("Keys: Space deals, H hits, S stands, D doubles, P splits, Y and N answer insurance.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
           {t("Pays and rules")}
@@ -315,7 +364,14 @@ export function BlackjackGame() {
                   <div className="blackjack-cards">
                     {round
                       ? dealerCards.map((card, index) => (
-                          <PlayingCard key={`d${index}-${card ?? "back"}`} card={card} order={index * 2 + 1} fresh={!over && round.hands[0].cards.length <= 2} flip={index === 1 && card !== null} />
+                          <PlayingCard
+                            key={`d${index}-${card ?? "back"}`}
+                            card={card}
+                            order={index * 2 + 1}
+                            fresh={!over && round.hands[0].cards.length <= 2}
+                            flip={index === 1 && card !== null}
+                            peek={index === 1 && card === null ? peek : null}
+                          />
                         ))
                       : null}
                   </div>
@@ -341,6 +397,12 @@ export function BlackjackGame() {
                 </svg>
 
                 <div className="blackjack-player">
+                  {insuranceChips ? (
+                    <div className={`blackjack-insurance is-${insuranceChips.stage}`} aria-label={t("Insurance")}>
+                      <ChipStack amount={insuranceChips.amount} />
+                      <span className="blackjack-insurance-label">{t("Insurance")}</span>
+                    </div>
+                  ) : null}
                   {round ? (
                     round.hands.map((hand, index) => {
                       const shownResult = settledShown ? hand.result : null;
@@ -396,21 +458,21 @@ export function BlackjackGame() {
                         <span aria-hidden="true">2×</span>
                         <small>{t("Double")}</small>
                       </button>
-                      <button type="button" className="blackjack-deal" disabled={busy || bet === 0 || Boolean(state.closed)} onClick={() => void dealRound()}>
+                      <button type="button" className="blackjack-deal" data-key="Space" disabled={busy || bet === 0 || Boolean(state.closed)} onClick={() => void dealRound()}>
                         {t("Deal")}
                       </button>
                     </div>
                   ) : round.phase === "INSURANCE" ? (
                     <div className="blackjack-moves is-insurance">
-                      <MoveButton kind="double" icon="½" label={t("Insurance")} disabled={!can("insure")} onClick={() => void move("insure")} />
-                      <MoveButton kind="clear" icon="✕" label={t("No insurance")} disabled={!can("noInsurance")} onClick={() => void move("noInsurance")} />
+                      <MoveButton kind="double" icon="½" label={t("Insurance")} keys="KeyY" disabled={!can("insure")} onClick={() => void move("insure")} />
+                      <MoveButton kind="clear" icon="✕" label={t("No insurance")} keys="KeyN" disabled={!can("noInsurance")} onClick={() => void move("noInsurance")} />
                     </div>
                   ) : (
                     <div className="blackjack-moves">
-                      <MoveButton kind="double" icon="2×" label={t("Double")} disabled={!can("double")} onClick={() => void move("double")} />
-                      <MoveButton kind="hit" icon="+" label={t("Hit")} disabled={!can("hit")} onClick={() => void move("hit")} />
-                      <MoveButton kind="stand" icon="−" label={t("Stand")} disabled={!can("stand")} onClick={() => void move("stand")} />
-                      <MoveButton kind="split" icon="◀▶" label={t("Split")} disabled={!can("split")} onClick={() => void move("split")} />
+                      <MoveButton kind="double" icon="2×" label={t("Double")} keys="KeyD" disabled={!can("double")} onClick={() => void move("double")} />
+                      <MoveButton kind="hit" icon="+" label={t("Hit")} keys="KeyH" disabled={!can("hit")} onClick={() => void move("hit")} />
+                      <MoveButton kind="stand" icon="−" label={t("Stand")} keys="KeyS" disabled={!can("stand")} onClick={() => void move("stand")} />
+                      <MoveButton kind="split" icon="◀▶" label={t("Split")} keys="KeyP" disabled={!can("split")} onClick={() => void move("split")} />
                       <span className="blackjack-moves-total">{round.hands[round.active].total}</span>
                     </div>
                   )}
@@ -488,10 +550,10 @@ function outcome(round: BlackjackRoundView, t: I18n["t"]): string {
 const FIGURES: Record<string, string> = { K: "♚", Q: "♛", J: "♞" };
 
 /** A playing card, drawn in markup: rank and suit in the corners, the suit large in the middle. Null is a card face down; `flip` turns it over where it lies (the dealer's face-down card) instead of dealing it in. */
-function PlayingCard({ card, order, fresh, flip = false }: { card: string | null; order: number; fresh: boolean; flip?: boolean }) {
+function PlayingCard({ card, order, fresh, flip = false, peek = null }: { card: string | null; order: number; fresh: boolean; flip?: boolean; peek?: "peeking" | "peeked" | null }) {
   // The first four cards come out one after another; later ones straight away.
   const style = { animationDelay: fresh ? `${order * 140}ms` : "0ms" } as CSSProperties;
-  if (!card) return <span className="playing-card is-back" style={style} aria-label="?" />;
+  if (!card) return <span className={`playing-card is-back${peek ? ` is-${peek}` : ""}`} style={style} aria-label="?" />;
   const rank = rankLabel(card);
   const suit = SUIT_SYMBOLS[card[1]];
   const face = "JQK".includes(card[0]);
@@ -549,9 +611,9 @@ function ChipStack({ amount, large = false }: { amount: number; large?: boolean 
 }
 
 /** A big table button: a coloured tile with an icon, its name underneath. */
-function MoveButton({ kind, icon, label, disabled, onClick }: { kind: "hit" | "stand" | "double" | "split" | "clear"; icon: string; label: string; disabled: boolean; onClick(): void }) {
+function MoveButton({ kind, icon, label, keys, disabled, onClick }: { kind: "hit" | "stand" | "double" | "split" | "clear"; icon: string; label: string; keys: string; disabled: boolean; onClick(): void }) {
   return (
-    <button type="button" className={`blackjack-move is-${kind}`} disabled={disabled} onClick={onClick}>
+    <button type="button" className={`blackjack-move is-${kind}`} data-key={keys} disabled={disabled} onClick={onClick}>
       <span className="blackjack-move-tile" aria-hidden="true">
         {icon}
       </span>
@@ -586,7 +648,7 @@ function BlackjackRules({ state, onClose, i18n }: { state: BlackjackState; onClo
           <button type="button" className="modal-close secondary" onClick={onClose} aria-label={t("Close")}>×</button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          {t("Get closer to 21 than the dealer. Cards 2 to 10 count their number, faces 10, an ace 1 or 11. The dealer draws to 17 and stands on every 17, soft 17 included. The dealer's second card stays face down until you've played: a dealer's blackjack beats every hand but a blackjack, doubles and splits included. Six decks, shuffled for every round.")}
+          {t("Get closer to 21 than the dealer. Cards 2 to 10 count their number, faces 10, an ace 1 or 11. The dealer draws to 17 and stands on every 17, soft 17 included. With an ace showing, the dealer offers insurance, then looks at the face-down card: a blackjack is turned over at once and ends the round. Under any other card, the dealer's second card stays face down until you've played: a dealer's blackjack beats every hand but a blackjack, doubles and splits included. Six decks, shuffled for every round.")}
         </p>
         <div className="report-list">
           {rows.map(([name, how]) => (
@@ -603,9 +665,6 @@ function BlackjackRules({ state, onClose, i18n }: { state: BlackjackState; onClo
             min: formatMoney(state.game.chips[0]),
             limit: formatMoney(state.tableMax),
           })}
-        </p>
-        <p style={{ margin: 0 }}>
-          {t("Played perfectly, blackjack pays back about {rate}% of what's bet. The cards are shuffled and dealt on our server, never on your phone.", { rate: state.game.payoutRate })}
         </p>
       </section>
     </div>

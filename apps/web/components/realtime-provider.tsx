@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useContext,
@@ -147,10 +147,25 @@ export function useRealtime(handler: Listener) {
 /** Re-renders the server-rendered parts of the dashboard when this account's balance or bets change. */
 export function RealtimeRefresh() {
   const router = useRouter();
+  const pathname = usePathname();
   const timer = useRef<number>();
+  /** A balance change skipped while in the casino, refreshed on the way out. */
+  const owed = useRef(false);
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  const inCasino = pathname.startsWith("/dashboard/casino");
+  useEffect(() => {
+    if (inCasino || !owed.current) return;
+    owed.current = false;
+    router.refresh();
+  }, [inCasino, router]);
   useRealtime((event) => {
     if (event.type !== "balance.changed" && event.type !== "bets.changed" && event.type !== "resync") return;
+    // Every spin changes the balance. The games and the balance chip follow it live, and a whole
+    // server render of the dashboard each time would stutter the reels, so in the casino it waits.
+    if (event.type === "balance.changed" && inCasino) {
+      owed.current = true;
+      return;
+    }
     // Coalesce a burst of events into one refresh.
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => router.refresh(), 250);

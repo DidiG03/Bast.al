@@ -23,6 +23,8 @@ const STEP_MS = 105;
 const STEP_MS_REDUCED = 35;
 /** Time between balls on autoplay. */
 const AUTO_MS = 380;
+/** The quickest balls can follow each other, however fast Space is pressed: 5 a second, inside the API's limit of 360 a minute. */
+const MIN_GAP_MS = 200;
 
 const RISK_NAMES: Record<PlinkoRisk, string> = { LOW: msg("Low"), MEDIUM: msg("Medium"), HIGH: msg("High") };
 
@@ -229,8 +231,13 @@ export function PlinkoGame() {
   const falling = inPlay.balls > 0;
   const canDrop = !!state && !state.closed && bet > 0 && bet <= state.tableMax && bet <= balance + 1e-9 && inPlay.balls < MAX_IN_FLIGHT;
 
+  const lastDrop = useRef(0);
   const drop = useCallback(async () => {
     if (!state || !canDrop) return false;
+    const now = performance.now();
+    // Too soon after the last ball: this press is skipped, not refused, so autoplay carries on.
+    if (now - lastDrop.current < MIN_GAP_MS) return true;
+    lastDrop.current = now;
     slotSound.unlock();
     const stake = bet;
     setInPlay((current) => ({ balls: current.balls + 1, stakes: current.stakes + stake }));
@@ -328,7 +335,6 @@ export function PlinkoGame() {
   if (!state) return <PageLoading label="Loading the Casino" />;
 
   const pays = state.game.pays[rows][risk];
-  const rate = state.game.payoutRates[rows][risk];
   const buckets = rows + 1;
 
   return (
@@ -512,13 +518,12 @@ export function PlinkoGame() {
               {t("The ball falls through the rows of pegs. At every peg it goes left or right, each just as likely, and lands in a bucket at the bottom. Each bucket pays the stake times its number: the middle ones are hit most and pay least, the edges are rare and pay most.")}
             </p>
             <p>
-              {t("More rows and more risk make the edges pay more and the middle less. Whatever you pick, a ball pays back about {rate}% of its stake on average. A ball costs {min} to {max}, and never more than your max stake. Every ball is decided on our server.", {
-                rate: state.game.payoutRate,
+              {t("More rows and more risk make the edges pay more and the middle less. A ball costs {min} to {max}, and never more than your max stake.", {
                 min: formatMoney(state.game.bets[0]),
                 max: formatMoney(state.game.bets[state.game.bets.length - 1]),
               })}
             </p>
-            <h3 style={{ margin: "0.5rem 0 0.25rem" }}>{t("{count} rows, {risk} risk: {rate}% back", { count: rows, risk: t(RISK_NAMES[risk]).toLowerCase(), rate })}</h3>
+            <h3 style={{ margin: "0.5rem 0 0.25rem" }}>{t("{count} rows, {risk} risk", { count: rows, risk: t(RISK_NAMES[risk]).toLowerCase() })}</h3>
             <div className="plinko-paytable">
               {pays.slice(0, rows / 2 + 1).map((multiplier, bucket) => (
                 <span key={bucket}>

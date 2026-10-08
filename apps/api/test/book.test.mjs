@@ -4,7 +4,7 @@
 // reels themselves. The payout rate is measured by scripts/book-rtp.mjs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BOOK, FREE_SPINS, LINES, LINE_SHAPES, MAX_WIN, PAYING, REEL_STRIPS, drawSpecial, evaluate, expand, land, minToPay, roomLeft, spin } from "../dist/casino/book.js";
+import { BOOK, FREE_SPINS, LINES, LINE_PAYS, LINE_SHAPES, MAX_WIN, PAYING, REEL_STRIPS, drawSpecial, evaluate, expand, land, minToPay, roomLeft, spin } from "../dist/casino/book.js";
 
 /** A grid from five columns written top to bottom: "E" explorer, "B" book, "A" ace and so on. */
 const CODES = { E: "EXPLORER", P: "PHARAOH", S: "STATUE", C: "SCARAB", A: "ACE", K: "KING", Q: "QUEEN", J: "JACK", T: "TEN", B: "BOOK" };
@@ -70,4 +70,31 @@ test("the cap: never more than 5,000 times the bet for a round", () => {
   assert.equal(roomLeft(0), MAX_WIN * LINES);
   assert.equal(roomLeft(MAX_WIN * LINES - 7), 7);
   assert.equal(roomLeft(MAX_WIN * LINES + 100), 0);
+});
+
+test("five explorers never land: on a line, books included, or filling every reel in a free spin", () => {
+  /** A draw that stops the reels at these places, landing after landing. */
+  const stopsAt = (...stops) => {
+    let at = 0;
+    return () => stops[at++ % stops.length];
+  };
+  const showing = (reel, symbol, row) => (REEL_STRIPS[reel].indexOf(symbol) - row + REEL_STRIPS[reel].length) % REEL_STRIPS[reel].length;
+  const without = (reel) => {
+    const strip = REEL_STRIPS[reel];
+    for (let stop = 0; stop < strip.length; stop++) if (![0, 1, 2].some((row) => ["EXPLORER", BOOK].includes(strip[(stop + row) % strip.length]))) return stop;
+    throw new Error("no such stop");
+  };
+  const explorers = [0, 1, 2, 3, 4].map((reel) => showing(reel, "EXPLORER", 1));
+  const next = [0, 1, 2, 3, 4].map(without);
+  const landed = spin(null, stopsAt(...explorers, ...next));
+  assert.deepEqual(landed.stops, next);
+  assert.throws(() => spin(null, stopsAt(...explorers)), /couldn't land/);
+  // A book standing in for the fifth.
+  const withBook = [...explorers.slice(0, 4), showing(4, BOOK, 1)];
+  assert.deepEqual(spin(null, stopsAt(...withBook, ...next)).stops, next);
+  // The explorer on every reel, but on different rows: no line, yet in a free spin it would fill all 5.
+  const scattered = [0, 1, 2, 3, 4].map((reel) => showing(reel, "EXPLORER", reel % 2 === 0 ? 0 : 2));
+  assert.deepEqual(spin("EXPLORER", stopsAt(...scattered, ...next)).stops, next);
+  assert.deepEqual(spin("PHARAOH", stopsAt(...scattered)).stops, scattered, "another special symbol: it lands");
+  assert.equal(LINE_PAYS.EXPLORER[3], 0);
 });

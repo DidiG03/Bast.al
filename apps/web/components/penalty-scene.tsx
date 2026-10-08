@@ -97,6 +97,7 @@ export function PenaltyScene({
                 key={side}
                 type="button"
                 className={`pk-zone is-${side.toLowerCase()}${last?.aim === side ? " is-aimed" : ""}`}
+                data-key={side === "LEFT" ? "ArrowLeft" : side === "RIGHT" ? "ArrowRight" : "ArrowUp"}
                 disabled={!canShoot}
                 aria-label={t("Shoot {side}", { side: t(sideName(side)) })}
                 onClick={() => onShoot(side)}

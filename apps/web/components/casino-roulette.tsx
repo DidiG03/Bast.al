@@ -11,6 +11,7 @@ import { RouletteWheel, type RouletteWheelHandle } from "./roulette-wheel";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
 import { FullScreenIcon, RotatePhoneIcon, useFullScreen, usePrefersReducedMotion } from "./use-full-screen";
+import { useGameKeys } from "./use-game-keys";
 import { apiFetch, type RouletteResult, type RouletteRound, type RouletteState } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { msg } from "../lib/i18n/core";
@@ -249,6 +250,8 @@ export function RouletteGame() {
     }
   }
 
+  useGameKeys(rulesOpen);
+
   if (!state) return <PageLoading label="Loading the Casino" />;
   const shown = settled ? lastBets : bets;
   const total = totalOf(shown);
@@ -274,6 +277,7 @@ export function RouletteGame() {
         <div>
           <h1 style={{ margin: 0 }}>{state.game.name}</h1>
           <p className="muted report-subtitle">{t("European roulette with a single 0, played with your balance.")}</p>
+          <p className="game-keys-hint">{t("Press Space to spin.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
           {t("Pays and rules")}
@@ -389,7 +393,7 @@ export function RouletteGame() {
                   <span className="roulette-max"> · {t("Max {amount}", { amount: formatMoney(state.tableMax) })}</span>
                 </small>
               </div>
-              <button type="button" className="slot-btn slot-start" disabled={spinning || (total === 0 && Object.keys(lastBets).length === 0)} onClick={() => void spin()}>
+              <button type="button" className="slot-btn slot-start" data-key="Space" disabled={spinning || (total === 0 && Object.keys(lastBets).length === 0)} onClick={() => void spin()}>
                 <span aria-hidden="true">⟳</span>
                 {t("Spin")}
               </button>
@@ -597,9 +601,6 @@ function RouletteRules({ game, tableMax, onClose, i18n }: { game: RouletteState[
             max: formatMoney(game.chips[game.chips.length - 1]),
             limit: formatMoney(tableMax),
           })}
-        </p>
-        <p style={{ margin: 0 }}>
-          {t("On average every bet pays back {rate}% of what it costs. The number is drawn on our server, never on your phone.", { rate: game.payoutRate })}
         </p>
       </section>
     </div>

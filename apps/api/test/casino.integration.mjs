@@ -53,7 +53,8 @@ function stopsWhere(wanted) {
   throw new Error("no such round");
 }
 const losing = stopsWhere((round) => round.win === 0);
-const sevens = REEL_STRIPS.map((strip) => (strip.indexOf("SEVEN") - 1 + strip.length) % strip.length);
+/** Four sevens on the middle row, then a lemon. */
+const sevens = REEL_STRIPS.map((strip, reel) => (strip.indexOf(reel < 4 ? "SEVEN" : "LEMON") - 1 + strip.length) % strip.length);
 /** A small win: 10 line bets, $2 on a $1 spin. */
 const smallWin = stopsWhere((round) => round.win === 10);
 const RED = SUITS.indexOf("HEARTS");
@@ -120,8 +121,8 @@ test("a win adds to the balance, and the day's line keeps adding up", async () =
   casino.rng = stopsAt(sevens);
   const result = await casino.spin(cara, 2);
   const paid = result.lines.reduce((sum, line) => sum + line.win, 0) + (result.scatter?.win ?? 0);
-  assert.ok(result.lines.some((line) => line.symbol === "SEVEN" && line.count === 5), "five sevens on the middle row");
-  assert.ok(result.win >= 2000, "5,000 line bets at 40 cents");
+  assert.ok(result.lines.some((line) => line.symbol === "SEVEN" && line.count === 4), "four sevens on the middle row");
+  assert.ok(result.win >= 400, "1,000 line bets at 40 cents");
   assert.equal(result.gamble, null, "too big to double: over the limit");
   assert.equal(result.win, Math.round(paid * 100) / 100);
   assert.equal(await balanceOf(cara), 99 - 2 + result.win);

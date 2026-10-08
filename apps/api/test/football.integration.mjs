@@ -52,7 +52,7 @@ const market = (key, name, selections) => ({ key, name, sortOrder: 0, selections
 let sa, owner, manager, dita, ditaActor;
 
 test("setup", async () => {
-  for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "bet_legs", "bets", "odds_snapshots", "odds_overrides", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
+  for (const table of ["settlement_entries", "casino_spins", "casino_free_spins", "casino_gambles", "blackjack_hands", "mines_rounds", "penalty_rounds", "commission_payouts", "balance_transactions", "bet_legs", "bets", "odds_snapshots", "odds_overrides", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
   sa = await user("SUPER_ADMIN", null);

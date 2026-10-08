@@ -331,10 +331,10 @@ export class CasinoController {
     return this.plinko.state(actor);
   }
 
-  /** Drops one ball. Players drop them quickly, hence the higher limit. A repeated request with the same Idempotency-Key gets the first answer back. */
+  /** Drops one ball. Players drop them quickly, hence the higher limit; the page never sends more than 5 a second. A repeated request with the same Idempotency-Key gets the first answer back. */
   @Post("plinko/drop")
   @Roles(Role.PLAYER)
-  @Throttle({ default: { limit: 180, ttl: 60_000 } })
+  @Throttle({ default: { limit: 360, ttl: 60_000 } })
   @Idempotent()
   plinkoDrop(@CurrentActor() actor: Actor, @Body() body: PlinkoDropDto, @Req() req: AuthenticatedRequest) {
     return this.plinko.drop(actor, body.bet, body.rows, body.risk, clientIp(req));

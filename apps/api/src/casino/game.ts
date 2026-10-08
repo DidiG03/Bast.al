@@ -30,9 +30,9 @@ export const REELS = 5;
 export const ROWS = 3;
 export const LINES = 5;
 /** What spins pay back on average, in percent of what they cost, as measured (see REEL_MAKEUP). */
-export const PAYOUT_RATE = 95.7;
+export const PAYOUT_RATE = 94.9;
 /** What a spin can cost, in dollars. A line bet is a fifth of it. */
-export const BETS = [0.5, 1, 2, 5, 10] as const;
+export const BETS = [0.5, 1, 2, 5, 10, 50, 100] as const;
 
 export const SYMBOLS = ["SEVEN", "MELON", "GRAPES", "PLUM", "ORANGE", "LEMON", "CHERRY", "STAR"] as const;
 export type SlotSymbol = (typeof SYMBOLS)[number];
@@ -46,7 +46,7 @@ type Paying = Exclude<SlotSymbol, "STAR">;
  * in a row. 0 means that many don't pay; only cherries pay for 2.
  */
 export const LINE_PAYS: Record<Paying, [number, number, number, number]> = {
-  SEVEN: [0, 100, 1000, 5000],
+  SEVEN: [0, 100, 1000, 0],
   MELON: [0, 40, 120, 700],
   GRAPES: [0, 40, 120, 700],
   PLUM: [0, 10, 40, 200],
@@ -154,10 +154,20 @@ export type Round = {
   win: number;
 };
 
+/** How many times the reels may land again before a round is given up. */
+const LANDINGS = 1000;
+
+/** Five sevens on a line: the reels never stop that way. */
+const fiveSevens = (grid: SlotSymbol[][]) => LINE_SHAPES.some((shape) => shape.every((row, reel) => grid[reel][row] === "SEVEN"));
+
 /** Plays one round. Uses crypto.randomInt unless a test or the simulation passes its own random source. */
 export function playRound(rng: RandomNumberGenerating = secure): Round {
   const generator = new SymbolsCombinationsGenerator<SlotSymbol>(config, rng);
-  const combination = generator.generateSymbolsCombination();
+  let combination = generator.generateSymbolsCombination();
+  for (let landing = 1; fiveSevens(combination.toMatrix()); landing++) {
+    if (landing >= LANDINGS) throw new Error("The reels couldn't land");
+    combination = generator.generateSymbolsCombination();
+  }
   const calculator = new VideoSlotWinCalculator<SlotSymbol>(config);
   calculator.calculateWin(1, combination);
   const grid = combination.toMatrix();

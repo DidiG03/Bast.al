@@ -10,6 +10,7 @@ import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
 import { FullScreenIcon, useFullScreen } from "./use-full-screen";
+import { useGameKeys } from "./use-game-keys";
 import { apiFetch, type MinesRoundView, type MinesState, type MinesStepResult, type MinesTile } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
@@ -130,7 +131,7 @@ export function MinesGame() {
       else if (next.opened === 0) slotSound.click();
     }
     if (next.phase !== "PLAY") {
-      setRecent((rows) => [{ ...next, id: `${next.phase}-${rows.length}-${next.cashout}`, createdAt: new Date().toISOString() }, ...rows].slice(0, 10));
+      setRecent((rows) => [{ ...next, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...rows].slice(0, 10));
     }
   }
 
@@ -176,6 +177,8 @@ export function MinesGame() {
     }
   }
 
+  useGameKeys(rulesOpen);
+
   if (!state) return <PageLoading label="Loading the Casino" />;
 
   const message = (() => {
@@ -197,6 +200,7 @@ export function MinesGame() {
         <div>
           <h1 style={{ margin: 0 }}>{t("Mines")}</h1>
           <p className="muted report-subtitle">{t("Open the gems, cash out before a mine. Played with your balance.")}</p>
+          <p className="game-keys-hint">{t("Press Space to start a round or cash out.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
           {t("Pays and rules")}
@@ -294,11 +298,11 @@ export function MinesGame() {
               ))}
             </div>
             {playing ? (
-              <button type="button" className="mines-go" disabled={busy || round.opened === 0} onClick={() => void cashOut()}>
+              <button type="button" className="mines-go" data-key="Space" disabled={busy || round.opened === 0} onClick={() => void cashOut()}>
                 {round.opened === 0 ? t("Open a tile") : t("Cash out {amount}", { amount: formatMoney(round.cashout) })}
               </button>
             ) : (
-              <button type="button" className="mines-go" disabled={busy || bet <= 0 || bet > balance || bet > state.tableMax} onClick={() => void start()}>
+              <button type="button" className="mines-go" data-key="Space" disabled={busy || bet <= 0 || bet > balance || bet > state.tableMax} onClick={() => void start()}>
                 {t("Start {amount}", { amount: formatMoney(bet) })}
               </button>
             )}
@@ -343,8 +347,7 @@ export function MinesGame() {
               {t("A 5 by 5 field hides the number of mines you pick. Tap a tile: a gem raises what the round pays, a mine loses the stake. Cash out after the first gem, or keep going. The round ends on its own if you clear every gem, or if it reaches {times} times the stake.", { times: state.game.maxWin.toLocaleString() })}
             </p>
             <p>
-              {t("Each gem pays the fair chance of having reached it, less 3%, so a round pays back {rate}% on average whichever gem you stop on. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile. Every round is decided on our server.", {
-                rate: state.game.payoutRate,
+              {t("Each gem pays the fair chance of having reached it, less 3%. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.", {
                 min: formatMoney(state.game.bets[0]),
                 max: formatMoney(state.game.bets[state.game.bets.length - 1]),
               })}

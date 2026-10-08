@@ -113,8 +113,6 @@ export const casino: Record<string, string> = {
   "Big win!": "Fitim i madh!",
   "Your wins on this spin": "Fitimet e tua në këtë rrotullim",
   "Tap a win to see it on the reels.": "Prek një fitim për ta parë në rrotulla.",
-  "On average spins pay back {rate}% of what they cost. Each spin is decided on our server, never on your phone.":
-    "Mesatarisht rrotullimet kthejnë {rate}% të asaj që kushtojnë. Çdo rrotullim vendoset në serverin tonë, kurrë në telefonin tënd.",
 
   // Staff: switches and figures
   "Open the Casino for the site and for each Owner's team, and see how it's doing.": "Hape Kazinonë për faqen dhe për skuadrën e çdo Pronari, dhe shiko si po ecën.",
@@ -211,8 +209,6 @@ export const casino: Record<string, string> = {
   "{payout} to 1": "{payout} me 1",
   "Chips from {min} to {max}. All the chips on the table together can be up to {limit} a spin: your max stake, if you have one. Your daily loss limit counts the Casino too.":
     "Fisha nga {min} deri {max}. Të gjitha fishat në tavolinë bashkë mund të jenë deri {limit} për rrotullim: basti yt maksimal, nëse ke një të tillë. Kufiri ditor i humbjes llogarit edhe Kazinonë.",
-  "On average every bet pays back {rate}% of what it costs. The number is drawn on our server, never on your phone.":
-    "Mesatarisht çdo bast kthen {rate}% të asaj që kushton. Numri hidhet në serverin tonë, kurrë në telefonin tënd.",
   "1st 12": "12 e 1-rë",
   "2nd 12": "12 e 2-të",
   "3rd 12": "12 e 3-të",
@@ -282,12 +278,10 @@ export const casino: Record<string, string> = {
   "Two cards of the same rank, like two kings (not a king and a queen), become two hands, each with its own bet. Once a round; split aces get one card each.":
     "Dy letra të njëjta, si dy mbretër (jo një mbret dhe një mbretëreshë), bëhen dy duar, secila me bastin e vet. Një herë për raund; asët e ndarë marrin nga një letër.",
   "When the dealer shows an ace: half your bet that the dealer has blackjack. Pays 2 to 1, settled when the dealer's card is turned over.": "Kur dileri tregon një as: gjysma e bastit që dileri ka blackjack. Paguan 2 me 1, dhe mbyllet kur kthehet letra e dilerit.",
-  "Get closer to 21 than the dealer. Cards 2 to 10 count their number, faces 10, an ace 1 or 11. The dealer draws to 17 and stands on every 17, soft 17 included. The dealer's second card stays face down until you've played: a dealer's blackjack beats every hand but a blackjack, doubles and splits included. Six decks, shuffled for every round.":
-    "Arri më afër 21 se dileri. Letrat 2 deri 10 vlejnë numrin e tyre, figurat 10, asi 1 ose 11. Dileri merr letra deri në 17 dhe ndalon në çdo 17, edhe në 17 të butë. Letra e dytë e dilerit mbetet e kthyer derisa të luash ti: një blackjack i dilerit mund çdo dorë përveç një blackjack-u, edhe duart e dyfishuara dhe të ndara. Gjashtë pako, të përziera për çdo raund.",
+  "Get closer to 21 than the dealer. Cards 2 to 10 count their number, faces 10, an ace 1 or 11. The dealer draws to 17 and stands on every 17, soft 17 included. With an ace showing, the dealer offers insurance, then looks at the face-down card: a blackjack is turned over at once and ends the round. Under any other card, the dealer's second card stays face down until you've played: a dealer's blackjack beats every hand but a blackjack, doubles and splits included. Six decks, shuffled for every round.":
+    "Arri më afër 21 se dileri. Letrat 2 deri 10 vlejnë numrin e tyre, figurat 10, asi 1 ose 11. Dileri merr letra deri në 17 dhe ndalon në çdo 17, edhe në 17 të butë. Kur dileri ka një as të hapur, ofron sigurimin dhe pastaj shikon letrën e kthyer: një blackjack hapet menjëherë dhe raundi mbaron. Nën çdo letër tjetër, letra e dytë e dilerit mbetet e kthyer derisa të luash ti: një blackjack i dilerit mund çdo dorë përveç një blackjack-u, edhe duart e dyfishuara dhe të ndara. Gjashtë pako, të përziera për çdo raund.",
   "Bets from {min} up to {limit} a hand: your max stake, if you have one. Doubling and splitting add to it. A hand left for an hour is stood for you.":
     "Baste nga {min} deri {limit} për dorë: basti yt maksimal, nëse ke një të tillë. Dyfishimi dhe ndarja shtohen mbi të. Një dorë e lënë për një orë ndalet për ty.",
-  "Played perfectly, blackjack pays back about {rate}% of what's bet. The cards are shuffled and dealt on our server, never on your phone.":
-    "Kur luhet në mënyrë të përsosur, blackjack kthen rreth {rate}% të asaj që vihet. Letrat përzihen dhe shpërndahen në serverin tonë, kurrë në telefonin tënd.",
   "Your newest blackjack rounds. They're also in My money, as one Blackjack line for each day.":
     "Raundet e tua më të reja në blackjack. Janë edhe te Paratë e mia, si një rresht Blackjack për çdo ditë.",
 
@@ -332,7 +326,7 @@ export const casino: Record<string, string> = {
   "Free spins and the special symbol": "Rrotullimet falas dhe simboli i veçantë",
   "Before the free spins the book chooses a special symbol. In each free spin, after the line wins are paid, the special symbol on enough reels fills them and pays again on all 10 lines. The reels don't need to be next to each other. 3 books in a free spin give {count} more.": "Para rrotullimeve falas libri zgjedh një simbol të veçantë. Në çdo rrotullim falas, pasi paguhen fitimet e linjave, simboli i veçantë në mjaft rrotulla i mbush ato dhe paguan sërish në të 10 linjat. Rrotullat nuk duhet të jenë njëra pranë tjetrës. 3 libra në një rrotullim falas japin edhe {count}.",
   "After a win, or at the end of the free spins, you can guess whether a card is red or black. Right, and the win doubles; wrong, and it's lost. Up to {steps} guesses in a row, and up to {limit}.": "Pas një fitimi, ose në fund të rrotullimeve falas, mund të gjesh nëse një letër është e kuqe apo e zezë. E saktë, dhe fitimi dyfishohet; e gabuar, dhe humbet. Deri në {steps} hamendje radhazi, dhe deri në {limit}.",
-  "A spin, or a round of free spins with the spin that started it, pays at most {times} times the bet. On average spins pay back {rate}% of what they cost. Each spin is decided on our server, never on your phone.": "Një rrotullim, ose një raund rrotullimesh falas bashkë me rrotullimin që e nisi, paguan të shumtën {times} herë bastin. Mesatarisht rrotullimet kthejnë {rate}% të asaj që kushtojnë. Çdo rrotullim vendoset në serverin tonë, kurrë në telefonin tënd.",
+  "A spin, or a round of free spins with the spin that started it, pays at most {times} times the bet.": "Një rrotullim, ose një raund rrotullimesh falas bashkë me rrotullimin që e nisi, paguan të shumtën {times} herë bastin.",
   "Explorer": "Eksploruesi",
   "Pharaoh": "Faraoni",
   "Statue": "Statuja",
@@ -372,7 +366,7 @@ export const casino: Record<string, string> = {
   "{count} Mines round": "{count} raund Mines",
   "{count} Mines rounds": "{count} raunde Mines",
   "A 5 by 5 field hides the number of mines you pick. Tap a tile: a gem raises what the round pays, a mine loses the stake. Cash out after the first gem, or keep going. The round ends on its own if you clear every gem, or if it reaches {times} times the stake.": "Një fushë 5 me 5 fsheh numrin e minave që zgjedh ti. Prek një katror: një gur e ngre pagesën e raundit, një minë e humb shumën. Tërhiqe pas gurit të parë, ose vazhdo. Raundi mbaron vetë nëse i hap të gjithë gurët, ose nëse arrin {times} herë shumën.",
-  "Each gem pays the fair chance of having reached it, less 3%, so a round pays back {rate}% on average whichever gem you stop on. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile. Every round is decided on our server.": "Çdo gur paguan shansin e drejtë për të arritur deri aty, minus 3%, kështu që një raund kthen {rate}% mesatarisht, te cilido gur që ndalon. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror. Çdo raund vendoset në serverin tonë.",
+  "Each gem pays the fair chance of having reached it, less 3%. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.": "Çdo gur paguan shansin e drejtë për të arritur deri aty, minus 3%. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
   "Finish the Mines round you're playing first.": "Mbaro më parë raundin e Mines që po luan.",
   "Finish your Book of Ra free spins first.": "Mbaro më parë rrotullimet falas të Book of Ra.",
   "There's no Mines round in play. Start one first.": "Nuk ke raund Mines në lojë. Nise një më parë.",
@@ -407,7 +401,7 @@ export const casino: Record<string, string> = {
   "{count} Penalty rounds": "{count} raunde Penalty",
   "Your newest Penalty rounds. They're also in My money, as one Penalty line for each day.": "Raundet e tua më të fundit në Penalty. Janë edhe te Paratë e mia, si një rresht Penalty për çdo ditë.",
   "You aim left, center or right, and the keeper dives one of those ways. A different way is a goal and raises what the round pays. The same way is a save and loses the stake. Cash out after the first goal, or keep taking them. The round ends on its own if it reaches {times} times the stake.": "Synon majtas, në qendër ose djathtas, dhe portieri hidhet nga njëra anë. Anë tjetër, dhe është gol që e ngre pagesën e raundit. E njëjta anë, dhe është pritje që e humb shumën. Tërhiqe pas golit të parë, ose vazhdo. Raundi mbaron vetë nëse arrin {times} herë shumën.",
-  "The first {full} goals pay the fair chance of having scored that many, less {edge}%, so stopping there pays back {rate}% on average. Every goal after that multiplies what the round pays by {step} instead of the fair 1.5. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't scored. Every kick is decided on our server.": "{full} golat e parë paguajnë shansin e drejtë për të shënuar aq, minus {edge}%, kështu që po të ndalosh aty kthen {rate}% mesatarisht. Çdo gol pas tyre e shumëzon fitimin me {step} në vend të 1.5 së drejtë. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke shënuar. Çdo gjuajtje vendoset në serverin tonë.",
+  "The first {full} goals pay the fair chance of having scored that many, less {edge}%. Every goal after that multiplies what the round pays by {step} instead of the fair 1.5. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't scored.": "{full} golat e parë paguajnë shansin e drejtë për të shënuar aq, minus {edge}%. Çdo gol pas tyre e shumëzon fitimin me {step} në vend të 1.5 së drejtë. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke shënuar.",
   "Finish the Penalty round you're playing first.": "Mbaro më parë raundin e Penalty që po luan.",
   "There's no Penalty round in play. Start one first.": "Nuk ke raund Penalty në lojë. Nise një më parë.",
   "Score a goal before you cash out.": "Shëno një gol para se të tërheqësh.",
@@ -432,8 +426,8 @@ export const casino: Record<string, string> = {
   "High": "I lartë",
   "Your newest Plinko balls. They're also in My money, as one Plinko line for each day.": "Topat e tu më të fundit në Plinko. Janë edhe te Paratë e mia, si një rresht Plinko për çdo ditë.",
   "The ball falls through the rows of pegs. At every peg it goes left or right, each just as likely, and lands in a bucket at the bottom. Each bucket pays the stake times its number: the middle ones are hit most and pay least, the edges are rare and pay most.": "Topi bie nëpër rreshtat e kunjave. Te çdo kunj shkon majtas ose djathtas, me të njëjtin shans, dhe bie në një kuti poshtë. Çdo kuti paguan shumën herë numrin e saj: ato në mes bien më shpesh dhe paguajnë më pak, skajet janë të rralla dhe paguajnë më shumë.",
-  "More rows and more risk make the edges pay more and the middle less. Whatever you pick, a ball pays back about {rate}% of its stake on average. A ball costs {min} to {max}, and never more than your max stake. Every ball is decided on our server.": "Më shumë rreshta dhe më shumë rrezik i bëjnë skajet të paguajnë më shumë dhe mesin më pak. Çfarëdo të zgjedhësh, një top kthen rreth {rate}% të shumës mesatarisht. Një top kushton nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Çdo top vendoset në serverin tonë.",
-  "{count} rows, {risk} risk: {rate}% back": "{count} rreshta, rrezik {risk}: kthen {rate}%",
+  "More rows and more risk make the edges pay more and the middle less. A ball costs {min} to {max}, and never more than your max stake.": "Më shumë rreshta dhe më shumë rrezik i bëjnë skajet të paguajnë më shumë dhe mesin më pak. Një top kushton nga {min} deri në {max}, dhe kurrë më shumë se limiti yt.",
+  "{count} rows, {risk} risk": "{count} rreshta, rrezik {risk}",
   "From the edge to the middle; the other side is the same. Under each, how often a ball lands in that bucket or its twin.": "Nga skaji te mesi; ana tjetër është njësoj. Poshtë secilës, sa shpesh bie një top në atë kuti ose në binjaken e saj.",
   "Pick one of the stakes shown for a ball.": "Zgjidh një nga shumat e treguara për një top.",
   "A board has 8, 12 or 16 rows.": "Një tabelë ka 8, 12 ose 16 rreshta.",
@@ -444,4 +438,10 @@ export const casino: Record<string, string> = {
   "Plinko: {count} balls": "Plinko: {count} topa",
   "The ball bounced off the board": "Topi doli jashtë tabelës",
   "Press Space to drop a ball.": "Shtyp Space për të lëshuar një top.",
+  "Press Space to spin.": "Shtyp Space për të rrotulluar.",
+  "Keys: Space deals, H hits, S stands, D doubles, P splits, Y and N answer insurance.": "Tastet: Space shpërndan, H merr letër, S ndalet, D dyfishon, P ndan, Y dhe N i përgjigjen sigurimit.",
+  "Press Space to start a round or cash out.": "Shtyp Space për të nisur një raund ose për të tërhequr fitimin.",
+  "Keys: Space starts a round or cashes out, and ← ↑ → shoot left, centre and right.": "Tastet: Space nis një raund ose tërheq fitimin, dhe ← ↑ → gjuajnë majtas, në qendër dhe djathtas.",
+  "The dealer checks for blackjack…": "Dileri kontrollon për blackjack…",
+  "No blackjack. Play on.": "S'ka blackjack. Vazhdo lojën.",
 };

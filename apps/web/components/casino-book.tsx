@@ -15,6 +15,7 @@ import { SlotReels, type ReelWin, type SlotReelsHandle } from "./slot-reels";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
 import { FullScreenIcon, RotatePhoneIcon, useFullScreen, usePrefersReducedMotion } from "./use-full-screen";
+import { useGameKeys } from "./use-game-keys";
 import {
   apiFetch,
   type BookFeature,
@@ -473,6 +474,8 @@ export function BookGame() {
     reels.current?.present([combos[index].reel], () => setShowing(index));
   }
 
+  useGameKeys(rulesOpen);
+
   if (!state || !grid || !artReady) return <PageLoading label="Loading the Casino" />;
   const playingFree = feature !== null;
   const tooBig = (value: number) => (state.maxStake !== null && value > state.maxStake) || value > balance;
@@ -534,6 +537,7 @@ export function BookGame() {
         <div>
           <h1 style={{ margin: 0 }}>{state.game.name}</h1>
           <p className="muted report-subtitle">{t("5 reels, 10 lines, and the book that opens free spins. Played with your balance.")}</p>
+          <p className="game-keys-hint">{t("Press Space to spin.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
           {t("Pays and rules")}
@@ -737,7 +741,7 @@ export function BookGame() {
               {/* START and TOTAL BET: rings over the right-hand numbers, as in the original. */}
               <div className="book-rings">
                 <div className="book-ring-spot is-start">
-                  <button type="button" className="book-ring is-start" onClick={() => (auto ? setAuto(null) : spin())} disabled={!auto && !canSpin}>
+                  <button type="button" className="book-ring is-start" data-key="Space" onClick={() => (auto ? setAuto(null) : spin())} disabled={!auto && !canSpin}>
                     <StartArrows />
                     <span>{auto ? t("Stop") : playingFree ? t("Free spin") : t("Start")}</span>
                   </button>
@@ -1052,13 +1056,7 @@ function Rules({ game, bet, onClose, i18n }: { game: BookState["game"]; bet: num
           </p>
         </div>
         <p style={{ margin: 0 }}>
-          {t(
-            "A spin, or a round of free spins with the spin that started it, pays at most {times} times the bet. On average spins pay back {rate}% of what they cost. Each spin is decided on our server, never on your phone.",
-            {
-              times: game.maxWin.toLocaleString(),
-              rate: game.payoutRate,
-            },
-          )}
+          {t("A spin, or a round of free spins with the spin that started it, pays at most {times} times the bet.", { times: game.maxWin.toLocaleString() })}
         </p>
       </section>
     </div>

@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BalanceChip } from "../../components/balance-chip";
 import { DashboardSidebar } from "../../components/dashboard-sidebar";
 import { DashboardTrail } from "../../components/dashboard-trail";
 import { NotificationCenter } from "../../components/notification-center";
@@ -10,7 +11,6 @@ import { ThemeToggle } from "../../components/theme-toggle";
 import { UserMenu } from "../../components/user-menu";
 import { ApiError, type MeResponse } from "../../lib/api";
 import { getMe } from "../../lib/api-server";
-import { formatMoney } from "../../lib/format";
 import { LanguageToggle } from "../../components/language-toggle";
 import { getT } from "../../lib/i18n/server";
 
@@ -85,10 +85,7 @@ export default async function DashboardLayout({
             </Link>
             {isPlayer ? null : <DashboardTrail />}
             {isPlayer ? (
-              <Link href="/dashboard/money" className="player-balance-chip" title={t("Your balance, given to you by your Manager or Owner")}>
-                <span className="player-balance-chip-icon" aria-hidden="true">$</span>
-                {formatMoney(Number(me.balance))}
-              </Link>
+              <BalanceChip balance={Number(me.balance)} title={t("Your balance, given to you by your Manager or Owner")} />
             ) : null}
             <div className="topbar-actions">
               <LanguageToggle />

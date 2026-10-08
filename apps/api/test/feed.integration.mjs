@@ -60,7 +60,7 @@ async function bet(player, selection, { stake, placedAt }) {
 let sa, owner, managerA, managerB, cara;
 
 test("setup", async () => {
-  for (const table of ["blackjack_hands", "settlement_entries", "commission_payouts", "balance_transactions", "bet_legs", "bets", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
+  for (const table of ["settlement_entries", "casino_spins", "casino_free_spins", "casino_gambles", "blackjack_hands", "mines_rounds", "penalty_rounds", "commission_payouts", "balance_transactions", "bet_legs", "bets", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
   sa = await user("SUPER_ADMIN", null);

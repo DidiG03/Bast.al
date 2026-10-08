@@ -8,14 +8,17 @@ import { randomInt } from "crypto";
  *
  * The rules:
  * - A fresh 6-deck shoe, shuffled for every round, so nothing carries over.
- * - One hand per round. The dealer takes a card face down and doesn't look
- *   at it until the Player has played: a dealer's blackjack shows only then,
- *   and beats every hand but a blackjack, doubles and splits included.
+ * - One hand per round. The dealer takes a card face down. With an ace
+ *   showing, the dealer offers insurance, then looks at that card: a
+ *   blackjack is turned over at once and ends the round. Otherwise the
+ *   dealer doesn't look until the Player has played: a blackjack under a
+ *   ten showing shows only then, and beats every hand but a blackjack,
+ *   doubles and splits included.
  * - The dealer stands on every 17, soft 17 included.
  * - Blackjack pays 3 to 2 at once (a tie if the dealer has one too), a win
  *   1 to 1, a tie returns the bet.
  * - Insurance, when the dealer shows an ace: half the bet, pays 2 to 1 if
- *   the face-down card makes blackjack, settled when it's turned over.
+ *   the face-down card makes blackjack. Settled when the dealer looks.
  * - One split per round, of two cards of the same rank (two kings, not a
  *   king and a queen), and one double down per round: on the first two
  *   cards, or on one of the split hands. Split aces get one card each. 21
@@ -159,7 +162,7 @@ export function deal(bet: number, shoe: Card[] = newShoe()): Round {
 /**
  * A Player's blackjack ends the round at once (the dealer's card is turned
  * over: a blackjack there too is a tie). The dealer doesn't look for one of
- * their own here; it shows when the Player has played.
+ * their own here, under a ten showing; it shows when the Player has played.
  */
 function checkNatural(round: Round): Round {
   if (isNatural(round.hands[0].cards)) {
@@ -194,6 +197,8 @@ export function act(input: Round, action: Action): Round {
 
   if (action === "insure" || action === "noInsurance") {
     round.insurance = action === "insure" ? Math.floor(round.bet / 2) : 0;
+    // The dealer looks at the face-down card: a blackjack is turned over and ends the round.
+    if (isNatural(round.dealer)) return finish(round);
     return checkNatural(round);
   }
 

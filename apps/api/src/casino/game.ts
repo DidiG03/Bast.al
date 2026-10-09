@@ -30,7 +30,7 @@ export const REELS = 5;
 export const ROWS = 3;
 export const LINES = 5;
 /** What spins pay back on average, in percent of what they cost, as measured (see REEL_MAKEUP). */
-export const PAYOUT_RATE = 94.9;
+export const PAYOUT_RATE = 90.7;
 /** What a spin can cost, in dollars. A line bet is a fifth of it. */
 export const BETS = [0.5, 1, 2, 5, 10, 25] as const;
 
@@ -73,16 +73,10 @@ export const LINE_SHAPES: number[][] = [
  * by scripts/casino-rtp.mjs. Change any number here, run it again, and
  * update PAYOUT_RATE.
  */
-const REEL_MAKEUP: Array<Record<SlotSymbol, number>> = Array.from({ length: REELS }, () => ({
-  SEVEN: 3,
-  MELON: 6,
-  GRAPES: 6,
-  PLUM: 4,
-  ORANGE: 6,
-  LEMON: 10,
-  CHERRY: 8,
-  STAR: 2,
-}));
+const FIRST_REELS: Record<SlotSymbol, number> = { SEVEN: 3, MELON: 6, GRAPES: 6, PLUM: 4, ORANGE: 6, LEMON: 10, CHERRY: 8, STAR: 2 };
+/** Reels 3 to 5 carry fewer plums and more lemons than the first two, so lines started there are finished less often. */
+const LAST_REELS: Record<SlotSymbol, number> = { ...FIRST_REELS, LEMON: 9, PLUM: 5 };
+const REEL_MAKEUP: Array<Record<SlotSymbol, number>> = [FIRST_REELS, FIRST_REELS, LAST_REELS, LAST_REELS, LAST_REELS];
 
 /**
  * Lays a reel out from its makeup, spreading each symbol as evenly as it

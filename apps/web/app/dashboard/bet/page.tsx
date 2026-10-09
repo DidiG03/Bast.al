@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
 import { GreyhoundRaces } from "../../../components/greyhound-races";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
@@ -21,7 +21,7 @@ import { useTopUpRequest } from "../../../components/top-up-request";
 import { breakPause, livePill } from "../../../lib/live";
 import { usePolling } from "../../../lib/use-polling";
 import { pickLabel } from "../../../lib/picks";
-import { isDaysFromToday } from "../../../lib/time";
+import { addDays, dayKey } from "../../../lib/time";
 import { MIN_SYSTEM_LINE_STAKE, systemMaxReturn, systemOptions, type SystemOption } from "../../../lib/system-bets";
 
 type Tab = "matches" | "open" | "settled";
@@ -63,13 +63,28 @@ const MATCHES_SHOWN = 60;
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 const DATE_TIME: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
 
-function dayLabel(iso: string, { t, date: format }: I18n): string {
-  if (isDaysFromToday(iso, 0)) return t("Today");
-  if (isDaysFromToday(iso, 1)) return t("Tomorrow");
-  const date = new Date(iso);
-  // Albanian day names are lower case ("e premte"); as a heading it starts with a capital.
-  const label = format(date, { weekday: "long", day: "numeric", month: "short" });
-  return label.charAt(0).toUpperCase() + label.slice(1);
+/**
+ * Each match's day heading (Today, Tomorrow, then the day's name), for a
+ * whole list at once: today's and tomorrow's dates are worked out once, not
+ * again for every match, and each day's name is spelled out once.
+ */
+function dayLabeller({ t, date: format }: I18n): (iso: string) => string {
+  const today = dayKey(Date.now());
+  const tomorrow = dayKey(addDays(new Date(), 1));
+  const byDay = new Map<string, string>();
+  return (iso) => {
+    const key = dayKey(iso);
+    if (key === today) return t("Today");
+    if (key === tomorrow) return t("Tomorrow");
+    let label = byDay.get(key);
+    if (label === undefined) {
+      // Albanian day names are lower case ("e premte"); as a heading it starts with a capital.
+      const name = format(new Date(iso), { weekday: "long", day: "numeric", month: "short" });
+      label = name.charAt(0).toUpperCase() + name.slice(1);
+      byDay.set(key, label);
+    }
+    return label;
+  };
 }
 
 /**
@@ -243,16 +258,22 @@ function BetPage() {
     [loadEvents, loadDetail, refreshSlip],
   );
 
-  function toggleExpanded(id: string) {
-    const opening = !expanded.has(id);
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (opening) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-    if (opening && !details[id]) void loadDetail(id).catch(() => toast.error(t("Couldn't load the matches")));
-  }
+  // Read through refs, so the match cards keep the same handler and don't redraw on every keystroke in the slip.
+  const detailsRef = useRef(details);
+  detailsRef.current = details;
+  const toggleExpanded = useCallback(
+    (id: string) => {
+      const opening = !expandedRef.current.has(id);
+      setExpanded((current) => {
+        const next = new Set(current);
+        if (opening) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      if (opening && !detailsRef.current[id]) void loadDetail(id).catch(() => toast.error(t("Couldn't load the matches")));
+    },
+    [loadDetail, toast, t],
+  );
 
   const loadInfo = useCallback(async () => {
     const token = await getToken();
@@ -408,8 +429,9 @@ function BetPage() {
     router.replace(next === "football" ? "/dashboard/bet" : `/dashboard/bet?sport=${next}`, { scroll: false });
   }
 
-  function toggle(event: OddsEvent, marketName: string, selection: OddsSelection) {
-    if (!slip.some((item) => item.selectionId === selection.id) && slip.length >= MAX_SLIP) {
+  const toggle = useCallback((event: OddsEvent, marketName: string, selection: OddsSelection) => {
+    const current = slipRef.current;
+    if (!current.some((item) => item.selectionId === selection.id) && current.length >= MAX_SLIP) {
       toast.error(t("A slip holds up to {max} bets.", { max: MAX_SLIP }));
       return;
     }
@@ -422,25 +444,32 @@ function BetPage() {
         { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, name: selection.name, odds: selection.price, stake: lastStake, live: event.live, sp: selection.sp },
       ];
     });
-  }
+  }, [toast, t]);
 
   const leagues = useMemo(() => Array.from(new Set((events ?? []).map((e) => e.league))).sort(), [events]);
   const query = search.trim().toLowerCase();
-  const shown = merged.filter(
-    (event) => (finishedNow(event) || ((event.bettable || event.live) && event.markets.length > 0)) && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
-  );
-  const allGroups: Array<[string, OddsEvent[]]> = [];
   const liveLabel = t("Live now");
-  for (const event of shown) {
-    const label = event.live || finishedNow(event) ? liveLabel : dayLabel(event.startsAt, i18n);
-    const last = allGroups[allGroups.length - 1];
-    if (last && last[0] === label) last[1].push(event);
-    else allGroups.push([label, [event]]);
-  }
+  // Worked out again only when the matches or the filters change: typing a stake leaves them as they are.
+  const { shown, allGroups } = useMemo(() => {
+    const shown = merged.filter(
+      (event) => (finishedNow(event) || ((event.bettable || event.live) && event.markets.length > 0)) && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
+    );
+    const allGroups: Array<[string, OddsEvent[]]> = [];
+    const label = dayLabeller(i18n);
+    for (const event of shown) {
+      const heading = event.live || finishedNow(event) ? liveLabel : label(event.startsAt);
+      const last = allGroups[allGroups.length - 1];
+      if (last && last[0] === heading) last[1].push(event);
+      else allGroups.push([heading, [event]]);
+    }
+    return { shown, allGroups };
+  }, [merged, league, query, liveLabel, i18n]);
   // A day that no longer has matches (a search, a league filter) falls back to every day.
   const dayShown = day === "" ? "" : day === "live" ? liveLabel : day;
   const groups = dayShown && allGroups.some(([label]) => label === dayShown) ? allGroups.filter(([label]) => label === dayShown) : allGroups;
-  const selected = new Set(slip.map((item) => item.selectionId));
+  // The same set while only stakes change, so the match cards don't redraw as a stake is typed.
+  const selectedKey = slip.map((item) => item.selectionId).join("\n");
+  const selected = useMemo(() => new Set(selectedKey ? selectedKey.split("\n") : []), [selectedKey]);
   // Only the first `limit` matches are drawn, cut across the day groups.
   let budget = limit;
   const drawn = groups
@@ -548,7 +577,7 @@ function BetPage() {
         </div>
       ) : tab === "matches" ? (
         <div className="bet-layout">
-          <div className="stack bet-matches">
+          <div className={`stack bet-matches${focused ? " is-jumping" : ""}`}>
             <div className="bet-filters">
               <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => filter(() => setSearch(e.target.value))} aria-label={t("Search matches")} />
               {allGroups.length > 1 ? (
@@ -626,7 +655,7 @@ function BetPage() {
                         moves={moves}
                         expanded={expanded.has(event.id)}
                         loading={expanded.has(event.id) && !details[event.id]}
-                        onToggle={() => toggleExpanded(event.id)}
+                        onToggle={toggleExpanded}
                       />
                     ))}
                   </section>
@@ -714,7 +743,8 @@ function marketGroup(key: string): MarketGroup {
 /** Players shown in a goalscorer market before "Show all players". */
 const SCORERS_SHOWN = 12;
 
-function MatchCard({
+/** Drawn again only when its own props change: a list of 240 matches redrawing on every keystroke made typing a stake lag. */
+const MatchCard = memo(function MatchCard({
   event,
   selected,
   onPick,
@@ -732,7 +762,7 @@ function MatchCard({
   /** Every market showing (they load when the match is opened). */
   expanded: boolean;
   loading: boolean;
-  onToggle: () => void;
+  onToggle: (eventId: string) => void;
 }) {
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;
@@ -764,7 +794,7 @@ function MatchCard({
           )}
           {/* Opens or closes the other markets from the top, so there's no scrolling down to close them. */}
           {more > 0 ? (
-            <button type="button" className={`markets-toggle${expanded ? " is-open" : ""}`} onClick={onToggle} aria-expanded={expanded} aria-label={toggleLabel}>
+            <button type="button" className={`markets-toggle${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded} aria-label={toggleLabel}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m6 9 6 6 6-6" />
               </svg>
@@ -864,7 +894,7 @@ function MatchCard({
       ) : null}
       {more > 0 ? (
         <footer className="odds-event-footer">
-          <button type="button" className={`bet-more-markets${expanded ? " is-open" : ""}`} onClick={onToggle} aria-expanded={expanded}>
+          <button type="button" className={`bet-more-markets${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded}>
             {toggleLabel}
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m6 9 6 6 6-6" />
@@ -874,7 +904,7 @@ function MatchCard({
       ) : null}
     </article>
   );
-}
+});
 
 /** Just finished: the live list keeps it a few minutes, marked full time, instead of dropping it. */
 function finishedNow(event: OddsEvent): boolean {

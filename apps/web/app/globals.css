@@ -3537,6 +3537,21 @@ button.odds-selection:hover,
   color: var(--accent);
 }
 
+/*
+ * Matches out of sight aren't laid out or painted, so a long list (a week of
+ * football is hundreds) doesn't slow down everything else on the page, like
+ * typing a stake. The browser keeps each one's last height once it's been seen.
+ */
+.bet-match {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 250px;
+}
+
+/* Scrolling to a match opened from the Overview: every match is drawn, so the scroll lands on it, not where the estimates put it. */
+.bet-matches.is-jumping .bet-match {
+  content-visibility: visible;
+}
+
 .bet-match.is-live {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }

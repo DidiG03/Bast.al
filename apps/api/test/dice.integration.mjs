@@ -70,20 +70,20 @@ test("setup", async () => {
   }
   await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false } });
   sa = await user("SUPER_ADMIN", null);
-  owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 5000 });
-  manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 900 });
-  dan = await user("PLAYER", manager.id, { balance: 100 });
-  await prisma.balanceTransaction.create({ data: { fromUserId: manager.id, toUserId: dan.id, actorId: manager.id, type: "DELEGATION", amount: 100, reason: "Top-up" } });
+  owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 500000 });
+  manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 90000 });
+  dan = await user("PLAYER", manager.id, { balance: 10000 });
+  await prisma.balanceTransaction.create({ data: { fromUserId: manager.id, toUserId: dan.id, actorId: manager.id, type: "DELEGATION", amount: 10000, reason: "Top-up" } });
 });
 
 test("closed with the Casino's switches; the state gives a seed pair, its server seed hidden", async () => {
-  await assert.rejects(dice.roll(dan, 1, 50, "UNDER"), /The Casino is closed right now/);
+  await assert.rejects(dice.roll(dan, 100, 50, "UNDER"), /The Casino is closed right now/);
   await casino.setOpen(sa, true);
-  await assert.rejects(dice.roll(dan, 1, 50, "UNDER"), /isn't open for your team/);
+  await assert.rejects(dice.roll(dan, 100, 50, "UNDER"), /isn't open for your team/);
   await casino.setOpen(owner, true);
   const state = await dice.state(dan);
   assert.equal(state.closed, null);
-  assert.equal(state.tableMax, 50);
+  assert.equal(state.tableMax, 2500);
   assert.equal(state.game.maxMultiplier, 97);
   assert.equal(state.seed.nonce, 0);
   assert.equal(state.seed.serverSeed, null);
@@ -97,26 +97,26 @@ test("closed with the Casino's switches; the state gives a seed pair, its server
 test("a winning roll pays the multiplier, a losing one takes the stake; both show in the ledger and the journal", async () => {
   const roll = await nextRoll(dan);
   const good = winningBet(roll);
-  const win = await dice.roll(dan, 2, good.target / 100, good.direction);
+  const win = await dice.roll(dan, 250, good.target / 100, good.direction);
   assert.equal(win.round.roll, roll / 100);
   assert.equal(win.round.won, true);
   assert.equal(win.round.nonce, 0);
   assert.equal(win.seed.nonce, 1);
-  assert.equal(win.round.win, winCents(200, Math.round(win.round.chance * 100)) / 100);
-  const afterWin = Math.round((100 - 2 + win.round.win) * 100) / 100;
+  assert.equal(win.round.win, winCents(25000, Math.round(win.round.chance * 100)) / 100);
+  const afterWin = Math.round((10000 - 250 + win.round.win) * 100) / 100;
   assert.equal(win.balance, afterWin);
 
   const bad = losingBet(await nextRoll(dan));
-  const loss = await dice.roll(dan, 1.37, bad.target / 100, bad.direction);
+  const loss = await dice.roll(dan, 100, bad.target / 100, bad.direction);
   assert.deepEqual([loss.round.won, loss.round.win, loss.round.nonce], [false, 0, 1]);
-  const expected = Math.round((afterWin - 1.37) * 100) / 100;
+  const expected = Math.round((afterWin - 100) * 100) / 100;
   assert.equal(await balanceOf(dan), expected);
 
   const line = await todaysLine(dan);
   assert.deepEqual([line.type, line.reason], ["CASINO", "Dice: 2 rolls"]);
-  assert.equal(Number(line.amount), Math.round((expected - 100) * 100) / 100);
+  assert.equal(Number(line.amount), Math.round((expected - 10000) * 100) / 100);
   const journal = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpinId: win.round.id } });
-  assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 2, win.round.win, owner.id, manager.id]);
+  assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 250, win.round.win, owner.id, manager.id]);
   assert.equal(await ledgerTotal(dan), expected, "the ledger adds up to the balance");
 });
 
@@ -137,7 +137,7 @@ test("changing seeds reveals the old server seed, and every roll made with it ch
     assert.equal(hashSeed(round.serverSeed), round.serverSeedHash);
     assert.equal(rollFor(round.serverSeed, round.clientSeed, round.nonce) / 100, round.roll);
   }
-  const fresh = await dice.roll(dan, 1, 50, "UNDER");
+  const fresh = await dice.roll(dan, 100, 50, "UNDER");
   assert.deepEqual([fresh.round.clientSeed, fresh.round.nonce, fresh.round.serverSeed], ["dans-own-seed", 0, null]);
   await assert.rejects(dice.changeSeed(dan, "has spaces"), /client seed/);
 });
@@ -145,24 +145,24 @@ test("changing seeds reveals the old server seed, and every roll made with it ch
 test("bad stakes and targets, the max stake, the daily loss limit and a low balance stop a roll, and nothing moves", async () => {
   const balance = await balanceOf(dan);
   const nonce = (await activeSeed(dan)).nonce;
-  await assert.rejects(dice.roll(dan, 0.05, 50, "UNDER"), /smallest roll is 0\.10 ALL/);
-  await assert.rejects(dice.roll(dan, 1.005, 50, "UNDER"), /whole cents/);
-  await assert.rejects(dice.roll(dan, 51, 50, "UNDER"), /most a roll can cost you is 50\.00 ALL/);
-  await assert.rejects(dice.roll(dan, 1, 0.5, "UNDER"), /1% to 95%/);
-  await assert.rejects(dice.roll(dan, 1, 99.5, "OVER"), /1% to 95%/);
-  await assert.rejects(dice.roll(dan, 1, 50.123, "OVER"), /0\.00 to 99\.99/);
-  await assert.rejects(dice.roll(dan, 1, 50, "SIDEWAYS"), /over or under/);
+  await assert.rejects(dice.roll(dan, 30, 50, "UNDER"), /A roll costs 50\.00, 100\.00/);
+  await assert.rejects(dice.roll(dan, 100.5, 50, "UNDER"), /A roll costs/);
+  await assert.rejects(dice.roll(dan, 5000, 50, "UNDER"), /A roll costs/);
+  await assert.rejects(dice.roll(dan, 100, 0.5, "UNDER"), /1% to 95%/);
+  await assert.rejects(dice.roll(dan, 100, 99.5, "OVER"), /1% to 95%/);
+  await assert.rejects(dice.roll(dan, 100, 50.123, "OVER"), /0\.00 to 99\.99/);
+  await assert.rejects(dice.roll(dan, 100, 50, "SIDEWAYS"), /over or under/);
 
-  await prisma.bettingLimit.create({ data: { playerId: dan.id, ownerMaxStake: 3 } });
-  assert.equal((await dice.state(dan)).tableMax, 3);
-  await assert.rejects(dice.roll(dan, 3.5, 50, "UNDER"), /3\.00 ALL/);
+  await prisma.bettingLimit.create({ data: { playerId: dan.id, ownerMaxStake: 300 } });
+  assert.equal((await dice.state(dan)).tableMax, 300);
+  await assert.rejects(dice.roll(dan, 500, 50, "UNDER"), /most a roll can cost you is 300\.00 ALL/);
   const used = await limits.usedToday(dan.id);
-  await prisma.bettingLimit.update({ where: { playerId: dan.id }, data: { ownerMaxStake: null, ownerDailyLossLimit: used + 0.5 } });
-  await assert.rejects(dice.roll(dan, 1, 50, "UNDER"), /daily loss limit/);
+  await prisma.bettingLimit.update({ where: { playerId: dan.id }, data: { ownerMaxStake: null, ownerDailyLossLimit: used + 50 } });
+  await assert.rejects(dice.roll(dan, 100, 50, "UNDER"), /daily loss limit/);
   await prisma.bettingLimit.delete({ where: { playerId: dan.id } });
 
-  await prisma.user.update({ where: { id: dan.id }, data: { balance: 0.5 } });
-  await assert.rejects(dice.roll(dan, 1, 50, "UNDER"), /balance is too low/);
+  await prisma.user.update({ where: { id: dan.id }, data: { balance: 50 } });
+  await assert.rejects(dice.roll(dan, 100, 50, "UNDER"), /balance is too low/);
   await prisma.user.update({ where: { id: dan.id }, data: { balance } });
   assert.equal(await balanceOf(dan), balance);
   assert.equal((await activeSeed(dan)).nonce, nonce, "a refused roll doesn't use up a nonce");
@@ -191,15 +191,15 @@ test("a big win goes in the audit log", async () => {
     await dice.changeSeed(dan);
     roll = await nextRoll(dan);
   }
-  const result = await dice.roll(dan, 0.1, 1, "UNDER");
-  assert.deepEqual([result.round.won, result.round.multiplier, result.round.win], [true, 97, 9.7]);
+  const result = await dice.roll(dan, 50, 1, "UNDER");
+  assert.deepEqual([result.round.won, result.round.multiplier, result.round.win], [true, 97, 4850]);
   const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "casino.big_win" } });
   assert.equal(log.metadata.game, "dice");
 });
 
 test("the same roll sent twice plays once", async () => {
   const interceptor = new IdempotencyInterceptor(prisma);
-  const body = { bet: 1, target: 50, direction: "UNDER" };
+  const body = { bet: 100, target: 50, direction: "UNDER" };
   const context = {
     switchToHttp: () => ({
       getRequest: () => ({ actor: { id: dan.id }, headers: { "idempotency-key": "dice-key-0123456789" }, originalUrl: "/casino/dice/roll", path: "/casino/dice/roll", method: "POST", body }),
@@ -213,7 +213,7 @@ test("the same roll sent twice plays once", async () => {
   const again = await send();
   assert.equal(again.round.id, first.round.id);
   assert.equal((await activeSeed(dan)).nonce, nonce + 1, "one nonce used");
-  assert.equal(await balanceOf(dan), Math.round((before - 1 + first.round.win) * 100) / 100);
+  assert.equal(await balanceOf(dan), Math.round((before - 100 + first.round.win) * 100) / 100);
   assert.equal(await ledgerTotal(dan), await balanceOf(dan));
 });
 

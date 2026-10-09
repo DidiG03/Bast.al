@@ -11,7 +11,7 @@ import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
 import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import { apiFetch, newIdempotencyKey, type PlinkoBall, type PlinkoDropResult, type PlinkoRisk, type PlinkoRows, type PlinkoState } from "../lib/api";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatStake } from "../lib/format";
 import { msg } from "../lib/i18n/core";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
@@ -400,7 +400,7 @@ export function PlinkoGame() {
                 </span>
                 <span>
                   <small>{t("Stake")}</small>
-                  <strong>{formatMoney(bet)}</strong>
+                  <strong>{formatStake(bet)}</strong>
                 </span>
                 <span>
                   <small>{t("Last win")}</small>
@@ -463,13 +463,13 @@ export function PlinkoGame() {
               <div className="mines-picks" role="radiogroup" aria-label={t("Stake")}>
                 {state.game.bets.map((value) => (
                   <button key={value} type="button" className={`mines-pick${bet === value ? " is-on" : ""}`} aria-pressed={bet === value} disabled={auto || value > state.tableMax} onClick={() => setBet(value)}>
-                    {formatMoney(value)}
+                    {formatStake(value)}
                   </button>
                 ))}
               </div>
               <div className="plinko-actions">
                 <button type="button" className="mines-go" disabled={auto || !canDrop} onClick={() => void drop()}>
-                  {t("Drop a ball {amount}", { amount: formatMoney(bet) })}
+                  {t("Drop a ball {amount}", { amount: formatStake(bet) })}
                 </button>
                 <button type="button" className={`mines-pick plinko-auto${auto ? " is-on" : ""}`} aria-pressed={auto} disabled={!auto && !canDrop} onClick={() => setAuto(!auto)}>
                   {auto ? t("Stop") : t("Auto")}

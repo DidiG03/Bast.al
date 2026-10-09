@@ -23,21 +23,23 @@ import { MinesService } from "./mines.service";
 import { PenaltyService } from "./penalty.service";
 import { PlinkoService } from "./plinko.service";
 import { DiceService } from "./dice.service";
-import { DIRECTIONS as DICE_DIRECTIONS, MAX_BET as DICE_MAX_BET, MIN_BET as DICE_MIN_BET } from "./dice";
+import { KenoService } from "./keno.service";
+import { BETS as KENO_BETS, MAX_PICKS as KENO_MAX_PICKS, MIN_PICKS as KENO_MIN_PICKS, NUMBERS as KENO_NUMBERS } from "./keno";
+import { BETS as DICE_BETS, DIRECTIONS as DICE_DIRECTIONS } from "./dice";
 import { BETS as BOOK_BETS } from "./book";
-import { MINE_COUNTS, TILES } from "./mines";
-import { DIRECTIONS } from "./penalty";
+import { BETS as MINES_BETS, MINE_COUNTS, TILES } from "./mines";
+import { BETS as PENALTY_BETS, DIRECTIONS } from "./penalty";
 import { BETS as PLINKO_BETS, RISKS as PLINKO_RISKS, ROWS as PLINKO_ROWS } from "./plinko";
 
 class SpinDto {
-  @ApiProperty({ enum: BETS, description: "What the spin costs, in dollars. Ignored while the Player has free spins left from the old game." })
+  @ApiProperty({ enum: BETS, description: "What the spin costs, in ALL. Ignored while the Player has free spins left from the old game." })
   @IsNumber()
   @IsIn([...BETS])
   bet!: number;
 }
 
 class BookSpinDto {
-  @ApiProperty({ enum: BOOK_BETS, description: "What the spin costs, in dollars. Ignored during free spins, which play at the bet that started them." })
+  @ApiProperty({ enum: BOOK_BETS, description: "What the spin costs, in ALL. Ignored during free spins, which play at the bet that started them." })
   @IsNumber()
   @IsIn([...BOOK_BETS])
   bet!: number;
@@ -71,13 +73,13 @@ class RouletteSpinDto {
 }
 
 class BlackjackDealDto {
-  @ApiProperty({ description: "The bet, in dollars, in whole chips" })
+  @ApiProperty({ description: "The bet, in ALL, in whole chips" })
   @IsNumber()
   bet!: number;
 }
 
 class MinesStartDto {
-  @ApiProperty({ enum: [0.5, 1, 2, 5, 10], description: "The stake, in dollars" })
+  @ApiProperty({ enum: MINES_BETS, description: "The stake, in ALL" })
   @IsNumber()
   bet!: number;
 
@@ -98,7 +100,7 @@ class MinesRevealDto {
 }
 
 class PenaltyStartDto {
-  @ApiProperty({ enum: [0.5, 1, 2, 5, 10], description: "The stake, in dollars" })
+  @ApiProperty({ enum: PENALTY_BETS, description: "The stake, in ALL" })
   @IsNumber()
   bet!: number;
 }
@@ -110,7 +112,7 @@ class PenaltyKickDto {
 }
 
 class PlinkoDropDto {
-  @ApiProperty({ enum: PLINKO_BETS, description: "What the ball costs, in dollars" })
+  @ApiProperty({ enum: PLINKO_BETS, description: "What the ball costs, in ALL" })
   @IsNumber()
   @IsIn([...PLINKO_BETS])
   bet!: number;
@@ -127,10 +129,9 @@ class PlinkoDropDto {
 }
 
 class DiceRollDto {
-  @ApiProperty({ minimum: DICE_MIN_BET, maximum: DICE_MAX_BET, description: "The stake, in dollars and whole cents" })
+  @ApiProperty({ enum: DICE_BETS, description: "The stake, in ALL" })
   @IsNumber()
-  @Min(DICE_MIN_BET)
-  @Max(DICE_MAX_BET)
+  @IsIn([...DICE_BETS])
   bet!: number;
 
   @ApiProperty({ description: "The target, 0.00 to 99.99, in hundredths" })
@@ -150,6 +151,22 @@ class DiceSeedDto {
   @IsString()
   @MaxLength(32)
   clientSeed?: string;
+}
+
+class KenoPlayDto {
+  @ApiProperty({ enum: KENO_BETS, description: "What the round costs, in ALL" })
+  @IsNumber()
+  @IsIn([...KENO_BETS])
+  bet!: number;
+
+  @ApiProperty({ type: [Number], minItems: KENO_MIN_PICKS, maxItems: KENO_MAX_PICKS, description: `${KENO_MIN_PICKS} to ${KENO_MAX_PICKS} different numbers from 1 to ${KENO_NUMBERS}` })
+  @IsArray()
+  @ArrayMinSize(KENO_MIN_PICKS)
+  @ArrayMaxSize(KENO_MAX_PICKS)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(KENO_NUMBERS, { each: true })
+  picks!: number[];
 }
 
 class BlackjackActionDto {
@@ -194,6 +211,7 @@ export class CasinoController {
     private readonly penalty: PenaltyService,
     private readonly plinko: PlinkoService,
     private readonly dice: DiceService,
+    private readonly keno: KenoService,
   ) {}
 
   /** The game for the home page's "Continue playing": a round still in play, or the game played last. */
@@ -397,6 +415,30 @@ export class CasinoController {
   @Roles(Role.PLAYER)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   diceSeed(@CurrentActor() actor: Actor, @Body() body: DiceSeedDto) {
+    return this.dice.changeSeed(actor, body.clientSeed);
+  }
+
+  /** The Player's Keno board: can they play, the rules and pay table, their seed pair, their last rounds. */
+  @Get("keno")
+  @Roles(Role.PLAYER)
+  kenoState(@CurrentActor() actor: Actor) {
+    return this.keno.state(actor);
+  }
+
+  /** One Keno draw. Autoplay plays quickly, hence the higher limit. A repeated request with the same Idempotency-Key gets the first answer back. */
+  @Post("keno/play")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Idempotent()
+  kenoPlay(@CurrentActor() actor: Actor, @Body() body: KenoPlayDto, @Req() req: AuthenticatedRequest) {
+    return this.keno.play(actor, body.bet, body.picks, clientIp(req));
+  }
+
+  /** Changes the Player's seed pair (shared with Dice), showing the old server seed so its draws can be checked. */
+  @Post("keno/seed")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  kenoSeed(@CurrentActor() actor: Actor, @Body() body: DiceSeedDto) {
     return this.dice.changeSeed(actor, body.clientSeed);
   }
 

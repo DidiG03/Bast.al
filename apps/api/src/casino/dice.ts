@@ -26,9 +26,10 @@ export const PAYOUT_RATE = 97;
 /** The chance of winning can be set from 1% to 95%: 100 to 9,500 winning numbers. */
 export const MIN_WINNING = 100;
 export const MAX_WINNING = 9_500;
-/** What a roll can cost, in dollars, in whole cents. The Player's max stake applies below MAX_BET. */
-export const MIN_BET = 0.1;
-export const MAX_BET = 50;
+/** What a roll can cost, in ALL, like every Casino game. The Player's max stake applies too. */
+export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
+export const MIN_BET = BETS[0];
+export const MAX_BET = BETS[BETS.length - 1];
 
 export const DIRECTIONS = ["UNDER", "OVER"] as const;
 export type Direction = (typeof DIRECTIONS)[number];

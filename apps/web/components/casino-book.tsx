@@ -29,7 +29,7 @@ import {
   type CasinoGamble,
   type CasinoGambleResult,
 } from "../lib/api";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatStake } from "../lib/format";
 import { msg } from "../lib/i18n/core";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
 
@@ -210,6 +210,8 @@ export function BookGame() {
   const [balance, setBalance] = useState(0);
   const [bet, setBet] = useState(1);
   const [feature, setFeature] = useState<BookFeature | null>(null);
+  /** The Casino closed while free spins were in play: the game stays up until the Player leaves, so the last spin and its win still show. */
+  const [finishingFree, setFinishingFree] = useState(false);
   const [recent, setRecent] = useState<BookSpinRow[]>([]);
   const [grid, setGrid] = useState<BookSymbol[][] | null>(null);
   const [lastWin, setLastWin] = useState<{
@@ -426,9 +428,14 @@ export function BookGame() {
     }
   }
 
+  useEffect(() => {
+    if (state?.closed && feature) setFinishingFree(true);
+  }, [state?.closed, feature]);
+
   // Free spins play by themselves, one after another, once the book has shown its symbol.
   useEffect(() => {
-    if (!feature || spinning || overlay || !state || state.closed || !(reelsReady || plainGrid)) return;
+    // Free spins already won play on even if the Casino has closed since.
+    if (!feature || spinning || overlay || !state || !(reelsReady || plainGrid)) return;
     const timer = setTimeout(() => void spin(), lastWin ? 1800 : 700);
     return () => clearTimeout(timer);
     // spin() is a new function every render; the values it reads are listed here.
@@ -544,7 +551,7 @@ export function BookGame() {
         </button>
       </div>
 
-      {state.closed ? (
+      {state.closed && !feature && !finishingFree ? (
         <div className="card">
           <p style={{ margin: 0 }}>{ts(state.closed)}</p>
         </div>
@@ -751,12 +758,12 @@ export function BookGame() {
                     type="button"
                     className="book-ring is-bet"
                     aria-expanded={betMenu}
-                    aria-label={`${t("Change the bet")}: ${formatMoney(playingFree ? feature.bet : bet)}`}
+                    aria-label={`${t("Change the bet")}: ${formatStake(playingFree ? feature.bet : bet)}`}
                     onClick={() => setBetMenu((open) => !open)}
                     disabled={spinning || auto !== null || playingFree}
                   >
                     <small>{t("Total bet")}</small>
-                    <b>{formatMoney(playingFree ? feature.bet : bet)}</b>
+                    <b>{formatStake(playingFree ? feature.bet : bet)}</b>
                   </button>
                   {betMenu && !spinning && !auto && !playingFree ? (
                     <div className="book-auto-menu book-bet-menu" role="dialog" aria-label={t("Total bet")}>
@@ -771,7 +778,7 @@ export function BookGame() {
                             disabled={value > balance}
                             onClick={() => chooseBet(value)}
                           >
-                            {formatMoney(value)}
+                            {formatStake(value)}
                           </button>
                         ))}
                       </div>

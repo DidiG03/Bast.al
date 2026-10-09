@@ -24,7 +24,7 @@ export const RISKS = ["LOW", "MEDIUM", "HIGH"] as const;
 export type Risk = (typeof RISKS)[number];
 
 /** What a ball can cost, in dollars. All multiples of 10 cents, so every pay comes out in whole cents. */
-export const BETS = [0.2, 0.5, 1, 2, 5, 10] as const;
+export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 
 /** What a ball pays back on average, in percent of the stake, to the nearest whole percent. */
 export const PAYOUT_RATE = 97;

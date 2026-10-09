@@ -24,7 +24,7 @@ export const REELS = 5;
 export const ROWS = 3;
 export const LINES = 10;
 /** What a spin can cost, in dollars. A line bet is a tenth of it. */
-export const BETS = [0.5, 1, 2, 5, 10, 25] as const;
+export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 /** What spins pay back on average, in percent of what they cost, as measured by scripts/book-rtp.mjs. */
 export const PAYOUT_RATE = 90.1;
 export const FREE_SPINS = 10;

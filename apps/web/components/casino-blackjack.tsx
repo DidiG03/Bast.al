@@ -28,8 +28,9 @@ const PEEK_MS = 1300;
 const COLLECT_MS = 700;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const CHIP_COLORS: Record<string, string> = { "0.5": "#7fb8e6", "1": "#f2f2f2", "2": "#f3c33b", "5": "#d8262c", "10": "#2f6fd6", "25": "#1f9d55" };
-const chipText = (amount: number) => (amount % 1 === 0 ? String(amount) : amount.toFixed(1));
+const CHIP_COLORS: Record<string, string> = { "50": "#7fb8e6", "100": "#f2f2f2", "250": "#f3c33b", "500": "#d8262c", "1000": "#2f6fd6", "2500": "#1f9d55" };
+/** A chip's face: "50", "250", "1k", "2.5k". */
+const chipText = (amount: number) => (amount >= 1000 ? `${Math.round(amount / 100) / 10}k` : amount % 1 === 0 ? String(amount) : amount.toFixed(1));
 const cents = (value: number) => Math.round(value * 100);
 
 /** Blackjack for a Player: the table, the bet, the moves and the last rounds. */
@@ -445,7 +446,7 @@ export function BlackjackGame() {
                             key={value}
                             type="button"
                             className="casino-chip"
-                            style={{ "--chip": CHIP_COLORS[String(value)], "--mark": value === 1 ? "#2f6fd6" : "#fff", "--ink": value === 1 ? "#1b1b1b" : "#fff", "--arc": Math.abs(index - (state.game.chips.length - 1) / 2) } as CSSProperties}
+                            style={{ "--chip": CHIP_COLORS[String(value)], "--mark": value === 100 ? "#2f6fd6" : "#fff", "--ink": value === 100 ? "#1b1b1b" : "#fff", "--arc": Math.abs(index - (state.game.chips.length - 1) / 2) } as CSSProperties}
                             disabled={busy}
                             onClick={() => addChip(value)}
                             aria-label={t("Add {amount}", { amount: formatMoney(value) })}
@@ -584,7 +585,7 @@ function PlayingCard({ card, order, fresh, flip = false, peek = null }: { card: 
 function chipsFor(amount: number): number[] {
   const chips: number[] = [];
   let left = cents(amount);
-  for (const chip of [25, 10, 5, 2, 1, 0.5]) {
+  for (const chip of [2500, 1000, 500, 250, 100, 50]) {
     while (left >= cents(chip) && chips.length < 12) {
       chips.push(chip);
       left -= cents(chip);

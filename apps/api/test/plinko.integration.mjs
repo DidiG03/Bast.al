@@ -63,46 +63,46 @@ test("setup", async () => {
   }
   await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false } });
   sa = await user("SUPER_ADMIN", null);
-  owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 5000 });
-  manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 900 });
-  pia = await user("PLAYER", manager.id, { balance: 100 });
-  await prisma.balanceTransaction.create({ data: { fromUserId: manager.id, toUserId: pia.id, actorId: manager.id, type: "DELEGATION", amount: 100, reason: "Top-up" } });
+  owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 500000 });
+  manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 90000 });
+  pia = await user("PLAYER", manager.id, { balance: 10000 });
+  await prisma.balanceTransaction.create({ data: { fromUserId: manager.id, toUserId: pia.id, actorId: manager.id, type: "DELEGATION", amount: 10000, reason: "Top-up" } });
 });
 
 test("closed with the Casino's switches, like the other games", async () => {
-  await assert.rejects(plinko.drop(pia, 1, 8, "LOW"), /The Casino is closed right now/);
+  await assert.rejects(plinko.drop(pia, 100, 8, "LOW"), /The Casino is closed right now/);
   await casino.setOpen(sa, true);
-  await assert.rejects(plinko.drop(pia, 1, 8, "LOW"), /isn't open for your team/);
+  await assert.rejects(plinko.drop(pia, 100, 8, "LOW"), /isn't open for your team/);
   await casino.setOpen(owner, true);
   const state = await plinko.state(pia);
   assert.equal(state.closed, null);
-  assert.equal(state.tableMax, 10);
+  assert.equal(state.tableMax, 2500);
   assert.deepEqual(state.game.rows, [8, 12, 16]);
   assert.equal(state.game.pays[16].HIGH.length, 17);
   assert.equal(state.game.payoutRates[16].LOW, 97);
-  assert.equal(await balanceOf(pia), 100);
+  assert.equal(await balanceOf(pia), 10000);
 });
 
 test("a ball takes the stake, pays its bucket, and shows in the ledger and the journal", async () => {
   // All left on 8 rows, medium risk: the edge, 13.4 times.
   follow([0]);
-  const edge = await plinko.drop(pia, 0.5, 8, "MEDIUM");
-  assert.deepEqual([edge.round.rows, edge.round.risk, edge.round.bucket, edge.round.multiplier, edge.round.bet, edge.round.win], [8, "MEDIUM", 0, 13.4, 0.5, 6.7]);
+  const edge = await plinko.drop(pia, 50, 8, "MEDIUM");
+  assert.deepEqual([edge.round.rows, edge.round.risk, edge.round.bucket, edge.round.multiplier, edge.round.bet, edge.round.win], [8, "MEDIUM", 0, 13.4, 50, 670]);
   assert.deepEqual(edge.round.path, [0, 0, 0, 0, 0, 0, 0, 0]);
-  assert.equal(edge.balance, 106.2);
-  assert.equal(await balanceOf(pia), 106.2);
+  assert.equal(edge.balance, 10620);
+  assert.equal(await balanceOf(pia), 10620);
 
   // Four each way on 8 rows, high risk: the middle, 0.2 times.
   follow([0, 1]);
-  const middle = await plinko.drop(pia, 2, 8, "HIGH");
-  assert.deepEqual([middle.round.bucket, middle.round.multiplier, middle.round.win], [4, 0.2, 0.4]);
-  assert.equal(await balanceOf(pia), 104.6);
+  const middle = await plinko.drop(pia, 250, 8, "HIGH");
+  assert.deepEqual([middle.round.bucket, middle.round.multiplier, middle.round.win], [4, 0.2, 50]);
+  assert.equal(await balanceOf(pia), 10420);
 
   const line = await todaysLine(pia);
-  assert.deepEqual([line.type, Number(line.amount), line.reason], ["CASINO", 4.6, "Plinko: 2 balls"]);
+  assert.deepEqual([line.type, Number(line.amount), line.reason], ["CASINO", 420, "Plinko: 2 balls"]);
   const journal = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpinId: edge.round.id } });
-  assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 0.5, 6.7, owner.id, manager.id]);
-  assert.equal(await ledgerTotal(pia), 104.6, "the ledger adds up to the balance");
+  assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 50, 670, owner.id, manager.id]);
+  assert.equal(await ledgerTotal(pia), 10420, "the ledger adds up to the balance");
 
   const state = await plinko.state(pia);
   assert.deepEqual(state.recent.map((row) => row.multiplier), [0.2, 13.4]);
@@ -111,8 +111,8 @@ test("a ball takes the stake, pays its bucket, and shows in the ledger and the j
 
 test("a big win goes in the audit log", async () => {
   follow([1]);
-  const ball = await plinko.drop(pia, 0.2, 16, "HIGH");
-  assert.deepEqual([ball.round.bucket, ball.round.multiplier, ball.round.win], [16, 1000, 200]);
+  const ball = await plinko.drop(pia, 50, 16, "HIGH");
+  assert.deepEqual([ball.round.bucket, ball.round.multiplier, ball.round.win], [16, 1000, 50000]);
   const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "casino.big_win" } });
   assert.equal(log.metadata.game, "plinko");
   assert.equal(log.metadata.multiplier, 1000);
@@ -121,21 +121,21 @@ test("a big win goes in the audit log", async () => {
 test("bad stakes and boards, the max stake, the daily loss limit and a low balance stop a ball, and nothing moves", async () => {
   follow([0, 1]);
   const balance = await balanceOf(pia);
-  await assert.rejects(plinko.drop(pia, 0.3, 8, "LOW"), /Pick one of the stakes/);
-  await assert.rejects(plinko.drop(pia, 1, 10, "LOW"), /8, 12 or 16 rows/);
-  await assert.rejects(plinko.drop(pia, 1, 8, "EXTREME"), /Pick a risk/);
+  await assert.rejects(plinko.drop(pia, 30, 8, "LOW"), /Pick one of the stakes/);
+  await assert.rejects(plinko.drop(pia, 100, 10, "LOW"), /8, 12 or 16 rows/);
+  await assert.rejects(plinko.drop(pia, 100, 8, "EXTREME"), /Pick a risk/);
 
-  await prisma.bettingLimit.create({ data: { playerId: pia.id, managerMaxStake: 2 } });
-  assert.equal((await plinko.state(pia)).tableMax, 2);
-  await assert.rejects(plinko.drop(pia, 5, 8, "LOW"), /most a ball can cost you is 2\.00 ALL/);
+  await prisma.bettingLimit.create({ data: { playerId: pia.id, managerMaxStake: 250 } });
+  assert.equal((await plinko.state(pia)).tableMax, 250);
+  await assert.rejects(plinko.drop(pia, 500, 8, "LOW"), /most a ball can cost you is 250\.00 ALL/);
 
   const used = await limits.usedToday(pia.id);
-  await prisma.bettingLimit.update({ where: { playerId: pia.id }, data: { managerMaxStake: null, managerDailyLossLimit: used + 0.5 } });
-  await assert.rejects(plinko.drop(pia, 1, 8, "LOW"), /daily loss limit/);
+  await prisma.bettingLimit.update({ where: { playerId: pia.id }, data: { managerMaxStake: null, managerDailyLossLimit: used + 50 } });
+  await assert.rejects(plinko.drop(pia, 100, 8, "LOW"), /daily loss limit/);
   await prisma.bettingLimit.delete({ where: { playerId: pia.id } });
 
-  await prisma.user.update({ where: { id: pia.id }, data: { balance: 0.4 } });
-  await assert.rejects(plinko.drop(pia, 0.5, 8, "LOW"), /balance is too low/);
+  await prisma.user.update({ where: { id: pia.id }, data: { balance: 40 } });
+  await assert.rejects(plinko.drop(pia, 50, 8, "LOW"), /balance is too low/);
   await prisma.user.update({ where: { id: pia.id }, data: { balance } });
   assert.equal(await balanceOf(pia), balance);
   assert.equal(await prisma.casinoSpin.count({ where: { kind: "PLINKO" } }), 3);
@@ -161,7 +161,7 @@ test("Plinko profit counts in commissions, and the Casino page shows it as its o
 test("the same ball sent twice drops once", async () => {
   follow([0, 0, 0, 0, 0, 0, 0, 1]);
   const interceptor = new IdempotencyInterceptor(prisma);
-  const body = { bet: 1, rows: 8, risk: "LOW" };
+  const body = { bet: 100, rows: 8, risk: "LOW" };
   const context = {
     switchToHttp: () => ({
       getRequest: () => ({ actor: { id: pia.id }, headers: { "idempotency-key": "plinko-key-0123456789" }, originalUrl: "/casino/plinko/drop", path: "/casino/plinko/drop", method: "POST", body }),
@@ -174,7 +174,7 @@ test("the same ball sent twice drops once", async () => {
   const again = await send();
   assert.equal(again.round.id, first.round.id);
   assert.equal(first.round.multiplier, 1.8);
-  assert.equal(await balanceOf(pia), Math.round((before + 0.8) * 100) / 100, "paid once");
+  assert.equal(await balanceOf(pia), Math.round((before + 80) * 100) / 100, "paid once");
   assert.equal(await ledgerTotal(pia), await balanceOf(pia));
 });
 

@@ -143,6 +143,15 @@ function CasinoLobby() {
               <span>{t("Set your own odds: roll over or under a target, from a sure thing to 97 times the stake. Every roll can be checked.")}</span>
             </span>
           </Link>
+          <Link className="casino-tile is-keno" href="/dashboard/casino/keno">
+            <span className="casino-tile-art" aria-hidden="true">
+              <KenoTileArt />
+            </span>
+            <span className="casino-tile-body">
+              <strong>{t("Keno")}</strong>
+              <span>{t("Pick up to 10 numbers, 20 of 80 are drawn. Catch them all for up to 2,000 times the stake. Every draw can be checked.")}</span>
+            </span>
+          </Link>
         </div>
       )}
     </div>
@@ -282,6 +291,55 @@ function DiceTileArt() {
         <rect width="132" height="12" rx="6" fill="#2fd47e" />
         <rect x="126" y="-5" width="12" height="22" rx="3" fill="#f4f7fb" stroke="#1b2433" strokeWidth="0.8" />
       </g>
+    </svg>
+  );
+}
+
+/** The Keno tile: a corner of the board, the picked numbers gold, the drawn ones lit, and a few balls rolling out. */
+function KenoTileArt() {
+  const picked = new Set([3, 7, 12, 15, 19, 26]);
+  const drawn = new Set([3, 5, 9, 12, 19, 22, 28, 30]);
+  return (
+    <svg viewBox="0 0 300 150" className="keno-tile-scene">
+      {Array.from({ length: 30 }, (_, index) => {
+        const number = index + 1;
+        const x = 18 + (index % 10) * 27;
+        const y = 14 + Math.floor(index / 10) * 27;
+        const hit = picked.has(number) && drawn.has(number);
+        const fill = hit ? "#ffcf3f" : picked.has(number) ? "#7a5a12" : drawn.has(number) ? "#2b6cb0" : "rgba(255,255,255,0.08)";
+        return (
+          <g key={number}>
+            <rect x={x} y={y} width="23" height="23" rx="5" fill={fill} stroke={hit ? "#fff3c4" : "none"} strokeWidth="1.5" />
+            <text x={x + 11.5} y={y + 15.5} textAnchor="middle" fontSize="10" fontWeight="800" fill={hit ? "#3a2600" : "#e8eef6"}>
+              {number}
+            </text>
+          </g>
+        );
+      })}
+      {[
+        [62, 3, true],
+        [104, 12, true],
+        [146, 22, false],
+        [188, 19, true],
+        [230, 28, false],
+      ].map(([cx, number, hit]) => (
+        <g key={String(number)}>
+          <circle cx={Number(cx)} cy="122" r="15" fill={hit ? "url(#kt-gold)" : "url(#kt-white)"} />
+          <text x={Number(cx)} y="126.5" textAnchor="middle" fontSize="12" fontWeight="900" fill="#1b2433">
+            {String(number)}
+          </text>
+        </g>
+      ))}
+      <defs>
+        <radialGradient id="kt-gold" cx="0.35" cy="0.3" r="0.8">
+          <stop offset="0" stopColor="#fff6cf" />
+          <stop offset="1" stopColor="#e2a514" />
+        </radialGradient>
+        <radialGradient id="kt-white" cx="0.35" cy="0.3" r="0.8">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#b9c3d1" />
+        </radialGradient>
+      </defs>
     </svg>
   );
 }
@@ -534,7 +592,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
       </div>
 
       <div className="report-grid">
-        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins + data.games.dice.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
+        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins + data.games.dice.spins + data.games.keno.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
         <Stat label={t("Staked")} value={formatMoney(data.totals.staked)} hint={t("What spins and rounds cost")} />
         <Stat label={t("Paid out")} value={formatMoney(data.totals.won)} hint={data.totals.payoutRate === null ? t("No spins yet") : t("{rate}% of what was staked", { rate: data.totals.payoutRate })} />
         <Stat label={t("Casino profit")} help="What Players lost in the Casino minus what they won. It's part of the team's profit in Commissions." value={formatSignedMoney(data.totals.net)} highlight={data.totals.net < 0 ? "bad" : "good"} />
@@ -553,6 +611,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
               ["penalty", t("Penalty"), tn(data.games.penalty.spins, "{count} round", "{count} rounds")],
               ["plinko", "Plinko", tn(data.games.plinko.spins, "{count} ball", "{count} balls")],
               ["dice", t("Dice"), tn(data.games.dice.spins, "{count} roll", "{count} rolls")],
+              ["keno", t("Keno"), tn(data.games.keno.spins, "{count} round", "{count} rounds")],
             ] as const
           ).map(([key, name, count]) => {
             const game = data.games[key];
@@ -591,7 +650,8 @@ function CasinoOverview({ me }: { me: MeResponse }) {
                     {player.mines.rounds > 0 ? ` · ${tn(player.mines.rounds, "{count} Mines round", "{count} Mines rounds")}` : ""}
                     {player.penalty.rounds > 0 ? ` · ${tn(player.penalty.rounds, "{count} Penalty round", "{count} Penalty rounds")}` : ""}
                     {player.plinko.balls > 0 ? ` · ${tn(player.plinko.balls, "{count} Plinko ball", "{count} Plinko balls")}` : ""}
-                    {player.dice.rolls > 0 ? ` · ${tn(player.dice.rolls, "{count} dice roll", "{count} dice rolls")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
+                    {player.dice.rolls > 0 ? ` · ${tn(player.dice.rolls, "{count} dice roll", "{count} dice rolls")}` : ""}
+                    {player.keno.rounds > 0 ? ` · ${tn(player.keno.rounds, "{count} Keno round", "{count} Keno rounds")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
                   </span>
                 </div>
                 <strong className={player.net < 0 ? "is-bad" : undefined}>{formatSignedMoney(player.net)}</strong>

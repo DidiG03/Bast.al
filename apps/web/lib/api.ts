@@ -284,15 +284,22 @@ export type CommissionDaily = { days: Array<CommissionTotals & { from: string; t
 
 type BetSummary = { id: string; description: string | null; odds: number | null; stake: number; placedAt: string };
 
+/** A casino round started and not finished: its stake is already out of the balance. Free spins cost nothing. */
+export type CasinoInPlay = { game: CasinoGameKey; staked: number; freeSpins: number | null; startedAt: string };
+
 export type PlayerActivity = {
   player: { id: string; username: string; status: UserRow["status"]; balance: number; parent: { username: string; role: UserRole } | null };
-  summary: { thisWeek: CommissionTotals; last30Days: CommissionTotals; allTime: CommissionTotals };
-  open: { count: number; staked: number; bets: BetSummary[] };
+  /** Bets and casino together; `casinoRounds` are the spins, hands and rounds among them. */
+  summary: { thisWeek: CommissionTotals & { casinoRounds: number }; last30Days: CommissionTotals & { casinoRounds: number }; allTime: CommissionTotals & { casinoRounds: number } };
+  open: { count: number; staked: number; bets: BetSummary[]; casino: CasinoInPlay[] };
+  /** Each casino game played in the last 30 days, most staked first. */
+  casino: Array<{ game: CasinoGameKey; rounds: number; staked: number; paidOut: number; net: number; lastPlayed: string }>;
   recent: Array<BetSummary & { payout: number; status: "WON" | "LOST" | "VOID"; settledAt: string | null }>;
 };
 
 /** A Player's betting limits. null means no limit. */
-export type Limits = { maxStake: number | null; dailyLossLimit: number | null };
+/** One layer's limits. `casinoOff`: that layer turned the Casino off for the Player (either one closes it). */
+export type Limits = { maxStake: number | null; dailyLossLimit: number | null; casinoOff: boolean };
 
 export type BettingLimits = {
   /** The ceiling the Owner (or Super Admin) sets. */
@@ -736,8 +743,8 @@ export type CasinoAdmin = {
   /** A Manager's team: whether their Owner has the Casino open. Null for others. */
   teamOpen: boolean | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
-  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), Plinko (`spins` are its balls) and Dice (`spins` are its rolls). */
-  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
+  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), Plinko (`spins` are its balls), Dice (`spins` are its rolls) and Keno (`spins` are its rounds). */
+  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
     /** Book of Ra: paid spins and free ones, with double or nothing on its wins. */
     book: { spins: number; freeSpins: number; staked: number; won: number; payoutRate: number | null };
   };
@@ -752,6 +759,7 @@ export type CasinoAdmin = {
     penalty: { rounds: number; staked: number; won: number };
     plinko: { balls: number; staked: number; won: number };
     dice: { rolls: number; staked: number; won: number };
+    keno: { rounds: number; staked: number; won: number };
     staked: number;
     won: number;
     net: number;
@@ -880,7 +888,7 @@ export type BlackjackState = {
 
 export type BlackjackMoveResult = { round: BlackjackRoundView; balance: number };
 
-export type CasinoGameKey = "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice";
+export type CasinoGameKey = "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno";
 
 /** The home page's "Continue playing": a round still in play, or the game played last. */
 export type CasinoLastGame = {
@@ -1070,7 +1078,7 @@ export type PlinkoDropResult = {
   balance: number;
 };
 
-/** A Player's dice seed pair. The server seed stays null until the Player changes seeds. */
+/** A Player's seed pair, for Dice and Keno. The server seed stays null until the Player changes seeds. */
 export type DiceSeed = {
   serverSeedHash: string;
   clientSeed: string;
@@ -1113,6 +1121,8 @@ export type DiceState = {
     maxChance: number;
     minBet: number;
     maxBet: number;
+    /** The stakes a roll can be played at. */
+    bets: number[];
     maxMultiplier: number;
   };
 };
@@ -1126,4 +1136,51 @@ export type DiceRollResult = {
 export type DiceSeedChange = {
   seed: DiceSeed;
   previousSeed: DiceSeed;
+};
+
+/** One Keno round. */
+export type KenoRound = {
+  id: string;
+  /** The Player's numbers, smallest first. */
+  picks: number[];
+  /** The 20 numbers drawn, in the order they came out. */
+  drawn: number[];
+  /** The picks that were drawn. */
+  hits: number[];
+  multiplier: number;
+  bet: number;
+  win: number;
+  serverSeedHash: string;
+  clientSeed: string;
+  nonce: number;
+  serverSeed: string | null;
+  createdAt: string;
+};
+
+export type KenoState = {
+  closed: string | null;
+  balance: number;
+  /** The most one round can cost: the Player's max stake, or the top bet without one. */
+  tableMax: number;
+  recent: KenoRound[];
+  seed: DiceSeed;
+  previousSeed: DiceSeed | null;
+  game: {
+    name: string;
+    numbers: number;
+    drawn: number;
+    minPicks: number;
+    maxPicks: number;
+    bets: number[];
+    /** pays[picks][hits], in times the stake. */
+    pays: Record<string, number[]>;
+    maxMultiplier: number;
+    payoutRates: Record<string, number>;
+  };
+};
+
+export type KenoPlayResult = {
+  round: KenoRound;
+  balance: number;
+  seed: DiceSeed;
 };

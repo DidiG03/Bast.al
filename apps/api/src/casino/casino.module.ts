@@ -12,11 +12,12 @@ import { MinesService } from "./mines.service";
 import { PenaltyService } from "./penalty.service";
 import { PlinkoService } from "./plinko.service";
 import { DiceService } from "./dice.service";
+import { KenoService } from "./keno.service";
 
 @Module({
   imports: [AuthModule, SecurityModule, UsersModule, CommissionsModule],
   controllers: [CasinoController],
-  providers: [CasinoService, RouletteService, BlackjackService, BookService, MinesService, PenaltyService, PlinkoService, DiceService],
-  exports: [CasinoService, RouletteService, BlackjackService, BookService, MinesService, PenaltyService, PlinkoService, DiceService],
+  providers: [CasinoService, RouletteService, BlackjackService, BookService, MinesService, PenaltyService, PlinkoService, DiceService, KenoService],
+  exports: [CasinoService, RouletteService, BlackjackService, BookService, MinesService, PenaltyService, PlinkoService, DiceService, KenoService],
 })
 export class CasinoModule {}

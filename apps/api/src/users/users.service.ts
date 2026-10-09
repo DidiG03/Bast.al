@@ -1649,19 +1649,22 @@ async function lockAccounts(tx: Prisma.TransactionClient, ids: Array<string | nu
 }
 
 /** Casino rounds a Player is in the middle of, whose winnings would otherwise land with a new team. */
-async function inPlay(db: Pick<Prisma.TransactionClient, "blackjackHand" | "casinoBookFeature" | "minesRound" | "penaltyRound">, playerId: string) {
-  const [hands, rounds, mines, penalty] = await Promise.all([
+async function inPlay(db: Pick<Prisma.TransactionClient, "blackjackHand" | "casinoBookFeature" | "casinoFreeSpins" | "minesRound" | "penaltyRound">, playerId: string) {
+  const [hands, rounds, slotFreeSpins, mines, penalty] = await Promise.all([
     db.blackjackHand.count({ where: { playerId } }),
     db.casinoBookFeature.count({ where: { playerId } }),
+    // Free spins the fruit slot still owes from its old rules: they'd pay out under the new team.
+    db.casinoFreeSpins.count({ where: { playerId, remaining: { gt: 0 } } }),
     db.minesRound.count({ where: { playerId } }),
     db.penaltyRound.count({ where: { playerId } }),
   ]);
-  return { blackjack: hands > 0, freeSpins: rounds > 0, mines: mines > 0, penalty: penalty > 0 };
+  return { blackjack: hands > 0, freeSpins: rounds > 0, slotFreeSpins: slotFreeSpins > 0, mines: mines > 0, penalty: penalty > 0 };
 }
 
-function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, playing: { blackjack: boolean; freeSpins: boolean; mines: boolean; penalty: boolean } = { blackjack: false, freeSpins: false, mines: false, penalty: false }): string | null {
+function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, playing: { blackjack: boolean; freeSpins: boolean; slotFreeSpins: boolean; mines: boolean; penalty: boolean } = { blackjack: false, freeSpins: false, slotFreeSpins: false, mines: false, penalty: false }): string | null {
   if (playing.blackjack) return `${username} is in the middle of a blackjack hand. Move them once it's over.`;
   if (playing.freeSpins) return `${username} is in the middle of Book of Ra free spins. Move them once they're over.`;
+  if (playing.slotFreeSpins) return `${username} still has free spins to play on the fruit slot. Move them once they're played.`;
   if (playing.mines) return `${username} is in the middle of a Mines round. Move them once it's over.`;
   if (playing.penalty) return `${username} is in the middle of a Penalty round. Move them once it's over.`;
   if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;

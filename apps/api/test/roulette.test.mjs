@@ -76,13 +76,13 @@ test("every spot pays back exactly 36/37 of its stake over the whole wheel (97.3
 });
 
 test("bets that can't be played are refused", () => {
-  assert.equal(invalidBets([{ spot: "17", amount: 1 }, { spot: "RED", amount: CHIPS[5] }]), null);
+  assert.equal(invalidBets([{ spot: "17", amount: 50 }, { spot: "RED", amount: CHIPS[5] }]), null);
   assert.match(invalidBets([]), /at least one chip/);
-  assert.match(invalidBets([{ spot: "00", amount: 1 }]), /no "00"/);
-  assert.match(invalidBets([{ spot: "3-4", amount: 1 }]), /no "3-4"/);
-  assert.match(invalidBets([{ spot: "17", amount: 1 }, { spot: "17", amount: 1 }]), /twice/);
-  for (const amount of [0, -1, 0.3, 1.25, 0.501, Number.NaN, Infinity]) assert.match(invalidBets([{ spot: "17", amount }]), /chips/, String(amount));
-  assert.match(invalidBets(Array.from({ length: 151 }, (_, n) => ({ spot: String(n), amount: 1 }))), /at most 150/);
+  assert.match(invalidBets([{ spot: "00", amount: 50 }]), /no "00"/);
+  assert.match(invalidBets([{ spot: "3-4", amount: 50 }]), /no "3-4"/);
+  assert.match(invalidBets([{ spot: "17", amount: 50 }, { spot: "17", amount: 50 }]), /twice/);
+  for (const amount of [0, -50, 30, 125, 50.01, Number.NaN, Infinity]) assert.match(invalidBets([{ spot: "17", amount }]), /chips/, String(amount));
+  assert.match(invalidBets(Array.from({ length: 151 }, (_, n) => ({ spot: String(n), amount: 50 }))), /at most 150/);
 });
 
 test("the wheel stops where the random source says, and only on the wheel", () => {

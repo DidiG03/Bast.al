@@ -12,7 +12,7 @@ import { useToast } from "./toaster";
 import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import { useGameKeys } from "./use-game-keys";
 import { apiFetch, type MinesRoundView, type MinesState, type MinesStepResult, type MinesTile } from "../lib/api";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatStake } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
@@ -293,7 +293,7 @@ export function MinesGame() {
                   disabled={playing || busy || value > state.tableMax || value > balance}
                   onClick={() => setBet(value)}
                 >
-                  {formatMoney(value)}
+                  {formatStake(value)}
                 </button>
               ))}
             </div>
@@ -303,7 +303,7 @@ export function MinesGame() {
               </button>
             ) : (
               <button type="button" className="mines-go" data-key="Space" disabled={busy || bet <= 0 || bet > balance || bet > state.tableMax} onClick={() => void start()}>
-                {t("Start {amount}", { amount: formatMoney(bet) })}
+                {t("Start {amount}", { amount: formatStake(bet) })}
               </button>
             )}
           </div>

@@ -372,6 +372,20 @@ export const slotSound = {
     tone(1319, 0.07, 0.16, { type: "triangle", gain: 0.11 });
   },
 
+  /** Keno: a ball drawn. On one of the Player's numbers it pops, a little higher for each hit; otherwise a soft tick. */
+  kenoBall(hit: boolean, hits: number) {
+    if (hit) {
+      this.coinPop(hits);
+      return;
+    }
+    tone(880 + Math.random() * 80, 0, 0.03, { type: "triangle", gain: 0.05 });
+  },
+
+  /** Keno: the round's result, like a Plinko bucket: a thud below the stake, a chime above it, a fanfare for a big win. */
+  kenoResult(multiplier: number) {
+    this.bucket(multiplier);
+  },
+
   /** Book of Ra: the special symbol growing to fill a reel, a rising shimmer. */
   expand(reel: number) {
     const base = 330 * 2 ** (reel / 6);

@@ -36,7 +36,7 @@ import { useIdempotencyKey } from "../lib/use-idempotency-key";
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
 /** Each chip's colour, by value. */
-const CHIP_COLORS: Record<string, string> = { "0.5": "#7fb8e6", "1": "#f2f2f2", "2": "#f3c33b", "5": "#d8262c", "10": "#2f6fd6", "25": "#1f9d55" };
+const CHIP_COLORS: Record<string, string> = { "50": "#7fb8e6", "100": "#f2f2f2", "250": "#f3c33b", "500": "#d8262c", "1000": "#2f6fd6", "2500": "#1f9d55" };
 const chipColor = (amount: number, chips: number[]) => CHIP_COLORS[String([...chips].reverse().find((chip) => chip <= amount + 1e-9) ?? chips[0])] ?? "#f2f2f2";
 const chipText = (amount: number) => (amount >= 1000 ? `${Math.round(amount / 100) / 10}k` : amount % 1 === 0 ? String(amount) : amount.toFixed(1));
 

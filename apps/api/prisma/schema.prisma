@@ -545,6 +545,9 @@ model BettingLimit {
   ownerDailyLossLimit   Decimal? @map("owner_daily_loss_limit") @db.Decimal(12, 2)
   managerMaxStake       Decimal? @map("manager_max_stake") @db.Decimal(12, 2)
   managerDailyLossLimit Decimal? @map("manager_daily_loss_limit") @db.Decimal(12, 2)
+  /// The Casino turned off for this one Player, by their Owner (or Super Admin) or by their Manager. Either one closes it.
+  ownerCasinoOff        Boolean  @default(false) @map("owner_casino_off")
+  managerCasinoOff      Boolean  @default(false) @map("manager_casino_off")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
   @@map("betting_limits")
@@ -718,6 +721,8 @@ model CasinoSpin {
   plinko       Json?
   /// A dice roll: the target and its side, the roll, the multiplier, and the seed pair and nonce it came from.
   dice         Json?
+  /// A Keno round: the numbers picked, the 20 drawn in order, the hits, the multiplier, and the seed pair and nonce they came from.
+  keno         Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -742,9 +747,11 @@ enum CasinoPlayKind {
   PLINKO
   /// One dice roll.
   DICE
+  /// One Keno draw.
+  KENO
 }
 
-/// A Player's provably fair seed pair for dice. Each roll is the HMAC-SHA256
+/// A Player's provably fair seed pair, for Dice and Keno. Each roll is the HMAC-SHA256
 /// of the server seed and "clientSeed:nonce". While a pair is active only its
 /// server seed's hash is shown; changing the pair reveals the server seed, so
 /// the Player can check every roll made with it. One active pair per Player.

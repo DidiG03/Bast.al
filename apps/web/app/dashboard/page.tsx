@@ -643,6 +643,7 @@ const CASINO_GAMES: Record<CasinoLastGame["game"], { href: string; icon: string;
   penalty: { href: "/dashboard/casino/penalty", icon: "⚽", name: "Penalty" },
   plinko: { href: "/dashboard/casino/plinko", icon: "🔴", name: "Plinko" },
   dice: { href: "/dashboard/casino/dice", icon: "🎲", name: "Dice" },
+  keno: { href: "/dashboard/casino/keno", icon: "🔢", name: "Keno" },
 };
 
 const LAST_PLAYED: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };

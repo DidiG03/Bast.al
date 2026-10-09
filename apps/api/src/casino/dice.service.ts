@@ -9,7 +9,9 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
+import { activeSeed, lockedActiveSeed, previousSeed, revealedSeeds, seedView } from "./fair-seeds";
 import {
+  BETS,
   DIRECTIONS,
   GAME_NAME,
   MAX_BET,
@@ -44,12 +46,6 @@ const ledgerLineId = (playerId: string, at: Date) => `dice_${playerId}_${dayKey(
 const roundSelect = { id: true, bet: true, win: true, dice: true, createdAt: true } satisfies Prisma.CasinoSpinSelect;
 
 type Stored = { target: number; direction: Direction; roll: number; winning: number; multiplier: number; seedId: string; serverSeedHash: string; clientSeed: string; nonce: number };
-type Seed = { id: string; serverSeed: string; serverSeedHash: string; clientSeed: string; nonce: number; active: boolean };
-
-/** A seed pair as the Player may see it: the server seed only once it's been changed. */
-function seedView(seed: Seed) {
-  return { serverSeedHash: seed.serverSeedHash, clientSeed: seed.clientSeed, nonce: seed.nonce, serverSeed: seed.active ? null : seed.serverSeed };
-}
 
 function roundView(round: Prisma.CasinoSpinGetPayload<{ select: typeof roundSelect }>, revealed: Map<string, string>) {
   const stored = round.dice as Stored;
@@ -95,22 +91,6 @@ export class DiceService {
     return max === null ? MAX_BET : Math.min(max, MAX_BET);
   }
 
-  /** The Player's active seed pair, made the first time they need one. Call with the Player's row locked. */
-  private async activeSeed(db: Prisma.TransactionClient | PrismaService, playerId: string): Promise<Seed> {
-    const seed = await db.diceSeed.findFirst({ where: { playerId, active: true }, orderBy: { createdAt: "desc" } });
-    if (seed) return seed;
-    const serverSeed = newServerSeed();
-    return db.diceSeed.create({ data: { playerId, serverSeed, serverSeedHash: hashSeed(serverSeed), clientSeed: newClientSeed() } });
-  }
-
-  /** Server seeds already shown, by seed id, for the rolls given. */
-  private async revealedSeeds(rounds: Array<{ dice: Prisma.JsonValue }>): Promise<Map<string, string>> {
-    const ids = [...new Set(rounds.map((round) => (round.dice as Stored | null)?.seedId).filter((id): id is string => !!id))];
-    if (ids.length === 0) return new Map();
-    const seeds = await this.prisma.diceSeed.findMany({ where: { id: { in: ids }, active: false }, select: { id: true, serverSeed: true } });
-    return new Map(seeds.map((seed) => [seed.id, seed.serverSeed]));
-  }
-
   /** The Player's dice table: whether they can play, the rules, their seed pair and their last rolls. */
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
@@ -119,13 +99,10 @@ export class DiceService {
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "DICE" }, orderBy: { createdAt: "desc" }, take: RECENT, select: roundSelect }),
-      this.prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
-        return this.activeSeed(tx, actor.id);
-      }),
-      this.prisma.diceSeed.findFirst({ where: { playerId: actor.id, active: false }, orderBy: { revealedAt: "desc" } }),
+      lockedActiveSeed(this.prisma, actor.id),
+      previousSeed(this.prisma, actor.id),
     ]);
-    const revealed = await this.revealedSeeds(recent);
+    const revealed = await revealedSeeds(this.prisma, recent.map((round) => (round.dice as Stored | null)?.seedId));
     return {
       closed,
       balance: Number(player.balance),
@@ -142,6 +119,7 @@ export class DiceService {
         maxChance: MAX_WINNING / 100,
         minBet: MIN_BET,
         maxBet: MAX_BET,
+        bets: BETS,
         maxMultiplier: multiplierOf(MIN_WINNING),
       },
     };
@@ -152,9 +130,8 @@ export class DiceService {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const closed = await casinoClosedReason(this.prisma, actor);
     if (closed) throw new ForbiddenException(closed);
+    if (!(BETS as readonly number[]).includes(Number(betInput))) throw new BadRequestException(`A roll costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);
     const stakeCents = Math.round(Number(betInput) * 100);
-    if (!Number.isFinite(Number(betInput)) || Math.abs(stakeCents - Number(betInput) * 100) > 1e-6) throw new BadRequestException("The stake is in whole cents.");
-    if (stakeCents < Math.round(MIN_BET * 100)) throw new BadRequestException(`The smallest roll is ${MIN_BET.toFixed(2)} ALL`);
     if (!(DIRECTIONS as readonly string[]).includes(directionInput)) throw new BadRequestException("Roll over or under the target.");
     const direction = directionInput as Direction;
     const target = targetUnits(Number(targetInput));
@@ -173,7 +150,7 @@ export class DiceService {
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
       await this.limits.assertCanPlace(actor.id, stakeCents / 100);
 
-      const seed = await this.activeSeed(tx, actor.id);
+      const seed = await activeSeed(tx, actor.id);
       const roll = rollFor(seed.serverSeed, seed.clientSeed, seed.nonce);
       const won = wins(roll, target, direction);
       const stake = new Prisma.Decimal(stakeCents).div(100);
@@ -231,7 +208,7 @@ export class DiceService {
     if (clientSeedInput !== undefined && !isClientSeed(clientSeedInput)) throw new BadRequestException("A client seed is 1 to 32 letters, digits, dashes or underscores.");
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
-      const current = await this.activeSeed(tx, actor.id);
+      const current = await activeSeed(tx, actor.id);
       const previous = await tx.diceSeed.update({ where: { id: current.id }, data: { active: false, revealedAt: new Date() } });
       const serverSeed = newServerSeed();
       const seed = await tx.diceSeed.create({ data: { playerId: actor.id, serverSeed, serverSeedHash: hashSeed(serverSeed), clientSeed: clientSeedInput ?? newClientSeed() } });

@@ -20,3 +20,8 @@ export function formatMoney(value: number | string): string {
 export function formatSignedMoney(value: number | string): string {
   return formatMoney(value);
 }
+
+/** A stake as the bet buttons show it: "2,500 ALL", without cents when there are none ("12.50 ALL" keeps them). */
+export function formatStake(value: number | string): string {
+  return formatMoney(value).replace(/\.00(?= )/, "");
+}

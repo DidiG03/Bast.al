@@ -96,55 +96,55 @@ test("setup", async () => {
   }
   await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false } });
   sa = await user("SUPER_ADMIN", null);
-  owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 5000 });
-  manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 900 });
+  owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 500000 });
+  manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 90000 });
   other = await user("MANAGER", owner.id, { commissionRate: 20 });
-  cara = await user("PLAYER", manager.id, { balance: 100 });
-  await prisma.balanceTransaction.create({ data: { fromUserId: manager.id, toUserId: cara.id, actorId: manager.id, type: "DELEGATION", amount: 100, reason: "Top-up" } });
+  cara = await user("PLAYER", manager.id, { balance: 10000 });
+  await prisma.balanceTransaction.create({ data: { fromUserId: manager.id, toUserId: cara.id, actorId: manager.id, type: "DELEGATION", amount: 10000, reason: "Top-up" } });
 });
 
 test("closed with the Casino's switches, like the other games", async () => {
   script(losing);
-  await assert.rejects(book.spin(cara, 1), /The Casino is closed right now/);
+  await assert.rejects(book.spin(cara, 100), /The Casino is closed right now/);
   await casino.setOpen(sa, true);
   await casino.setOpen(owner, true);
   assert.equal((await book.state(cara)).closed, null);
-  await assert.rejects(book.spin(cara, 3), /Choose a bet of/);
-  assert.equal(await balanceOf(cara), 100);
+  await assert.rejects(book.spin(cara, 300), /Choose a bet of/);
+  assert.equal(await balanceOf(cara), 10000);
 });
 
 test("a losing spin takes the stake, on its own ledger line and in the journal with the team", async () => {
   script(losing);
-  const result = await book.spin(cara, 1);
-  assert.deepEqual([result.win, result.spin.stake, result.free, result.feature, result.balance], [0, 1, false, null, 99]);
+  const result = await book.spin(cara, 100);
+  assert.deepEqual([result.win, result.spin.stake, result.free, result.feature, result.balance], [0, 100, false, null, 9900]);
   const line = await todaysLine(cara);
-  assert.deepEqual([line.type, Number(line.amount), line.reason], ["CASINO", -1, "Book of Ra: 1 spin"]);
+  assert.deepEqual([line.type, Number(line.amount), line.reason], ["CASINO", -100, "Book of Ra: 1 spin"]);
   const entry = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpinId: (await prisma.casinoSpin.findFirstOrThrow({ where: { playerId: cara.id, kind: "BOOK" } })).id } });
-  assert.deepEqual([entry.ownerId, entry.managerId, Number(entry.stake), Number(entry.payout)], [owner.id, manager.id, 1, 0]);
+  assert.deepEqual([entry.ownerId, entry.managerId, Number(entry.stake), Number(entry.payout)], [owner.id, manager.id, 100, 0]);
 });
 
 test("3 books start 10 free spins with a special symbol; each costs nothing and pays as it plays, whatever bet is sent", async () => {
   script(trigger, EXPLORER);
-  const started = await book.spin(cara, 1);
-  assert.equal(started.win, 2, "3 books: twice the bet");
-  assert.deepEqual(started.feature, { bet: 1, special: "EXPLORER", remaining: 10, played: 0, won: 2 });
+  const started = await book.spin(cara, 100);
+  assert.equal(started.win, 200, "3 books: twice the bet");
+  assert.deepEqual(started.feature, { bet: 100, special: "EXPLORER", remaining: 10, played: 0, won: 200 });
   assert.equal(started.gamble, null, "no double or nothing until the free spins are over");
-  assert.equal(await balanceOf(cara), 100, "99, less the $1 bet, plus $2");
+  assert.equal(await balanceOf(cara), 10000, "9,900, less the 100 bet, plus 200");
 
-  // A free spin: explorers on 3 reels fill them and pay 100 line bets on each of the 10 lines: $100 on a $1 bet.
+  // A free spin: explorers on 3 reels fill them and pay 100 line bets on each of the 10 lines: 10,000 on a 100 bet.
   script(expanding);
-  const free = await book.spin(cara, 10);
-  assert.deepEqual([free.free, free.spin.bet, free.spin.stake, free.expansion.reels.length, free.win], [true, 1, 0, 3, 100]);
-  assert.deepEqual([free.feature.remaining, free.feature.played, free.feature.won], [9, 1, 102]);
-  assert.equal(await balanceOf(cara), 200);
+  const free = await book.spin(cara, 1000);
+  assert.deepEqual([free.free, free.spin.bet, free.spin.stake, free.expansion.reels.length, free.win], [true, 100, 0, 3, 10000]);
+  assert.deepEqual([free.feature.remaining, free.feature.played, free.feature.won], [9, 1, 10200]);
+  assert.equal(await balanceOf(cara), 20000);
 
   // The round is kept between requests: the state shows it.
-  assert.deepEqual((await book.state(cara)).feature, { bet: 1, special: "EXPLORER", remaining: 9, played: 1, won: 102 });
+  assert.deepEqual((await book.state(cara)).feature, { bet: 100, special: "EXPLORER", remaining: 9, played: 1, won: 10200 });
 });
 
 test("3 books in a free spin give 10 more, with the same symbol", async () => {
   script(retrigger);
-  const result = await book.spin(cara, 1);
+  const result = await book.spin(cara, 100);
   assert.equal(result.freeSpinsWon, 10);
   assert.deepEqual([result.feature.remaining, result.feature.special], [18, "EXPLORER"]);
 });
@@ -154,7 +154,7 @@ test("the round ends when the free spins run out, and its total can go to double
   let last;
   for (let i = 0; i < before.remaining; i++) {
     script(losingFree);
-    last = await book.spin(cara, 1);
+    last = await book.spin(cara, 100);
   }
   assert.equal(last.feature, null);
   assert.equal(last.featureEnded, Number(before.won));
@@ -176,26 +176,26 @@ test("the round ends when the free spins run out, and its total can go to double
 });
 
 test("a round never pays more than 5,000 times the bet", async () => {
-  // A round already at $4,999.50 of a $1 bet's $5,000: the next win pays 50 cents and ends it.
-  await prisma.casinoBookFeature.create({ data: { playerId: cara.id, bet: 1, special: "EXPLORER", remaining: 5, won: MAX_WIN - 0.5 } });
+  // A round already at 499,950 of a 100 bet's 500,000: the next win pays 50 and ends it.
+  await prisma.casinoBookFeature.create({ data: { playerId: cara.id, bet: 100, special: "EXPLORER", remaining: 5, won: MAX_WIN * 100 - 50 } });
   script(expanding);
-  const result = await book.spin(cara, 1);
-  assert.deepEqual([result.win, result.capped, result.feature, result.featureEnded], [0.5, true, null, MAX_WIN]);
+  const result = await book.spin(cara, 100);
+  assert.deepEqual([result.win, result.capped, result.feature, result.featureEnded], [50, true, null, MAX_WIN * 100]);
 });
 
 test("free spins can't be bought: the max stake, daily loss limit and a low balance only stop paid spins", async () => {
-  await prisma.bettingLimit.create({ data: { playerId: cara.id, ownerMaxStake: 1 } });
+  await prisma.bettingLimit.create({ data: { playerId: cara.id, ownerMaxStake: 100 } });
   script(losing);
-  await assert.rejects(book.spin(cara, 2), /The most this Player can stake on one bet is 1\.00 ALL/);
+  await assert.rejects(book.spin(cara, 250), /The most this Player can stake on one bet is 100\.00 ALL/);
   await prisma.bettingLimit.update({ where: { playerId: cara.id }, data: { ownerMaxStake: null, ownerDailyLossLimit: 0.01 } });
   script(losing);
-  await assert.rejects(book.spin(cara, 0.5), /daily loss limit/);
+  await assert.rejects(book.spin(cara, 50), /daily loss limit/);
   const balance = await balanceOf(cara);
   await prisma.user.update({ where: { id: cara.id }, data: { balance: 0 } });
   // A round of free spins still plays.
-  await prisma.casinoBookFeature.create({ data: { playerId: cara.id, bet: 1, special: "EXPLORER", remaining: 2, won: 0 } });
+  await prisma.casinoBookFeature.create({ data: { playerId: cara.id, bet: 100, special: "EXPLORER", remaining: 2, won: 0 } });
   script(losingFree);
-  assert.equal((await book.spin(cara, 1)).free, true);
+  assert.equal((await book.spin(cara, 100)).free, true);
   await prisma.bettingLimit.delete({ where: { playerId: cara.id } });
   await prisma.user.update({ where: { id: cara.id }, data: { balance } });
 });
@@ -203,8 +203,24 @@ test("free spins can't be bought: the max stake, daily loss limit and a low bala
 test("a Player in the middle of free spins waits to be moved", async () => {
   await assert.rejects(users.reassignPlayer(owner, cara.id, other.id), /in the middle of Book of Ra free spins/);
   script(losingFree);
-  await book.spin(cara, 1);
+  await book.spin(cara, 100);
   assert.equal(await prisma.casinoBookFeature.count(), 0);
+});
+
+test("free spins already won still play if the Casino closes; a paid spin then doesn't", async () => {
+  await prisma.casinoBookFeature.create({ data: { playerId: cara.id, bet: 100, special: "EXPLORER", remaining: 1, won: 0 } });
+  await casino.setOpen(owner, false);
+  const state = await book.state(cara);
+  assert.equal(state.closed, "The Casino isn't open for your team.");
+  assert.equal(state.feature.remaining, 1, "the page still gets the free spins to show");
+  script(losingFree);
+  const last = await book.spin(cara, 100);
+  assert.equal(last.free, true);
+  assert.equal(last.gamble, null);
+  assert.equal(await prisma.casinoBookFeature.count(), 0);
+  script(losing);
+  await assert.rejects(book.spin(cara, 100), /The Casino isn't open for your team/);
+  await casino.setOpen(owner, true);
 });
 
 test("the same spin request sent twice spins once", async () => {
@@ -212,11 +228,11 @@ test("the same spin request sent twice spins once", async () => {
   const interceptor = new IdempotencyInterceptor(prisma);
   const context = {
     switchToHttp: () => ({
-      getRequest: () => ({ actor: { id: cara.id }, headers: { "idempotency-key": "book-key-0123456789" }, originalUrl: "/casino/book/spin", path: "/casino/book/spin", method: "POST", body: { bet: 0.5 } }),
+      getRequest: () => ({ actor: { id: cara.id }, headers: { "idempotency-key": "book-key-0123456789" }, originalUrl: "/casino/book/spin", path: "/casino/book/spin", method: "POST", body: { bet: 50 } }),
       getResponse: () => ({ setHeader: () => undefined }),
     }),
   };
-  const send = () => firstValueFrom(interceptor.intercept(context, { handle: () => from(book.spin(cara, 0.5)) }));
+  const send = () => firstValueFrom(interceptor.intercept(context, { handle: () => from(book.spin(cara, 50)) }));
   const before = await prisma.casinoSpin.count({ where: { playerId: cara.id } });
   const first = await send();
   const again = await send();
@@ -239,7 +255,7 @@ test("Book of Ra counts in commissions, and the Casino page shows it as its own 
 });
 
 test("the data reset clears a round in progress", async () => {
-  await prisma.casinoBookFeature.create({ data: { playerId: cara.id, bet: 1, special: "KING", remaining: 3, won: 0 } });
+  await prisma.casinoBookFeature.create({ data: { playerId: cara.id, bet: 100, special: "KING", remaining: 3, won: 0 } });
   const clerk = { api: { users: { verifyPassword: async () => ({ verified: true }) } }, deleteUserStrict: async () => undefined };
   await new DataResetService(prisma, clerk, audit, { get: () => undefined }).reset(sa, { username: sa.username, password: "right" });
   assert.equal(await prisma.casinoBookFeature.count(), 0);

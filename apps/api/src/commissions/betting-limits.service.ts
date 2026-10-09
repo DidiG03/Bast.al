@@ -6,6 +6,8 @@ import { startOfDay } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
 
 type Limits = { maxStake: number | null; dailyLossLimit: number | null };
+/** One layer's limits, and whether that layer has turned the Casino off for the Player. */
+type Layer = Limits & { casinoOff: boolean };
 
 function value(decimal: Prisma.Decimal | null | undefined): number | null {
   return decimal === null || decimal === undefined ? null : Number(decimal);
@@ -22,7 +24,8 @@ function stricter(a: number | null, b: number | null): number | null {
  * Per-Player betting limits. The Owner above the Player (or Super Admin)
  * sets the ceiling; the Player's own Manager can tighten it but never go
  * above it. `assertCanPlace` is what bet placement must call before it
- * creates a Bet row.
+ * creates a Bet row. Either one can also turn the Casino off for the
+ * Player; a Manager can't turn it back on over their Owner.
  */
 /** An amount as Players see it: "25.00 ALL". */
 const money = (value: number) => `${value.toFixed(2)} ALL`;
@@ -37,12 +40,12 @@ export class BettingLimitsService {
   async get(actor: Actor, playerId: string) {
     const player = await this.player(actor, playerId);
     const row = await this.prisma.bettingLimit.findUnique({ where: { playerId } });
-    const owner: Limits = { maxStake: value(row?.ownerMaxStake), dailyLossLimit: value(row?.ownerDailyLossLimit) };
-    const manager: Limits = { maxStake: value(row?.managerMaxStake), dailyLossLimit: value(row?.managerDailyLossLimit) };
+    const owner: Layer = { maxStake: value(row?.ownerMaxStake), dailyLossLimit: value(row?.ownerDailyLossLimit), casinoOff: row?.ownerCasinoOff ?? false };
+    const manager: Layer = { maxStake: value(row?.managerMaxStake), dailyLossLimit: value(row?.managerDailyLossLimit), casinoOff: row?.managerCasinoOff ?? false };
     return {
       owner,
       manager,
-      effective: { maxStake: stricter(owner.maxStake, manager.maxStake), dailyLossLimit: stricter(owner.dailyLossLimit, manager.dailyLossLimit) },
+      effective: { maxStake: stricter(owner.maxStake, manager.maxStake), dailyLossLimit: stricter(owner.dailyLossLimit, manager.dailyLossLimit), casinoOff: owner.casinoOff || manager.casinoOff },
       lossToday: await this.lossToday(playerId),
       /** Which layer this viewer may change, if any. */
       editable: this.editableLayer(actor, player),
@@ -50,7 +53,7 @@ export class BettingLimitsService {
     };
   }
 
-  async set(actor: Actor, playerId: string, input: Partial<Limits>) {
+  async set(actor: Actor, playerId: string, input: Partial<Layer>) {
     const player = await this.player(actor, playerId);
     const layer = this.editableLayer(actor, player);
     if (!layer) throw new ForbiddenException("You can't change this Player's betting limits");
@@ -60,6 +63,7 @@ export class BettingLimitsService {
     if (layer === "owner") {
       if (input.maxStake !== undefined) data.ownerMaxStake = input.maxStake;
       if (input.dailyLossLimit !== undefined) data.ownerDailyLossLimit = input.dailyLossLimit;
+      if (input.casinoOff !== undefined) data.ownerCasinoOff = input.casinoOff;
     } else {
       // A Manager can only tighten what the Owner allows. Clearing their own
       // value is fine: the Owner's limit still applies.
@@ -74,6 +78,8 @@ export class BettingLimitsService {
       }
       if (input.maxStake !== undefined) data.managerMaxStake = input.maxStake;
       if (input.dailyLossLimit !== undefined) data.managerDailyLossLimit = input.dailyLossLimit;
+      // Turning it back on only clears the Manager's own switch: if the Owner turned it off, it stays off.
+      if (input.casinoOff !== undefined) data.managerCasinoOff = input.casinoOff;
     }
     await this.prisma.bettingLimit.upsert({
       where: { playerId },

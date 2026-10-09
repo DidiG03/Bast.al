@@ -38,7 +38,7 @@ test("the reels, lines and bets are what the rules say", () => {
   assert.equal(LINES, 5);
   assert.equal(LINE_SHAPES.length, LINES);
   assert.ok(LINE_SHAPES.every((shape) => shape.length === 5 && shape.every((row) => row >= 0 && row < ROWS)));
-  assert.deepEqual([...BETS], [0.5, 1, 2, 5, 10, 25]);
+  assert.deepEqual([...BETS], [50, 100, 250, 500, 1000, 2500]);
   for (const strip of REEL_STRIPS) assert.ok(strip.includes(SCATTER));
   for (const [symbol, pays] of Object.entries(LINE_PAYS)) assert.equal(pays[0] > 0, symbol === "CHERRY", `only cherries pay for 2 (${symbol})`);
 });

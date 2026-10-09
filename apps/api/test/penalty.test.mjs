@@ -10,7 +10,7 @@ const { BETS, DIRECTIONS, MAX_WIN, cashOut, kick, multiplierHundredths, payoutCe
 
 test("the directions and the bets are what the rules say", () => {
   assert.deepEqual([...DIRECTIONS], ["LEFT", "CENTER", "RIGHT"]);
-  assert.deepEqual([...BETS], [0.5, 1, 2, 5, 10]);
+  assert.deepEqual([...BETS], [50, 100, 250, 500, 1000, 2500]);
   assert.equal(MAX_WIN, 5000);
 });
 

@@ -20,7 +20,7 @@ export const TILES = 25;
 /** How many mines a round can hide. */
 export const MINE_COUNTS = [1, 3, 5, 10, 15, 20, 24] as const;
 /** What a round can cost, in dollars. The same chips as the fruit slot. */
-export const BETS = [0.5, 1, 2, 5, 10] as const;
+export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 /** The house's edge on every cash-out: 3%, so a round pays back 97% on average. */
 export const HOUSE_EDGE = 0.03;
 /** What a round pays back on average, in percent of the stake, before cents are floored. */

@@ -24,11 +24,11 @@ export const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 3
 /** What a round pays back on average, in percent of what it costs: 36/37. */
 export const PAYOUT_RATE = 97.3;
 
-/** The chips, in dollars. Every amount on the table is a sum of them, so a multiple of the smallest. */
-export const CHIPS = [0.5, 1, 2, 5, 10, 25] as const;
+/** The chips, in ALL. Every amount on the table is a sum of them, so a multiple of the smallest. */
+export const CHIPS = [50, 100, 250, 500, 1000, 2500] as const;
 export const MIN_CHIP = CHIPS[0];
 /** The most a round can stake in all when the Player has no max stake set. With one, that's the most. */
-export const TABLE_MAX = 100;
+export const TABLE_MAX = 2500;
 /** The most spots one round can cover. */
 export const MAX_SPOTS = 150;
 

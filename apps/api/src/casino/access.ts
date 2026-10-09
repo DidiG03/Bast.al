@@ -4,21 +4,24 @@ import { assertOnTeam } from "../bets/team";
 /**
  * Why a Player can't play in the Casino right now, or null if they can:
  * they must be on an active team (like betting), and the Casino must be open
- * for the site (Super Admin's switch) and for their team (their Owner's).
+ * for the site (Super Admin's switch), for their team (their Owner's) and
+ * for them (their Owner or Manager can turn it off for one Player).
  */
-export async function casinoClosedReason(db: Pick<Prisma.TransactionClient, "user" | "platformSettings">, player: { id: string; parentId: string | null }): Promise<string | null> {
+export async function casinoClosedReason(db: Pick<Prisma.TransactionClient, "user" | "platformSettings" | "bettingLimit">, player: { id: string; parentId: string | null }): Promise<string | null> {
   let ownerId: string;
   try {
     ownerId = (await assertOnTeam(db, player)).ownerId;
   } catch (error) {
     return error instanceof Error ? error.message : "Your account can't play right now";
   }
-  const [platform, owner] = await Promise.all([
+  const [platform, owner, limits] = await Promise.all([
     db.platformSettings.findUnique({ where: { id: "default" }, select: { casinoEnabled: true } }),
     db.user.findUnique({ where: { id: ownerId }, select: { casinoEnabled: true } }),
+    db.bettingLimit.findUnique({ where: { playerId: player.id }, select: { ownerCasinoOff: true, managerCasinoOff: true } }),
   ]);
   if (!platform?.casinoEnabled) return "The Casino is closed right now.";
   if (!owner?.casinoEnabled) return "The Casino isn't open for your team.";
+  if (limits?.ownerCasinoOff || limits?.managerCasinoOff) return "The Casino is turned off for your account.";
   return null;
 }
 

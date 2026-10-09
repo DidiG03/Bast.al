@@ -115,7 +115,8 @@ function PayoutAction({
 
 /** A Player's result in their own words: what they lost (the team's profit) or won. */
 export function playerOutcome(player: CommissionTotals, t: I18n["t"]): string {
-  if (player.bets === 0) return t("No settled bets");
+  // Casino rounds count no bets but do stake money: a Player who only plays the Casino still has a result.
+  if (player.bets === 0 && player.staked === 0) return t("No settled bets");
   if (player.net > 0) return t("Lost {amount}", { amount: formatMoney(player.net) });
   if (player.net < 0) return t("Won {amount}", { amount: formatMoney(-player.net) });
   return t("Broke even");

@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, MaxLength, Min, ValidateIf } from "class-validator";
+import { IsBoolean, IsDateString, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, MaxLength, Min, ValidateIf } from "class-validator";
 
 export class CommissionPeriodDto {
   @IsOptional()
@@ -73,4 +73,9 @@ export class BettingLimitsDto {
   @IsPositive()
   @Max(1000000)
   dailyLossLimit?: number | null;
+
+  /** Turns the Casino off (true) or back on (false) for this Player, at the viewer's level. */
+  @IsOptional()
+  @IsBoolean()
+  casinoOff?: boolean;
 }

@@ -32,7 +32,7 @@ export const LINES = 5;
 /** What spins pay back on average, in percent of what they cost, as measured (see REEL_MAKEUP). */
 export const PAYOUT_RATE = 90.7;
 /** What a spin can cost, in dollars. A line bet is a fifth of it. */
-export const BETS = [0.5, 1, 2, 5, 10, 25] as const;
+export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 
 export const SYMBOLS = ["SEVEN", "MELON", "GRAPES", "PLUM", "ORANGE", "LEMON", "CHERRY", "STAR"] as const;
 export type SlotSymbol = (typeof SYMBOLS)[number];
@@ -194,9 +194,9 @@ export function playRound(rng: RandomNumberGenerating = secure): Round {
   };
 }
 
-/** Double or nothing: at most this many guesses in a row, and never for more than this much (dollars). */
+/** Double or nothing: at most this many guesses in a row, and never for more than this much (ALL). */
 export const GAMBLE_STEPS = 5;
-export const GAMBLE_LIMIT = 500;
+export const GAMBLE_LIMIT = 50_000;
 
 export const SUITS = ["HEARTS", "DIAMONDS", "CLUBS", "SPADES"] as const;
 export type Suit = (typeof SUITS)[number];

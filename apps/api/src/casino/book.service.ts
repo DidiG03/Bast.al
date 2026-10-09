@@ -150,7 +150,8 @@ export class BookService {
   async spin(actor: Actor, bet: number, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const closed = await casinoClosedReason(this.prisma, actor);
-    if (closed) throw new ForbiddenException(closed);
+    // Free spins already won are still played if the Casino has closed since, like a blackjack hand or a Mines round in play.
+    if (closed && !(await this.prisma.casinoBookFeature.findUnique({ where: { playerId: actor.id }, select: { playerId: true } }))) throw new ForbiddenException(closed);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -159,6 +160,8 @@ export class BookService {
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
       const feature = await tx.casinoBookFeature.findUnique({ where: { playerId: actor.id } });
       const free = feature !== null;
+      // Closed with free spins that ended in the meantime: no paid spin.
+      if (closed && !free) throw new ForbiddenException(closed);
       if (!free && (await tx.minesRound.findUnique({ where: { playerId: actor.id }, select: { playerId: true } }))) {
         throw new BadRequestException("Finish the Mines round you're playing first.");
       }
@@ -227,7 +230,8 @@ export class BookService {
       await this.addToLedger(tx, actor.id, net, now);
       // Double or nothing: on a paid spin's win (unless it started free spins), or on the whole round once the free spins end.
       const toGamble = ended ?? (!free && !next ? win : null);
-      const gamble = toGamble && canGamble(toGamble, 0) ? await tx.casinoGamble.create({ data: { playerId: actor.id, amount: toGamble, game: "book" } }) : null;
+      // Double or nothing is a new bet, so it isn't offered once the Casino has closed.
+      const gamble = toGamble && !closed && canGamble(toGamble, 0) ? await tx.casinoGamble.create({ data: { playerId: actor.id, amount: toGamble, game: "book" } }) : null;
       const balance = (await tx.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } })).balance;
       return { row, round, win, net, free, next, ended, capped, gamble, balance };
     });

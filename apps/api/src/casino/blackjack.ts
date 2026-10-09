@@ -46,10 +46,10 @@ export const RULES = {
   splitPairs: null as number[] | null,
 };
 
-/** The chips, in dollars. A bet is a sum of them. */
-export const CHIPS = [0.5, 1, 2, 5, 10, 25] as const;
+/** The chips, in ALL. A bet is a sum of them. */
+export const CHIPS = [50, 100, 250, 500, 1000, 2500] as const;
 /** The most a first bet can be when the Player has no max stake set. */
-export const TABLE_MAX = 100;
+export const TABLE_MAX = 2500;
 
 const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"] as const;
 const SUITS = ["S", "H", "D", "C"] as const;

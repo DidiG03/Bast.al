@@ -26,8 +26,10 @@ function parse(text: string): number | null | "invalid" {
 }
 
 /**
- * The Player's max stake and daily loss limit. The Owner sets the ceiling;
- * the Player's Manager can tighten it but not go above it.
+ * The Player's max stake and daily loss limit, and whether they can play in
+ * the Casino. The Owner sets the ceiling; the Player's Manager can tighten it
+ * but not go above it, and can turn the Casino off but not back on over the
+ * Owner.
  */
 export function BettingLimitsCard({ playerId }: { playerId: string }) {
   const { getToken } = useAuth();
@@ -57,6 +59,21 @@ export function BettingLimitsCard({ playerId }: { playerId: string }) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerId]);
+
+  /** Turns the Casino off or back on for this Player, at the viewer's level. Saved straight away. */
+  async function setCasinoOff(off: boolean) {
+    const token = await getToken();
+    if (!token) return;
+    setBusy(true);
+    try {
+      apply(await apiFetch<BettingLimits>(`/players/${playerId}/limits`, token, { method: "POST", body: JSON.stringify({ casinoOff: off }) }));
+      toast.success(off ? t("The Casino is off for this Player.") : t("The Casino is back on for this Player."));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("Could not save betting limits"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -88,7 +105,7 @@ export function BettingLimitsCard({ playerId }: { playerId: string }) {
     );
   }
 
-  const { effective, owner, editable } = data;
+  const { effective, owner, manager, editable } = data;
   const lossLeft = effective.dailyLossLimit === null ? null : Math.max(0, effective.dailyLossLimit - data.lossToday);
   const isManager = editable === "manager";
 
@@ -108,7 +125,35 @@ export function BettingLimitsCard({ playerId }: { playerId: string }) {
           <strong>{show(t, effective.dailyLossLimit)}</strong>
           {lossLeft !== null ? <span className="muted">{t("{amount} left today", { amount: formatMoney(lossLeft) })}</span> : null}
         </div>
+        <div>
+          <span className="muted">{t("Casino")}</span>
+          <strong>{effective.casinoOff ? t("Off") : t("On")}</strong>
+          {effective.casinoOff ? <span className="muted">{owner.casinoOff ? t("Turned off by their Owner") : t("Turned off by their Manager")}</span> : null}
+        </div>
       </div>
+      {editable ? (
+        <label className="casino-switch">
+          {/* Each layer switches its own: a Manager can't turn it back on over the Owner. */}
+          <input
+            type="checkbox"
+            checked={isManager ? !effective.casinoOff : !owner.casinoOff}
+            disabled={busy || (isManager && owner.casinoOff)}
+            onChange={(event) => void setCasinoOff(!event.target.checked)}
+          />
+          <span>
+            <strong>{t("Casino for this Player")}</strong>
+            <span className="muted">
+              {isManager && owner.casinoOff
+                ? t("Your Owner turned the Casino off for this Player. Only they can turn it back on.")
+                : !isManager && manager.casinoOff
+                  ? t("Their Manager turned the Casino off for this Player, so it stays off until they turn it back on.")
+                  : (isManager ? effective.casinoOff : owner.casinoOff)
+                    ? t("Off: this Player can't play in the Casino. Their sports betting isn't affected.")
+                    : t("On: this Player can play in the Casino, when it's open for the team. Untick to turn it off for them only.")}
+            </span>
+          </span>
+        </label>
+      ) : null}
       {editable ? (
         <form className="stack" onSubmit={submit}>
           <p className="muted" style={{ margin: 0 }}>

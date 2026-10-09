@@ -20,7 +20,7 @@ export const DIRECTIONS = ["LEFT", "CENTER", "RIGHT"] as const;
 export type Direction = (typeof DIRECTIONS)[number];
 
 /** What a round can cost, in dollars. The same chips as the fruit slot. */
-export const BETS = [0.5, 1, 2, 5, 10] as const;
+export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 /** The house's edge on every cash-out: 8%, so a round pays back 92% on average. */
 export const HOUSE_EDGE = 0.08;
 /** What a round cashed out after 1 or 2 goals pays back on average, in percent of the stake, before cents are floored. */

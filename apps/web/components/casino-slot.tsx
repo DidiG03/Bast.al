@@ -25,7 +25,7 @@ import {
   type CasinoState,
   type SlotSymbol,
 } from "../lib/api";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatStake } from "../lib/format";
 import { msg } from "../lib/i18n/core";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
 
@@ -154,6 +154,8 @@ export function SlotGame() {
   const gambleKey = useIdempotencyKey();
   const instant = usePrefersReducedMotion();
   const reels = useRef<SlotReelsHandle>(null);
+  /** The Casino closed while free spins were owed: the game stays up until the Player leaves, so the last one and its win still show. */
+  const [finishingFree, setFinishingFree] = useState(false);
 
   const [state, setState] = useState<CasinoState | null>(null);
   const [balance, setBalance] = useState(0);
@@ -204,6 +206,10 @@ export function SlotGame() {
     load().catch((err: Error) => toast.error(err.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (state?.closed && freeSpins && freeSpins.remaining > 0) setFinishingFree(true);
+  }, [state?.closed, freeSpins]);
 
   useRealtime((event) => {
     if (event.type === "balance.changed" && !spinning) setBalance(event.balance);
@@ -343,7 +349,9 @@ export function SlotGame() {
   const playingFree = freeSpins !== null && freeSpins.remaining > 0;
   const tooBig = (value: number) => (state.maxStake !== null && value > state.maxStake) || value > balance;
   const winCells = new Set(combos.flatMap((combo, index) => (showing === null || showing === index ? combo.reel.cells.map((cell) => cell.join(":")) : [])));
-  const canSpin = !state.closed && !spinning && (reelsReady || plainGrid) && (playingFree || !tooBig(bet));
+  // Free spins already won play on even if the Casino has closed since; the game stays up until the Player leaves.
+  const finishing = Boolean(state.closed) && (playingFree || finishingFree);
+  const canSpin = (!state.closed || playingFree) && !spinning && (reelsReady || plainGrid) && (playingFree || !tooBig(bet));
   /** Bets within the Player's limit for one bet; the balance is checked when they spin. */
   const allowedBets = state.game.bets.filter((value) => state.maxStake === null || value <= state.maxStake);
   const stepBet = (direction: 1 | -1) => {
@@ -393,7 +401,7 @@ export function SlotGame() {
         </button>
       </div>
 
-      {state.closed ? (
+      {state.closed && !finishing ? (
         <div className="card">
           <p style={{ margin: 0 }}>{ts(state.closed)}</p>
         </div>
@@ -485,7 +493,7 @@ export function SlotGame() {
                     +
                   </button>
                 </small>
-                <b>{formatMoney(playingFree ? freeSpins.bet : bet)}</b>
+                <b>{formatStake(playingFree ? freeSpins.bet : bet)}</b>
               </div>
               <div className={`slot-message${lastWin || card?.won ? " is-win" : ""}`} aria-live="polite">
                 <span>{message}</span>

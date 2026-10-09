@@ -23,7 +23,7 @@ const ways = (tiles, opened, safe) => {
 test("the field, the mine counts and the bets are what the rules say", () => {
   assert.equal(TILES, 25);
   assert.deepEqual([...MINE_COUNTS], [1, 3, 5, 10, 15, 20, 24]);
-  assert.deepEqual([...BETS], [0.5, 1, 2, 5, 10]);
+  assert.deepEqual([...BETS], [50, 100, 250, 500, 1000, 2500]);
   assert.equal(MAX_WIN, 5000);
 });
 

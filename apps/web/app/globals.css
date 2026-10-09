@@ -11756,3 +11756,300 @@ button.is-blocked {
     padding: 3.2rem 1.4rem 0.7rem;
   }
 }
+
+/* Keno: Dice's cabinet in deep blue, an 80-number board, the picked numbers gold, the drawn ones lit. */
+.casino-tile.is-keno .casino-tile-art {
+  padding: 0.3rem 0.5rem;
+  background: radial-gradient(ellipse at 50% 15%, #27306a, #151a3d 62%, #0b0e22);
+}
+
+.keno-tile-scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.keno-cabinet {
+  --keno-gold: #ffcf3f;
+  --keno-drawn: #2f6fd6;
+  background: radial-gradient(ellipse at 60% 0%, #2a3270, #151a3d 60%, #0b0e22);
+}
+
+.keno-marquee {
+  background: linear-gradient(180deg, #3d478f, #222960 60%, #151a3d);
+}
+
+.keno-stage {
+  gap: 0.85rem;
+}
+
+.keno-board {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 0.3rem;
+  /* 10 by 8, so a board as wide as this is as tall as the screen less the title bar, the readout and the result: all 80 numbers fit without scrolling. */
+  width: 100%;
+  max-width: max(18rem, calc((100dvh - 15rem) * 1.25));
+  margin-inline: auto;
+}
+
+.keno-board.is-small {
+  max-width: none;
+}
+
+.keno-cell {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  color: #dfe6f3;
+  font-size: clamp(0.7rem, 2.6cqi, 1rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+
+.keno-cell:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.keno-cell:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.keno-cell.is-picked {
+  background: #6d5214;
+  box-shadow: inset 0 0 0 2px var(--keno-gold);
+  color: #ffe9a6;
+}
+
+.keno-cell.is-drawn {
+  background: var(--keno-drawn);
+  color: #fff;
+}
+
+.keno-cell.is-hit {
+  background: radial-gradient(circle at 35% 30%, #fff6cf, var(--keno-gold) 55%, #d39a0c);
+  box-shadow: 0 0 0 2px #fff3c4, 0 0 14px rgba(255, 207, 63, 0.6);
+  color: #3a2600;
+}
+
+.keno-cell.is-latest {
+  animation: keno-pop 0.32s ease-out;
+}
+
+@keyframes keno-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.keno-board.is-small {
+  gap: 0.2rem;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.keno-board.is-small .keno-cell {
+  border-radius: 5px;
+  font-size: 0.68rem;
+  cursor: default;
+}
+
+.keno-result {
+  min-height: 2.6rem;
+  display: grid;
+  place-items: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  background: var(--dice-panel);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.keno-result.is-win {
+  background: rgba(47, 212, 126, 0.16);
+}
+
+.keno-result-hint {
+  color: #9fb0c8;
+}
+
+.keno-bets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.keno-bets button {
+  min-height: 0;
+  padding: 0.5rem 0.3rem;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #dfe6f3;
+  font-size: 0.85rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.keno-bets button.is-on {
+  background: var(--keno-gold);
+  color: #3a2600;
+}
+
+.keno-pick-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.keno-pick-row span {
+  display: grid;
+}
+
+.keno-pick-row small {
+  color: #9fb0c8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.keno-pick-row strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.keno-pick-row button {
+  min-height: 0;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.keno-pays {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.5rem;
+  border-radius: 10px;
+  background: rgba(4, 7, 12, 0.35);
+}
+
+.keno-pays p {
+  margin: 0.2rem;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.keno-pay {
+  display: grid;
+  grid-template-columns: 1fr auto minmax(6.5rem, auto);
+  gap: 0.6rem;
+  padding: 0.25rem 0.45rem;
+  border-radius: 6px;
+  color: #c9d3e3;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.keno-pay strong {
+  color: #fff;
+  text-align: right;
+}
+
+.keno-pay.is-landed {
+  background: var(--keno-gold);
+  color: #3a2600;
+}
+
+.keno-pay.is-landed strong {
+  color: #3a2600;
+}
+
+.keno-paytable {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
+.keno-paytable-row {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.keno-verify-numbers {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+@media (max-width: 560px) {
+  .keno-board {
+    gap: 0.2rem;
+  }
+
+  .keno-cell {
+    border-radius: 6px;
+  }
+
+  .keno-paytable-row {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .keno-cell.is-latest {
+    animation: none;
+  }
+}
+
+@container (min-width: 760px) {
+  .keno-cabinet .dice-body {
+    grid-template-columns: 20rem 1fr;
+  }
+}
+
+/* A short screen: the controls tighten up so they fit beside the board. */
+@media (max-height: 760px) and (min-width: 760px) {
+  .keno-cabinet .dice-controls {
+    gap: 0.5rem;
+    padding-block: 0.8rem;
+  }
+
+  .keno-cabinet .dice-tabs button,
+  .keno-bets button {
+    padding-block: 0.38rem;
+  }
+
+  .keno-pay {
+    padding-block: 0.12rem;
+    font-size: 0.8rem;
+  }
+
+  .keno-cabinet .dice-go {
+    padding-block: 0.65rem;
+  }
+}
+
+/* Dice's stake buttons: Keno's, in Dice's green. */
+.dice-cabinet .dice-bets button.is-on {
+  background: #4cf09a;
+  color: #032312;
+}

@@ -109,7 +109,8 @@ export function texture(kind: TextureKind): string {
   const canvas = document.createElement("canvas");
   canvas.width = SIZE;
   canvas.height = SIZE;
-  const ctx = canvas.getContext("2d")!;
+  // On the CPU: it's written pixel by pixel and read straight back as a picture, which on a GPU canvas means waiting for the GPU.
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const image = ctx.createImageData(SIZE, SIZE);
   (kind === "stone" ? stone : marble)(image.data);
   ctx.putImageData(image, 0, 0);

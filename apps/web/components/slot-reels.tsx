@@ -73,6 +73,41 @@ const SHARPNESS = 2;
 
 const drawFruit = (symbol: string, size: number) => drawSymbol(symbol as SlotSymbol, size);
 
+/** How long the reels keep drawing after the last thing on them stops, so a tween easing out finishes. */
+const SETTLE_MS = 300;
+
+/**
+ * Draws the reels only while something on them moves: a spin, wins being
+ * shown, a symbol growing. Still reels stay as last drawn. Left to itself,
+ * PixiJS draws every frame, 60 a second, for as long as the page is open;
+ * on a phone that's the battery, and it slows the rest of the page.
+ */
+type Motion = { spinning: boolean; showing: boolean; expanding: number; wake(): void; settle(): void };
+
+function motionFor(app: Application): Motion {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const motion: Motion = {
+    spinning: false,
+    showing: false,
+    expanding: 0,
+    wake() {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (!app.ticker.started) app.ticker.start();
+    },
+    settle() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        if (motion.spinning || motion.showing || motion.expanding > 0 || !app.renderer) return;
+        app.render();
+        app.ticker.stop();
+      }, SETTLE_MS);
+    },
+  };
+  return motion;
+}
+
 export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({ grid, symbols, scatter, weights, draw: drawPicture = drawFruit, instant, onReady, onFailed }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<{
@@ -84,6 +119,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
     expanded: Container;
     expand(reels: number[], symbol: string): Promise<void>;
     anticipate(grid: string[][]): number[];
+    /** What's moving on the reels; they're drawn only while something is. */
+    motion: Motion;
   } | null>(null);
   /** The wins being shown, and who to tell which one is up. */
   const showing = useRef<{ wins: ReelWin[]; onShow?: (index: number) => void; onRound?: () => void; shown: number }>({ wins: [], shown: 0 });
@@ -139,6 +176,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       // A symbol filling a reel: its picture, big and stretched tall, on a glowing gold-framed panel the height of the reel.
       const expanded = new Container();
       app.stage.addChild(expanded);
+      const motion = motionFor(app);
       const tall = new Map<string, InstanceType<typeof Texture>>();
       const tallTexture = (symbol: string) => {
         let texture = tall.get(symbol);
@@ -186,9 +224,12 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
           });
           if (instantRef.current) {
             for (const { sprite } of sprites) sprite.alpha = 1;
+            app.render();
             resolve();
             return;
           }
+          motion.expanding += 1;
+          motion.wake();
           // Each reel in turn, growing up and down from its middle.
           const started = performance.now();
           const tick = () => {
@@ -202,6 +243,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
             });
             if (done) {
               app.ticker.remove(tick);
+              motion.expanding -= 1;
+              motion.settle();
               resolve();
             }
           };
@@ -245,7 +288,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         symbolAnim: instantRef.current
           ? async () => undefined
           : async (symbol) => {
-              for (let pulse = 0; pulse < 2; pulse += 1) await Promise.race([symbol.playWin(), new Promise((resolve) => setTimeout(resolve, 400))]);
+              // Not once the reels are gone (the page was left mid-win): the symbol has nothing left to animate.
+              for (let pulse = 0; pulse < 2 && !disposed; pulse += 1) await Promise.race([symbol.playWin(), new Promise((resolve) => setTimeout(resolve, 400))]);
             },
       });
       reelSet.events.on("win:group", (win) => {
@@ -267,7 +311,11 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         slotSound.reelStop(reel);
         if (landed.includes(scatter)) slotSound.star(reel);
       });
-      reelSet.events.on("spin:allLanded", () => slotSound.stopTicking());
+      reelSet.events.on("spin:allLanded", () => {
+        slotSound.stopTicking();
+        motion.spinning = false;
+        motion.settle();
+      });
       // Drawn at a fixed size and scaled to the page's width. PixiJS sets a fixed pixel size on the canvas; this replaces it.
       app.canvas.classList.add("slot-canvas");
       app.canvas.style.width = "100%";
@@ -281,8 +329,20 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         expanded,
         expand,
         anticipate: (next) => anticipationForScatters(next.map((column) => ({ visible: column })), { symbol: scatter, trigger: 2 }),
+        motion,
       };
+      // The first frame is drawn, then the reels wait still for the first spin.
+      motion.settle();
+      // Back on the page: drawn again, in case the phone dropped the drawing while it was away.
+      const onVisible = () => {
+        if (document.visibilityState !== "visible") return;
+        motion.wake();
+        motion.settle();
+      };
+      document.addEventListener("visibilitychange", onVisible);
       teardown = () => {
+        document.removeEventListener("visibilitychange", onVisible);
+        motion.spinning = true;
         presenter.destroy();
         reelSet.destroy();
         app.destroy(true, { children: true, texture: true });
@@ -312,6 +372,9 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         current.overlay.clear();
         current.expanded.removeChildren();
         skipped.current = false;
+        current.motion.showing = false;
+        current.motion.spinning = true;
+        current.motion.wake();
         slotSound.spinStart();
         if (!instantRef.current) slotSound.startTicking();
         return current.reelSet.spin().then(() => undefined);
@@ -345,14 +408,23 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
           return;
         }
         showing.current = { wins, onShow, onRound, shown: 0 };
+        // Wins cycle until the next spin or clear(): the reels draw all that time.
+        current.motion.showing = true;
+        current.motion.wake();
         // show() cycles until aborted; it settles then, and nothing waits on it.
         current.presenter.show(wins.map((win, id) => ({ id, cells: win.cells.map(([reelIndex, cellIndex]) => ({ reelIndex, cellIndex })) }))).catch(() => undefined);
       },
       clear() {
         showing.current = { wins: [], shown: 0 };
-        engine.current?.presenter.abort();
-        engine.current?.overlay.clear();
-        engine.current?.expanded.removeChildren();
+        const current = engine.current;
+        if (!current) return;
+        current.presenter.abort();
+        current.overlay.clear();
+        current.expanded.removeChildren();
+        current.motion.showing = false;
+        // What was just taken off is drawn away before the reels go still.
+        current.motion.wake();
+        current.motion.settle();
       },
     }),
     [],

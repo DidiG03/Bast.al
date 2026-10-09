@@ -201,7 +201,8 @@ export function Dice3D({ dice, rolling, outcome, label }: { dice: DiceThrow | nu
         renderer.toneMapping = three.NeutralToneMapping;
         renderer.toneMappingExposure = 1;
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = three.PCFSoftShadowMap;
+        // PCFSoftShadowMap is gone from three.js, which used this in its place and said so on every visit.
+        renderer.shadowMap.type = three.PCFShadowMap;
         renderer.domElement.className = "dice-canvas";
         holder.current.appendChild(renderer.domElement);
 
@@ -265,6 +266,10 @@ export function Dice3D({ dice, rolling, outcome, label }: { dice: DiceThrow | nu
           rest,
           reach,
           dispose: () => {
+            // three.js shares one lookup texture among all its renderers for these plastic materials, and each
+            // renderer that drew with it stays subscribed to it, so no renderer was ever freed: one more held for
+            // each visit to the page. Disposing it unsubscribes them; three.js makes it again when it's next needed.
+            (renderer.properties.get(material) as { uniforms?: { dfgLUT?: { value?: { dispose(): void } | null } } }).uniforms?.dfgLUT?.value?.dispose();
             geometry.dispose();
             texture.dispose();
             finish.dispose();
@@ -272,6 +277,9 @@ export function Dice3D({ dice, rolling, outcome, label }: { dice: DiceThrow | nu
             environment.dispose();
             pmrem.dispose();
             renderer.dispose();
+            // dispose() keeps the WebGL context until it's garbage collected, which can be never: a browser
+            // allows only so many (fewer on phones), and each visit to the page left one more open.
+            renderer.forceContextLoss();
             renderer.domElement.remove();
           },
         };

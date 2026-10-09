@@ -402,7 +402,8 @@ function silhouette(art: HTMLCanvasElement, color: string): HTMLCanvasElement {
   const out = document.createElement("canvas");
   out.width = art.width;
   out.height = art.height;
-  const ctx = out.getContext("2d")!;
+  // On the CPU, like the symbol it goes into (see drawSymbol): copying between GPU and CPU canvases waits on the GPU.
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(art, 0, 0);
   ctx.globalCompositeOperation = "source-in";
   ctx.fillStyle = color;
@@ -431,7 +432,9 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
+  // Drawn on the CPU: the picture is read back (as an image address, or into the reels' textures), and reading a
+  // GPU canvas waits for the GPU, which the spinning reels keep busy.
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
   // The reel behind it.
   const reel = ctx.createLinearGradient(0, 0, size, 0);
@@ -447,7 +450,7 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
     const art = document.createElement("canvas");
     art.width = size;
     art.height = size;
-    const artCtx = art.getContext("2d")!;
+    const artCtx = art.getContext("2d", { willReadFrequently: true })!;
     const box = size * 0.84;
     artCtx.translate((size - box) / 2, (size - box) / 2);
     artCtx.scale(box / 100, box / 100);
@@ -465,7 +468,19 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
   return canvas;
 }
 
-/** The same picture as an image address, for the rules sheet. */
+const addresses = new Map<string, string>();
+
+/**
+ * The same picture as an image address, for the rules sheet and the list of
+ * wins. Made once: the page draws these again on every update, and encoding
+ * the picture each time held up the spin.
+ */
 export function symbolImage(symbol: SlotSymbol, size = 96): string {
-  return drawSymbol(symbol, size).toDataURL("image/png");
+  const key = `${symbol}:${size}`;
+  let address = addresses.get(key);
+  if (!address) {
+    address = drawSymbol(symbol, size).toDataURL("image/png");
+    addresses.set(key, address);
+  }
+  return address;
 }

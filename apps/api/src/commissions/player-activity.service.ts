@@ -21,6 +21,8 @@ const GAME_OF_KIND: Record<string, string> = {
   PLINKO: "plinko",
   DICE: "dice",
   KENO: "keno",
+  COIN_FLIP: "coinflip",
+  SCRATCH: "scratch",
 };
 
 function round(value: number): number {

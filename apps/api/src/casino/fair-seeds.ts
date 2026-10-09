@@ -3,7 +3,7 @@ import { PrismaService } from "../prisma.service";
 import { hashSeed, newClientSeed, newServerSeed } from "./dice";
 
 /**
- * The Player's provably fair seed pair, shared by Dice and Keno: each round
+ * The Player's provably fair seed pair, shared by Dice, Keno, Coin Flip and Scratch Cards: each round
  * takes the pair's next nonce. While a pair is active only its server
  * seed's hash is shown; changing the pair (DiceService.changeSeed) reveals
  * it, so every round made with it can be checked.

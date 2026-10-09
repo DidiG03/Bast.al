@@ -152,6 +152,24 @@ function CasinoLobby() {
               <span>{t("Pick up to 10 numbers, 20 of 80 are drawn. Catch them all for up to 2,000 times the stake. Every draw can be checked.")}</span>
             </span>
           </Link>
+          <Link className="casino-tile is-coin" href="/dashboard/casino/coin-flip">
+            <span className="casino-tile-art" aria-hidden="true">
+              <CoinTileArt />
+            </span>
+            <span className="casino-tile-body">
+              <strong>{t("Coin Flip")}</strong>
+              <span>{t("Call heads or tails. A right call pays 1.8 times the stake. Every flip can be checked.")}</span>
+            </span>
+          </Link>
+          <Link className="casino-tile is-scratch" href="/dashboard/casino/scratch">
+            <span className="casino-tile-art" aria-hidden="true">
+              <ScratchTileArt />
+            </span>
+            <span className="casino-tile-body">
+              <strong>{t("Scratch Cards")}</strong>
+              <span>{t("Scratch 9 boxes and find three of a kind, for up to 1,000 times the price. Every card can be checked.")}</span>
+            </span>
+          </Link>
         </div>
       )}
     </div>
@@ -291,6 +309,88 @@ function DiceTileArt() {
         <rect width="132" height="12" rx="6" fill="#2fd47e" />
         <rect x="126" y="-5" width="12" height="22" rx="3" fill="#f4f7fb" stroke="#1b2433" strokeWidth="0.8" />
       </g>
+    </svg>
+  );
+}
+
+/** The Coin Flip tile: a gold coin in the air, crown up, turning over above a silver one lying star up. */
+function CoinTileArt() {
+  return (
+    <svg viewBox="0 0 300 150" className="coin-tile-scene">
+      <defs>
+        <radialGradient id="ct-gold" cx="0.4" cy="0.35" r="0.75">
+          <stop offset="0" stopColor="#fff2b0" />
+          <stop offset="0.55" stopColor="#f2c13b" />
+          <stop offset="1" stopColor="#a8740c" />
+        </radialGradient>
+        <radialGradient id="ct-silver" cx="0.4" cy="0.35" r="0.75">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.6" stopColor="#c9d1dc" />
+          <stop offset="1" stopColor="#7d8796" />
+        </radialGradient>
+      </defs>
+      <path d="M92 118 C 104 70, 128 40, 150 30" fill="none" stroke="rgba(255,230,160,0.35)" strokeWidth="3" strokeDasharray="2 7" strokeLinecap="round" />
+      <ellipse cx="96" cy="128" rx="40" ry="9" fill="rgba(0,0,0,0.35)" />
+      <ellipse cx="96" cy="120" rx="40" ry="12" fill="#6b7482" />
+      <ellipse cx="96" cy="116" rx="40" ry="12" fill="url(#ct-silver)" />
+      <path d="M96 108 l3 6 l7 0.6 l-5.4 4.4 l1.7 6.6 l-6.3 -3.6 l-6.3 3.6 l1.7 -6.6 l-5.4 -4.4 l7 -0.6 Z" fill="#8a94a3" transform="translate(0 -1)" />
+      <g transform="translate(184 62) rotate(-18)">
+        <ellipse cx="0" cy="5" rx="42" ry="36" fill="#7d5508" />
+        <ellipse cx="0" cy="0" rx="42" ry="36" fill="url(#ct-gold)" />
+        <ellipse cx="0" cy="0" rx="34" ry="29" fill="none" stroke="#b9860f" strokeWidth="2" />
+        <path d="M-18 10 L-21 -10 L-10 -2 L0 -16 L10 -2 L21 -10 L18 10 Z" fill="#9a6a06" />
+        <rect x="-18" y="13" width="36" height="5" rx="2" fill="#9a6a06" />
+      </g>
+      <path d="M232 36 l8 -8 M240 54 l12 -3 M226 22 l2 -11" stroke="#ffe58a" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** The Scratch Cards tile: a ticket half scratched, three bells showing and the rest still under silver foil. */
+function ScratchTileArt() {
+  const cells: Array<string | null> = ["🔔", null, "🍒", null, "🔔", null, "🍋", null, "🔔"];
+  return (
+    <svg viewBox="0 0 300 150" className="scratch-tile-scene">
+      <defs>
+        <linearGradient id="st-foil" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#b9c0ca" />
+          <stop offset="0.4" stopColor="#eef1f5" />
+          <stop offset="1" stopColor="#9aa3b0" />
+        </linearGradient>
+        <linearGradient id="st-ticket" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff6d8" />
+          <stop offset="1" stopColor="#f3dc97" />
+        </linearGradient>
+      </defs>
+      <g transform="rotate(-6 150 75)">
+        <rect x="70" y="10" width="160" height="132" rx="10" fill="url(#st-ticket)" stroke="#c8961c" strokeWidth="3" />
+        <rect x="70" y="10" width="160" height="22" rx="10" fill="#d8402f" />
+        <rect x="70" y="22" width="160" height="10" fill="#d8402f" />
+        <text x="150" y="26" textAnchor="middle" fontSize="12" fontWeight="900" fill="#fff4cc">
+          3 × 🔔
+        </text>
+        {cells.map((cell, index) => {
+          const x = 86 + (index % 3) * 44;
+          const y = 40 + Math.floor(index / 3) * 33;
+          return cell ? (
+            <g key={index}>
+              <rect x={x} y={y} width="40" height="29" rx="5" fill={cell === "🔔" ? "#fff2b8" : "#fffaf0"} stroke={cell === "🔔" ? "#e2a514" : "#e6d6a8"} strokeWidth="1.5" />
+              <text x={x + 20} y={y + 20} textAnchor="middle" fontSize="16">
+                {cell}
+              </text>
+            </g>
+          ) : (
+            <g key={index}>
+              <rect x={x} y={y} width="40" height="29" rx="5" fill="url(#st-foil)" />
+              <text x={x + 20} y={y + 20} textAnchor="middle" fontSize="15" fontWeight="900" fill="rgba(70,78,92,0.45)">
+                ?
+              </text>
+            </g>
+          );
+        })}
+      </g>
+      <circle cx="252" cy="104" r="15" fill="#e8c35a" stroke="#a8740c" strokeWidth="2" />
+      <path d="M232 92 q-10 -6 -20 4" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -592,7 +692,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
       </div>
 
       <div className="report-grid">
-        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins + data.games.dice.spins + data.games.keno.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
+        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins + data.games.dice.spins + data.games.keno.spins + data.games.coinflip.spins + data.games.scratch.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
         <Stat label={t("Staked")} value={formatMoney(data.totals.staked)} hint={t("What spins and rounds cost")} />
         <Stat label={t("Paid out")} value={formatMoney(data.totals.won)} hint={data.totals.payoutRate === null ? t("No spins yet") : t("{rate}% of what was staked", { rate: data.totals.payoutRate })} />
         <Stat label={t("Casino profit")} help="What Players lost in the Casino minus what they won. It's part of the team's profit in Commissions." value={formatSignedMoney(data.totals.net)} highlight={data.totals.net < 0 ? "bad" : "good"} />
@@ -612,6 +712,8 @@ function CasinoOverview({ me }: { me: MeResponse }) {
               ["plinko", "Plinko", tn(data.games.plinko.spins, "{count} ball", "{count} balls")],
               ["dice", t("Dice"), tn(data.games.dice.spins, "{count} roll", "{count} rolls")],
               ["keno", t("Keno"), tn(data.games.keno.spins, "{count} round", "{count} rounds")],
+              ["coinflip", t("Coin Flip"), tn(data.games.coinflip.spins, "{count} flip", "{count} flips")],
+              ["scratch", t("Scratch Cards"), tn(data.games.scratch.spins, "{count} card", "{count} cards")],
             ] as const
           ).map(([key, name, count]) => {
             const game = data.games[key];
@@ -651,7 +753,9 @@ function CasinoOverview({ me }: { me: MeResponse }) {
                     {player.penalty.rounds > 0 ? ` · ${tn(player.penalty.rounds, "{count} Penalty round", "{count} Penalty rounds")}` : ""}
                     {player.plinko.balls > 0 ? ` · ${tn(player.plinko.balls, "{count} Plinko ball", "{count} Plinko balls")}` : ""}
                     {player.dice.rolls > 0 ? ` · ${tn(player.dice.rolls, "{count} dice roll", "{count} dice rolls")}` : ""}
-                    {player.keno.rounds > 0 ? ` · ${tn(player.keno.rounds, "{count} Keno round", "{count} Keno rounds")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
+                    {player.keno.rounds > 0 ? ` · ${tn(player.keno.rounds, "{count} Keno round", "{count} Keno rounds")}` : ""}
+                    {player.coinFlip.flips > 0 ? ` · ${tn(player.coinFlip.flips, "{count} coin flip", "{count} coin flips")}` : ""}
+                    {player.scratch.cards > 0 ? ` · ${tn(player.scratch.cards, "{count} scratch card", "{count} scratch cards")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
                   </span>
                 </div>
                 <strong className={player.net < 0 ? "is-bad" : undefined}>{formatSignedMoney(player.net)}</strong>

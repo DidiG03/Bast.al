@@ -743,8 +743,8 @@ export type CasinoAdmin = {
   /** A Manager's team: whether their Owner has the Casino open. Null for others. */
   teamOpen: boolean | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
-  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), Plinko (`spins` are its balls), Dice (`spins` are its rolls) and Keno (`spins` are its rounds). */
-  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
+  /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), Plinko (`spins` are its balls), Dice (`spins` are its rolls), Keno (`spins` are its rounds), Coin Flip (`spins` are its flips) and Scratch Cards (`spins` are its cards). */
+  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
     /** Book of Ra: paid spins and free ones, with double or nothing on its wins. */
     book: { spins: number; freeSpins: number; staked: number; won: number; payoutRate: number | null };
   };
@@ -760,6 +760,8 @@ export type CasinoAdmin = {
     plinko: { balls: number; staked: number; won: number };
     dice: { rolls: number; staked: number; won: number };
     keno: { rounds: number; staked: number; won: number };
+    coinFlip: { flips: number; staked: number; won: number };
+    scratch: { cards: number; staked: number; won: number };
     staked: number;
     won: number;
     net: number;
@@ -888,7 +890,7 @@ export type BlackjackState = {
 
 export type BlackjackMoveResult = { round: BlackjackRoundView; balance: number };
 
-export type CasinoGameKey = "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno";
+export type CasinoGameKey = "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch";
 
 /** The home page's "Continue playing": a round still in play, or the game played last. */
 export type CasinoLastGame = {
@@ -1078,7 +1080,7 @@ export type PlinkoDropResult = {
   balance: number;
 };
 
-/** A Player's seed pair, for Dice and Keno. The server seed stays null until the Player changes seeds. */
+/** A Player's seed pair, for Dice, Keno, Coin Flip and Scratch Cards. The server seed stays null until the Player changes seeds. */
 export type DiceSeed = {
   serverSeedHash: string;
   clientSeed: string;
@@ -1181,6 +1183,89 @@ export type KenoState = {
 
 export type KenoPlayResult = {
   round: KenoRound;
+  balance: number;
+  seed: DiceSeed;
+};
+
+export type CoinSide = "HEADS" | "TAILS";
+
+/** One coin flip. */
+export type CoinFlipRound = {
+  id: string;
+  /** The side the Player called. */
+  call: CoinSide;
+  /** The side that came up. */
+  side: CoinSide;
+  won: boolean;
+  multiplier: number;
+  bet: number;
+  win: number;
+  serverSeedHash: string;
+  clientSeed: string;
+  nonce: number;
+  serverSeed: string | null;
+  createdAt: string;
+};
+
+export type CoinFlipState = {
+  closed: string | null;
+  balance: number;
+  /** The most one flip can cost: the Player's max stake, or the top bet without one. */
+  tableMax: number;
+  recent: CoinFlipRound[];
+  seed: DiceSeed;
+  previousSeed: DiceSeed | null;
+  game: { name: string; sides: CoinSide[]; bets: number[]; multiplier: number; payoutRate: number };
+};
+
+export type CoinFlipResult = {
+  round: CoinFlipRound;
+  balance: number;
+  seed: DiceSeed;
+};
+
+export type ScratchSymbol = "CHERRY" | "LEMON" | "BELL" | "CLOVER" | "WATERMELON" | "DIAMOND" | "SEVEN" | "CROWN";
+
+/** One scratch card, decided and paid when it was bought. */
+export type ScratchCard = {
+  id: string;
+  /** The 9 boxes, left to right and top to bottom. */
+  cells: ScratchSymbol[];
+  /** The symbol that shows three times, or null for a card that doesn't win. */
+  symbol: ScratchSymbol | null;
+  multiplier: number;
+  bet: number;
+  win: number;
+  serverSeedHash: string;
+  clientSeed: string;
+  nonce: number;
+  serverSeed: string | null;
+  createdAt: string;
+};
+
+export type ScratchState = {
+  closed: string | null;
+  balance: number;
+  /** The most one card can cost: the Player's max stake, or the top price without one. */
+  tableMax: number;
+  recent: ScratchCard[];
+  seed: DiceSeed;
+  previousSeed: DiceSeed | null;
+  game: {
+    name: string;
+    cells: number;
+    symbols: ScratchSymbol[];
+    bets: number[];
+    /** Smallest first; chance in percent. */
+    prizes: Array<{ symbol: ScratchSymbol; multiplier: number; chance: number }>;
+    maxMultiplier: number;
+    payoutRate: number;
+    winChance: number;
+  };
+};
+
+export type ScratchBuyResult = {
+  round: ScratchCard;
   balance: number;
   seed: DiceSeed;
 };

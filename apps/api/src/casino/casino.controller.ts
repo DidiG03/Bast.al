@@ -26,6 +26,10 @@ import { DiceService } from "./dice.service";
 import { KenoService } from "./keno.service";
 import { BETS as KENO_BETS, MAX_PICKS as KENO_MAX_PICKS, MIN_PICKS as KENO_MIN_PICKS, NUMBERS as KENO_NUMBERS } from "./keno";
 import { BETS as DICE_BETS, DIRECTIONS as DICE_DIRECTIONS } from "./dice";
+import { CoinFlipService } from "./coin-flip.service";
+import { BETS as COIN_BETS, SIDES as COIN_SIDES } from "./coin-flip";
+import { ScratchService } from "./scratch.service";
+import { BETS as SCRATCH_BETS } from "./scratch";
 import { BETS as BOOK_BETS } from "./book";
 import { BETS as MINES_BETS, MINE_COUNTS, TILES } from "./mines";
 import { BETS as PENALTY_BETS, DIRECTIONS } from "./penalty";
@@ -169,6 +173,24 @@ class KenoPlayDto {
   picks!: number[];
 }
 
+class CoinFlipDto {
+  @ApiProperty({ enum: COIN_BETS, description: "What the flip costs, in ALL" })
+  @IsNumber()
+  @IsIn([...COIN_BETS])
+  bet!: number;
+
+  @ApiProperty({ enum: COIN_SIDES, description: "The side the Player calls" })
+  @IsIn([...COIN_SIDES])
+  call!: "HEADS" | "TAILS";
+}
+
+class ScratchBuyDto {
+  @ApiProperty({ enum: SCRATCH_BETS, description: "What the card costs, in ALL" })
+  @IsNumber()
+  @IsIn([...SCRATCH_BETS])
+  bet!: number;
+}
+
 class BlackjackActionDto {
   @ApiProperty({ enum: ["hit", "stand", "double", "split", "insure", "noInsurance"] })
   @IsIn(["hit", "stand", "double", "split", "insure", "noInsurance"])
@@ -212,6 +234,8 @@ export class CasinoController {
     private readonly plinko: PlinkoService,
     private readonly dice: DiceService,
     private readonly keno: KenoService,
+    private readonly coinFlip: CoinFlipService,
+    private readonly scratch: ScratchService,
   ) {}
 
   /** The game for the home page's "Continue playing": a round still in play, or the game played last. */
@@ -439,6 +463,54 @@ export class CasinoController {
   @Roles(Role.PLAYER)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   kenoSeed(@CurrentActor() actor: Actor, @Body() body: DiceSeedDto) {
+    return this.dice.changeSeed(actor, body.clientSeed);
+  }
+
+  /** The Player's coin: can they play, the rules, their seed pair, their last flips. */
+  @Get("coin-flip")
+  @Roles(Role.PLAYER)
+  coinFlipState(@CurrentActor() actor: Actor) {
+    return this.coinFlip.state(actor);
+  }
+
+  /** One coin flip. Autoplay flips quickly, hence the higher limit. A repeated request with the same Idempotency-Key gets the first answer back. */
+  @Post("coin-flip/flip")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 240, ttl: 60_000 } })
+  @Idempotent()
+  coinFlipFlip(@CurrentActor() actor: Actor, @Body() body: CoinFlipDto) {
+    return this.coinFlip.flip(actor, body.bet, body.call);
+  }
+
+  /** Changes the Player's seed pair (shared with Dice and Keno), showing the old server seed so its flips can be checked. */
+  @Post("coin-flip/seed")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  coinFlipSeed(@CurrentActor() actor: Actor, @Body() body: DiceSeedDto) {
+    return this.dice.changeSeed(actor, body.clientSeed);
+  }
+
+  /** The Player's scratch cards: can they play, the prizes, their seed pair, their last cards. */
+  @Get("scratch")
+  @Roles(Role.PLAYER)
+  scratchState(@CurrentActor() actor: Actor) {
+    return this.scratch.state(actor);
+  }
+
+  /** Buys one scratch card, paid at once. Autoplay buys quickly, hence the higher limit. A repeated request with the same Idempotency-Key gets the first answer back. */
+  @Post("scratch/buy")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Idempotent()
+  scratchBuy(@CurrentActor() actor: Actor, @Body() body: ScratchBuyDto, @Req() req: AuthenticatedRequest) {
+    return this.scratch.buy(actor, body.bet, clientIp(req));
+  }
+
+  /** Changes the Player's seed pair (shared with Dice, Keno and Coin Flip), showing the old server seed so its cards can be checked. */
+  @Post("scratch/seed")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  scratchSeed(@CurrentActor() actor: Actor, @Body() body: DiceSeedDto) {
     return this.dice.changeSeed(actor, body.clientSeed);
   }
 

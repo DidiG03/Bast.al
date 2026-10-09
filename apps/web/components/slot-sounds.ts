@@ -386,6 +386,44 @@ export const slotSound = {
     this.bucket(multiplier);
   },
 
+  /** Coin Flip: the coin flicked off the thumb, a bright metal ting and a short whoosh. */
+  coinToss() {
+    tone(2637, 0, 0.3, { type: "sine", gain: 0.09 });
+    tone(3951, 0.005, 0.2, { type: "sine", gain: 0.04 });
+    noise(0.02, 0.28, { filter: "bandpass", freq: 1200, sweepTo: 3200, gain: 0.05 });
+  },
+
+  /** Coin Flip: the coin landing in the hand, a soft clink, then Dice's chime for a right call or its knock for a wrong one. */
+  coinLand(won: boolean) {
+    noise(0, 0.03, { filter: "highpass", freq: 3000, gain: 0.1 });
+    tone(2093, 0, 0.1, { type: "sine", gain: 0.07 });
+    this.diceResult(won, 1.8);
+  },
+
+  /** Scratch Cards: a card torn off the roll, a short papery rip. */
+  ticket() {
+    noise(0, 0.14, { filter: "bandpass", freq: 1800, sweepTo: 4200, gain: 0.08 });
+  },
+
+  /** Scratch Cards: a coin edge dragged over the foil, a short dry rasp. */
+  scratch() {
+    noise(0, 0.07, { filter: "bandpass", freq: 2600 + Math.random() * 1400, gain: 0.05 });
+  },
+
+  /** Scratch Cards: a box uncovered, a soft pop a little higher for each one. */
+  scratchReveal(shown: number) {
+    tone(620 + shown * 55, 0, 0.07, { type: "triangle", gain: 0.07 });
+  },
+
+  /** Scratch Cards: the card's result. The price back is a light tick; more is Plinko's chime or fanfare; nothing is its thud. */
+  scratchResult(multiplier: number) {
+    if (multiplier === 1) {
+      tone(1046, 0, 0.1, { type: "triangle", gain: 0.1 });
+      return;
+    }
+    this.bucket(multiplier);
+  },
+
   /** Book of Ra: the special symbol growing to fill a reel, a rising shimmer. */
   expand(reel: number) {
     const base = 330 * 2 ** (reel / 6);

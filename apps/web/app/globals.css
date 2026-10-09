@@ -12053,3 +12053,609 @@ button.is-blocked {
   background: #4cf09a;
   color: #032312;
 }
+
+/* Coin Flip: Dice's cabinet in plum, a gold-and-silver coin tossed in 3D, and two big calls. */
+.casino-tile.is-coin .casino-tile-art {
+  padding: 0.3rem 0.5rem;
+  background: radial-gradient(ellipse at 50% 15%, #5a2f5f, #2a1530 62%, #150a19);
+}
+
+.coin-tile-scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.coin-cabinet {
+  --coin-gold: #f5c542;
+  background: radial-gradient(ellipse at 60% 0%, #4b2a55, #25142c 60%, #12091a);
+}
+
+.coin-marquee {
+  background: linear-gradient(180deg, #6a3d78, #3a2045 60%, #25142c);
+}
+
+.coin-cabinet .dice-tabs button.is-on {
+  background: #5d3c6b;
+}
+
+.coin-cabinet .coin-bets button.is-on {
+  background: var(--coin-gold);
+  color: #3a2600;
+}
+
+.coin-go {
+  background: linear-gradient(180deg, #ffe07a, #e2a514);
+  box-shadow: 0 6px 18px rgba(226, 165, 20, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  color: #3a2600;
+}
+
+.coin-stage {
+  gap: 0.9rem;
+}
+
+/* The small coins: the history and the call buttons. Heads is gold with a crown, tails silver with a star. */
+.coin-mini {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+}
+
+.coin-mini.is-heads,
+.coin-face.is-heads {
+  background: radial-gradient(circle at 35% 30%, #fff4c2, #f5c542 45%, #c58b12 80%, #8f6206);
+  color: #8f5f05;
+}
+
+.coin-mini.is-tails,
+.coin-face.is-tails {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #d5dce6 45%, #9aa4b2 80%, #6b7482);
+  color: #5f6876;
+}
+
+.coin-emblem {
+  width: 62%;
+  height: 62%;
+  fill: currentColor;
+}
+
+.coin-history {
+  min-height: 1.9rem;
+  align-items: center;
+  padding-inline: 0.25rem;
+}
+
+.coin-chip {
+  flex: none;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.coin-chip.is-win {
+  box-shadow: 0 0 0 2px var(--dice-win);
+}
+
+.coin-chip.is-loss {
+  box-shadow: 0 0 0 2px rgba(255, 77, 94, 0.75);
+  opacity: 0.75;
+}
+
+.coin-chip:first-child {
+  transform: scale(1.15);
+  opacity: 1;
+}
+
+/* The coin: two faces and a stack of rims between them, turned end over end. */
+.coin-arena {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  padding-top: 0.6rem;
+}
+
+.coin-scene {
+  position: relative;
+  width: clamp(8rem, 32cqw, 11.5rem);
+  aspect-ratio: 1;
+  perspective: 900px;
+}
+
+.coin-toss,
+.coin {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.coin-toss {
+  z-index: 2;
+}
+
+.coin {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.18, 0.6, 0.25, 1);
+}
+
+.coin-face,
+.coin-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.coin-face {
+  display: grid;
+  place-items: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.coin-face.is-heads {
+  transform: translateZ(4px);
+  box-shadow: inset 0 0 0 6px #e0a92a, inset 0 0 0 8px #a8740c, inset 0 0 0 10px rgba(255, 240, 180, 0.55);
+}
+
+.coin-face.is-tails {
+  transform: rotateX(180deg) translateZ(4px);
+  box-shadow: inset 0 0 0 6px #e0a92a, inset 0 0 0 8px #a8740c, inset 0 0 0 10px rgba(255, 255, 255, 0.6);
+}
+
+.coin-face .coin-emblem {
+  width: 50%;
+  height: 50%;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.55));
+}
+
+.coin-edge {
+  background: #9a6c12;
+}
+
+.coin-shadow {
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -16%;
+  height: 12%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+}
+
+/* The toss: up and back down while the coin turns. Two names, so each toss starts the animation over. */
+.coin-toss.is-tossed-0 {
+  animation: coin-toss-0 var(--toss-ms) linear;
+}
+
+.coin-toss.is-tossed-1 {
+  animation: coin-toss-1 var(--toss-ms) linear;
+}
+
+.coin-shadow.is-tossed-0 {
+  animation: coin-shadow-0 var(--toss-ms) linear;
+}
+
+.coin-shadow.is-tossed-1 {
+  animation: coin-shadow-1 var(--toss-ms) linear;
+}
+
+@keyframes coin-toss-0 {
+  0% {
+    transform: translateY(0) scale(1);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  48% {
+    transform: translateY(-46%) scale(1.14);
+    animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.4);
+  }
+  92% {
+    transform: translateY(2%) scale(0.98);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes coin-toss-1 {
+  0% {
+    transform: translateY(0) scale(1);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  48% {
+    transform: translateY(-46%) scale(1.14);
+    animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.4);
+  }
+  92% {
+    transform: translateY(2%) scale(0.98);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes coin-shadow-0 {
+  48% {
+    transform: scale(0.5);
+    opacity: 0.35;
+  }
+}
+
+@keyframes coin-shadow-1 {
+  48% {
+    transform: scale(0.5);
+    opacity: 0.35;
+  }
+}
+
+.coin-arena.is-win .coin-scene {
+  filter: drop-shadow(0 0 18px rgba(255, 205, 80, 0.55));
+}
+
+.coin-result {
+  margin-top: 1.2rem;
+  color: #f3eaf7;
+  font-size: clamp(1.6rem, 6cqw, 2.3rem);
+  font-weight: 900;
+  line-height: 1.1;
+  transition: color 200ms ease, opacity 200ms ease;
+}
+
+.coin-arena.is-flipping .coin-result {
+  opacity: 0.3;
+}
+
+.dice-cabinet .coin-arena.is-win .coin-result,
+.dice-cabinet .coin-arena.is-win .coin-note {
+  color: var(--dice-win);
+}
+
+.dice-cabinet .coin-arena.is-loss .coin-result {
+  color: var(--dice-loss);
+}
+
+.coin-arena.is-flipping .coin-note {
+  visibility: hidden;
+}
+
+/* The two calls. */
+.coin-calls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.coin-call {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 0;
+  padding: 0.6rem 0.8rem;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+  text-align: left;
+}
+
+.coin-call .coin-mini {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.coin-call > span:last-child {
+  display: grid;
+}
+
+.coin-call strong {
+  font-size: 1.05rem;
+}
+
+.coin-call small {
+  color: #cdbcd9;
+  font-weight: 700;
+}
+
+.coin-call.is-on {
+  border-color: var(--coin-gold);
+  background: rgba(245, 197, 66, 0.14);
+  box-shadow: 0 0 0 3px rgba(245, 197, 66, 0.18);
+}
+
+.coin-call:disabled {
+  opacity: 0.75;
+}
+
+/* Scratch Cards: Dice's cabinet in deep teal, a cream ticket with a red band, 9 boxes under silver foil. */
+.casino-tile.is-scratch .casino-tile-art {
+  padding: 0.3rem 0.5rem;
+  background: radial-gradient(ellipse at 50% 15%, #1f5560, #0f2a31 62%, #08171b);
+}
+
+.scratch-tile-scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.scratch-cabinet {
+  --scratch-gold: #f2c13b;
+  --scratch-red: #d8402f;
+  background: radial-gradient(ellipse at 60% 0%, #1f5560, #0f2a31 60%, #08171b);
+}
+
+.scratch-marquee {
+  background: linear-gradient(180deg, #2c6f7c, #17414a 60%, #0f2a31);
+}
+
+.scratch-cabinet .dice-tabs button.is-on {
+  background: #2c6672;
+}
+
+.scratch-cabinet .scratch-bets button.is-on {
+  background: var(--scratch-gold);
+  color: #3a2600;
+}
+
+.scratch-go {
+  background: linear-gradient(180deg, #ff7a5c, #d8402f);
+  box-shadow: 0 6px 18px rgba(216, 64, 47, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+
+.scratch-go.is-reveal {
+  background: linear-gradient(180deg, #ffe07a, #e2a514);
+  box-shadow: 0 6px 18px rgba(226, 165, 20, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  color: #3a2600;
+}
+
+.scratch-stage {
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.scratch-stage > .dice-readout,
+.scratch-stage > .dice-history {
+  align-self: stretch;
+}
+
+.scratch-cabinet .dice-chip.is-even {
+  background: rgba(242, 193, 59, 0.85);
+  color: #3a2600;
+}
+
+/* The ticket. */
+.scratch-ticket {
+  width: min(100%, 24rem);
+  padding: 0 0.75rem 0.75rem;
+  overflow: hidden;
+  border: 3px solid #c8961c;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff6d8, #f3dc97);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+  color: #3a2600;
+  transition: box-shadow 250ms ease;
+}
+
+.scratch-ticket.is-win {
+  box-shadow: 0 0 0 3px rgba(255, 220, 110, 0.5), 0 0 34px rgba(255, 205, 80, 0.45), 0 14px 30px rgba(0, 0, 0, 0.4);
+}
+
+.scratch-ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 -0.75rem 0.7rem;
+  padding: 0.45rem 0.9rem;
+  background: var(--scratch-red);
+  color: #fff4cc;
+}
+
+.scratch-ticket-head strong {
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scratch-ticket-head span {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.scratch-area {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.scratch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+  padding: 0.45rem;
+  background: #ead39a;
+}
+
+.scratch-cell {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1.15;
+  border: 2px solid #e6d6a8;
+  border-radius: 10px;
+  background: #fffaf0;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease, transform 200ms ease;
+}
+
+.scratch-cell.is-win {
+  border-color: #e2a514;
+  background: #fff0b0;
+  animation: scratch-win 900ms ease-in-out 2;
+}
+
+.scratch-cell.is-dim {
+  opacity: 0.5;
+}
+
+@keyframes scratch-win {
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+.scratch-emoji {
+  font-size: clamp(1.6rem, 8cqw, 2.4rem);
+  line-height: 1;
+}
+
+.scratch-seven {
+  color: #d8402f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.8rem, 9cqw, 2.7rem);
+  font-weight: 900;
+  font-style: italic;
+  line-height: 1;
+  text-shadow: 0 2px 0 #f2c13b;
+}
+
+.scratch-foil {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.scratch-foil.is-live {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.scratch-foil.is-live:active {
+  cursor: grabbing;
+}
+
+.scratch-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.15rem 0.9rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scratch-legend li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.1rem 0.3rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.scratch-legend li.is-win {
+  background: rgba(216, 64, 47, 0.15);
+  font-weight: 900;
+}
+
+.dice-cabinet .scratch-legend strong {
+  color: #7a2414;
+  font-variant-numeric: tabular-nums;
+}
+
+.dice-cabinet .scratch-legend li.is-win {
+  color: #3a2600;
+}
+
+.scratch-legend-symbols {
+  display: inline-flex;
+  gap: 0.05rem;
+}
+
+.scratch-legend-symbols .scratch-emoji {
+  font-size: 0.9rem;
+}
+
+.scratch-legend-symbols .scratch-seven {
+  font-size: 1rem;
+  text-shadow: none;
+}
+
+.scratch-note {
+  text-align: center;
+}
+
+.dice-cabinet .scratch-note:not(:empty) {
+  color: #d8e6ea;
+}
+
+/* The rules sheet's pay table, and the small cards in the history and the checks. */
+.scratch-pays {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+
+.scratch-pays > div {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr auto 6.5rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.scratch-pays small {
+  text-align: right;
+}
+
+.scratch-mini {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 1.9rem);
+  gap: 0.2rem;
+}
+
+.scratch-mini span {
+  display: grid;
+  place-items: center;
+  height: 1.7rem;
+  border-radius: 5px;
+  background: #fffaf0;
+}
+
+.scratch-mini span.is-win {
+  background: #fff0b0;
+  box-shadow: 0 0 0 2px #e2a514;
+}
+
+.scratch-mini .scratch-emoji {
+  font-size: 1rem;
+}
+
+.scratch-mini .scratch-seven {
+  font-size: 1.1rem;
+  text-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scratch-cell.is-win {
+    animation: none;
+  }
+}
+
+/* A phone: "Gërvisht & Fito" is long, so the title takes the left edge too and comes down a size. */
+@media (max-width: 560px) {
+  .scratch-cabinet:not(.is-full) .scratch-marquee {
+    padding-left: 1rem;
+  }
+
+  .scratch-marquee .slot-title {
+    max-width: 100%;
+    font-size: 1.1rem;
+  }
+}

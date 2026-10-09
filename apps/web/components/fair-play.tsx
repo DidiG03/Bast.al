@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useI18n } from "./i18n-provider";
 
-/** Pieces the provably fair games (Dice and Keno) share: their sheets, the seed lines in them, and the shield icon. */
+/** Pieces the provably fair games (Dice, Keno, Coin Flip and Scratch Cards) share: their sheets, the seed lines in them, and the shield icon. */
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const { t } = useI18n();

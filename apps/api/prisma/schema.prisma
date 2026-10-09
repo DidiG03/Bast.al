@@ -723,6 +723,10 @@ model CasinoSpin {
   dice         Json?
   /// A Keno round: the numbers picked, the 20 drawn in order, the hits, the multiplier, and the seed pair and nonce they came from.
   keno         Json?
+  /// A coin flip: the side called, the side that came up, the multiplier, and the seed pair and nonce it came from.
+  coin         Json?
+  /// A scratch card: its 9 boxes, the winning symbol (or none), the multiplier, and the seed pair and nonce it came from.
+  scratch      Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -749,9 +753,13 @@ enum CasinoPlayKind {
   DICE
   /// One Keno draw.
   KENO
+  /// One coin flip.
+  COIN_FLIP
+  /// One scratch card.
+  SCRATCH
 }
 
-/// A Player's provably fair seed pair, for Dice and Keno. Each roll is the HMAC-SHA256
+/// A Player's provably fair seed pair, for Dice, Keno, Coin Flip and Scratch Cards. Each roll is the HMAC-SHA256
 /// of the server seed and "clientSeed:nonce". While a pair is active only its
 /// server seed's hash is shown; changing the pair reveals the server seed, so
 /// the Player can check every roll made with it. One active pair per Player.

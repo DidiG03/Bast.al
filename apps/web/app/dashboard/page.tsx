@@ -644,6 +644,8 @@ const CASINO_GAMES: Record<CasinoLastGame["game"], { href: string; icon: string;
   plinko: { href: "/dashboard/casino/plinko", icon: "🔴", name: "Plinko" },
   dice: { href: "/dashboard/casino/dice", icon: "🎲", name: "Dice" },
   keno: { href: "/dashboard/casino/keno", icon: "🔢", name: "Keno" },
+  coinflip: { href: "/dashboard/casino/coin-flip", icon: "🪙", name: "Coin Flip" },
+  scratch: { href: "/dashboard/casino/scratch", icon: "🎟️", name: "Scratch Cards" },
 };
 
 const LAST_PLAYED: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };

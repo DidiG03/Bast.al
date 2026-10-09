@@ -32,6 +32,8 @@ const GAME_NAMES: Record<CasinoGameKey, string> = {
   plinko: "Plinko",
   dice: "Dice",
   keno: "Keno",
+  coinflip: "Coin Flip",
+  scratch: "Scratch Cards",
 };
 
 export function PlayerActivityView({ data }: { data: PlayerActivity }) {

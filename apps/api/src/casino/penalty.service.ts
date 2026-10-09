@@ -94,7 +94,7 @@ export class PenaltyService implements OnModuleInit, OnModuleDestroy {
     if (closed) throw new ForbiddenException(closed);
     const cents = Math.round(bet * 100);
     if (!Number.isFinite(bet) || Math.abs(cents - bet * 100) > 1e-6 || !(BETS as readonly number[]).includes(bet)) {
-      throw new BadRequestException("Bets are made in chips of 0.50 ALL and up.");
+      throw new BadRequestException(`A round costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);
     }
     const tableMax = await this.tableMax(actor.id);
     if (bet > tableMax) throw new BadRequestException(`The most you can bet on one round is ${tableMax.toFixed(2)} ALL`);
@@ -116,7 +116,7 @@ export class PenaltyService implements OnModuleInit, OnModuleDestroy {
       }
       // A slot win still open to double or nothing is taken as it is: it's already in the balance.
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
-      await this.limits.assertCanPlace(actor.id, bet);
+      await this.limits.assertCanPlace(actor.id, bet, 0, tx);
       const round = startRound(cents);
       await this.take(tx, actor.id, round.bet);
       const now = new Date();

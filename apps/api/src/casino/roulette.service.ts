@@ -111,7 +111,7 @@ export class RouletteService {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
       // A slot win still open to double or nothing is taken as it is: it's already in the balance.
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
-      await this.limits.assertCanPlace(actor.id, staked);
+      await this.limits.assertCanPlace(actor.id, staked, 0, tx);
 
       const { stop, number } = spinWheel(this.draw);
       const outcome = settle(bets, number);

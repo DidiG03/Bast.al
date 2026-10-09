@@ -21,6 +21,16 @@ type PricedEvent = Prisma.EventGetPayload<{ include: { markets: { include: { sel
 
 const COUNT_MARKETS = { _count: { select: { markets: true } } } as const;
 
+/**
+ * How long one read of a match list serves everyone who asks for it, in ms.
+ * Reading a week of football with each match's main market takes over a
+ * tenth of a second and is the same for every Player (only pricing is per
+ * team, and it isn't kept), so on a busy page each Player's refresh would
+ * otherwise read it all again. Live lists are kept briefly, since their
+ * prices move; the page refreshes them every 10 seconds anyway.
+ */
+const LIST_TTL_MS: Record<EventFilter | "top", number> = { live: 2_000, upcoming: 5_000, finished: 30_000, top: 5_000 };
+
 const FILTER_STATUSES: Record<EventFilter, EventStatus[]> = {
   upcoming: [EventStatus.UPCOMING, EventStatus.POSTPONED],
   live: [EventStatus.LIVE],
@@ -33,9 +43,14 @@ const FILTER_STATUSES: Record<EventFilter, EventStatus[]> = {
  * team, and set their own price on any single selection. Managers and Players
  * see their Owner's prices; nobody outside a team sees them.
  */
+/** A selection's price as one Player's team sees it, and whether it can be bet on now. */
+export type PlayerPrice = { odds: number; bettable: boolean; live: boolean; score: string; sp: boolean; marketKey: string; margin: number };
+
 @Injectable()
 export class OddsService {
   private readonly inflight = new Map<string, Promise<unknown>>();
+  /** Reads kept for a few seconds (see `kept`). */
+  private readonly keptReads = new Map<string, { value: unknown; until: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -116,7 +131,7 @@ export class OddsService {
     const events =
       view === "list"
         ? // Everyone browsing asks for the same list: requests that arrive together share one read.
-          await this.shared(`list:${sport}:${filter}:${isAdmin}`, async () => this.withMainMarket(await this.prisma.event.findMany({ where, orderBy, take: LIST_LIMIT, include: COUNT_MARKETS })))
+          await this.kept(`list:${sport}:${filter}:${isAdmin}`, LIST_TTL_MS[filter], async () => this.withMainMarket(await this.prisma.event.findMany({ where, orderBy, take: LIST_LIMIT, include: COUNT_MARKETS })))
         : await this.prisma.event.findMany({
             where,
             orderBy,
@@ -136,12 +151,14 @@ export class OddsService {
     const now = new Date();
     if (sport === "greyhounds") return this.nextRaces(actor, count, now);
     const soon = now.getTime() + 2 * 86_400_000;
-    const rows = await this.prisma.event.findMany({
-      where: { sport, status: { in: [EventStatus.LIVE, ...FILTER_STATUSES.upcoming] }, hidden: false },
-      orderBy: { startsAt: "asc" },
-      take: LIST_LIMIT,
-      include: COUNT_MARKETS,
-    });
+    const rows = await this.kept(`top:${sport}`, LIST_TTL_MS.top, () =>
+      this.prisma.event.findMany({
+        where: { sport, status: { in: [EventStatus.LIVE, ...FILTER_STATUSES.upcoming] }, hidden: false },
+        orderBy: { startsAt: "asc" },
+        take: LIST_LIMIT,
+        include: COUNT_MARKETS,
+      }),
+    );
     const open = rows.filter((event) => (event.status === EventStatus.LIVE || eventOpen(event, now)) && event._count.markets > 0);
     const byMarkets = (a: (typeof rows)[number], b: (typeof rows)[number]) => b._count.markets - a._count.markets || a.startsAt.getTime() - b.startsAt.getTime();
     const live = open.filter((event) => event.status === EventStatus.LIVE).sort(byMarkets);
@@ -184,6 +201,19 @@ export class OddsService {
       const market = byEvent.get(event.id);
       return { ...event, markets: market ? [market] : [] };
     });
+  }
+
+  /**
+   * Like `shared`, and the answer is then kept for `ttlMs`: everyone asking
+   * for the same `key` in that time gets the same read. A failed read isn't
+   * kept.
+   */
+  private async kept<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+    const hit = this.keptReads.get(key);
+    if (hit && hit.until > Date.now()) return hit.value as T;
+    const value = await this.shared(key, load);
+    this.keptReads.set(key, { value, until: Date.now() + ttlMs });
+    return value;
   }
 
   /** Runs `load` once for every caller that asks for the same `key` while it's running. */
@@ -448,38 +478,55 @@ export class OddsService {
    * The price a Player gets on a selection right now, and whether it can be
    * bet on. Bet placement must lock this price into Bet.odds.
    */
-  async priceForPlayer(playerId: string, selectionId: string): Promise<{ odds: number; bettable: boolean; live: boolean; score: string; sp: boolean; marketKey: string; margin: number }> {
+  async priceForPlayer(playerId: string, selectionId: string): Promise<PlayerPrice> {
+    const price = (await this.pricesForPlayer(playerId, [selectionId])).get(selectionId);
+    if (!price) throw new NotFoundException("Selection not found");
+    return price;
+  }
+
+  /**
+   * The same prices for several selections at once, as placing a slip needs:
+   * the Player, their team's margin and the platform's are read once, and the
+   * selections and the team's own prices for them in one query each, not
+   * again for every pick. Selections that don't exist are left out.
+   */
+  async pricesForPlayer(playerId: string, selectionIds: string[]): Promise<Map<string, PlayerPrice>> {
     const player = await this.prisma.user.findUnique({ where: { id: playerId }, select: { id: true, role: true, parentId: true, parent: { select: { id: true, role: true, parentId: true } } } });
     if (!player || player.role !== Role.PLAYER) throw new NotFoundException("Player not found");
     const ownerId = ownerOf(player);
-    const selection = await this.prisma.selection.findUnique({ where: { id: selectionId }, include: { market: { include: { event: true } } } });
-    if (!selection) throw new NotFoundException("Selection not found");
-    const event = selection.market.event;
-    const [platform, owner, override] = await Promise.all([
+    const ids = [...new Set(selectionIds)];
+    const [selections, platform, owner, overrides] = await Promise.all([
+      this.prisma.selection.findMany({ where: { id: { in: ids } }, include: { market: { include: { event: true } } } }),
       this.platform(),
       ownerId ? this.prisma.user.findUnique({ where: { id: ownerId }, select: { oddsMargin: true } }) : null,
-      ownerId ? this.prisma.oddsOverride.findUnique({ where: { ownerId_selectionId: { ownerId, selectionId } } }) : null,
+      ownerId ? this.prisma.oddsOverride.findMany({ where: { ownerId, selectionId: { in: ids } }, select: { selectionId: true, odds: true } }) : [],
     ]);
     const baseMargin = Number(platform.baseOddsMargin);
     const ownerMargin = num(owner?.oddsMargin) ?? 0;
-    const quote = selectionQuote({
-      event,
-      market: selection.market,
-      selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn },
-      baseMargin,
-      ownerMargin,
-      override: num(override?.odds),
-    });
-    return {
-      odds: quote.price,
-      bettable: quote.bettable,
-      live: quote.live,
-      score: `${event.homeScore ?? "-"}:${event.awayScore ?? "-"}`,
-      // Greyhounds: no price yet; the bet keeps the team's margin and is paid at the SP less it.
-      sp: event.sport === "greyhounds",
-      marketKey: selection.market.key,
-      margin: teamMargin(baseMargin, ownerMargin),
-    };
+    const overrideBy = new Map(overrides.map((row) => [row.selectionId, num(row.odds)]));
+    const prices = new Map<string, PlayerPrice>();
+    for (const selection of selections) {
+      const event = selection.market.event;
+      const quote = selectionQuote({
+        event,
+        market: selection.market,
+        selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn },
+        baseMargin,
+        ownerMargin,
+        override: overrideBy.get(selection.id) ?? null,
+      });
+      prices.set(selection.id, {
+        odds: quote.price,
+        bettable: quote.bettable,
+        live: quote.live,
+        score: `${event.homeScore ?? "-"}:${event.awayScore ?? "-"}`,
+        // Greyhounds: no price yet; the bet keeps the team's margin and is paid at the SP less it.
+        sp: event.sport === "greyhounds",
+        marketKey: selection.market.key,
+        margin: teamMargin(baseMargin, ownerMargin),
+      });
+    }
+    return prices;
   }
 
   private async platform() {

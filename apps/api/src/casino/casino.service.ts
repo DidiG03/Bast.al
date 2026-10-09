@@ -233,7 +233,7 @@ export class CasinoService {
       if (closed && !free) throw new ForbiddenException(closed);
       const playedAt = free ? owed!.bet : new Prisma.Decimal(bet);
       const stake = free ? new Prisma.Decimal(0) : playedAt;
-      if (!free) await this.limits.assertCanPlace(actor.id, Number(stake));
+      if (!free) await this.limits.assertCanPlace(actor.id, Number(stake), 0, tx);
 
       const round: Round = playRound(this.rng);
       // A line bet is a fifth of the bet; every bet is a whole number of cents per line, so this is exact.
@@ -325,7 +325,7 @@ export class CasinoService {
       const open = await tx.casinoGamble.findUnique({ where: { playerId: actor.id } });
       if (!open) throw new BadRequestException("There's no win to double. Spin first.");
       const stake = open.amount;
-      await this.limits.assertCanPlace(actor.id, Number(stake));
+      await this.limits.assertCanPlace(actor.id, Number(stake), 0, tx);
 
       const suit = SUITS[this.drawSuit()];
       const won = colorOf(suit) === pick;

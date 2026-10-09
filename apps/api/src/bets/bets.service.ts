@@ -165,11 +165,14 @@ export class BetsService {
     const byId = new Map(selections.map((s) => [s.id, s]));
 
     const changed: string[] = [];
+    // Every pick's price at once, rather than a round of queries for each.
+    const quotes = await this.odds.pricesForPlayer(actor.id, ids);
     /** Checks a pick is still open and at the price the Player saw. */
     const price = async (pick: { selectionId: string; odds: number }) => {
       const selection = byId.get(pick.selectionId);
-      if (!selection) throw new BadRequestException("One of the bets on your slip no longer exists. Remove it and try again.");
-      const { odds, bettable, live, score, sp, marketKey, margin } = await this.odds.priceForPlayer(actor.id, pick.selectionId);
+      const quote = quotes.get(pick.selectionId);
+      if (!selection || !quote) throw new BadRequestException("One of the bets on your slip no longer exists. Remove it and try again.");
+      const { odds, bettable, live, score, sp, marketKey, margin } = quote;
       if (!bettable) {
         throw new BadRequestException(
           live ? `Live bets on ${selection.market.event.name} are paused right now. Try again in a moment.` : `Bets are closed on ${selection.market.event.name}. Remove it from your slip.`,
@@ -263,18 +266,19 @@ export class BetsService {
     // A system counts at the most it can return on each of its picks, like an accumulator.
     if (pricedSystem) for (const leg of pricedSystem.legs) add(leg.selectionId, payoutFor(BetStatus.WON, pricedSystem.stake, pricedSystem.odds), leg.label);
 
+    // Each match's betting volume, added once the slip is in (addVolumes).
+    const volumes = new Map<string, number>();
+    const addVolume = (eventId: string, stake: Prisma.Decimal | number) => volumes.set(eventId, (volumes.get(eventId) ?? 0) + Number(stake));
     const created = await this.prisma.$transaction(async (tx) => {
       // One slip at a time per Player, so two slips can't both squeeze under
-      // the daily loss limit or spend the same balance; and one at a time per
-      // team, so two Players can't both squeeze under the Owner's payout cap.
-      await this.risk.lockTeam(tx, ownerId);
+      // the daily loss limit or spend the same balance. The Owner's payout
+      // cap is checked last (below).
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
       let alsoStaking = 0;
       for (const stake of stakes) {
-        await this.limits.assertCanPlace(actor.id, Number(stake), alsoStaking);
+        await this.limits.assertCanPlace(actor.id, Number(stake), alsoStaking, tx);
         alsoStaking += Number(stake);
       }
-      await this.risk.assertUnderCap(tx, ownerId, adding);
       const taken = await tx.user.updateMany({ where: { id: actor.id, balance: { gte: total } }, data: { balance: { decrement: total } } });
       if (taken.count === 0) throw new BadRequestException("Your balance is too low for this slip. Ask your Manager for a top-up.");
       const rows = [];
@@ -294,7 +298,7 @@ export class BetsService {
             select: betSelect,
           }),
         );
-        await tx.event.update({ where: { id: bet.eventId }, data: { volume: { increment: bet.stake } } });
+        addVolume(bet.eventId, bet.stake);
       }
       if (pricedAcca) {
         rows.push(
@@ -313,7 +317,7 @@ export class BetsService {
             select: betSelect,
           }),
         );
-        for (const leg of pricedAcca.legs) await tx.event.update({ where: { id: leg.eventId }, data: { volume: { increment: pricedAcca.stake } } });
+        for (const leg of pricedAcca.legs) addVolume(leg.eventId, pricedAcca.stake);
       }
       if (pricedBuilder) {
         rows.push(
@@ -332,7 +336,7 @@ export class BetsService {
             select: betSelect,
           }),
         );
-        await tx.event.update({ where: { id: pricedBuilder.eventId }, data: { volume: { increment: pricedBuilder.stake } } });
+        addVolume(pricedBuilder.eventId, pricedBuilder.stake);
       }
       if (pricedSystem) {
         const { info } = pricedSystem;
@@ -353,7 +357,7 @@ export class BetsService {
             select: betSelect,
           }),
         );
-        for (const leg of pricedSystem.legs) await tx.event.update({ where: { id: leg.eventId }, data: { volume: { increment: pricedSystem.stake } } });
+        for (const leg of pricedSystem.legs) addVolume(leg.eventId, pricedSystem.stake);
       }
       // Every stake in the Player's balance ledger, so their statement adds up to their balance.
       await tx.balanceTransaction.createMany({
@@ -366,8 +370,13 @@ export class BetsService {
           betId: bet.id,
         })),
       });
+      // Last, with the slip's bets already written: the payout cap locks only
+      // the slip's own outcomes, and only from here to the commit, so slips
+      // on other outcomes, or on the same ones a moment later, aren't held up.
+      await this.risk.assertUnderCap(tx, ownerId, adding);
       return rows;
     });
+    await this.addVolumes(volumes);
 
     await this.audit.log({
       actorId: actor.id,
@@ -380,6 +389,20 @@ export class BetsService {
     await this.realtime.publish(actor.id, { type: "bets.changed" });
     await this.users.alertLowBalance(actor.id, Number(total));
     return { bets: created.map(betView), total: Number(total) };
+  }
+
+  /**
+   * Adds a placed slip's stakes to each match's betting volume. It runs after
+   * the slip is in, one match at a time and always in the same order: inside
+   * the slip's transaction, every bet on a busy match would wait for that
+   * match's row, and two accumulators locking the same matches in a
+   * different order would deadlock. Volume is only a tally, so a slip never
+   * fails over it.
+   */
+  private async addVolumes(volumes: Map<string, number>) {
+    for (const [eventId, amount] of [...volumes].sort(([a], [b]) => a.localeCompare(b))) {
+      await this.prisma.event.update({ where: { id: eventId }, data: { volume: { increment: amount } } }).catch(() => undefined);
+    }
   }
 
   /** The bet builder's price for these picks, for the slip while the Player picks them. */

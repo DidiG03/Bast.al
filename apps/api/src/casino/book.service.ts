@@ -171,7 +171,7 @@ export class BookService {
       if (!free && !BETS.some((allowed) => allowed === bet)) throw new BadRequestException(`Choose a bet of ${BETS.map((b) => money(b)).join(", ")}`);
       const playedAt = free ? feature.bet : new Prisma.Decimal(bet);
       const stake = free ? new Prisma.Decimal(0) : playedAt;
-      if (!free) await this.limits.assertCanPlace(actor.id, Number(stake));
+      if (!free) await this.limits.assertCanPlace(actor.id, Number(stake), 0, tx);
 
       const special = free ? (feature.special as Exclude<BookSymbol, "BOOK">) : null;
       const round: Spin = playSpin(special, this.draw);

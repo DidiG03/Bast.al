@@ -5,6 +5,9 @@ import { PrismaService } from "../prisma.service";
 import { startOfDay } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
 
+/** The database to read through: the service's pool, or the transaction a caller holds. */
+type Db = Prisma.TransactionClient;
+
 type Limits = { maxStake: number | null; dailyLossLimit: number | null };
 /** One layer's limits, and whether that layer has turned the Casino off for the Player. */
 type Layer = Limits & { casinoOff: boolean };
@@ -94,16 +97,21 @@ export class BettingLimitsService {
    * max stake, or today's losses plus stakes still open plus this stake over
    * the daily loss limit. Call it before creating a Bet. `alsoStaking` is
    * what the same bet slip stakes on bets that aren't saved yet.
+   *
+   * Inside a transaction, pass it as `db`: the check then runs on the
+   * transaction's own connection. Reading through the pool instead would
+   * need a second connection while the transaction holds one, and with every
+   * connection held by a transaction waiting for another, all play stops.
    */
-  async assertCanPlace(playerId: string, stake: number, alsoStaking = 0) {
-    const row = await this.prisma.bettingLimit.findUnique({ where: { playerId } });
+  async assertCanPlace(playerId: string, stake: number, alsoStaking = 0, db: Db = this.prisma) {
+    const row = await db.bettingLimit.findUnique({ where: { playerId } });
     const maxStake = stricter(value(row?.ownerMaxStake), value(row?.managerMaxStake));
     const dailyLossLimit = stricter(value(row?.ownerDailyLossLimit), value(row?.managerDailyLossLimit));
     if (maxStake !== null && stake > maxStake) {
       throw new BadRequestException(`The most this Player can stake on one bet is ${maxStake.toFixed(2)} ALL`);
     }
     if (dailyLossLimit !== null) {
-      const worstCase = (await this.lossToday(playerId)) + (await this.openStakes(playerId)) + alsoStaking + stake;
+      const worstCase = (await this.lossToday(playerId, db)) + (await this.openStakes(playerId, db)) + alsoStaking + stake;
       if (worstCase > dailyLossLimit) {
         throw new BadRequestException(`This bet could take the Player past their ${dailyLossLimit.toFixed(2)} ALL daily loss limit`);
       }
@@ -119,12 +127,12 @@ export class BettingLimitsService {
   }
 
   /** Money still riding: stakes on bets placed today that are still open, and on a blackjack, Mines or Penalty round still being played. */
-  private async openStakes(playerId: string): Promise<number> {
+  private async openStakes(playerId: string, db: Db = this.prisma): Promise<number> {
     const [open, blackjack, mines, penalty] = await Promise.all([
-      this.prisma.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfDay(new Date()) } }, _sum: { stake: true } }),
-      this.prisma.blackjackHand.findUnique({ where: { playerId }, select: { staked: true } }),
-      this.prisma.minesRound.findUnique({ where: { playerId }, select: { staked: true } }),
-      this.prisma.penaltyRound.findUnique({ where: { playerId }, select: { staked: true } }),
+      db.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfDay(new Date()) } }, _sum: { stake: true } }),
+      db.blackjackHand.findUnique({ where: { playerId }, select: { staked: true } }),
+      db.minesRound.findUnique({ where: { playerId }, select: { staked: true } }),
+      db.penaltyRound.findUnique({ where: { playerId }, select: { staked: true } }),
     ]);
     return Number(open._sum.stake ?? 0) + Number(blackjack?.staked ?? 0) + Number(mines?.staked ?? 0) + Number(penalty?.staked ?? 0);
   }
@@ -133,14 +141,14 @@ export class BettingLimitsService {
    * Net amount the Player has lost today (since midnight, Albanian time) on
    * bets settled and casino spins played, together; 0 if they're up.
    */
-  private async lossToday(playerId: string): Promise<number> {
+  private async lossToday(playerId: string, db: Db = this.prisma): Promise<number> {
     const today = startOfDay(new Date());
     const [settled, spins] = await Promise.all([
-      this.prisma.bet.aggregate({
+      db.bet.aggregate({
         where: { playerId, status: { in: [BetStatus.WON, BetStatus.LOST] }, settledAt: { gte: today } },
         _sum: { stake: true, payout: true },
       }),
-      this.prisma.casinoSpin.aggregate({ where: { playerId, createdAt: { gte: today } }, _sum: { stake: true, win: true } }),
+      db.casinoSpin.aggregate({ where: { playerId, createdAt: { gte: today } }, _sum: { stake: true, win: true } }),
     ]);
     const net = Number(settled._sum.stake ?? 0) - Number(settled._sum.payout ?? 0) + Number(spins._sum.stake ?? 0) - Number(spins._sum.win ?? 0);
     return Math.max(0, Math.round(net * 100) / 100);

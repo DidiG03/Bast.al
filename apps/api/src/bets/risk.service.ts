@@ -24,10 +24,15 @@ export class RiskService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Open payout per selection for one team, for the given selections (or all). */
+  /**
+   * Open payout per selection for one team, for the given selections (or
+   * all). With selections given, only bets on them are read, through the
+   * selection indexes, so a slip's check doesn't grow with the whole team's
+   * open bets.
+   */
   async exposure(db: Db, ownerId: string, selectionIds?: string[]): Promise<Map<string, SelectionExposure>> {
-    const only = selectionIds ? Prisma.sql`AND sel_id = ANY(${selectionIds})` : Prisma.empty;
-    const rows = await db.$queryRaw<Array<{ sel_id: string; kind: "SINGLE" | "ACCUMULATOR"; bets: bigint; staked: Prisma.Decimal; payout: Prisma.Decimal }>>`
+    type Row = { sel_id: string; kind: "SINGLE" | "ACCUMULATOR"; bets: bigint; staked: Prisma.Decimal; payout: Prisma.Decimal };
+    const rows = selectionIds ? await this.exposureOf(db, ownerId, selectionIds) : await db.$queryRaw<Row[]>`
       WITH team_bets AS (
         SELECT b.id, b.kind, b.stake, FLOOR(b.stake * COALESCE(b.odds, b.sp_cap) * 100) / 100 AS payout, b.selection_id
         FROM bets b
@@ -42,7 +47,7 @@ export class RiskService {
         WHERE t.kind IN ('ACCUMULATOR', 'BUILDER', 'SYSTEM') AND l.result IS NULL
       )
       SELECT sel_id, kind, COUNT(*) AS bets, SUM(stake) AS staked, SUM(payout) AS payout
-      FROM picks WHERE TRUE ${only}
+      FROM picks
       GROUP BY sel_id, kind
     `;
     const map = new Map<string, SelectionExposure>();
@@ -55,18 +60,55 @@ export class RiskService {
   }
 
   /**
+   * The team's open singles and accumulator legs on these selections only,
+   * the same sums as exposure's. Bets are found by their selection, or a
+   * leg's bet by its id, and only then checked for the team and status: the
+   * subqueries' OFFSET 0 keeps the planner from reaching for the team index
+   * instead, which with few teams (or statistics not yet caught up with a
+   * burst of bets) means reading the team's every bet once per leg.
+   */
+  private exposureOf(db: Db, ownerId: string, selectionIds: string[]) {
+    return db.$queryRaw<Array<{ sel_id: string; kind: "SINGLE" | "ACCUMULATOR"; bets: bigint; staked: Prisma.Decimal; payout: Prisma.Decimal }>>`
+      SELECT b.selection_id AS sel_id, 'SINGLE'::"BetKind" AS kind, COUNT(*) AS bets, SUM(b.stake) AS staked,
+        SUM(FLOOR(b.stake * COALESCE(b.odds, b.sp_cap) * 100) / 100) AS payout
+      FROM (SELECT * FROM bets WHERE selection_id = ANY(${selectionIds}) OFFSET 0) b
+      WHERE b.kind = 'SINGLE' AND b.status = 'OPEN' AND b.owner_id = ${ownerId} AND COALESCE(b.odds, b.sp_cap) IS NOT NULL
+      GROUP BY b.selection_id
+      UNION ALL
+      SELECT l.selection_id AS sel_id, 'ACCUMULATOR'::"BetKind" AS kind, COUNT(*) AS bets, SUM(b.stake) AS staked,
+        SUM(FLOOR(b.stake * COALESCE(b.odds, b.sp_cap) * 100) / 100) AS payout
+      FROM (SELECT bet_id, selection_id FROM bet_legs WHERE selection_id = ANY(${selectionIds}) AND result IS NULL OFFSET 0) l
+      CROSS JOIN LATERAL (SELECT x.stake, x.odds, x.sp_cap, x.kind, x.status, x.owner_id FROM bets x WHERE x.id = l.bet_id OFFSET 0) b
+      WHERE b.kind IN ('ACCUMULATOR', 'BUILDER', 'SYSTEM') AND b.status = 'OPEN' AND b.owner_id = ${ownerId} AND COALESCE(b.odds, b.sp_cap) IS NOT NULL
+      GROUP BY l.selection_id
+    `;
+  }
+
+  /**
    * Refuses new bets that would take any outcome's open payout over the
-   * team's cap. `adding` is the potential payout each selection would gain.
-   * Run inside the placement transaction, after lockTeam.
+   * team's cap. `adding` is the potential payout each selection gains from
+   * the slip. Run at the end of the placement transaction, once the slip's
+   * bets are written: what's open then includes them, so the check is on
+   * the total.
+   *
+   * Without a cap there's nothing to check and nothing is locked. With one,
+   * each of the slip's outcomes is locked for the team (in a fixed order, so
+   * two slips can't wait on each other) until the commit, so two slips can't
+   * both squeeze under the cap on the same outcome; a slip that waited sees
+   * the other's bets once it has the lock. Slips on other outcomes go through
+   * at the same time.
    */
   async assertUnderCap(db: Db, ownerId: string, adding: Map<string, { payout: number; label: string }>) {
     const owner = await db.user.findUnique({ where: { id: ownerId }, select: { maxOutcomePayout: true } });
     if (!owner?.maxOutcomePayout) return;
     const cap = Number(owner.maxOutcomePayout);
+    for (const selectionId of [...adding.keys()].sort()) {
+      await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`team-risk:${ownerId}:${selectionId}`}))`;
+    }
     const current = await this.exposure(db, ownerId, [...adding.keys()]);
     for (const [selectionId, add] of adding) {
       const now = current.get(selectionId);
-      const total = (now?.singles.payout ?? 0) + (now?.accumulators.payout ?? 0) + add.payout;
+      const total = (now?.singles.payout ?? 0) + (now?.accumulators.payout ?? 0);
       if (total > cap) {
         const room = Math.max(0, cap - (total - add.payout));
         throw new BadRequestException(
@@ -74,11 +116,6 @@ export class RiskService {
         );
       }
     }
-  }
-
-  /** Serializes bet placement per team, so two Players can't both slip under the cap. */
-  async lockTeam(tx: Prisma.TransactionClient, ownerId: string) {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`team-risk:${ownerId}`}))`;
   }
 
   /** The risk view: open matches where the team has money at stake, worst first. */

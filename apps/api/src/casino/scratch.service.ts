@@ -121,7 +121,7 @@ export class ScratchService {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
       // A slot win still open to double or nothing is taken as it is: it's already in the balance.
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
-      await this.limits.assertCanPlace(actor.id, bet);
+      await this.limits.assertCanPlace(actor.id, bet, 0, tx);
 
       const seed = await activeSeed(tx, actor.id);
       const card = cardFor(seed.serverSeed, seed.clientSeed, seed.nonce);

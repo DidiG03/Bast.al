@@ -127,7 +127,7 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
       }
       // A slot win still open to double or nothing is taken as it is: it's already in the balance.
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
-      await this.limits.assertCanPlace(actor.id, bet);
+      await this.limits.assertCanPlace(actor.id, bet, 0, tx);
       const round = deal(cents, this.shoe());
       await this.take(tx, actor.id, staked(round), "Your balance is too low for this bet. Pick a smaller one, or ask your Manager for a top-up.");
       const now = new Date();
@@ -161,7 +161,7 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
       // A double, a split or insurance puts more down.
       const extra = staked(round) - staked(before);
       if (extra > 0) {
-        await this.limits.assertCanPlace(actor.id, extra / 100);
+        await this.limits.assertCanPlace(actor.id, extra / 100, 0, tx);
         await this.take(tx, actor.id, extra, "Your balance is too low for that. You can still hit or stand.");
       }
       const now = new Date();

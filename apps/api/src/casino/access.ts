@@ -7,7 +7,7 @@ import { assertOnTeam } from "../bets/team";
  * for the site (Super Admin's switch), for their team (their Owner's) and
  * for them (their Owner or Manager can turn it off for one Player).
  */
-export async function casinoClosedReason(db: Pick<Prisma.TransactionClient, "user" | "platformSettings" | "bettingLimit">, player: { id: string; parentId: string | null }): Promise<string | null> {
+export async function casinoClosedReason(db: Pick<Prisma.TransactionClient, "$queryRaw" | "user" | "platformSettings" | "bettingLimit">, player: { id: string; parentId: string | null }): Promise<string | null> {
   let ownerId: string;
   try {
     ownerId = (await assertOnTeam(db, player)).ownerId;

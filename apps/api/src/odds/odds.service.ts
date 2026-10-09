@@ -216,6 +216,11 @@ export class OddsService {
     return value;
   }
 
+  /** Drops the match lists kept for a few seconds, so the next read is fresh. */
+  forgetLists() {
+    this.keptReads.clear();
+  }
+
   /** Runs `load` once for every caller that asks for the same `key` while it's running. */
   private shared<T>(key: string, load: () => Promise<T>): Promise<T> {
     const running = this.inflight.get(key) as Promise<T> | undefined;
@@ -411,6 +416,8 @@ export class OddsService {
     if (input.hidden !== undefined) data.hidden = input.hidden;
     if (input.suspended !== undefined) data.suspended = input.suspended;
     const updated = await this.prisma.event.update({ where: { id: eventId }, data, select: { id: true, hidden: true, suspended: true } });
+    // Hidden or stopped now, not once the lists kept for a few seconds run out.
+    this.forgetLists();
     await this.audit.log({ actorId: actor.id, action: "odds.event_update", metadata: { eventId, event: event.name, ...input } });
     return updated;
   }

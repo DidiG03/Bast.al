@@ -218,6 +218,8 @@ test("the home page's next races, the last six hours' results, and a race with n
   const finished = await odds.events(ditaActor, "finished", undefined, "list", "greyhounds");
   assert.deepEqual(finished.find((r) => r.id === r1.id)?.raceResult.positions.map((p) => p.dogId), [101, 103, 102], "a run race with its finishing order");
   await prisma.event.update({ where: { id: r1.id }, data: { startsAt: new Date(Date.now() - 7 * 60 * MIN) } });
+  // Six hours passing, in a moment: the finished list read just now is kept for half a minute.
+  odds.forgetLists();
   assert.equal((await odds.events(ditaActor, "finished", undefined, "list", "greyhounds")).some((r) => r.id === r1.id), false, "run over six hours ago: off the list");
 
   // r5 never gets a result: after six hours its bets come back.

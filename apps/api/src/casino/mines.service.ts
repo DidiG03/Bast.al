@@ -94,11 +94,11 @@ export class MinesService implements OnModuleInit, OnModuleDestroy {
     if (closed) throw new ForbiddenException(closed);
     const cents = Math.round(bet * 100);
     if (!Number.isFinite(bet) || Math.abs(cents - bet * 100) > 1e-6 || !(BETS as readonly number[]).includes(bet)) {
-      throw new BadRequestException("Bets are made in chips of $0.50 and up.");
+      throw new BadRequestException("Bets are made in chips of 0.50 ALL and up.");
     }
     if (!(MINE_COUNTS as readonly number[]).includes(mines)) throw new BadRequestException("Pick 1, 3, 5, 10, 15, 20 or 24 mines.");
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one round is $${tableMax.toFixed(2)}`);
+    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one round is ${tableMax.toFixed(2)} ALL`);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {

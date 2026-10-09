@@ -21,8 +21,8 @@ import { randomInt } from "crypto";
  *   the face-down card makes blackjack. Settled when the dealer looks.
  * - One split per round, of two cards of the same rank (two kings, not a
  *   king and a queen), and one double down per round: on the first two
- *   cards, or on one of the split hands. Split aces get one card each. 21
- *   on a split hand isn't blackjack.
+ *   cards, or on one of the split hands. Split aces are played like any
+ *   other pair. 21 on a split hand isn't blackjack.
  * RULES holds the settings that set the house's edge.
  *
  * Money here is in cents, so every amount stays a whole number.
@@ -31,7 +31,7 @@ import { randomInt } from "crypto";
 export const GAME_NAME = "Blackjack";
 export const DECKS = 6;
 /** What the round pays back on average with perfect play, in percent, as measured by scripts/blackjack-rtp.mjs. */
-export const PAYOUT_RATE = 99.5;
+export const PAYOUT_RATE = 99.6;
 /** The rules that set the house's edge. Kept together so the payout-rate script can measure other settings. */
 export const RULES = {
   /** What a blackjack pays, as [to win, for every]: [3, 2] is 3 to 2. */
@@ -221,12 +221,10 @@ export function act(input: Round, action: Action): Round {
       break;
     case "split": {
       round.splitUsed = true;
-      const [first, second] = hand.cards;
-      const aces = first[0] === "A";
-      round.hands = [first, second].map((card) => {
+      round.hands = hand.cards.map((card) => {
         const cards: Card[] = [card, take(round)];
-        // Split aces get one card each and no more; any hand reaching 21 is done.
-        return { cards, bet: hand.bet, doubled: false, split: true, done: aces || handTotal(cards).total === 21, result: null, payout: 0 };
+        // Each hand is played on, split aces too; a hand reaching 21 is done.
+        return { cards, bet: hand.bet, doubled: false, split: true, done: handTotal(cards).total === 21, result: null, payout: 0 };
       });
       round.active = 0;
       break;

@@ -12,7 +12,7 @@ const { PrismaClient } = require("@prisma/client");
 const { firstValueFrom, from } = require("rxjs");
 const { SeededRandomNumberGenerator } = require("pokie");
 const { CasinoService } = require("../dist/casino/casino.service.js");
-const { GAMBLE_LIMIT, GAMBLE_STEPS, LINES, REEL_STRIPS, SUITS, playRound } = require("../dist/casino/game.js");
+const { GAME_NAME, GAMBLE_LIMIT, GAMBLE_STEPS, LINES, REEL_STRIPS, SUITS, playRound } = require("../dist/casino/game.js");
 const { BettingLimitsService } = require("../dist/commissions/betting-limits.service.js");
 const { CommissionsService } = require("../dist/commissions/commissions.service.js");
 const { UsersService } = require("../dist/users/users.service.js");
@@ -210,7 +210,7 @@ test("free spins left from the old game play at the bet that won them and cost n
 test("the max stake, the shared daily loss limit, a low balance and a suspended Manager stop a spin", async () => {
   casino.rng = stopsAt(losing);
   await prisma.bettingLimit.create({ data: { playerId: cara.id, ownerMaxStake: 1 } });
-  await assert.rejects(casino.spin(cara, 2), /The most this Player can stake on one bet is \$1\.00/);
+  await assert.rejects(casino.spin(cara, 2), /The most this Player can stake on one bet is 1\.00 ALL/);
 
   const used = await limits.usedToday(cara.id);
   await prisma.bettingLimit.update({ where: { playerId: cara.id }, data: { ownerMaxStake: null, ownerDailyLossLimit: used + 0.4 } });
@@ -269,6 +269,21 @@ test("the same spin request sent twice spins once", async () => {
   const again = await send();
   assert.equal(again.spin.id, first.spin.id);
   assert.equal(await prisma.casinoSpin.count({ where: { playerId: cara.id } }), before + 1);
+});
+
+test("the home page's Continue playing: a round still in play first, then the game played last", async () => {
+  const last = await casino.lastGame(cara);
+  assert.equal(last.game, "slot");
+  assert.equal(last.name, GAME_NAME);
+  await prisma.casinoGamble.deleteMany({ where: { playerId: cara.id } });
+  assert.equal((await casino.lastGame(cara)).waiting, null, "the last game is done");
+  await prisma.minesRound.create({ data: { playerId: cara.id, staked: 2, state: {} } });
+  assert.deepEqual(await casino.lastGame(cara).then(({ game, waiting, amount }) => ({ game, waiting, amount })), { game: "mines", waiting: "round", amount: 2 });
+  await prisma.minesRound.delete({ where: { playerId: cara.id } });
+  await prisma.casinoGamble.create({ data: { playerId: cara.id, game: "book", amount: 6 } });
+  assert.deepEqual(await casino.lastGame(cara).then(({ game, waiting, amount }) => ({ game, waiting, amount })), { game: "book", waiting: "gamble", amount: 6 });
+  await prisma.casinoGamble.delete({ where: { playerId: cara.id } });
+  assert.equal(await casino.lastGame(manager), null, "nothing played yet");
 });
 
 test("spins count as money history, and the data reset clears them", async () => {

@@ -96,7 +96,7 @@ test("picks from one match, or a set that isn't a system, are refused", async ()
   const draw = await pick("M1", "match_winner", "draw");
   await assert.rejects(bets.place(actor(player), { system: { legs: await legsOf([...selections.slice(0, 3), draw]), sizes: [2], lineStake: 1 } }), /one pick from each match/);
   await assert.rejects(bets.place(actor(player), { system: { legs: await legsOf(selections), sizes: [4], lineStake: 1 } }), /Choose a system/);
-  await assert.rejects(bets.place(actor(player), { system: { legs: await legsOf(selections.slice(0, 3)), sizes: [2, 3], lineStake: 0.1 } }), /at least \$1/);
+  await assert.rejects(bets.place(actor(player), { system: { legs: await legsOf(selections.slice(0, 3)), sizes: [2, 3], lineStake: 0.1 } }), /at least 1 ALL/);
 });
 
 test("it settles line by line: a lost pick only loses its lines", async () => {

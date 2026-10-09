@@ -70,7 +70,7 @@ export class RiskService {
       if (total > cap) {
         const room = Math.max(0, cap - (total - add.payout));
         throw new BadRequestException(
-          room < 1 ? `Your team isn't taking more bets on ${add.label} right now. Try another pick.` : `That bet is too big for ${add.label} right now. The most it can pay out is $${room.toFixed(2)}, so lower the stake.`,
+          room < 1 ? `Your team isn't taking more bets on ${add.label} right now. Try another pick.` : `That bet is too big for ${add.label} right now. The most it can pay out is ${room.toFixed(2)} ALL, so lower the stake.`,
         );
       }
     }

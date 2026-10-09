@@ -410,7 +410,7 @@ export function ManagerView({ data }: { data: ManagerCommissions }) {
           value={totals.net < 0 ? t("Won {amount}", { amount: formatMoney(-totals.net) }) : t("Lost {amount}", { amount: formatMoney(totals.net) })}
           hint={t("Stakes minus payouts")}
         />
-        <Stat label={t("Your rate")} help="Your percent of what your Players lose. Your Owner sets it. Example: at 10%, if your Players lose $500, you earn $50." value={`${manager.commissionRate}%`} hint={t("Set by your Owner")} />
+        <Stat label={t("Your rate")} help="Your percent of what your Players lose. Your Owner sets it. Example: at 10%, if your Players lose 500 ALL, you earn 50 ALL." value={`${manager.commissionRate}%`} hint={t("Set by your Owner")} />
         <Stat label={t("Settled bets")} help="How many bets finished in this period, and how much money was on them." value={String(totals.bets)} hint={t("{amount} staked", { amount: formatMoney(totals.staked) })} />
       </div>
       <section className="card stack">

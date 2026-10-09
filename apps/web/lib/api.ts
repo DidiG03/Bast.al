@@ -880,6 +880,21 @@ export type BlackjackState = {
 
 export type BlackjackMoveResult = { round: BlackjackRoundView; balance: number };
 
+export type CasinoGameKey = "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice";
+
+/** The home page's "Continue playing": a round still in play, or the game played last. */
+export type CasinoLastGame = {
+  game: CasinoGameKey;
+  /** The slots' own names ("Sizzling Hot", "Book of Ra"); null for the other games. */
+  name: string | null;
+  /** Something left to finish, or null when the last game is done. */
+  waiting: "round" | "freeSpins" | "gamble" | null;
+  /** The round's stake, the free spins' bet, the win at stake, or the last bet. */
+  amount: number;
+  freeSpins?: number;
+  at: string;
+};
+
 export type RouletteColor = "RED" | "BLACK" | "GREEN";
 
 /** One round of roulette in the Player's list: the number, and what each spot had on it and paid (its stake included). */

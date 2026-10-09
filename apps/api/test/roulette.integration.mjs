@@ -120,11 +120,11 @@ test("illegal bets, the table limit, the daily loss limit and a low balance stop
   const balance = await balanceOf(rita);
   await assert.rejects(roulette.spin(rita, [{ spot: "00", amount: 1 }]), /no "00" on the table/);
   await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 0.3 }]), /chips/);
-  await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 60 }, { spot: "BLACK", amount: 41 }]), /most you can have on the table in one spin is \$100\.00/);
+  await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 60 }, { spot: "BLACK", amount: 41 }]), /most you can have on the table in one spin is 100\.00 ALL/);
 
   await prisma.bettingLimit.create({ data: { playerId: rita.id, ownerMaxStake: 20 } });
   assert.equal((await roulette.state(rita)).tableMax, 20);
-  await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 10 }, { spot: "BLACK", amount: 10.5 }]), /\$20\.00/);
+  await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 10 }, { spot: "BLACK", amount: 10.5 }]), /20\.00 ALL/);
   await prisma.bettingLimit.update({ where: { playerId: rita.id }, data: { ownerMaxStake: 150 } });
   assert.equal((await roulette.state(rita)).tableMax, 150, "a higher max stake raises the table limit");
 

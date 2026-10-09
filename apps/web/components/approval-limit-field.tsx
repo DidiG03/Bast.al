@@ -47,7 +47,7 @@ export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, o
     event.preventDefault();
     const value = Number(limit);
     if (!Number.isFinite(value) || value < 0 || value > 1000000) {
-      toast.error(t("Enter an amount between $0 and $1,000,000"));
+      toast.error(t("Enter an amount between 0 ALL and 1,000,000 ALL"));
       return;
     }
     save(value).catch(() => undefined);
@@ -65,7 +65,7 @@ export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, o
       <div className="commission-input-row">
         <label htmlFor={`approval-limit-${userId}`}>{t("Limit")}</label>
         <div className="commission-input">
-          <span aria-hidden="true">$</span>
+          <span aria-hidden="true">ALL</span>
           <input
             id={`approval-limit-${userId}`}
             type="number"

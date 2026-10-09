@@ -64,7 +64,7 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
     event.preventDefault();
     const value = Math.round(Number(amount) * 100) / 100;
     if (action === "delegate" && !(value > 0 && value <= 1000000)) {
-      toast.error(t("Enter an amount between $0 and $1,000,000"));
+      toast.error(t("Enter an amount between 0 ALL and 1,000,000 ALL"));
       return;
     }
     if (action === "reassign" && !parentId) {
@@ -118,7 +118,7 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
               <label className="stack" style={{ gap: "0.35rem" }}>
                 <span>{t("Amount for each")}</span>
                 <div className="commission-input">
-                  <span aria-hidden="true">$</span>
+                  <span aria-hidden="true">ALL</span>
                   <input type="number" min="0.01" max="1000000" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus required />
                 </div>
                 {Number(amount) > 0 ? <span className="muted">{t("{amount} in total", { amount: formatMoney(Number(amount) * users.length) })}</span> : null}

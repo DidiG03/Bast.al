@@ -137,7 +137,7 @@ export class OddsService {
     if (sport === "greyhounds") return this.nextRaces(actor, count, now);
     const soon = now.getTime() + 2 * 86_400_000;
     const rows = await this.prisma.event.findMany({
-      where: { sport: "football", status: { in: [EventStatus.LIVE, ...FILTER_STATUSES.upcoming] }, hidden: false },
+      where: { sport, status: { in: [EventStatus.LIVE, ...FILTER_STATUSES.upcoming] }, hidden: false },
       orderBy: { startsAt: "asc" },
       take: LIST_LIMIT,
       include: COUNT_MARKETS,

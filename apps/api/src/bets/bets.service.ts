@@ -220,7 +220,7 @@ export class BetsService {
       const { payout, topOdds } = systemMaxReturn(legs.map((leg) => leg.price!), sizes, lineStake);
       if (topOdds.greaterThan(MAX_ACCUMULATOR_ODDS)) throw new BadRequestException(`A system's biggest line can't have odds of more than ${MAX_ACCUMULATOR_ODDS}. Remove a pick.`);
       const stake = lineStake.mul(lines);
-      if (stake.lessThan(MIN_STAKE)) throw new BadRequestException(`A system bet has to cost at least $${MIN_STAKE} in all. Raise the stake per bet.`);
+      if (stake.lessThan(MIN_STAKE)) throw new BadRequestException(`A system bet has to cost at least ${MIN_STAKE} ALL in all. Raise the stake per bet.`);
       pricedSystem = {
         stake,
         // The most it returns over the stake, rounded up, for the team's open payouts.

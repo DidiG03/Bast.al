@@ -615,7 +615,7 @@ export class UsersService {
           userId: actor.parentId,
           type: NotificationType.APPROVAL_REQUESTED,
           title: "Approval needed",
-          message: `${actor.username} wants to delegate $${dto.amount.toFixed(2)} to ${target.username}.`,
+          message: `${actor.username} wants to delegate ${dto.amount.toFixed(2)} ALL to ${target.username}.`,
           deepLink: "/dashboard/finance",
           metadata: { transactionId: pending.id, amount: dto.amount },
         });
@@ -680,7 +680,7 @@ export class UsersService {
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
       title: "Credit received",
-      message: `You received $${dto.amount.toFixed(2)} from ${actor.username}.`,
+      message: `You received ${dto.amount.toFixed(2)} ALL from ${actor.username}.`,
       deepLink: "/dashboard/finance",
       metadata: { amount: dto.amount, actorId: actor.id },
     });
@@ -728,7 +728,7 @@ export class UsersService {
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
       title: "Balance adjusted",
-      message: `An administrative adjustment of $${dto.amount.toFixed(2)} was applied to your balance.`,
+      message: `An administrative adjustment of ${dto.amount.toFixed(2)} ALL was applied to your balance.`,
       deepLink: "/dashboard/finance",
       metadata: { amount: dto.amount, actorId: actor.id },
     });
@@ -820,7 +820,7 @@ export class UsersService {
     await this.audit.log({ actorId: actor.id, action: "user.balance_approved", targetId: transaction.toUserId, ipAddress, metadata: { transactionId } });
     await this.realtime.publishBalances([transaction.toUserId, transaction.fromUserId]);
     if (transaction.fromUserId) await this.alertLowBalance(transaction.fromUserId, amount);
-    await this.notifications.create({ userId: transaction.toUserId, type: NotificationType.FUNDS_RECEIVED, title: "Transaction approved", message: `A $${Number(transaction.amount).toFixed(2)} transaction was approved.`, deepLink: `/dashboard/finance/transaction/${transactionId}`, metadata: { transactionId } });
+    await this.notifications.create({ userId: transaction.toUserId, type: NotificationType.FUNDS_RECEIVED, title: "Transaction approved", message: `A ${Number(transaction.amount).toFixed(2)} ALL transaction was approved.`, deepLink: `/dashboard/finance/transaction/${transactionId}`, metadata: { transactionId } });
     return { ...result, amount: Number(result.amount) };
   }
 
@@ -916,7 +916,7 @@ export class UsersService {
       userId: id,
       type: NotificationType.FUNDS_RECLAIMED,
       title: "Credit reclaimed",
-      message: `${actor.username} reclaimed $${dto.amount.toFixed(2)} from your balance.`,
+      message: `${actor.username} reclaimed ${dto.amount.toFixed(2)} ALL from your balance.`,
       deepLink: "/dashboard",
       metadata: { amount: dto.amount, actorId: actor.id },
     });
@@ -1185,7 +1185,7 @@ export class UsersService {
       metadata: { fromManagerId: previousManager?.id ?? null, toManagerId: manager.id, returnedBalance: returned },
     });
     if (returned > 0) await this.realtime.publishBalances([id, previousManager?.id ?? null]);
-    const back = returned > 0 && previousManager ? ` Your $${returned.toFixed(2)} balance went back to ${previousManager.username}.` : "";
+    const back = returned > 0 && previousManager ? ` Your ${returned.toFixed(2)} ALL balance went back to ${previousManager.username}.` : "";
     await this.notifications.create({
       userId: id,
       type: NotificationType.ACCOUNT_REASSIGNED,
@@ -1199,7 +1199,7 @@ export class UsersService {
         userId: previousManager.id,
         type: NotificationType.ACCOUNT_REASSIGNED,
         title: "Player reassigned",
-        message: returned > 0 ? `${player.username} was moved to another manager. Their $${returned.toFixed(2)} balance came back to you.` : `${player.username} was moved to another manager.`,
+        message: returned > 0 ? `${player.username} was moved to another manager. Their ${returned.toFixed(2)} ALL balance came back to you.` : `${player.username} was moved to another manager.`,
         deepLink: `/dashboard/users?userId=${id}`,
         metadata: { userId: id, managerId: manager.id, returnedBalance: returned },
       });
@@ -1208,7 +1208,7 @@ export class UsersService {
       userId: manager.id,
       type: NotificationType.ACCOUNT_REASSIGNED,
       title: "Player assigned",
-      message: `${player.username} was assigned to your team. Their balance starts at $0.00.`,
+      message: `${player.username} was assigned to your team. Their balance starts at 0.00 ALL.`,
       deepLink: `/dashboard/users?userId=${id}`,
       metadata: { userId: id },
     });
@@ -1401,7 +1401,7 @@ export class UsersService {
       userId: id,
       type: NotificationType.ACCOUNT_UPDATED,
       title: "Approval limit updated",
-      message: `Transfers up to $${effective.toFixed(2)} now go through without approval.`,
+      message: `Transfers up to ${effective.toFixed(2)} ALL now go through without approval.`,
       deepLink: "/dashboard/users",
       metadata: { actorId: actor.id, limit },
     });
@@ -1431,7 +1431,7 @@ export class UsersService {
         userId: recipient,
         type: NotificationType.LOW_BALANCE,
         title: "Low balance",
-        message: `${account.username}'s balance dropped to $${balance.toFixed(2)}, below the $${threshold.toFixed(2)} alert.`,
+        message: `${account.username}'s balance dropped to ${balance.toFixed(2)} ALL, below the ${threshold.toFixed(2)} ALL alert.`,
         deepLink: "/dashboard/users",
         metadata: { accountId: account.id, balance, threshold },
       });
@@ -1448,7 +1448,7 @@ export class UsersService {
     const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, balance: true, parentId: true } });
     if (!account || !account.balance.isNegative()) return;
     const owner = await this.ownerAbove(account.parentId);
-    const balance = `-$${account.balance.abs().toFixed(2)}`;
+    const balance = `-${account.balance.abs().toFixed(2)} ALL`;
     const recipients = new Set([account.parentId, owner?.id].filter((id): id is string => Boolean(id)));
     for (const recipient of recipients) {
       await this.notifications.create({
@@ -1493,7 +1493,7 @@ export class UsersService {
       type: NotificationType.LOW_BALANCE,
       severity: NotificationSeverity.WARNING,
       title: "Top-up requested",
-      message: `${actor.username} is asking for a top-up. Their balance is $${balance.toFixed(2)}.`,
+      message: `${actor.username} is asking for a top-up. Their balance is ${balance.toFixed(2)} ALL.`,
       deepLink: `/dashboard/players/${actor.id}`,
       metadata: { accountId: actor.id, balance },
     });
@@ -1666,7 +1666,7 @@ function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number
   if (playing.penalty) return `${username} is in the middle of a Penalty round. Move them once it's over.`;
   if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;
   if (openBets > 1) return `${username} still has ${openBets} open bets. Move them once they're settled.`;
-  if (balance.isNegative()) return `${username}'s balance is below zero (-$${balance.abs().toFixed(2)}). Give them credit to clear it before moving them.`;
+  if (balance.isNegative()) return `${username}'s balance is below zero (-${balance.abs().toFixed(2)} ALL). Give them credit to clear it before moving them.`;
   return null;
 }
 

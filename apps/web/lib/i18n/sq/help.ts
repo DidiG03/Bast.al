@@ -101,8 +101,8 @@ export const help: Record<string, string> = {
     "Kthe para nga kjo llogari te balanca jote, për shembull kur dikush ndalon së luajturi.",
   "Super Admin only: fix a balance by adding or removing money directly, without taking it from anyone. Always write the reason.":
     "Vetëm për Super Adminin: rregullo një balancë duke shtuar ose hequr para direkt, pa i marrë nga askush. Shkruaj gjithmonë arsyen.",
-  "The percent of this Owner's team profit that they pay you each week. Example: at 10%, if their team makes $1,000, they owe you $100.":
-    "Përqindja e fitimit të skuadrës së këtij Pronari që të paguan çdo javë. Shembull: me 10%, nëse skuadra e tij fiton $1,000, të detyrohet $100.",
+  "The percent of this Owner's team profit that they pay you each week. Example: at 10%, if their team makes 1,000 ALL, they owe you 100 ALL.":
+    "Përqindja e fitimit të skuadrës së këtij Pronari që të paguan çdo javë. Shembull: me 10%, nëse skuadra e tij fiton 1,000 ALL, të detyrohet 100 ALL.",
   "Moves the Player to another Manager or Owner. Their balance goes back to whoever gave it to them, and the new Manager or Owner gives them credit. Past bets stay with the team they were placed with. A Player with open bets, or a balance below zero, can be moved once that's settled.":
     "Zhvendos Lojtarin te një Menaxher ose Pronar tjetër. Balanca i kthehet atij që ia dha, dhe Menaxheri ose Pronari i ri i jep kredi. Bastet e kaluara mbeten me skuadrën ku u vendosën. Një Lojtar me baste të hapura, ose me balancë nën zero, mund të zhvendoset pasi të mbyllen ato.",
   "Suspend blocks the account, and everyone under it, from signing in. You can undo it later with Reactivate. Delete is only for an account made by mistake: once it has placed a bet or moved money it can't be deleted, so its history stays in the reports. Suspend it instead.":
@@ -115,8 +115,8 @@ export const help: Record<string, string> = {
     "E ndalon një Lojtar të vërë shumë para. “Shuma maksimale” është më e shumta që mund të vërë njëherësh. “Limiti ditor i humbjes” është më e shumta që mund të humbasë në një ditë; pas kësaj nuk mund të vërë baste deri nesër.",
   "Does the same thing to every account you ticked, all at once. If some fail, a message tells you which and why, and those stay ticked so you can try again.":
     "Bën të njëjtën gjë për çdo llogari që shënove, të gjitha njëherësh. Nëse disa dështojnë, një mesazh të tregon cilat dhe pse, dhe ato mbeten të shënuara që të provosh sërish.",
-  "The percent of the weekly profit this person gets or pays. Example: at 10%, a $1,000 profit means $100.":
-    "Përqindja e fitimit javor që ky person merr ose paguan. Shembull: me 10%, një fitim prej $1,000 do të thotë $100.",
+  "The percent of the weekly profit this person gets or pays. Example: at 10%, a 1,000 ALL profit means 100 ALL.":
+    "Përqindja e fitimit javor që ky person merr ose paguan. Shembull: me 10%, një fitim prej 1,000 ALL do të thotë 100 ALL.",
   "Choose which football leagues and cups come into the site. Only matches from ticked leagues can be bet on. More leagues use more of the daily API-Football requests.":
     "Zgjidh cilat liga dhe kupa futbolli vijnë në faqe. Vetëm në ndeshjet e ligave të shënuara mund të vihen baste. Më shumë liga përdorin më shumë nga kërkesat ditore të API-Football.",
   "This Player's bets on matches that are not finished yet, and what they would win if the bets win.":
@@ -174,8 +174,8 @@ export const help: Record<string, string> = {
   "Your commission for this period. If your Players won more than they lost, it is below zero and you owe it back.":
     "Komisioni yt për këtë periudhë. Nëse Lojtarët e tu fituan më shumë se humbën, është nën zero dhe e detyrohesh ta kthesh.",
   "Did your Players win or lose money in this period? When they lose, you earn.": "A fituan apo humbën para Lojtarët e tu në këtë periudhë? Kur ata humbin, ti fiton.",
-  "Your percent of what your Players lose. Your Owner sets it. Example: at 10%, if your Players lose $500, you earn $50.":
-    "Përqindja jote nga ajo që humbin Lojtarët e tu. E vendos Pronari yt. Shembull: me 10%, nëse Lojtarët e tu humbin $500, ti fiton $50.",
+  "Your percent of what your Players lose. Your Owner sets it. Example: at 10%, if your Players lose 500 ALL, you earn 50 ALL.":
+    "Përqindja jote nga ajo që humbin Lojtarët e tu. E vendos Pronari yt. Shembull: me 10%, nëse Lojtarët e tu humbin 500 ALL, ti fiton 50 ALL.",
   "How many bets finished in this period, and how much money was on them.": "Sa baste mbaruan në këtë periudhë, dhe sa para kishte në to.",
   "One line for each Owner: their team's profit and how much they owe you. When the period is over, press Mark as collected once they have paid you.":
     "Një rresht për çdo Pronar: fitimi i skuadrës së tij dhe sa të detyrohet. Kur periudha mbaron, shtyp Shëno si të mbledhur sapo të të paguajë.",
@@ -218,15 +218,15 @@ export const help: Record<string, string> = {
     "Regjistri i plotë i një lëvizjeje parash: kush i dërgoi, kush i mori, pse, dhe kush e miratoi. Nuk mund ta ndryshosh; mbetet si provë.",
 
   // Bet
-  "The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: $10 at 2.50 pays back $25 if it wins.":
-    "Ndeshjet e kësaj dite. Shtyp një koeficient për ta shtuar në tiketë. Një numër më i lartë paguan më shumë, por fiton më rrallë. Shembull: $10 me 2.50 kthejnë $25 nëse fiton.",
+  "The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: 10 ALL at 2.50 pays back 25 ALL if it wins.":
+    "Ndeshjet e kësaj dite. Shtyp një koeficient për ta shtuar në tiketë. Një numër më i lartë paguan më shumë, por fiton më rrallë. Shembull: 10 ALL me 2.50 kthejnë 25 ALL nëse fiton.",
   "Your bets went through. The money was taken from your balance. You can follow them in Open bets.":
     "Bastet e tua u pranuan. Paratë u morën nga balanca jote. Mund t'i ndjekësh te Baste të hapura.",
   "The picks you tapped. Type how much to bet on each, then press Place. “Singles” are separate bets. “Accumulator” joins them into one bet that pays much more but only wins if every pick wins.":
     "Zgjedhjet që shtype. Shkruaj sa do të vësh në secilën, pastaj shtyp Vendos. “Të thjeshta” janë baste të veçanta. “Kombinim” i bashkon në një bast që paguan shumë më tepër, por fiton vetëm nëse fitojnë të gjitha zgjedhjet.",
   "The most you can lose today. Money you lost today plus money on bets placed today that are not finished counts. It starts again at midnight (UTC).": "Më së shumti që mund të humbësh sot. Llogariten paratë që humbe sot plus paratë në bastet e vëna sot që s’kanë mbaruar. Rifillon në mesnatë (UTC).",
   "Green is money that came in: top-ups from your Manager or Owner, and wins. Red is money that went out: your bets, and money your Manager or Owner took back. The newest is at the top.": "E gjelbra janë paratë që hynë: rimbushjet nga Menaxheri ose Pronari dhe fitoret. E kuqja janë paratë që dolën: bastet e tua dhe paratë që Menaxheri ose Pronari morën mbrapsht. Më të rejat janë sipër.",
-  "Matches playing now first, then the matches of the next two days with the most ways to bet. Tap one to go straight to its prices.": "Fillimisht ndeshjet që po luhen tani, pastaj ndeshjet e dy ditëve të ardhshme me më shumë mënyra basti. Prek njërën për të shkuar direkt te koeficientët e saj.",
+  "Matches playing now first, then the matches of the next two days with the most ways to bet, for each sport. Tap one to go straight to its prices.": "Fillimisht ndeshjet që po luhen tani, pastaj ndeshjet e dy ditëve të ardhshme me më shumë mënyra basti, për çdo sport. Prek njërën për të shkuar direkt te koeficientët e saj.",
   "For when you go live. Everything made while testing goes, so real users start from a clean app. Only you can do it, and you confirm it with your username and password.":
     "Për kur të nisësh punën e vërtetë. Gjithçka e krijuar gjatë provave fshihet, që përdoruesit e vërtetë të nisin në një aplikacion të pastër. Vetëm ti mund ta bësh, dhe e konfirmon me emrin e përdoruesit dhe fjalëkalimin.",
 };

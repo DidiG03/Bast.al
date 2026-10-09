@@ -106,10 +106,15 @@ test("one split into two hands, a double on one of them, and no second split or 
   assert.deepEqual([staked(round), paidOut(round)], [3000, 4000]);
 });
 
-test("split aces get one card each, and 21 on a split hand isn't blackjack", () => {
-  const round = act(deal(1000, stacked("AS", "9H", "AD", "8C", "KH", "5D")), "split");
-  assert.equal(round.phase, "DONE", "no moves on split aces");
-  assert.deepEqual(round.hands.map((hand) => [hand.cards.length, hand.result, hand.payout]), [[2, "WIN", 2000], [2, "LOSE", 0]]);
+test("split aces are played like any other pair, and 21 on a split hand isn't blackjack", () => {
+  let round = act(deal(1000, stacked("AS", "9H", "AD", "8C", "KH", "5D", "3S")), "split");
+  assert.equal(round.phase, "PLAYER", "split aces can be played on");
+  assert.deepEqual([round.hands[0].cards, round.hands[0].done, round.active], [["AS", "KH"], true, 1], "21 on the first hand is done");
+  assert.deepEqual(round.hands[1].cards, ["AD", "5D"]);
+  assert.ok(allowed(round).includes("hit"));
+  round = act(round, "hit"); // soft 19
+  round = act(round, "stand"); // 21 and 19 against 17
+  assert.deepEqual(round.hands.map((hand) => [hand.cards.length, hand.result, hand.payout]), [[2, "WIN", 2000], [3, "WIN", 2000]]);
 });
 
 test("only two cards of the same rank split: two kings, not a king and a queen", () => {

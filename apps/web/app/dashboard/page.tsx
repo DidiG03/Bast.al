@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { HelpTip } from "../../components/help-tip";
 import { NamedIcon } from "../../components/icons";
+import { PlayerSportTabs, type SportTab } from "../../components/player-sport-tabs";
+import { SportIcon } from "../../components/sport-icon";
 import { ToastOnMount } from "../../components/toast-on-mount";
 import {
   ActivityFeed,
@@ -15,6 +17,7 @@ import {
   type BarPoint,
 } from "../../components/overview";
 import {
+  type CasinoLastGame,
   type CommissionDaily,
   type CommissionHistory,
   type ManagerCommissions,
@@ -26,6 +29,7 @@ import {
   type RiskView,
   type SettlementEvent,
   type SlipInfo,
+  type Sport,
   type SuperAdminCommissions,
   type TeamCommissions,
   type UserRow,
@@ -618,68 +622,139 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
   );
 }
 
+/** The sports on the home page's Top events, in the Bet page's order. Greyhounds have their own section. */
+const HOME_SPORTS: Array<[Sport, string]> = [
+  ["football", "Football"],
+  ["tennis", "Tennis"],
+  ["basketball", "Basketball"],
+  ["volleyball", "Volleyball"],
+  ["handball", "Handball"],
+  ["nfl", "NFL"],
+  ["mma", "MMA"],
+];
+
+/** Each Casino game's page and its sign on the Continue card. */
+const CASINO_GAMES: Record<CasinoLastGame["game"], { href: string; icon: string; name: string }> = {
+  slot: { href: "/dashboard/casino/slot", icon: "🍒", name: "Sizzling Hot" },
+  book: { href: "/dashboard/casino/book", icon: "📖", name: "Book of Ra" },
+  roulette: { href: "/dashboard/casino/roulette", icon: "🎡", name: "Roulette" },
+  blackjack: { href: "/dashboard/casino/blackjack", icon: "🃏", name: "Blackjack" },
+  mines: { href: "/dashboard/casino/mines", icon: "💎", name: "Mines" },
+  penalty: { href: "/dashboard/casino/penalty", icon: "⚽", name: "Penalty" },
+  plinko: { href: "/dashboard/casino/plinko", icon: "🔴", name: "Plinko" },
+  dice: { href: "/dashboard/casino/dice", icon: "🎲", name: "Dice" },
+};
+
+const LAST_PLAYED: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
+
 async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
   const { t, tn, ts, date } = getT();
-  // Live first, then the next two days' matches with the most to bet on: picked by the API.
-  const [topEvents, nextRaces, slip, bets] = me.parent
+  // Live first, then the next two days' matches with the most to bet on: picked by the API, for each sport.
+  const [bySport, nextRaces, slip, bets, lastGame] = me.parent
     ? await Promise.all([
-        serverApiFetch<OddsEvent[]>("/odds/top-events?count=4", token).catch(() => []),
+        Promise.all(HOME_SPORTS.map(([sport]) => serverApiFetch<OddsEvent[]>(`/odds/top-events?count=4&sport=${sport}`, token).catch(() => [] as OddsEvent[]))),
         serverApiFetch<OddsEvent[]>("/odds/top-events?count=3&sport=greyhounds", token).catch(() => []),
         serverApiFetch<SlipInfo>("/bets/slip", token).catch(() => null),
         serverApiFetch<MyBets>("/bets/mine?status=open", token).catch(() => null),
+        me.casinoOpen ? serverApiFetch<{ last: CasinoLastGame | null }>("/casino/last-game", token).then((answer) => answer.last).catch(() => null) : Promise.resolve(null),
       ])
-    : [[], [], null, null];
+    : [[], [], null, null, null];
   // Why this account can't bet (a suspended Manager, no team yet): a warning toast, and no Top events.
   const blocked = me.status === "SUSPENDED" ? t("Your account is suspended. Ask your Manager or Owner.") : slip?.blocked ? ts(slip.blocked) : null;
   const week = bets?.week;
   const weekNet = week ? Math.round((week.returned - week.staked) * 100) / 100 : 0;
+
+  const sports = HOME_SPORTS.map(([sport, label], index) => ({ sport, label: t(label), events: bySport[index] ?? [] })).filter((entry) => entry.events.length > 0);
+  // All sports together: every match playing now first, then the soonest to start.
+  const everything = sports.flatMap(({ sport, events }) => events.map((event) => ({ sport, event })));
+  const all = [
+    ...everything.filter(({ event }) => event.status === "LIVE"),
+    ...everything.filter(({ event }) => event.status !== "LIVE").sort((a, b) => a.event.startsAt.localeCompare(b.event.startsAt)),
+  ].slice(0, 6);
+  const liveCount = (events: OddsEvent[]) => events.filter((event) => event.status === "LIVE").length;
+
+  const eventCard = (sport: Sport, event: OddsEvent, showSport: boolean) => (
+    <Link key={event.id} href={`/dashboard/bet?${sport === "football" ? "" : `sport=${sport}&`}match=${encodeURIComponent(event.id)}`} className="player-top-event">
+      <div className="player-top-event-head">
+        <span className="player-top-event-league">
+          {showSport ? <SportIcon sport={sport} /> : null}
+          {event.league}
+        </span>
+        <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
+          {event.status === "LIVE" ? livePill(event, t) : `${topEventDayLabel(event.startsAt)} · ${date(event.startsAt, MATCH_TIME)}`}
+        </span>
+      </div>
+      <div className="player-top-event-teams">
+        <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
+        <span>{event.homeTeam ?? event.name}</span>
+        {event.live && event.homeScore !== null && event.awayScore !== null ? (
+          <strong className="odds-score">
+            {event.homeScore} – {event.awayScore}
+          </strong>
+        ) : (
+          <span className="muted">{t("vs")}</span>
+        )}
+        <span>{event.awayTeam ?? ""}</span>
+        <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
+      </div>
+    </Link>
+  );
+  const tabs: SportTab[] =
+    sports.length === 0
+      ? []
+      : [
+          ...(sports.length > 1
+            ? [{ key: "all" as const, label: t("All"), live: liveCount(all.map(({ event }) => event)), panel: <div className="player-top-events">{all.map(({ sport, event }) => eventCard(sport, event, true))}</div> }]
+            : []),
+          ...sports.map(({ sport, label, events }) => ({ key: sport, label, live: liveCount(events), panel: <div className="player-top-events">{events.map((event) => eventCard(sport, event, false))}</div> })),
+        ];
+
+  const continueGame = lastGame ? CASINO_GAMES[lastGame.game] : null;
 
   return (
     <div className="stack player-home">
       {blocked ? <ToastOnMount kind="warning" message={blocked} /> : null}
       {me.parent ? null : <ToastOnMount kind="warning" message={t("Not yet assigned to a Manager or Owner.")} />}
 
+      {me.parent && !blocked && lastGame && continueGame ? (
+        <section className="stack">
+          <h2 style={{ margin: 0 }}>{lastGame.waiting ? t("Continue playing") : t("Play again")}</h2>
+          <Link href={continueGame.href} className={`card player-continue${lastGame.waiting ? " is-waiting" : ""}`}>
+            <span className="player-continue-icon" aria-hidden="true">
+              {continueGame.icon}
+            </span>
+            <span className="player-continue-body">
+              <strong>{lastGame.name ?? t(continueGame.name)}</strong>
+              <span className="muted">
+                {lastGame.waiting === "round"
+                  ? t("Your round is still in play: {amount} on the table.", { amount: formatMoney(lastGame.amount) })
+                  : lastGame.waiting === "freeSpins"
+                    ? tn(lastGame.freeSpins ?? 0, "{count} free spin waiting, at {amount}.", "{count} free spins waiting, at {amount}.", { amount: formatMoney(lastGame.amount) })
+                    : lastGame.waiting === "gamble"
+                      ? t("A {amount} win is waiting: double it or take it.", { amount: formatMoney(lastGame.amount) })
+                      : t("Last played {when}, at {amount}.", { when: date(lastGame.at, LAST_PLAYED), amount: formatMoney(lastGame.amount) })}
+              </span>
+            </span>
+            <span className="player-continue-go">{lastGame.waiting ? t("Continue") : t("Play")} →</span>
+          </Link>
+        </section>
+      ) : null}
+
       {me.parent && !blocked ? (
         <section className="stack">
           <div className="page-title-row">
             <h2 style={{ margin: 0 }}>
               {t("Top events")}
-              <HelpTip text="Matches playing now first, then the matches of the next two days with the most ways to bet. Tap one to go straight to its prices." />
+              <HelpTip text="Matches playing now first, then the matches of the next two days with the most ways to bet, for each sport. Tap one to go straight to its prices." />
             </h2>
             <Link href="/dashboard/bet">{t("View all")} →</Link>
           </div>
-          {topEvents.length === 0 ? (
+          {tabs.length === 0 ? (
             <div className="card">
               <p className="muted" style={{ margin: 0 }}>{t("No matches are open for bets right now. Check back soon.")}</p>
             </div>
           ) : (
-            <div className="player-top-events">
-              {topEvents.map((event) => (
-                <Link key={event.id} href={`/dashboard/bet?match=${encodeURIComponent(event.id)}`} className="player-top-event">
-                  <div className="player-top-event-head">
-                    <span className="player-top-event-league">{event.league}</span>
-                    <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
-                      {event.status === "LIVE"
-                        ? livePill(event, t)
-                        : `${topEventDayLabel(event.startsAt)} · ${date(event.startsAt, MATCH_TIME)}`}
-                    </span>
-                  </div>
-                  <div className="player-top-event-teams">
-                    <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
-                    <span>{event.homeTeam ?? event.name}</span>
-                    {event.live && event.homeScore !== null && event.awayScore !== null ? (
-                      <strong className="odds-score">
-                        {event.homeScore} – {event.awayScore}
-                      </strong>
-                    ) : (
-                      <span className="muted">{t("vs")}</span>
-                    )}
-                    <span>{event.awayTeam ?? ""}</span>
-                    <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
+            <PlayerSportTabs tabs={tabs} label={t("Sport")} />
           )}
         </section>
       ) : null}

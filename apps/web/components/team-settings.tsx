@@ -46,7 +46,7 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
     const lowBalanceThreshold = parse(threshold);
     const managerApprovalLimit = parse(approval);
     if (lowBalanceThreshold === "invalid" || managerApprovalLimit === "invalid") {
-      toast.error(t("Enter an amount between $0 and $1,000,000, or leave it blank"));
+      toast.error(t("Enter an amount between 0 ALL and 1,000,000 ALL, or leave it blank"));
       return;
     }
     setBusy(true);
@@ -79,7 +79,7 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
               <strong>{t("Low-balance alert")}</strong><HelpTip text="You get a notification when someone's balance falls below this amount, so you can top them up in time." />
               <span className="muted">{t("You and their Manager or Owner get a notification when a Manager or Player drops below this. Leave blank to turn it off.")}</span>
               <div className="commission-input">
-                <span aria-hidden="true">$</span>
+                <span aria-hidden="true">ALL</span>
                 <input type="number" min="0" max="1000000" step="0.01" inputMode="decimal" placeholder={t("Off")} value={threshold} onChange={(e) => setThreshold(e.target.value)} />
               </div>
             </label>
@@ -89,7 +89,7 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
                 {t("Your Managers can send up to this much to a Player without your approval. A limit you set on one Manager in their Balance window still wins. Leave blank for the standard {amount}.", { amount: formatMoney(standard) })}
               </span>
               <div className="commission-input">
-                <span aria-hidden="true">$</span>
+                <span aria-hidden="true">ALL</span>
                 <input type="number" min="0" max="1000000" step="0.01" inputMode="decimal" placeholder={String(standard)} value={approval} onChange={(e) => setApproval(e.target.value)} />
               </div>
             </label>

@@ -196,6 +196,13 @@ export class CasinoController {
     private readonly dice: DiceService,
   ) {}
 
+  /** The game for the home page's "Continue playing": a round still in play, or the game played last. */
+  @Get("last-game")
+  @Roles(Role.PLAYER)
+  async lastGame(@CurrentActor() actor: Actor) {
+    return { last: await this.casino.lastGame(actor) };
+  }
+
   /** The Player's Casino: can they play, the rules, free spins, recent spins. */
   @Get()
   @Roles(Role.PLAYER)

@@ -18,6 +18,8 @@ export type SlotReelsHandle = {
   start(): Promise<void> | null;
   /** Where to stop: grid[reel][row]. With two scatters (stars) already showing, the reels after them slow down to build suspense. */
   land(grid: string[][]): void;
+  /** Lands the spinning reels at once (a second press of Start); if the result isn't back yet, as soon as it is. */
+  skip(): void;
   /** Book of Ra's free spins: `symbol` grows to fill each of these reels. Resolves once it has; `clear` or the next spin takes it away. */
   expand(reels: number[], symbol: string): Promise<void>;
   /**
@@ -87,6 +89,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
   const showing = useRef<{ wins: ReelWin[]; onShow?: (index: number) => void; onRound?: () => void; shown: number }>({ wins: [], shown: 0 });
   const instantRef = useRef(instant);
   instantRef.current = instant;
+  /** The Player asked to land this spin at once: no slowing down to tease. */
+  const skipped = useRef(false);
 
   useEffect(() => {
     let disposed = false;
@@ -307,6 +311,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         current.presenter.abort();
         current.overlay.clear();
         current.expanded.removeChildren();
+        skipped.current = false;
         slotSound.spinStart();
         if (!instantRef.current) slotSound.startTicking();
         return current.reelSet.spin().then(() => undefined);
@@ -319,8 +324,16 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
           current.reelSet.skipSpin();
           return;
         }
+        if (skipped.current) return;
         const tease = current.anticipate(next);
         if (tease.length > 0) current.reelSet.setAnticipation(tease, { stagger: 400, duration: 1100, slowdown: { from: 0.45, to: 0.25 } });
+      },
+      skip() {
+        const current = engine.current;
+        if (!current || skipped.current) return;
+        skipped.current = true;
+        // Queued by pixi-reels until setResult() when the server hasn't answered yet; nothing when the reels have stopped.
+        current.reelSet.requestSkip();
       },
       expand(reelsToFill, symbol) {
         return engine.current?.expand(reelsToFill, symbol) ?? Promise.resolve();

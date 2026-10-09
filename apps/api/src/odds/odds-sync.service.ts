@@ -4,7 +4,7 @@ import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { GOAL_MARKET_KEYS } from "../bets/goals";
 import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLiveOdds, parseMarkets } from "./api-football";
-import { bigSwing, cooldownFor, laterCooldown } from "./live-guard";
+import { bigSwing, cooldownFor, goalPauseOver, laterCooldown } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
 /**
@@ -640,8 +640,14 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       { homeScore: scored ? odds.homeScore : before.homeScore, awayScore: scored ? odds.awayScore : before.awayScore, stopped: odds.stopped },
       swing,
     );
-    const pause = laterCooldown({ until: before.liveCooldownUntil, reason: before.liveCooldownReason }, cooldown);
+    let pause = laterCooldown({ until: before.liveCooldownUntil, reason: before.liveCooldownReason }, cooldown);
     if (cooldown && pause.until === cooldown.until) this.logger.log(`Live betting paused on event ${eventId} (${cooldown.reason}) until ${cooldown.until.toISOString()}`);
+    // After a goal: reopen as soon as the prices have caught up with it, instead of waiting out the whole pause.
+    const now = new Date();
+    if (goalPauseOver(pause, { hasScore: scored, stopped: odds.stopped, pausesItself: cooldown !== null }, now)) {
+      this.logger.log(`Live betting reopened on event ${eventId}: the prices have caught up with the goal`);
+      pause = { until: now, reason: null };
+    }
     await this.prisma.event.update({
       where: { id: eventId },
       data: {

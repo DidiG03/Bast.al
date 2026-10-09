@@ -537,7 +537,7 @@ export function BookGame() {
         <div>
           <h1 style={{ margin: 0 }}>{state.game.name}</h1>
           <p className="muted report-subtitle">{t("5 reels, 10 lines, and the book that opens free spins. Played with your balance.")}</p>
-          <p className="game-keys-hint">{t("Press Space to spin.")}</p>
+          <p className="game-keys-hint">{t("Press Space to spin, and again to stop the reels.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
           {t("Pays and rules")}
@@ -741,7 +741,7 @@ export function BookGame() {
               {/* START and TOTAL BET: rings over the right-hand numbers, as in the original. */}
               <div className="book-rings">
                 <div className="book-ring-spot is-start">
-                  <button type="button" className="book-ring is-start" data-key="Space" onClick={() => (auto ? setAuto(null) : spin())} disabled={!auto && !canSpin}>
+                  <button type="button" className="book-ring is-start" data-key="Space" onClick={() => (auto ? setAuto(null) : spinning ? reels.current?.skip() : spin())} disabled={!auto && !spinning && !canSpin}>
                     <StartArrows />
                     <span>{auto ? t("Stop") : playingFree ? t("Free spin") : t("Start")}</span>
                   </button>

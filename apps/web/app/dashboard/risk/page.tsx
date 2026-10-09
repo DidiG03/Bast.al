@@ -207,7 +207,7 @@ function CapEditor({ cap, onSave }: { cap: number | null; onSave: (cap: number |
   return (
     <form className="risk-cap" onSubmit={submit}>
       <label className="bet-stake risk-cap-input">
-        <span className="muted">{t("Most one outcome can pay out, $")}</span>
+        <span className="muted">{t("Most one outcome can pay out, ALL")}</span>
         <input type="number" inputMode="decimal" min={1} step="0.01" value={value} onChange={(e) => setValue(e.target.value)} required autoFocus />
       </label>
       <div className="odds-editor-actions">

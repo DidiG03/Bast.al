@@ -186,7 +186,7 @@ test("a round never pays more than 5,000 times the bet", async () => {
 test("free spins can't be bought: the max stake, daily loss limit and a low balance only stop paid spins", async () => {
   await prisma.bettingLimit.create({ data: { playerId: cara.id, ownerMaxStake: 1 } });
   script(losing);
-  await assert.rejects(book.spin(cara, 2), /The most this Player can stake on one bet is \$1\.00/);
+  await assert.rejects(book.spin(cara, 2), /The most this Player can stake on one bet is 1\.00 ALL/);
   await prisma.bettingLimit.update({ where: { playerId: cara.id }, data: { ownerMaxStake: null, ownerDailyLossLimit: 0.01 } });
   script(losing);
   await assert.rejects(book.spin(cara, 0.5), /daily loss limit/);

@@ -24,6 +24,9 @@ function stricter(a: number | null, b: number | null): number | null {
  * above it. `assertCanPlace` is what bet placement must call before it
  * creates a Bet row.
  */
+/** An amount as Players see it: "25.00 ALL". */
+const money = (value: number) => `${value.toFixed(2)} ALL`;
+
 @Injectable()
 export class BettingLimitsService {
   constructor(
@@ -66,7 +69,7 @@ export class BettingLimitsService {
         if (next === undefined) continue;
         const cap = ceiling[key];
         if (cap !== null && next !== null && next > cap) {
-          throw new BadRequestException(`Your Owner allows at most $${cap.toFixed(2)} for ${key === "maxStake" ? "one bet" : "daily losses"}. You can lower it but not raise it.`);
+          throw new BadRequestException(`Your Owner allows at most ${money(cap)} for ${key === "maxStake" ? "one bet" : "daily losses"}. You can lower it but not raise it.`);
         }
       }
       if (input.maxStake !== undefined) data.managerMaxStake = input.maxStake;
@@ -91,12 +94,12 @@ export class BettingLimitsService {
     const maxStake = stricter(value(row?.ownerMaxStake), value(row?.managerMaxStake));
     const dailyLossLimit = stricter(value(row?.ownerDailyLossLimit), value(row?.managerDailyLossLimit));
     if (maxStake !== null && stake > maxStake) {
-      throw new BadRequestException(`The most this Player can stake on one bet is $${maxStake.toFixed(2)}`);
+      throw new BadRequestException(`The most this Player can stake on one bet is ${maxStake.toFixed(2)} ALL`);
     }
     if (dailyLossLimit !== null) {
       const worstCase = (await this.lossToday(playerId)) + (await this.openStakes(playerId)) + alsoStaking + stake;
       if (worstCase > dailyLossLimit) {
-        throw new BadRequestException(`This bet could take the Player past their $${dailyLossLimit.toFixed(2)} daily loss limit`);
+        throw new BadRequestException(`This bet could take the Player past their ${dailyLossLimit.toFixed(2)} ALL daily loss limit`);
       }
     }
   }

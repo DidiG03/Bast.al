@@ -26,7 +26,7 @@ export type PlayerResult = Totals & { id: string; username: string; status: User
  *
  * Losses carry over. Each payment covers everything since the last one, so a
  * losing week is made up by the next winning weeks before anything is due:
- * Players win $1,000 in week 1 and lose $1,000 in week 2, and at 10% nothing
+ * Players win 1,000 ALL in week 1 and lose 1,000 ALL in week 2, and at 10% nothing
  * is owed for week 2. The first payment starts where the period on screen
  * starts.
  */

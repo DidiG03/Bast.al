@@ -637,7 +637,7 @@ function BlackjackRules({ state, onClose, i18n }: { state: BlackjackState; onClo
     [t("Push"), t("The same total as the dealer. Your bet comes back.")],
     [t("Hit or stand"), t("Hit takes another card; stand keeps what you have. Over 21 is bust and loses.")],
     [t("Double"), t("Double your bet on your first two cards and take exactly one more card. Once a round.")],
-    [t("Split"), t("Two cards of the same rank, like two kings (not a king and a queen), become two hands, each with its own bet. Once a round; split aces get one card each.")],
+    [t("Split"), t("Two cards of the same rank, like two kings (not a king and a queen), become two hands, each with its own bet. Once a round.")],
     [t("Insurance"), t("When the dealer shows an ace: half your bet that the dealer has blackjack. Pays 2 to 1, settled when the dealer's card is turned over.")],
   ];
   return (

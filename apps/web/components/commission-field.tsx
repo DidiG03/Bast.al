@@ -47,7 +47,7 @@ export function CommissionRateControl({ userId, currentRate, label, description,
   return (
     <form className="commission-field" onSubmit={save}>
       <div>
-        <h2>{label ?? t("Commission rate")}<HelpTip text="The percent of the weekly profit this person gets or pays. Example: at 10%, a $1,000 profit means $100." /></h2>
+        <h2>{label ?? t("Commission rate")}<HelpTip text="The percent of the weekly profit this person gets or pays. Example: at 10%, a 1,000 ALL profit means 100 ALL." /></h2>
         {description ? <p className="muted">{description}</p> : null}
       </div>
       <div className="commission-input-row">

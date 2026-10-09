@@ -222,12 +222,12 @@ export const casino: Record<string, string> = {
   // From the API: roulette
   "Roulette: 1 spin": "Ruletë: 1 rrotullim",
   "Roulette: {count} spins": "Ruletë: {count} rrotullime",
-  "The most you can have on the table in one spin is ${amount}": "Më së shumti mund të kesh në tavolinë për një rrotullim ${amount}",
+  "The most you can have on the table in one spin is {amount} ALL": "Më së shumti mund të kesh në tavolinë për një rrotullim {amount} ALL",
   "Your balance is too low for these chips. Take some off, or ask your Manager for a top-up.": "Balanca nuk mjafton për këto fisha. Hiq disa, ose kërkoji Menaxherit një rimbushje.",
   "Place at least one chip.": "Vendos të paktën një fishë.",
   "Bets can cover at most {count} spots in one spin.": "Bastet mund të mbulojnë më së shumti {count} vende për një rrotullim.",
   "There's no \"{spot}\" on the table.": "Nuk ka \"{spot}\" në tavolinë.",
-  "Bets are made in chips of ${amount} and up.": "Bastet bëhen me fisha prej ${amount} e lart.",
+  "Bets are made in chips of {amount} ALL and up.": "Bastet bëhen me fisha prej {amount} ALL e lart.",
   "The wheel stopped off the wheel": "Rrota ndaloi jashtë rrotës",
 
   // Blackjack
@@ -275,8 +275,8 @@ export const casino: Record<string, string> = {
   "Hit or stand": "Merr letër ose ndal",
   "Hit takes another card; stand keeps what you have. Over 21 is bust and loses.": "Merr letër të jep një letër tjetër; ndal mban atë që ke. Mbi 21 humbet.",
   "Double your bet on your first two cards and take exactly one more card. Once a round.": "Dyfisho bastin te dy letrat e para dhe merr vetëm edhe një letër. Një herë për raund.",
-  "Two cards of the same rank, like two kings (not a king and a queen), become two hands, each with its own bet. Once a round; split aces get one card each.":
-    "Dy letra të njëjta, si dy mbretër (jo një mbret dhe një mbretëreshë), bëhen dy duar, secila me bastin e vet. Një herë për raund; asët e ndarë marrin nga një letër.",
+  "Two cards of the same rank, like two kings (not a king and a queen), become two hands, each with its own bet. Once a round.":
+    "Dy letra të njëjta, si dy mbretër (jo një mbret dhe një mbretëreshë), bëhen dy duar, secila me bastin e vet. Një herë për raund.",
   "When the dealer shows an ace: half your bet that the dealer has blackjack. Pays 2 to 1, settled when the dealer's card is turned over.": "Kur dileri tregon një as: gjysma e bastit që dileri ka blackjack. Paguan 2 me 1, dhe mbyllet kur kthehet letra e dilerit.",
   "Get closer to 21 than the dealer. Cards 2 to 10 count their number, faces 10, an ace 1 or 11. The dealer draws to 17 and stands on every 17, soft 17 included. With an ace showing, the dealer offers insurance, then looks at the face-down card: a blackjack is turned over at once and ends the round. Under any other card, the dealer's second card stays face down until you've played: a dealer's blackjack beats every hand but a blackjack, doubles and splits included. Six decks, shuffled for every round.":
     "Arri më afër 21 se dileri. Letrat 2 deri 10 vlejnë numrin e tyre, figurat 10, asi 1 ose 11. Dileri merr letra deri në 17 dhe ndalon në çdo 17, edhe në 17 të butë. Kur dileri ka një as të hapur, ofron sigurimin dhe pastaj shikon letrën e kthyer: një blackjack hapet menjëherë dhe raundi mbaron. Nën çdo letër tjetër, letra e dytë e dilerit mbetet e kthyer derisa të luash ti: një blackjack i dilerit mund çdo dorë përveç një blackjack-u, edhe duart e dyfishuara dhe të ndara. Gjashtë pako, të përziera për çdo raund.",
@@ -286,7 +286,7 @@ export const casino: Record<string, string> = {
     "Raundet e tua më të reja në blackjack. Janë edhe te Paratë e mia, si një rresht Blackjack për çdo ditë.",
 
   // From the API: blackjack
-  "The most you can bet on one hand is ${amount}": "Më së shumti mund të vësh në një dorë ${amount}",
+  "The most you can bet on one hand is {amount} ALL": "Më së shumti mund të vësh në një dorë {amount} ALL",
   "Finish the hand you're playing first.": "Mbaro më parë dorën që po luan.",
   "There's no hand in play. Deal first.": "Nuk ka dorë në lojë. Shpërndaj më parë.",
   "Your balance is too low for that. You can still hit or stand.": "Balanca nuk mjafton për këtë. Mund të marrësh letër ose të ndalosh.",
@@ -375,7 +375,7 @@ export const casino: Record<string, string> = {
   "That isn't a tile on the board.": "Ky nuk është katror i fushës.",
   "That tile is already open.": "Ky katror është hapur.",
   "Open a tile before you cash out.": "Hap një katror para se të tërheqësh.",
-  "The most you can bet on one round is ${amount}": "Më së shumti mund të vësh në një raund ${amount}",
+  "The most you can bet on one round is {amount} ALL": "Më së shumti mund të vësh në një raund {amount} ALL",
   "Mines: 1 round": "Mines: 1 raund",
   "Mines: {count} rounds": "Mines: {count} raunde",
   "{name} is in the middle of a Mines round. Move them once it's over.": "{name} është në mes të një raundi Mines. Zhvendose pasi të mbarojë.",
@@ -432,7 +432,7 @@ export const casino: Record<string, string> = {
   "Pick one of the stakes shown for a ball.": "Zgjidh një nga shumat e treguara për një top.",
   "A board has 8, 12 or 16 rows.": "Një tabelë ka 8, 12 ose 16 rreshta.",
   "Pick a risk: low, medium or high.": "Zgjidh rrezikun: i ulët, mesatar ose i lartë.",
-  "The most a ball can cost you is ${amount}": "Më së shumti një top mund të të kushtojë ${amount}",
+  "The most a ball can cost you is {amount} ALL": "Më së shumti një top mund të të kushtojë {amount} ALL",
   "Your balance is too low for this ball. Pick a smaller stake, or ask your Manager for a top-up.": "Balanca jote është shumë e ulët për këtë top. Zgjidh një shumë më të vogël, ose kërkoji Menaxherit një rimbushje.",
   "Plinko: 1 ball": "Plinko: 1 top",
   "Plinko: {count} balls": "Plinko: {count} topa",
@@ -449,7 +449,7 @@ export const casino: Record<string, string> = {
   "The most a roll can cost you is {amount}.": "Më së shumti një hedhje mund të të kushtojë {amount}.",
   "Your balance is too low for this stake.": "Balanca jote është shumë e ulët për këtë shumë.",
   "Set from 1 to 1,000 rolls, or 0 to keep going until you stop.": "Vendos nga 1 deri në 1,000 hedhje, ose 0 për të vazhduar derisa ta ndalosh.",
-  "Stop on profit and stop on loss are amounts above $0, or empty.": "Ndalo në fitim dhe Ndalo në humbje janë shuma mbi $0, ose bosh.",
+  "Stop on profit and stop on loss are amounts above 0 ALL, or empty.": "Ndalo në fitim dhe Ndalo në humbje janë shuma mbi 0 ALL, ose bosh.",
   "Autoplay stopped: profit reached {amount}.": "Loja automatike u ndal: fitimi arriti {amount}.",
   "Autoplay stopped: loss reached {amount}.": "Loja automatike u ndal: humbja arriti {amount}.",
   "A client seed is 1 to 32 letters, digits, dashes or underscores.": "Seed-i i klientit ka 1 deri në 32 shkronja, shifra, viza ose nënvizime.",
@@ -513,10 +513,10 @@ export const casino: Record<string, string> = {
   "Copy": "Kopjo",
   "Your newest dice rolls. Tap one to see its seeds and check it. They're also in My money, as one Dice line for each day.": "Hedhjet e tua më të fundit me zare. Prek njërën për të parë seed-et dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Zare për çdo ditë.",
   "The stake is in whole cents.": "Shuma është në centë të plotë.",
-  "The smallest roll is ${amount}": "Hedhja më e vogël është ${amount}",
+  "The smallest roll is {amount} ALL": "Hedhja më e vogël është {amount} ALL",
   "Roll over or under the target.": "Hidh mbi ose nën objektivin.",
   "The target is a number from 0.00 to 99.99.": "Objektivi është një numër nga 0.00 deri në 99.99.",
-  "The most a roll can cost you is ${amount}": "Më së shumti një hedhje mund të të kushtojë ${amount}",
+  "The most a roll can cost you is {amount} ALL": "Më së shumti një hedhje mund të të kushtojë {amount} ALL",
   "Your balance is too low for this roll. Lower the stake, or ask your Manager for a top-up.": "Balanca jote është shumë e ulët për këtë hedhje. Ule shumën, ose kërkoji Menaxherit një rimbushje.",
   "Dice: 1 roll": "Zare: 1 hedhje",
   "Dice: {count} rolls": "Zare: {count} hedhje",
@@ -525,6 +525,7 @@ export const casino: Record<string, string> = {
   "The dice are rolling": "Zaret po rrokullisen",
   "The dice show {roll}": "Zaret tregojnë {roll}",
   "Press Space to spin.": "Shtyp Space për të rrotulluar.",
+  "Press Space to spin, and again to stop the reels.": "Shtyp Space për të rrotulluar, dhe sërish për të ndalur rrotullat.",
   "Keys: Space deals, H hits, S stands, D doubles, P splits, Y and N answer insurance.": "Tastet: Space shpërndan, H merr letër, S ndalet, D dyfishon, P ndan, Y dhe N i përgjigjen sigurimit.",
   "Press Space to start a round or cash out.": "Shtyp Space për të nisur një raund ose për të tërhequr fitimin.",
   "Keys: Space starts a round or cashes out, and ← ↑ → shoot left, centre and right.": "Tastet: Space nis një raund ose tërheq fitimin, dhe ← ↑ → gjuajnë majtas, në qendër dhe djathtas.",

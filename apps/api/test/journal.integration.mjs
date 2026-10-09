@@ -134,7 +134,7 @@ test("a correction that takes the balance below zero warns the Manager and Owner
   assert.equal(Number(player.balance), -200);
   const warnings = sent.filter((s) => s.title === "Balance below zero");
   assert.deepEqual(warnings.map((w) => w.userId), [owner.id], "Bora sits under the Owner, so only the Owner is told");
-  assert.equal(warnings[0].message, `${bora.username}'s balance is -$200.00 after a result was corrected. Their next top-up pays it off first.`);
+  assert.equal(warnings[0].message, `${bora.username}'s balance is -200.00 ALL after a result was corrected. Their next top-up pays it off first.`);
   // A Super Admin adjustment can bring it back up in part, even while it stays below zero.
   await users.adjustBalance(sa, bora.id, { amount: 50, reason: "Partial settlement of debt" });
   assert.equal(Number((await prisma.user.findUniqueOrThrow({ where: { id: bora.id } })).balance), -150);
@@ -204,7 +204,7 @@ test("losses carry over: a losing week is made up before anything is paid", asyn
   await settled(ardi, { stake: 1000, payout: 0, at: new Date("2026-09-08T10:00:00Z") });
 
   // Paying week 1 first isn't possible (below zero), but it records nothing either, so...
-  await assert.rejects(payouts.pay(owner, managerA.id, iso(W1), iso(W2)), /nothing to pay yet: losses of \$200\.00/);
+  await assert.rejects(payouts.pay(owner, managerA.id, iso(W1), iso(W2)), /nothing to pay yet: losses of 200\.00 ALL/);
 
   // ...the first payment Owner makes for A starts where they choose. Choose weeks 1-2 together: 200 - 200 = 0.
   const both = (await commissions.team(owner, undefined, iso(W1), iso(W3))).managers.find((m) => m.id === managerA.id).payout;

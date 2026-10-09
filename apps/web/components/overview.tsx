@@ -147,7 +147,7 @@ const compactMoney = new Intl.NumberFormat("en-US", { notation: "compact", maxim
 
 function axisLabel(value: number) {
   if (value === 0) return "0";
-  return `${value < 0 ? "−" : ""}$${compactMoney.format(Math.abs(value))}`;
+  return `${value < 0 ? "−" : ""}${compactMoney.format(Math.abs(value))} ALL`;
 }
 
 /**

@@ -223,7 +223,7 @@ export function DiceGame() {
     const profitLimit = stopProfit.trim() ? parseMoney(stopProfit) : null;
     const lossLimit = stopLoss.trim() ? parseMoney(stopLoss) : null;
     if ((profitLimit !== null && !(profitLimit > 0)) || (lossLimit !== null && !(lossLimit > 0))) {
-      toast.error(t("Stop on profit and stop on loss are amounts above $0, or empty."));
+      toast.error(t("Stop on profit and stop on loss are amounts above 0 ALL, or empty."));
       return;
     }
     autoStop.current = false;
@@ -552,7 +552,7 @@ export function DiceGame() {
               <label className="dice-field">
                 <small>{t("Stake")}</small>
                 <span className={`dice-input is-stake${stakeProblem ? " is-bad" : ""}`}>
-                  <em aria-hidden="true">$</em>
+                  <em aria-hidden="true">ALL</em>
                   <input value={stakeText} inputMode="decimal" disabled={locked} aria-label={t("Stake")} onChange={(event) => setStakeText(event.target.value)} onBlur={() => Number.isFinite(stake) && setStake(stake)} />
                   <button type="button" disabled={locked} onClick={() => setStake((Number.isFinite(stake) ? stake : 1) / 2)}>
                     ½
@@ -583,14 +583,14 @@ export function DiceGame() {
                     <label className="dice-field">
                       <small>{t("Stop on profit")}</small>
                       <span className="dice-input">
-                        <em aria-hidden="true">$</em>
+                        <em aria-hidden="true">ALL</em>
                         <input value={stopProfit} placeholder="—" inputMode="decimal" disabled={locked} onChange={(event) => setStopProfit(event.target.value)} aria-label={t("Stop on profit")} />
                       </span>
                     </label>
                     <label className="dice-field">
                       <small>{t("Stop on loss")}</small>
                       <span className="dice-input">
-                        <em aria-hidden="true">$</em>
+                        <em aria-hidden="true">ALL</em>
                         <input value={stopLoss} placeholder="—" inputMode="decimal" disabled={locked} onChange={(event) => setStopLoss(event.target.value)} aria-label={t("Stop on loss")} />
                       </span>
                     </label>

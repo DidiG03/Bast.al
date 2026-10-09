@@ -63,7 +63,7 @@ export function BettingLimitsCard({ playerId }: { playerId: string }) {
     const stake = parse(maxStake);
     const loss = parse(dailyLoss);
     if (stake === "invalid" || loss === "invalid") {
-      toast.error(t("Enter an amount between $0 and $1,000,000, or leave it blank for no limit"));
+      toast.error(t("Enter an amount between 0 ALL and 1,000,000 ALL, or leave it blank for no limit"));
       return;
     }
     const token = await getToken();
@@ -136,14 +136,14 @@ export function BettingLimitsCard({ playerId }: { playerId: string }) {
             <label className="field">
               <span>{t("Max stake per bet")}</span>
               <div className="commission-input">
-                <span aria-hidden="true">$</span>
+                <span aria-hidden="true">ALL</span>
                 <input type="number" min="0.01" max={isManager && owner.maxStake !== null ? owner.maxStake : 1000000} step="0.01" inputMode="decimal" placeholder={isManager && owner.maxStake !== null ? t("Owner's {amount}", { amount: formatMoney(owner.maxStake) }) : t("No limit")} value={maxStake} onChange={(e) => setMaxStake(e.target.value)} />
               </div>
             </label>
             <label className="field">
               <span>{t("Daily loss limit")}</span>
               <div className="commission-input">
-                <span aria-hidden="true">$</span>
+                <span aria-hidden="true">ALL</span>
                 <input type="number" min="0.01" max={isManager && owner.dailyLossLimit !== null ? owner.dailyLossLimit : 1000000} step="0.01" inputMode="decimal" placeholder={isManager && owner.dailyLossLimit !== null ? t("Owner's {amount}", { amount: formatMoney(owner.dailyLossLimit) }) : t("No limit")} value={dailyLoss} onChange={(e) => setDailyLoss(e.target.value)} />
               </div>
             </label>

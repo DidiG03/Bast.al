@@ -107,7 +107,7 @@ export class PlinkoService {
     const rows = rowsInput;
     const risk = riskInput;
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most a ball can cost you is $${tableMax.toFixed(2)}`);
+    if (bet > tableMax) throw new BadRequestException(`The most a ball can cost you is ${tableMax.toFixed(2)} ALL`);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {

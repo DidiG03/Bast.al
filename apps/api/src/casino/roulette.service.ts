@@ -103,7 +103,7 @@ export class RouletteService {
     if (invalid) throw new BadRequestException(invalid);
     const staked = settle(bets, 0).staked;
     const tableMax = await this.tableMax(actor.id);
-    if (staked > tableMax) throw new BadRequestException(`The most you can have on the table in one spin is $${tableMax.toFixed(2)}`);
+    if (staked > tableMax) throw new BadRequestException(`The most you can have on the table in one spin is ${tableMax.toFixed(2)} ALL`);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -153,7 +153,7 @@ export class RouletteService {
     await this.realtime.publishBalances([actor.id]);
     if (result.net.isNegative()) await this.users.alertLowBalance(actor.id, Number(result.net.abs()));
     if (result.outcome.bets.some((bet) => bet.win > 0 && bet.numbers.length === 1 && bet.amount >= 10)) {
-      // Worth a line in the audit log: a single number hit for $10 or more.
+      // Worth a line in the audit log: a single number hit for 10 ALL or more.
       await this.audit.log({ actorId: actor.id, action: "casino.big_win", targetId: actor.id, ipAddress, metadata: { spinId: result.round.id, game: "roulette", number: label(result.number), win: Number(result.win) } });
     }
     return {

@@ -154,7 +154,7 @@ export class DiceService {
     if (closed) throw new ForbiddenException(closed);
     const stakeCents = Math.round(Number(betInput) * 100);
     if (!Number.isFinite(Number(betInput)) || Math.abs(stakeCents - Number(betInput) * 100) > 1e-6) throw new BadRequestException("The stake is in whole cents.");
-    if (stakeCents < Math.round(MIN_BET * 100)) throw new BadRequestException(`The smallest roll is $${MIN_BET.toFixed(2)}`);
+    if (stakeCents < Math.round(MIN_BET * 100)) throw new BadRequestException(`The smallest roll is ${MIN_BET.toFixed(2)} ALL`);
     if (!(DIRECTIONS as readonly string[]).includes(directionInput)) throw new BadRequestException("Roll over or under the target.");
     const direction = directionInput as Direction;
     const target = targetUnits(Number(targetInput));
@@ -162,7 +162,7 @@ export class DiceService {
     const invalid = invalidTarget(target, direction);
     if (invalid) throw new BadRequestException(invalid);
     const tableMax = await this.tableMax(actor.id);
-    if (stakeCents > Math.round(tableMax * 100)) throw new BadRequestException(`The most a roll can cost you is $${tableMax.toFixed(2)}`);
+    if (stakeCents > Math.round(tableMax * 100)) throw new BadRequestException(`The most a roll can cost you is ${tableMax.toFixed(2)} ALL`);
     const team = await assertOnTeam(this.prisma, actor);
     const winning = winningNumbers(target, direction);
 

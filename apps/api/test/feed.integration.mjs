@@ -80,7 +80,7 @@ test("a Player with open bets, or below zero, waits to be moved", async () => {
   await prisma.bet.delete({ where: { id: open.id } });
 
   await prisma.user.update({ where: { id: cara.id }, data: { balance: -20 } });
-  await assert.rejects(users.reassignPlayer(owner, cara.id, managerB.id), /balance is below zero \(-\$20\.00\)/);
+  await assert.rejects(users.reassignPlayer(owner, cara.id, managerB.id), /balance is below zero \(-20\.00 ALL\)/);
   await prisma.user.update({ where: { id: cara.id }, data: { balance: 70 } });
   assert.equal((await find(cara)).parentId, managerA.id, "nothing moved");
 });
@@ -102,9 +102,9 @@ test("a moved Player's balance goes back to whoever gave it to them", async () =
   const back = await prisma.balanceTransaction.findFirstOrThrow({ where: { type: "RECLAIM", fromUserId: cara.id } });
   assert.deepEqual([back.toUserId, Number(back.amount), back.reason, back.actorId], [managerA.id, 70, `Returned when moved to ${managerB.username}`, owner.id]);
   assert.equal((await prisma.balanceTransaction.findUniqueOrThrow({ where: { id: pending.id } })).status, "REJECTED", "the old team's top-up can't land after the move");
-  assert.equal(sent.find((s) => s.userId === managerA.id).message, `${cara.username} was moved to another manager. Their $70.00 balance came back to you.`);
-  assert.equal(sent.find((s) => s.userId === cara.id).message, `Your account was reassigned to manager ${managerB.username}. Your $70.00 balance went back to ${managerA.username}.`);
-  assert.equal(sent.find((s) => s.userId === managerB.id).message, `${cara.username} was assigned to your team. Their balance starts at $0.00.`);
+  assert.equal(sent.find((s) => s.userId === managerA.id).message, `${cara.username} was moved to another manager. Their 70.00 ALL balance came back to you.`);
+  assert.equal(sent.find((s) => s.userId === cara.id).message, `Your account was reassigned to manager ${managerB.username}. Your 70.00 ALL balance went back to ${managerA.username}.`);
+  assert.equal(sent.find((s) => s.userId === managerB.id).message, `${cara.username} was assigned to your team. Their balance starts at 0.00 ALL.`);
 });
 
 test("a Player in the middle of a blackjack hand waits to be moved too", async () => {
@@ -232,7 +232,7 @@ test("bets on a match not played within 48 hours of kick-off are refunded", asyn
   const accumulator = await reload(acca);
   assert.deepEqual([accumulator.status, Number(accumulator.payout)], ["WON", 20], "the postponed pick drops out and the rest still counts");
   assert.equal(Number((await find(cara)).balance), 30 + 5 + 20);
-  assert.equal(sent.find((s) => s.userId === cara.id && s.title === "Bet voided")?.message, "Laçi v Bylis: your bet was voided (Not played within 48 hours of kick-off). $30.00 went back to your balance.");
+  assert.equal(sent.find((s) => s.userId === cara.id && s.title === "Bet voided")?.message, "Laçi v Bylis: your bet was voided (Not played within 48 hours of kick-off). 30.00 ALL went back to your balance.");
 });
 
 test("a match moved to a later date refunds only the bets placed for the old date", async () => {

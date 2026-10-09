@@ -64,7 +64,7 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
     event.preventDefault();
     const amount = Number(custom);
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error(t("Enter an amount above $0"));
+      toast.error(t("Enter an amount above 0 ALL"));
       return;
     }
     send(Math.round(amount * 100) / 100).catch(() => undefined);

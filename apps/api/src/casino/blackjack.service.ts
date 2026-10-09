@@ -108,10 +108,10 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
     if (closed) throw new ForbiddenException(closed);
     const cents = Math.round(bet * 100);
     if (!Number.isFinite(bet) || Math.abs(cents - bet * 100) > 1e-6 || cents <= 0 || cents % Math.round(CHIPS[0] * 100) !== 0) {
-      throw new BadRequestException(`Bets are made in chips of $${CHIPS[0].toFixed(2)} and up.`);
+      throw new BadRequestException(`Bets are made in chips of ${CHIPS[0].toFixed(2)} ALL and up.`);
     }
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one hand is $${tableMax.toFixed(2)}`);
+    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one hand is ${tableMax.toFixed(2)} ALL`);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {

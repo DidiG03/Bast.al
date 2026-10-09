@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatMoney } from "../lib/format";
+import { NamedIcon } from "./icons";
 import { useRealtime } from "./realtime-provider";
 
 /**
@@ -19,7 +20,9 @@ export function BalanceChip({ balance, title }: { balance: number; title: string
   });
   return (
     <Link href="/dashboard/money" className="player-balance-chip" title={title}>
-      <span className="player-balance-chip-icon" aria-hidden="true">$</span>
+      <span className="player-balance-chip-icon" aria-hidden="true">
+        <NamedIcon name="wallet" />
+      </span>
       {formatMoney(shown)}
     </Link>
   );

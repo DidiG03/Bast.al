@@ -127,7 +127,7 @@ test("bad stakes and boards, the max stake, the daily loss limit and a low balan
 
   await prisma.bettingLimit.create({ data: { playerId: pia.id, managerMaxStake: 2 } });
   assert.equal((await plinko.state(pia)).tableMax, 2);
-  await assert.rejects(plinko.drop(pia, 5, 8, "LOW"), /most a ball can cost you is \$2\.00/);
+  await assert.rejects(plinko.drop(pia, 5, 8, "LOW"), /most a ball can cost you is 2\.00 ALL/);
 
   const used = await limits.usedToday(pia.id);
   await prisma.bettingLimit.update({ where: { playerId: pia.id }, data: { managerMaxStake: null, managerDailyLossLimit: used + 0.5 } });

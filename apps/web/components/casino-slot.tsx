@@ -386,7 +386,7 @@ export function SlotGame() {
         <div>
           <h1 style={{ margin: 0 }}>{state.game.name}</h1>
           <p className="muted report-subtitle">{t("5 reels, 5 lines, played with your balance.")}</p>
-          <p className="game-keys-hint">{t("Press Space to spin.")}</p>
+          <p className="game-keys-hint">{t("Press Space to spin, and again to stop the reels.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
           {t("Pays and rules")}
@@ -500,7 +500,7 @@ export function SlotGame() {
                 <small>{t("Auto")}</small>
                 <span className="slot-switch" aria-hidden="true" />
               </button>
-              <button type="button" className="slot-btn slot-start" data-key="Space" onClick={() => (auto ? setAuto(false) : spin())} disabled={!auto && !canSpin}>
+              <button type="button" className="slot-btn slot-start" data-key="Space" onClick={() => (auto ? setAuto(false) : spinning ? reels.current?.skip() : spin())} disabled={!auto && !spinning && !canSpin}>
                 <span aria-hidden="true">⟳</span> {auto ? t("Stop") : t("Start")}
               </button>
             </footer>

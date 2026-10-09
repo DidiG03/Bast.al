@@ -21,7 +21,7 @@ import { teamOf } from "./team";
 
 type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean; builder?: boolean; system?: { won: number; lines: number } };
 
-const money = (value: Prisma.Decimal | number) => `$${Number(value).toFixed(2)}`;
+const money = (value: Prisma.Decimal | number) => `${Number(value).toFixed(2)} ALL`;
 
 /** What `move` needs to know about a bet. */
 const movable = {

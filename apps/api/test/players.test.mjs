@@ -26,7 +26,7 @@ test("a Player's top-up request notifies whoever looks after them", async () => 
   assert.equal(sent.length, 1);
   assert.equal(sent[0].userId, "m1");
   assert.equal(sent[0].title, "Top-up requested");
-  assert.equal(sent[0].message, "ardi is asking for a top-up. Their balance is $3.50.");
+  assert.equal(sent[0].message, "ardi is asking for a top-up. Their balance is 3.50 ALL.");
   assert.equal(sent[0].deepLink, "/dashboard/players/p1");
   assert.equal(logged[0].action, "balance.topup_request");
 });

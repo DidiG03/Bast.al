@@ -10,8 +10,10 @@ const ms = (name: string, fallback: number) => {
   return Number.isFinite(value) && value >= 0 && process.env[name] !== "" && process.env[name] !== undefined ? value : fallback;
 };
 
-/** After a goal (or a goal taken back by VAR): the prices need a while to settle. */
+/** After a goal (or a goal taken back by VAR): the prices need a while to settle. The longest it pauses; see goalPauseOver for reopening sooner. */
 export const GOAL_COOLDOWN_MS = ms("LIVE_GOAL_COOLDOWN_MS", 90_000);
+/** The least a goal pauses live betting, however quickly the prices catch up. */
+export const GOAL_MIN_PAUSE_MS = ms("LIVE_GOAL_MIN_PAUSE_MS", 30_000);
 /** After a big jump in the main prices, which usually means a red card or a penalty. */
 export const SWING_COOLDOWN_MS = ms("LIVE_SWING_COOLDOWN_MS", 30_000);
 /** After the bookmaker reopens a match it had blocked. */
@@ -49,6 +51,24 @@ export function laterCooldown(current: { until: Date | null; reason: string | nu
   if (!next) return current;
   if (current.until && current.until >= next.until) return current;
   return next;
+}
+
+/**
+ * Whether a goal's pause can end before GOAL_COOLDOWN_MS is up, on a new
+ * reading of the match: the bookmaker isn't blocking it, the reading's prices
+ * already carry the score (so they were made after the goal), the reading
+ * doesn't call for a pause of its own (another goal, a jump, a reopening),
+ * and at least GOAL_MIN_PAUSE_MS has gone by since the goal.
+ */
+export function goalPauseOver(
+  pause: { until: Date | null; reason: string | null },
+  reading: { hasScore: boolean; stopped: boolean; pausesItself: boolean },
+  now: Date = new Date(),
+): boolean {
+  if (pause.reason !== "goal" || !pause.until || pause.until <= now) return false;
+  if (reading.stopped || !reading.hasScore || reading.pausesItself) return false;
+  const goalAt = pause.until.getTime() - GOAL_COOLDOWN_MS;
+  return now.getTime() - goalAt >= GOAL_MIN_PAUSE_MS;
 }
 
 /** Whether any outcome's chance moved by at least SWING_POINTS between two readings. Outcomes new or gone don't count. */

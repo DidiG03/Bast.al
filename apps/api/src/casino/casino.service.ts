@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomInt } from "crypto";
-import { Prisma, Role } from "@prisma/client";
+import { CasinoPlayKind, Prisma, Role } from "@prisma/client";
 import type { RandomNumberGenerating } from "pokie";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
@@ -12,6 +12,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
+import { GAME_NAME as BOOK_NAME } from "./book";
 import {
   BETS,
   GAME_NAME,
@@ -35,7 +36,7 @@ import {
 
 const RECENT = 10;
 
-const money = (value: Prisma.Decimal | number) => `$${Number(value).toFixed(2)}`;
+const money = (value: Prisma.Decimal | number) => `${Number(value).toFixed(2)} ALL`;
 
 /** Line bets (a fifth of the bet) in dollars. */
 const inMoney = (bet: Prisma.Decimal, lineBets: number) => Number(bet.div(LINES).mul(lineBets).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN));
@@ -89,6 +90,31 @@ export const canGamble = (amount: Prisma.Decimal, steps: number) => amount.great
  * - the daily loss limit counts sports and casino together.
  * Super Admin opens the Casino for the site, and each Owner for their team.
  */
+/** The Casino page of each kind of play. */
+const GAME_OF_KIND: Record<CasinoPlayKind, LastGame["game"]> = {
+  SPIN: "slot",
+  GAMBLE: "slot",
+  ROULETTE: "roulette",
+  BLACKJACK: "blackjack",
+  BOOK: "book",
+  MINES: "mines",
+  PENALTY: "penalty",
+  PLINKO: "plinko",
+  DICE: "dice",
+};
+
+export type LastGame = {
+  game: "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice";
+  /** The game's own name for the slots ("Sizzling Hot", "Book of Ra"); null for the others. */
+  name: string | null;
+  /** Something left to finish: a round in play, free spins, or a win to double or collect. Null when the last game is done. */
+  waiting: "round" | "freeSpins" | "gamble" | null;
+  /** Dollars: the round's stake, the free spins' bet, the win at stake, or the last bet. */
+  amount: number;
+  freeSpins?: number;
+  at: Date;
+};
+
 @Injectable()
 export class CasinoService {
   /** Where the reels stop: crypto.randomInt unless a test sets its own. */
@@ -108,6 +134,34 @@ export class CasinoService {
   /** Why this Player can't play right now, or null if they can. */
   closedReason(player: Pick<Actor, "id" | "parentId">): Promise<string | null> {
     return casinoClosedReason(this.prisma, player);
+  }
+
+  /**
+   * The game for the home page's "Continue playing": a round still in play
+   * first (a blackjack hand, Mines, Penalty, Book of Ra's free spins, or a win
+   * waiting for double or nothing), then the game played last. Null when the
+   * Player hasn't played yet.
+   */
+  async lastGame(actor: Actor): Promise<LastGame | null> {
+    const playerId = actor.id;
+    const [blackjack, mines, penalty, freeSpins, gamble, last] = await Promise.all([
+      this.prisma.blackjackHand.findUnique({ where: { playerId }, select: { staked: true, updatedAt: true } }),
+      this.prisma.minesRound.findUnique({ where: { playerId }, select: { staked: true, updatedAt: true } }),
+      this.prisma.penaltyRound.findUnique({ where: { playerId }, select: { staked: true, updatedAt: true } }),
+      this.prisma.casinoBookFeature.findUnique({ where: { playerId }, select: { remaining: true, bet: true, updatedAt: true } }),
+      this.prisma.casinoGamble.findUnique({ where: { playerId }, select: { game: true, amount: true, updatedAt: true } }),
+      this.prisma.casinoSpin.findFirst({ where: { playerId }, orderBy: { createdAt: "desc" }, select: { kind: true, bet: true, createdAt: true } }),
+    ]);
+    const nameOf = (game: LastGame["game"]) => (game === "slot" ? GAME_NAME : game === "book" ? BOOK_NAME : null);
+    const open = (game: LastGame["game"], waiting: NonNullable<LastGame["waiting"]>, amount: Prisma.Decimal, at: Date): LastGame => ({ game, name: nameOf(game), waiting, amount: Number(amount), at });
+    if (blackjack) return open("blackjack", "round", blackjack.staked, blackjack.updatedAt);
+    if (mines) return open("mines", "round", mines.staked, mines.updatedAt);
+    if (penalty) return open("penalty", "round", penalty.staked, penalty.updatedAt);
+    if (freeSpins && freeSpins.remaining > 0) return { ...open("book", "freeSpins", freeSpins.bet, freeSpins.updatedAt), freeSpins: freeSpins.remaining };
+    if (gamble) return open(gamble.game === "book" ? "book" : "slot", "gamble", gamble.amount, gamble.updatedAt);
+    if (!last) return null;
+    const game = GAME_OF_KIND[last.kind];
+    return { game, name: nameOf(game), waiting: null, amount: Number(last.bet), at: last.createdAt };
   }
 
   /** The Player's Casino: whether they can play, the game's rules, their free spins and recent spins. */

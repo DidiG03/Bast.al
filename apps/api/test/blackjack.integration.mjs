@@ -151,10 +151,10 @@ test("a round's money counts against the daily loss limit while it's in play, an
 });
 
 test("the max stake caps the first bet, bets are whole chips, and a low balance stops a deal", async () => {
-  await assert.rejects(blackjack.deal(bea, 101), /most you can bet on one hand is \$100\.00/);
+  await assert.rejects(blackjack.deal(bea, 101), /most you can bet on one hand is 100\.00 ALL/);
   await assert.rejects(blackjack.deal(bea, 0.3), /chips/);
   await prisma.bettingLimit.create({ data: { playerId: bea.id, ownerMaxStake: 20 } });
-  await assert.rejects(blackjack.deal(bea, 25), /\$20\.00/);
+  await assert.rejects(blackjack.deal(bea, 25), /20\.00 ALL/);
   await prisma.bettingLimit.delete({ where: { playerId: bea.id } });
   const balance = await balanceOf(bea);
   await prisma.user.update({ where: { id: bea.id }, data: { balance: 1 } });

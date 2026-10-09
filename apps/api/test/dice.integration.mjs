@@ -145,9 +145,9 @@ test("changing seeds reveals the old server seed, and every roll made with it ch
 test("bad stakes and targets, the max stake, the daily loss limit and a low balance stop a roll, and nothing moves", async () => {
   const balance = await balanceOf(dan);
   const nonce = (await activeSeed(dan)).nonce;
-  await assert.rejects(dice.roll(dan, 0.05, 50, "UNDER"), /smallest roll is \$0\.10/);
+  await assert.rejects(dice.roll(dan, 0.05, 50, "UNDER"), /smallest roll is 0\.10 ALL/);
   await assert.rejects(dice.roll(dan, 1.005, 50, "UNDER"), /whole cents/);
-  await assert.rejects(dice.roll(dan, 51, 50, "UNDER"), /most a roll can cost you is \$50\.00/);
+  await assert.rejects(dice.roll(dan, 51, 50, "UNDER"), /most a roll can cost you is 50\.00 ALL/);
   await assert.rejects(dice.roll(dan, 1, 0.5, "UNDER"), /1% to 95%/);
   await assert.rejects(dice.roll(dan, 1, 99.5, "OVER"), /1% to 95%/);
   await assert.rejects(dice.roll(dan, 1, 50.123, "OVER"), /0\.00 to 99\.99/);
@@ -155,7 +155,7 @@ test("bad stakes and targets, the max stake, the daily loss limit and a low bala
 
   await prisma.bettingLimit.create({ data: { playerId: dan.id, ownerMaxStake: 3 } });
   assert.equal((await dice.state(dan)).tableMax, 3);
-  await assert.rejects(dice.roll(dan, 3.5, 50, "UNDER"), /\$3\.00/);
+  await assert.rejects(dice.roll(dan, 3.5, 50, "UNDER"), /3\.00 ALL/);
   const used = await limits.usedToday(dan.id);
   await prisma.bettingLimit.update({ where: { playerId: dan.id }, data: { ownerMaxStake: null, ownerDailyLossLimit: used + 0.5 } });
   await assert.rejects(dice.roll(dan, 1, 50, "UNDER"), /daily loss limit/);

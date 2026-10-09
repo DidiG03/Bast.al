@@ -33,10 +33,10 @@ export class TopEventsQueryDto {
   @Max(12)
   count?: number;
 
-  /** "greyhounds": the next races to run. */
+  /** Which sport; "greyhounds" gives the next races to run. Football by default. */
   @IsOptional()
-  @IsIn(["football", "greyhounds"])
-  sport?: "football" | "greyhounds";
+  @IsIn(["football", "greyhounds", "mma", "basketball", "nfl", "tennis", "volleyball", "handball"])
+  sport?: "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "tennis" | "volleyball" | "handball";
 }
 
 export class SelectionsQueryDto extends TeamQueryDto {

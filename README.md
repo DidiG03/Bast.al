@@ -155,7 +155,7 @@ Super Admin picks which competitions are synced under **Odds → Leagues**: sing
 | `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS` | Optional tuning: days ahead (7, at most 7), how often to check which days are due (10 min), live interval (45 s). |
 | `API_FOOTBALL_QUOTA_RESERVE` | Requests to keep in hand each day before only today's matches are refreshed. Defaults to `600`. |
 | `ODDS_FEED_MOCK=true` | Local testing only: serves made-up matches in API-Football's format when no key is set. |
-| `LIVE_VERIFY`, `LIVE_GOAL_COOLDOWN_MS`, `LIVE_SWING_COOLDOWN_MS`, `LIVE_REOPEN_COOLDOWN_MS`, `LIVE_SWING_POINTS`, `LIVE_CUTOFF_MINUTE`, `LIVE_FAST_INTERVAL_MS` | Live-betting protection (see below). Defaults: check each live bet with the feed, pause 90 s after a goal, 30 s after a result's chance jumps 12 points in the match-result prices, 15 s after the bookmaker reopens a match, close from minute 89, and fetch live prices every 15 s while someone is watching. |
+| `LIVE_VERIFY`, `LIVE_GOAL_COOLDOWN_MS`, `LIVE_GOAL_MIN_PAUSE_MS`, `LIVE_SWING_COOLDOWN_MS`, `LIVE_REOPEN_COOLDOWN_MS`, `LIVE_SWING_POINTS`, `LIVE_CUTOFF_MINUTE`, `LIVE_FAST_INTERVAL_MS` | Live-betting protection (see below). Defaults: check each live bet with the feed, pause after a goal until the prices carry the new score and the bookmaker isn't blocking the match (30 s at least, 90 s at most), 30 s after a result's chance jumps 12 points in the match-result prices, 15 s after the bookmaker reopens a match, close from minute 89, and fetch live prices every 15 s while someone is watching. |
 
 The API needs outbound access to `v3.football.api-sports.io`.
 
@@ -248,7 +248,7 @@ The API needs outbound access to `api.greyhoundapi.com`.
 
 **Live-betting protection** (`apps/api/src/odds/live-guard.ts`). A live match stops taking bets when:
 - the bookmaker has it blocked (dangerous attack, penalty, VAR);
-- a goal went in, or was taken back, in the last 90 s;
+- a goal went in, or was taken back, and the prices haven't caught up yet (at least 30 s, at most 90 s);
 - the match-result prices just jumped, which usually means a red card or a penalty;
 - the bookmaker reopened it less than 15 s ago;
 - it's the 89th minute or later;

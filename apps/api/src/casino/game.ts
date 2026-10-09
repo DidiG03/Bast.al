@@ -32,7 +32,7 @@ export const LINES = 5;
 /** What spins pay back on average, in percent of what they cost, as measured (see REEL_MAKEUP). */
 export const PAYOUT_RATE = 94.9;
 /** What a spin can cost, in dollars. A line bet is a fifth of it. */
-export const BETS = [0.5, 1, 2, 5, 10, 50, 100] as const;
+export const BETS = [0.5, 1, 2, 5, 10, 25] as const;
 
 export const SYMBOLS = ["SEVEN", "MELON", "GRAPES", "PLUM", "ORANGE", "LEMON", "CHERRY", "STAR"] as const;
 export type SlotSymbol = (typeof SYMBOLS)[number];

@@ -37,7 +37,7 @@ import { GAMBLE_LIMIT, GAMBLE_STEPS } from "./game";
 
 const RECENT = 10;
 
-const money = (value: Prisma.Decimal | number) => `$${Number(value).toFixed(2)}`;
+const money = (value: Prisma.Decimal | number) => `${Number(value).toFixed(2)} ALL`;
 
 /** Book of Ra has its own line per Player per day in their balance ledger. */
 const ledgerLineId = (playerId: string, at: Date) => `book_${playerId}_${dayKey(at)}`;

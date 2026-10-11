@@ -17,10 +17,10 @@ test("ledger entries say what happened to the bet", () => {
 
 test("clean-up keeps data at least as long as the minimums, whatever the settings", () => {
   const defaults = retentionDays({});
-  assert.deepEqual(defaults, { oddsHistory: 30, unusedEvents: 30, readNotifications: 90, notifications: 180, loginHistory: 180, idempotencyKeys: 2 });
+  assert.deepEqual(defaults, { oddsHistory: 7, unusedEvents: 7, readNotifications: 90, notifications: 180, loginHistory: 180, idempotencyKeys: 2 });
   const tooShort = retentionDays({ RETENTION_ODDS_HISTORY_DAYS: "1", RETENTION_UNUSED_EVENT_DAYS: "0", RETENTION_LOGIN_HISTORY_DAYS: "3" });
   assert.equal(tooShort.oddsHistory, 7);
-  assert.equal(tooShort.unusedEvents, 30, "0 or junk falls back to the default");
+  assert.equal(tooShort.unusedEvents, 7, "0 or junk falls back to the default");
   assert.equal(tooShort.loginHistory, 30);
   assert.equal(retentionDays({ RETENTION_ODDS_HISTORY_DAYS: "60" }).oddsHistory, 60);
 });

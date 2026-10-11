@@ -198,7 +198,8 @@ async function tabs(players) {
       const service = games[name];
       const begin = name === "mines" ? () => service.start(player, 100, 3) : name === "penalty" ? () => service.start(player, 100) : () => service.deal(player, 100);
       const started = await Promise.allSettled(Array.from({ length: TABS }, () => timed(`${name} start`, begin)));
-      const ok = started.filter((result) => result.status === "fulfilled").length;
+      // A blackjack deal can finish on the spot (a natural), leaving the Player free to deal again: only rounds still in play count.
+      const ok = started.filter((result) => result.status === "fulfilled" && !["DONE", "WON", "LOST"].includes(result.value.round.phase)).length;
       if (ok > 1) note(errors, `${name}: ${ok} rounds started at once for one Player`, 1);
       if (name === "mines") await Promise.allSettled([...Array.from({ length: TABS }, (_, i) => timed("mines step", () => service.open(player, i))), timed("mines step", () => service.collect(player))]);
       if (name === "penalty") await Promise.allSettled([...Array.from({ length: TABS }, () => timed("penalty step", () => service.shoot(player, "LEFT"))), timed("penalty step", () => service.collect(player))]);

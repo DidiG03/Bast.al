@@ -30,7 +30,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     const url = withPoolSize(process.env.DATABASE_URL);
     // Without DATABASE_URL, Prisma's own "Environment variable not found" error still shows.
     super(url ? { datasources: { db: { url } } } : undefined);
-    if (url) new Logger(PrismaService.name).log(`Database pool: ${new URL(url).searchParams.get("connection_limit")} connections`);
+    const logger = new Logger(PrismaService.name);
+    if (url) logger.log(`Database pool: ${new URL(url).searchParams.get("connection_limit")} connections`);
   }
 
   async onModuleInit() { await this.$connect(); }

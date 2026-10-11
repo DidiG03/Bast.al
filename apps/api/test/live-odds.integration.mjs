@@ -1,7 +1,8 @@
 // Saving live readings against a real Postgres: only what changed is
 // written, and what's saved is right: new markets and outcomes added, moved
-// prices updated, an outcome the feed stops pricing loses its price, a market
-// it stops sending is suspended (and comes back), and a goal pauses the match.
+// prices updated (also after a write of nothing but missing prices), an
+// outcome the feed stops pricing loses its price, a market it stops sending is
+// suspended (and comes back), and a goal pauses the match.
 // Like the other integration tests it empties tables, so it only runs against
 // a database whose name ends in "_test".
 import assert from "node:assert/strict";
@@ -65,13 +66,20 @@ test("the same reading again writes no prices", async () => {
   assert.equal(writes, 1, "only the match's own row (when it was last read)");
 });
 
+test("a market the feed sends without prices loses them all", async () => {
+  // Also the first price write on this connection: with arrays, Prisma prepared it for empty prices, and every later price not 4 characters long failed.
+  await sync.applyLiveOdds(match.id, reading(0, 0, { match_winner: {}, goals: { over: 1.8, under: 2 } }));
+  const now = await prices();
+  assert.deepEqual([now["match_winner.home"], now["match_winner.draw"], now["match_winner.away"]], [null, null, null]);
+});
+
 test("moved prices are updated, a new outcome is added, one no longer priced loses its price, and a market not sent is suspended", async () => {
   writes = 0;
-  await sync.applyLiveOdds(match.id, reading(0, 0, { match_winner: { home: 2.05, draw: 3.2, away: 3.7 }, corners: { over: 1.9, under: 1.9 } }));
+  await sync.applyLiveOdds(match.id, reading(0, 0, { match_winner: { home: 2.05, draw: 12, away: 101 }, corners: { over: 1.9, under: 1.9 } }));
   assert.deepEqual(await prices(), {
     "match_winner.home": 2.05,
-    "match_winner.draw": 3.2,
-    "match_winner.away": 3.7,
+    "match_winner.draw": 12,
+    "match_winner.away": 101,
     "goals.over": 1.8,
     "goals.under": 2,
     "corners.over": 1.9,

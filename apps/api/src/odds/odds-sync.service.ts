@@ -65,6 +65,8 @@ const LIVE_LOCK_KEY = "bastal:odds-sync:live";
  * every ODDS_LIVE_INTERVAL_MS, as long as the day's quota has room.
  */
 const LIVE_FAST_INTERVAL_MS = Number(process.env.LIVE_FAST_INTERVAL_MS) || 15_000;
+/** The regular live sync: scores and in-play prices, two requests a run. */
+const LIVE_INTERVAL_MS = Number(process.env.ODDS_LIVE_INTERVAL_MS) || 45_000;
 const LIVE_INTEREST_MS = 2 * 60_000;
 /** How long after a match ends its match centre is fetched once more, for the final numbers. */
 const MATCH_CENTRE_AFTER_MS = 15 * 60_000;
@@ -163,11 +165,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     this.redis.on("error", () => undefined);
     this.redis.connect().catch(() => undefined);
     const fullEvery = Number(process.env.ODDS_SYNC_INTERVAL_MS) || 10 * 60_000;
-    const liveEvery = Number(process.env.ODDS_LIVE_INTERVAL_MS) || 45_000;
     // First full sync shortly after boot, then on the interval.
     this.timers.push(setTimeout(() => void this.scheduled("full"), 5_000));
     this.timers.push(setInterval(() => void this.scheduled("full"), fullEvery));
-    this.timers.push(setInterval(() => void this.scheduled("live"), liveEvery));
+    this.timers.push(setInterval(() => void this.scheduled("live"), LIVE_INTERVAL_MS));
     this.timers.push(setInterval(() => void this.fastLive(), LIVE_FAST_INTERVAL_MS));
   }
 
@@ -488,8 +489,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * statistics), on every live sync, while the day's quota has room.
    */
   private async syncMatchCentres(): Promise<number> {
-    if (this.quotaLeft !== null && this.quotaLeft < QUOTA_RESERVE) return 0;
     const now = Date.now();
+    // Keep what the regular live sync still needs before the quota resets at midnight UTC, plus room for checking bets.
+    const liveRunsLeft = Math.ceil((86_400_000 - (now % 86_400_000)) / LIVE_INTERVAL_MS);
+    if (this.quotaLeft !== null && this.quotaLeft < Math.min(QUOTA_RESERVE, 2 * liveRunsLeft + 200)) return 0;
     const withBets = { markets: { some: { selections: { some: { OR: [{ bets: { some: {} } }, { legs: { some: {} } }] } } } } } satisfies Prisma.EventWhereInput;
     const due = await this.prisma.event.findMany({
       where: {
@@ -910,9 +913,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       if (reopen.length) await tx.market.updateMany({ where: { id: { in: reopen } }, data: { liveSuspended: false } });
       if (added.length) await tx.selection.createMany({ data: added, skipDuplicates: true });
       if (prices.length) {
+        // One JSON value rather than arrays: a connection whose first array held only missing prices kept that
+        // array's type, and every later price not exactly 4 characters long ("12.00") failed on it.
         await tx.$executeRaw`
           UPDATE selections AS s SET live_odds = v.price, updated_at = NOW()
-          FROM (SELECT UNNEST(${prices.map((p) => p.id)}::text[]) AS id, UNNEST(${prices.map((p) => p.price)}::text[])::numeric AS price) AS v
+          FROM json_to_recordset(${JSON.stringify(prices)}::json) AS v(id text, price numeric)
           WHERE s.id = v.id`;
       }
       return swing;

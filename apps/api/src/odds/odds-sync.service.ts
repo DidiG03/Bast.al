@@ -66,6 +66,8 @@ const LIVE_LOCK_KEY = "bastal:odds-sync:live";
  */
 const LIVE_FAST_INTERVAL_MS = Number(process.env.LIVE_FAST_INTERVAL_MS) || 15_000;
 const LIVE_INTEREST_MS = 2 * 60_000;
+/** Live matches saved at the same time on each reading; each takes one database connection. */
+const LIVE_WRITERS = 6;
 /** A match's score comes from the live odds while they're this fresh; the fixtures list lags behind them. */
 const LIVE_SCORE_SOURCE_MS = 60_000;
 /** Bets placed on the same match within this long share one check with the feed. */
@@ -613,14 +615,24 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     if (live.length === 0) return 0;
     const byExternal = new Map(live.map((e) => [e.externalId!, e]));
     const feed = await this.client!.liveOdds();
-    let priced = 0;
-    for (const raw of feed) {
+    const readings = feed.flatMap((raw) => {
       const event = byExternal.get(String(raw.fixture.id));
-      if (!event) continue;
-      await this.applyLiveOdds(event.id, parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? ""));
-      priced++;
-    }
-    return priced;
+      return event ? [{ eventId: event.id, odds: parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? "") }] : [];
+    });
+    // A few matches at a time: one after another, a busy evening's readings took longer than the time between them.
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(LIVE_WRITERS, readings.length) }, async () => {
+        while (next < readings.length) {
+          const reading = readings[next++];
+          // One match failing to save doesn't hold up the others.
+          await this.applyLiveOdds(reading.eventId, reading.odds).catch((error) =>
+            this.logger.warn(`Live odds for event ${reading.eventId} not saved: ${error instanceof Error ? error.message : String(error)}`),
+          );
+        }
+      }),
+    );
+    return readings.length;
   }
 
   /**
@@ -776,12 +788,26 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * Saves in-play prices; markets the feed didn't send this time are
    * suspended. Returns whether the match-result prices jumped (bigSwing).
    */
+  /**
+   * Saves one live reading's markets and prices, writing only what changed:
+   * the match's markets and prices are read in one query and compared, new
+   * ones are added, and changed prices go in one statement. A reading is
+   * mostly the same as the last (taken seconds ago), and writing every price
+   * of every live match on every reading took longer than the time between
+   * readings, which slowed them all down, a goal's reopening included.
+   * Returns whether the match-result prices jumped (bigSwing).
+   */
   private async upsertLiveMarkets(eventId: string, markets: FeedLiveMarket[]): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.market.findMany({
+        where: { eventId },
+        select: { id: true, key: true, liveSuspended: true, selections: { select: { id: true, key: true, liveOdds: true } } },
+      });
+      const byKey = new Map(existing.map((market) => [market.key, market]));
+      const priceOf = (odds: number) => (odds > 1 ? odds.toFixed(2) : null);
+
       const main = markets.find((m) => m.key === "match_winner");
-      const previous = main
-        ? await tx.selection.findMany({ where: { market: { eventId, key: "match_winner" } }, select: { key: true, liveOdds: true } })
-        : [];
+      const previous = byKey.get("match_winner")?.selections ?? [];
       const swing = main
         ? bigSwing(
             main.selections.map((s) => {
@@ -791,25 +817,57 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
             main.selections.map((s) => (s.odds > 1 ? s.odds : null)),
           )
         : false;
-      await tx.market.updateMany({ where: { eventId, key: { notIn: markets.map((m) => m.key) } }, data: { liveSuspended: true } });
+
+      // Markets the feed stopped sending are suspended.
+      const sent = new Set(markets.map((m) => m.key));
+      const suspend = existing.filter((market) => !sent.has(market.key) && !market.liveSuspended).map((market) => market.id);
+      const reopen: string[] = [];
+      const prices: Array<{ id: string; price: string | null }> = [];
+      const added: Prisma.SelectionCreateManyInput[] = [];
       for (const market of markets) {
-        const row = await tx.market.upsert({
-          where: { eventId_key: { eventId, key: market.key } },
-          create: { eventId, key: market.key, name: market.name, sortOrder: market.sortOrder, liveSuspended: market.suspended },
-          update: { liveSuspended: market.suspended },
-          select: { id: true },
-        });
-        for (const selection of market.selections) {
-          const liveOdds = selection.odds > 1 ? new Prisma.Decimal(selection.odds.toFixed(2)) : null;
-          await tx.selection.upsert({
-            where: { marketId_key: { marketId: row.id, key: selection.key } },
-            // A market first seen live has no pre-match price; the live one stands in.
-            create: { marketId: row.id, key: selection.key, name: selection.name, feedOdds: liveOdds ?? new Prisma.Decimal(1.01), liveOdds, sortOrder: selection.sortOrder },
-            update: { liveOdds },
+        const row = byKey.get(market.key);
+        if (!row) {
+          // A market first seen live has no pre-match price; the live one stands in.
+          await tx.market.create({
+            data: {
+              eventId,
+              key: market.key,
+              name: market.name,
+              sortOrder: market.sortOrder,
+              liveSuspended: market.suspended,
+              selections: {
+                create: market.selections.map((selection) => {
+                  const price = priceOf(selection.odds);
+                  return { key: selection.key, name: selection.name, feedOdds: new Prisma.Decimal(price ?? "1.01"), liveOdds: price === null ? null : new Prisma.Decimal(price), sortOrder: selection.sortOrder };
+                }),
+              },
+            },
           });
+          continue;
+        }
+        if (row.liveSuspended !== market.suspended) (market.suspended ? suspend : reopen).push(row.id);
+        const old = new Map(row.selections.map((selection) => [selection.key, selection]));
+        for (const selection of market.selections) {
+          const price = priceOf(selection.odds);
+          const was = old.get(selection.key);
+          if (!was) {
+            added.push({ marketId: row.id, key: selection.key, name: selection.name, feedOdds: new Prisma.Decimal(price ?? "1.01"), liveOdds: price === null ? null : new Prisma.Decimal(price), sortOrder: selection.sortOrder });
+          } else if ((was.liveOdds === null ? null : was.liveOdds.toFixed(2)) !== price) {
+            prices.push({ id: was.id, price });
+          }
         }
         // An outcome the feed no longer prices (0–0 once a goal is in) loses its live price, so it can't be bet on.
-        await tx.selection.updateMany({ where: { marketId: row.id, key: { notIn: market.selections.map((s) => s.key) } }, data: { liveOdds: null } });
+        const priced = new Set(market.selections.map((selection) => selection.key));
+        for (const was of row.selections) if (!priced.has(was.key) && was.liveOdds !== null) prices.push({ id: was.id, price: null });
+      }
+      if (suspend.length) await tx.market.updateMany({ where: { id: { in: suspend } }, data: { liveSuspended: true } });
+      if (reopen.length) await tx.market.updateMany({ where: { id: { in: reopen } }, data: { liveSuspended: false } });
+      if (added.length) await tx.selection.createMany({ data: added, skipDuplicates: true });
+      if (prices.length) {
+        await tx.$executeRaw`
+          UPDATE selections AS s SET live_odds = v.price, updated_at = NOW()
+          FROM (SELECT UNNEST(${prices.map((p) => p.id)}::text[]) AS id, UNNEST(${prices.map((p) => p.price)}::text[])::numeric AS price) AS v
+          WHERE s.id = v.id`;
       }
       return swing;
     });

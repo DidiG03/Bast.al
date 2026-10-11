@@ -399,9 +399,11 @@ test("a live bet's match is checked with the feed itself, and a goal found there
   const { OddsSyncService } = await import("../dist/odds/odds-sync.service.js");
   const saved = { id: "e1", externalId: "7", homeTeam: "A", awayTeam: "B", name: "A v B", homeScore: 0, awayScore: 0, liveStopped: false, liveCooldownUntil: null, liveCooldownReason: null };
   const updates = [];
+  // Live readings save only what changed: the match's markets are read, new ones created, changed prices updated in one statement.
   const tx = {
-    selection: { findMany: async () => [], upsert: async () => ({}), updateMany: async () => ({}) },
-    market: { updateMany: async () => ({}), upsert: async () => ({ id: "m1" }) },
+    selection: { createMany: async () => ({ count: 0 }) },
+    market: { findMany: async () => [], create: async () => ({ id: "m1" }), updateMany: async () => ({}) },
+    $executeRaw: async () => 0,
   };
   const prisma = {
     event: {
@@ -442,7 +444,7 @@ test("after a goal, live betting reopens once a later reading's prices carry the
   const run = async (secondsSinceGoal, goals = { home: 1, away: 0 }) => {
     const saved = { id: "e1", externalId: "7", homeTeam: "A", awayTeam: "B", name: "A v B", homeScore: 1, awayScore: 0, liveStopped: false, liveCooldownUntil: new Date(Date.now() + 90_000 - secondsSinceGoal * 1000), liveCooldownReason: "goal" };
     const updates = [];
-    const tx = { selection: { findMany: async () => [], upsert: async () => ({}), updateMany: async () => ({}) }, market: { updateMany: async () => ({}), upsert: async () => ({ id: "m1" }) } };
+    const tx = { selection: { createMany: async () => ({ count: 0 }) }, market: { findMany: async () => [], create: async () => ({ id: "m1" }), updateMany: async () => ({}) }, $executeRaw: async () => 0 };
     const prisma = { event: { findMany: async () => [saved], findUniqueOrThrow: async () => saved, update: async ({ data }) => updates.push(data) }, $transaction: async (fn) => fn(tx) };
     const service = new OddsSyncService(prisma);
     service.client = new ApiFootballClient(async () => ({ response: [{ ...liveRaw(), fixture: { id: 7, status: { elapsed: 34 } }, teams: { home: { goals: goals.home }, away: { goals: goals.away } } }] }));

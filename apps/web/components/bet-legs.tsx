@@ -4,6 +4,7 @@ import type { BetLeg } from "../lib/api";
 import { msg } from "../lib/i18n/core";
 import { pickLabel } from "../lib/picks";
 import { useI18n } from "./i18n-provider";
+import { MatchCentre } from "./match-centre";
 
 const LEG_MARK: Record<NonNullable<BetLeg["result"]>, string> = { WON: msg("Won"), LOST: msg("Lost"), VOID: msg("Void") };
 
@@ -37,6 +38,7 @@ export function BetLegs({ legs }: { legs: BetLeg[] }) {
               <span>{leg.odds.toFixed(2)}</span>
               <span className={`bet-leg-state${leg.result ? ` bet-status-${leg.result.toLowerCase()}` : " muted"}`}>{state}</span>
             </div>
+            {!leg.result ? <MatchCentre event={event} compact /> : null}
           </li>
         );
       })}

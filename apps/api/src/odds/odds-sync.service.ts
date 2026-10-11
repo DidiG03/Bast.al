@@ -3,7 +3,7 @@ import { BetStatus, EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { GOAL_MARKET_KEYS } from "../bets/goals";
-import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLiveOdds, parseMarkets } from "./api-football";
+import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLiveOdds, parseMarkets, parseMatchCentre } from "./api-football";
 import { bigSwing, cooldownFor, goalPauseOver, laterCooldown } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
@@ -66,6 +66,10 @@ const LIVE_LOCK_KEY = "bastal:odds-sync:live";
  */
 const LIVE_FAST_INTERVAL_MS = Number(process.env.LIVE_FAST_INTERVAL_MS) || 15_000;
 const LIVE_INTEREST_MS = 2 * 60_000;
+/** How long after a match ends its match centre is fetched once more, for the final numbers. */
+const MATCH_CENTRE_AFTER_MS = 15 * 60_000;
+/** Matches whose match centre is fetched on one live sync: 3 requests' worth. */
+const MATCH_CENTRE_MAX = 60;
 /** Live matches saved at the same time on each reading; each takes one database connection. */
 const LIVE_WRITERS = 6;
 /** A match's score comes from the live odds while they're this fresh; the fixtures list lags behind them. */
@@ -460,6 +464,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       updated++;
     }
     await this.syncLiveOdds();
+    await this.syncMatchCentres().catch((error) => this.logger.warn(`Match centres not updated: ${error instanceof Error ? error.message : String(error)}`));
     if (finished.length > 0) {
       await this.syncStats();
       await this.syncGoals();
@@ -475,6 +480,47 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * A match that went to extra time is skipped: its statistics include extra
    * time, so Super Admin enters the 90-minute numbers by hand.
    */
+  /**
+   * The match centre (timeline and numbers) of each football match a Player
+   * has a bet on, while it's live and once more in the first minutes after
+   * it ends, so their bet shows who scored, who was booked and the corners.
+   * Up to 20 matches per request (fixtures by id carry their events and
+   * statistics), on every live sync, while the day's quota has room.
+   */
+  private async syncMatchCentres(): Promise<number> {
+    if (this.quotaLeft !== null && this.quotaLeft < QUOTA_RESERVE) return 0;
+    const now = Date.now();
+    const withBets = { markets: { some: { selections: { some: { OR: [{ bets: { some: {} } }, { legs: { some: {} } }] } } } } } satisfies Prisma.EventWhereInput;
+    const due = await this.prisma.event.findMany({
+      where: {
+        provider: this.provider(),
+        sport: "football",
+        externalId: { not: null },
+        OR: [
+          { status: EventStatus.LIVE },
+          // Just finished: a few more times, for the final numbers (the feed can take a minute to complete them).
+          { status: EventStatus.COMPLETED, finishedAt: { gte: new Date(now - MATCH_CENTRE_AFTER_MS) }, OR: [{ matchCentreAt: null }, { matchCentreAt: { lt: new Date(now - 60_000) } }] },
+        ],
+        ...withBets,
+      },
+      select: { id: true, externalId: true },
+      orderBy: { startsAt: "asc" },
+      take: MATCH_CENTRE_MAX,
+    });
+    let saved = 0;
+    for (let i = 0; i < due.length; i += 20) {
+      const batch = due.slice(i, i + 20);
+      const byExternal = new Map(batch.map((event) => [event.externalId!, event.id]));
+      for (const raw of await this.client!.fixtureDetails(batch.map((event) => event.externalId!))) {
+        const eventId = byExternal.get(String(raw.fixture.id));
+        if (!eventId) continue;
+        await this.prisma.event.update({ where: { id: eventId }, data: { matchCentre: parseMatchCentre(raw) as unknown as Prisma.InputJsonValue, matchCentreAt: new Date() } });
+        saved++;
+      }
+    }
+    return saved;
+  }
+
   private async syncStats(): Promise<number> {
     const provider = this.provider();
     const now = Date.now();

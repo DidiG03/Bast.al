@@ -310,6 +310,9 @@ model Event {
   syncedAt           DateTime?   @map("synced_at")
   /// Last time live odds arrived for this match. Live bets pause when this goes stale.
   liveOddsAt         DateTime?   @map("live_odds_at")
+  /// A live football match's timeline (goals, cards, substitutions, VAR) and numbers (corners, cards), for Players with bets on it. See parseMatchCentre.
+  matchCentre        Json?       @map("match_centre")
+  matchCentreAt      DateTime?   @map("match_centre_at")
   /// The feed has stopped live betting on this match (e.g. a goal or VAR check).
   liveStopped        Boolean     @default(false) @map("live_stopped")
   /// Live bets pause until then after a goal, a big price jump or a reopen (see odds/live-guard.ts).

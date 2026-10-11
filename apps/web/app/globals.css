@@ -3610,6 +3610,7 @@ button.odds-selection:hover,
 
 .bet-leg {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 0.75rem;
   padding-left: 0.6rem;
@@ -3626,8 +3627,15 @@ button.odds-selection:hover,
 
 .bet-leg-main {
   display: grid;
+  flex: 1 1 0;
   gap: 0.1rem;
   min-width: 0;
+}
+
+/* A pick's match updates take a line of their own under it. */
+.bet-leg > .match-centre {
+  flex-basis: 100%;
+  margin-top: -0.35rem;
 }
 
 .bet-leg-main .muted {
@@ -12673,4 +12681,183 @@ button.is-blocked {
     max-width: 100%;
     font-size: 1.1rem;
   }
+}
+
+/* Match updates under a bet: the numbers so far and the timeline, home on the left, away on the right. */
+.match-centre {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 55%, var(--bg-elevated));
+}
+
+.match-centre > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  list-style: none;
+}
+
+.match-centre > summary::-webkit-details-marker {
+  display: none;
+}
+
+.match-centre > summary::after {
+  content: "";
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 150ms ease;
+}
+
+.match-centre[open] > summary::after {
+  transform: rotate(-135deg) translateY(-2px);
+}
+
+.match-centre-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+}
+
+.match-centre-peek {
+  display: inline-flex;
+  gap: 0.6rem;
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.match-centre.is-compact {
+  margin-top: 0.3rem;
+}
+
+.match-centre.is-compact > summary {
+  padding-block: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.match-centre-stats {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-centre-stats th,
+.match-centre-stats td {
+  padding: 0.25rem 0.7rem;
+  text-align: center;
+}
+
+.match-centre-stats thead th {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.match-centre-stats thead th:first-child,
+.match-centre-stats td:first-child {
+  text-align: left;
+}
+
+.match-centre-stats thead th:last-child,
+.match-centre-stats td:last-child {
+  text-align: right;
+}
+
+.match-centre-stats tbody th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.match-centre-stats td.is-ahead {
+  font-weight: 800;
+}
+
+.match-centre-moments {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0.3rem 0.5rem 0.6rem;
+  border-top: 1px solid var(--border);
+  list-style: none;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.match-moment {
+  display: grid;
+  grid-template-columns: 3rem 1.6rem 1fr;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.2rem;
+  font-size: 0.85rem;
+}
+
+/* Away moments mirror the home ones. */
+.match-moment.is-away {
+  grid-template-columns: 1fr 1.6rem 3rem;
+  text-align: right;
+}
+
+.match-moment.is-away .match-moment-minute {
+  order: 3;
+}
+
+.match-moment.is-away .match-moment-icon {
+  order: 2;
+}
+
+.match-moment.is-away .match-moment-text {
+  order: 1;
+}
+
+.match-moment-minute {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.match-moment-icon {
+  text-align: center;
+}
+
+.match-moment.is-var .match-moment-icon {
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.match-moment-text {
+  display: grid;
+  min-width: 0;
+}
+
+.match-moment-text strong,
+.match-moment-text .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-moment-text .muted {
+  font-size: 0.75rem;
+}
+
+.match-moment.is-goal,
+.match-moment.is-penalty,
+.match-moment.is-own-goal {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.match-moment.is-red {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }

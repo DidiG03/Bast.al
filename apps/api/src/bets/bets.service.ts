@@ -8,6 +8,7 @@ import { OddsService } from "../odds/odds.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
+import type { MatchCentre } from "../odds/api-football";
 import { RACE_CAP } from "../odds/greyhounds";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
@@ -29,6 +30,9 @@ export const MAX_ACCUMULATOR_ODDS = 5000;
 const PAGE = 50;
 
 /** What a bet looks like to the Player who placed it and to Super Admin. */
+/** What a bet shows about its match: the score, the minute, and while it's live or just over, its match centre. */
+const EVENT_SELECT = { id: true, name: true, league: true, startsAt: true, status: true, homeScore: true, awayScore: true, resultHome: true, resultAway: true, elapsed: true, period: true, matchCentre: true } satisfies Prisma.EventSelect;
+
 export const betSelect = {
   id: true,
   stake: true,
@@ -52,7 +56,7 @@ export const betSelect = {
       selection: {
         select: {
           name: true,
-          market: { select: { name: true, event: { select: { id: true, name: true, league: true, startsAt: true, status: true, homeScore: true, awayScore: true, resultHome: true, resultAway: true } } } },
+          market: { select: { name: true, event: { select: EVENT_SELECT } } },
         },
       },
     },
@@ -64,7 +68,7 @@ export const betSelect = {
       market: {
         select: {
           name: true,
-          event: { select: { id: true, name: true, league: true, startsAt: true, status: true, homeScore: true, awayScore: true, resultHome: true, resultAway: true } },
+          event: { select: EVENT_SELECT },
         },
       },
     },
@@ -73,7 +77,7 @@ export const betSelect = {
 
 type BetRow = Prisma.BetGetPayload<{ select: typeof betSelect }>;
 
-type EventRow = { id: string; name: string; league: string; startsAt: Date; status: string; homeScore: number | null; awayScore: number | null; resultHome: number | null; resultAway: number | null };
+type EventRow = Prisma.EventGetPayload<{ select: typeof EVENT_SELECT }>;
 
 function eventView(event: EventRow) {
   return {
@@ -85,6 +89,11 @@ function eventView(event: EventRow) {
     homeScore: event.homeScore,
     awayScore: event.awayScore,
     result: event.resultHome === null || event.resultAway === null ? null : { home: event.resultHome, away: event.resultAway },
+    /** While live: the minute and the phase ("HT", "2H"). */
+    elapsed: event.elapsed,
+    period: event.period,
+    /** Football with a bet on it: the timeline and numbers (MatchCentre in odds/api-football.ts), or null. */
+    centre: (event.matchCentre as MatchCentre | null) ?? null,
   };
 }
 

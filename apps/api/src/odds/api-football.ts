@@ -799,7 +799,90 @@ export type RawFixtureDetail = RawFixture & {
   events?: Array<{ time: { elapsed: number | null; extra?: number | null }; team: { id: number; name: string }; player: RawPerson; assist: RawPerson; type: string; detail: string }>;
   lineups?: Array<{ team: { id: number; name: string }; startXI: Array<{ player: RawPerson }>; substitutes: Array<{ player: RawPerson }> }>;
   players?: Array<{ team: { id: number; name: string }; players: Array<{ player: RawPerson; statistics: Array<{ games?: { minutes?: number | null } }> }> }>;
+  statistics?: RawTeamStatistics[];
 };
+
+/** One thing that happened in a match, for the match centre. */
+export type MatchMoment = {
+  minute: number;
+  /** Added time, e.g. 3 for 45+3. */
+  extra: number | null;
+  side: "home" | "away";
+  kind: "goal" | "own_goal" | "penalty" | "missed_penalty" | "yellow" | "red" | "sub" | "var";
+  /** Who scored, was booked, or came on. */
+  player: string | null;
+  /** Who assisted, or went off. */
+  other: string | null;
+  /** VAR only: what was decided ("Goal cancelled", "Penalty confirmed"). */
+  detail: string | null;
+};
+
+/** A match's timeline and numbers so far, newest moment first. A count the feed doesn't have is null. */
+export type MatchCentre = {
+  moments: MatchMoment[];
+  corners: [number, number] | null;
+  yellow: [number, number] | null;
+  red: [number, number] | null;
+  shotsOnTarget: [number, number] | null;
+  possession: [number, number] | null;
+};
+
+/**
+ * Reads a match's events and statistics into the match centre Players with
+ * bets on it see. The feed's own wording becomes a few kinds: a second yellow
+ * counts as a red, a goal can be normal, own or a penalty, and VAR decisions
+ * keep their wording.
+ */
+export function parseMatchCentre(raw: RawFixtureDetail): MatchCentre {
+  const homeId = raw.teams.home.id;
+  const sideOf = (team: { id: number; name: string }): "home" | "away" =>
+    (homeId !== undefined ? team.id === homeId : team.name === raw.teams.home.name) ? "home" : "away";
+  const moments: MatchMoment[] = [];
+  for (const event of raw.events ?? []) {
+    const type = event.type.toLowerCase();
+    const detail = event.detail ?? "";
+    let kind: MatchMoment["kind"] | null = null;
+    if (type === "goal") kind = /own goal/i.test(detail) ? "own_goal" : /missed penalty/i.test(detail) ? "missed_penalty" : /penalty/i.test(detail) ? "penalty" : "goal";
+    else if (type === "card") kind = /red|second yellow/i.test(detail) ? "red" : "yellow";
+    else if (type === "subst") kind = "sub";
+    else if (type === "var") kind = "var";
+    if (!kind) continue;
+    moments.push({
+      minute: event.time.elapsed ?? 0,
+      extra: event.time.extra ?? null,
+      side: sideOf(event.team),
+      kind,
+      player: event.player?.name ?? null,
+      other: event.assist?.name ?? null,
+      detail: kind === "var" ? detail || null : null,
+    });
+  }
+  moments.sort((a, b) => b.minute - a.minute || (b.extra ?? 0) - (a.extra ?? 0));
+
+  const stats = raw.statistics ?? [];
+  const team = (side: "home" | "away") => stats.find((entry) => sideOf(entry.team) === side);
+  const pair = (type: string): [number, number] | null => {
+    const read = (side: "home" | "away") => {
+      const stat = team(side)?.statistics.find((s) => s.type === type);
+      if (!stat) return undefined;
+      const value = Number(String(stat.value ?? 0).replace("%", ""));
+      return Number.isFinite(value) ? value : undefined;
+    };
+    const home = read("home");
+    const away = read("away");
+    return home === undefined || away === undefined ? null : [home, away];
+  };
+  // Cards from the timeline when the statistics don't have them yet; a second yellow is a red there too.
+  const count = (kind: MatchMoment["kind"]): [number, number] => [moments.filter((m) => m.kind === kind && m.side === "home").length, moments.filter((m) => m.kind === kind && m.side === "away").length];
+  return {
+    moments,
+    corners: pair("Corner Kicks"),
+    yellow: pair("Yellow Cards") ?? (stats.length === 0 && moments.length === 0 ? null : count("yellow")),
+    red: pair("Red Cards") ?? (stats.length === 0 && moments.length === 0 ? null : count("red")),
+    shotsOnTarget: pair("Shots on Goal"),
+    possession: pair("Ball Possession"),
+  };
+}
 
 /**
  * The goals of a finished match in order, and who took part, for the

@@ -516,6 +516,31 @@ export type OddsSettings = {
 
 export type BetStatus = "OPEN" | "WON" | "LOST" | "VOID";
 
+/** One thing that happened in a match: a goal, a card, a substitution or a VAR decision. */
+export type MatchMoment = {
+  minute: number;
+  /** Added time, e.g. 3 for 45+3. */
+  extra: number | null;
+  side: "home" | "away";
+  kind: "goal" | "own_goal" | "penalty" | "missed_penalty" | "yellow" | "red" | "sub" | "var";
+  /** Who scored, was booked, or came on. */
+  player: string | null;
+  /** Who assisted, or went off. */
+  other: string | null;
+  /** VAR only: what was decided, in the feed's words. */
+  detail: string | null;
+};
+
+/** A football match's timeline (newest first) and numbers, as home–away pairs; null when the feed doesn't have one yet. */
+export type MatchCentreData = {
+  moments: MatchMoment[];
+  corners: [number, number] | null;
+  yellow: [number, number] | null;
+  red: [number, number] | null;
+  shotsOnTarget: [number, number] | null;
+  possession: [number, number] | null;
+};
+
 export type BetEvent = {
   id: string;
   name: string;
@@ -525,6 +550,11 @@ export type BetEvent = {
   homeScore: number | null;
   awayScore: number | null;
   result: { home: number; away: number } | null;
+  /** While live: the minute and the phase ("HT", "2H"). */
+  elapsed?: number | null;
+  period?: string | null;
+  /** Football with a bet on it, live or just over: its timeline and numbers. */
+  centre?: MatchCentreData | null;
 };
 
 export type BetLeg = {

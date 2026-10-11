@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
+import { MatchCentre } from "../../../components/match-centre";
 import { GreyhoundRaces } from "../../../components/greyhound-races";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
@@ -449,21 +450,27 @@ function BetPage() {
   const leagues = useMemo(() => Array.from(new Set((events ?? []).map((e) => e.league))).sort(), [events]);
   const query = search.trim().toLowerCase();
   const liveLabel = t("Live now");
+  const endedLabel = t("Just finished");
   // Worked out again only when the matches or the filters change: typing a stake leaves them as they are.
   const { shown, allGroups } = useMemo(() => {
-    const shown = merged.filter(
+    const matching = merged.filter(
       (event) => (finishedNow(event) || ((event.bettable || event.live) && event.markets.length > 0)) && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
     );
+    // Matches being played first, under "Live now"; those that just ended under their own heading; then the days ahead.
+    const playing = matching.filter((event) => event.live && !finishedNow(event));
+    const ended = matching.filter((event) => finishedNow(event));
+    const later = matching.filter((event) => !event.live && !finishedNow(event));
+    const shown = [...playing, ...ended, ...later];
     const allGroups: Array<[string, OddsEvent[]]> = [];
     const label = dayLabeller(i18n);
     for (const event of shown) {
-      const heading = event.live || finishedNow(event) ? liveLabel : label(event.startsAt);
+      const heading = finishedNow(event) ? endedLabel : event.live ? liveLabel : label(event.startsAt);
       const last = allGroups[allGroups.length - 1];
       if (last && last[0] === heading) last[1].push(event);
       else allGroups.push([heading, [event]]);
     }
     return { shown, allGroups };
-  }, [merged, league, query, liveLabel, i18n]);
+  }, [merged, league, query, liveLabel, endedLabel, i18n]);
   // A day that no longer has matches (a search, a league filter) falls back to every day.
   const dayShown = day === "" ? "" : day === "live" ? liveLabel : day;
   const groups = dayShown && allGroups.some(([label]) => label === dayShown) ? allGroups.filter(([label]) => label === dayShown) : allGroups;
@@ -1455,6 +1462,24 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
     };
   }, [getToken, status, version, toast, t]);
 
+  // While a match on an open bet is live, its score and match updates refresh every 20 seconds.
+  const loaded = [...(data?.bets ?? []), ...more];
+  const watching = status === "open" && loaded.some((bet) => bet.event?.status === "LIVE" || bet.legs.some((leg) => leg.event.status === "LIVE"));
+  usePolling(
+    () =>
+      void (async () => {
+        const token = await getToken();
+        if (!token) return;
+        const next = await apiFetch<MyBets>(`/bets/mine?status=${status}`, token);
+        setData(next);
+        // Bets loaded with "Show more" get their fresh copy too, where the first page has one.
+        const fresh = new Map(next.bets.map((bet) => [bet.id, bet]));
+        setMore((list) => list.map((bet) => fresh.get(bet.id) ?? bet));
+      })().catch(() => undefined),
+    20_000,
+    watching,
+  );
+
   async function loadMore() {
     const all = [...(data?.bets ?? []), ...more];
     const last = all[all.length - 1];
@@ -1599,6 +1624,7 @@ function BetCard({ bet }: { bet: Bet }) {
           {score ? <strong className="odds-score">{score.home} – {score.away}</strong> : null}
         </div>
       ) : null}
+      {event && bet.status === "OPEN" ? <MatchCentre event={event} /> : null}
       <dl className="bet-card-numbers">
         <div>
           <dt className="muted">{t("Stake")}</dt>

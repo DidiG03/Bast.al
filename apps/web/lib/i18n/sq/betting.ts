@@ -15,6 +15,7 @@ export const betting: Record<string, string> = {
   "Search teams or leagues": "Kërko skuadra ose kampionate",
   "Search matches": "Kërko ndeshje",
   "League": "Kampionati",
+  "All leagues": "Të gjitha kampionatet",
   "All": "Të gjitha",
   "No matches are open for bets right now. Check back soon.": "Asnjë ndeshje nuk pranon baste tani. Kthehu së shpejti.",
   "No matches match your search.": "Asnjë ndeshje nuk përputhet me kërkimin.",

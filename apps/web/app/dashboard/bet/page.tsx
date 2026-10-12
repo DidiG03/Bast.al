@@ -566,21 +566,20 @@ function BetPage() {
           {t("Bet")}
           <HelpTip text="The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: 10 ALL at 2.50 pays back 25 ALL if it wins." />
         </h1>
+        <nav className="tabs-nav bet-tabs" aria-label={t("Betting sections")}>
+          {(
+            [
+              ["matches", t("Matches")],
+              ["open", t("Open bets")],
+              ["settled", t("Settled")],
+            ] as Array<[Tab, string]>
+          ).map(([key, label]) => (
+            <button key={key} type="button" className={`tab-button ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)} aria-current={tab === key ? "page" : undefined}>
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
-
-      <nav className="tabs-nav bet-tabs" aria-label={t("Betting sections")}>
-        {(
-          [
-            ["matches", t("Matches")],
-            ["open", t("Open bets")],
-            ["settled", t("Settled")],
-          ] as Array<[Tab, string]>
-        ).map(([key, label]) => (
-          <button key={key} type="button" className={`tab-button ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)} aria-current={tab === key ? "page" : undefined}>
-            {label}
-          </button>
-        ))}
-      </nav>
 
       {tab === "matches" ? (
         <div className="sport-switch" role="group" aria-label={t("Sport")}>
@@ -627,7 +626,19 @@ function BetPage() {
         <div className="bet-layout">
           <div className={`stack bet-matches${focused ? " is-jumping" : ""}`}>
             <div className="bet-filters">
-              <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => filter(() => setSearch(e.target.value))} aria-label={t("Search matches")} />
+              <div className="bet-filters-row">
+                <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => filter(() => setSearch(e.target.value))} aria-label={t("Search matches")} />
+                {leagues.length > 1 ? (
+                  <select className="bet-league-select" value={league} onChange={(e) => filter(() => setLeague(e.target.value))} aria-label={t("League")}>
+                    <option value="">{t("All leagues")}</option>
+                    {leagues.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
               {allGroups.length > 1 || favourites.size > 0 || favouritesOnly ? (
                 <div className="bet-chips bet-day-chips" role="group" aria-label={t("Day")}>
                   <button
@@ -661,18 +672,6 @@ function BetPage() {
                       </button>
                     );
                   })}
-                </div>
-              ) : null}
-              {leagues.length > 1 ? (
-                <div className="bet-chips" role="group" aria-label={t("League")}>
-                  <button type="button" className={`bet-chip${league === "" ? " is-active" : ""}`} onClick={() => filter(() => setLeague(""))}>
-                    {t("All")}
-                  </button>
-                  {leagues.map((name) => (
-                    <button key={name} type="button" className={`bet-chip${league === name ? " is-active" : ""}`} onClick={() => filter(() => setLeague(league === name ? "" : name))}>
-                      {name}
-                    </button>
-                  ))}
                 </div>
               ) : null}
             </div>
@@ -712,20 +711,29 @@ function BetPage() {
                       {label}
                       <span className="odds-day-count">{count}</span>
                     </h2>
-                    {dayEvents.map((event) => (
-                      <MatchCard
-                        key={event.id}
-                        event={event}
-                        selected={selected}
-                        onPick={toggle}
-                        focused={focused === event.id}
-                        moves={moves}
-                        expanded={expanded.has(event.id)}
-                        loading={expanded.has(event.id) && !details[event.id]}
-                        onToggle={toggleExpanded}
-                        starred={favourites.has(event.id)}
-                        onStar={toggleFavourite}
-                      />
+                    {byLeague(dayEvents).map((group) => (
+                      <div key={group.key} className="bm-league">
+                        <h3 className="bm-league-head">
+                          <span className="bm-league-name">{group.league}</span>
+                          {group.country ? <span className="bm-league-country">{group.country}</span> : null}
+                          <span className="bm-league-count">{group.events.length}</span>
+                        </h3>
+                        {group.events.map((event) => (
+                          <MatchCard
+                            key={event.id}
+                            event={event}
+                            selected={selected}
+                            onPick={toggle}
+                            focused={focused === event.id}
+                            moves={moves}
+                            expanded={expanded.has(event.id)}
+                            loading={expanded.has(event.id) && !details[event.id]}
+                            onToggle={toggleExpanded}
+                            starred={favourites.has(event.id)}
+                            onStar={toggleFavourite}
+                          />
+                        ))}
+                      </div>
                     ))}
                   </section>
                 ))}
@@ -848,160 +856,182 @@ const MatchCard = memo(function MatchCard({
   const over = finishedNow(event);
   // Football has stats once it's under way, and the line-ups from shortly before.
   const hasStats = (event.sport ?? "football") === "football" && (event.live || over || new Date(event.startsAt).getTime() - Date.now() < STATS_BEFORE_MS);
+  // The row carries the main market when it fits in three columns; everything else opens below it.
   // A finished match shows its final score and no prices.
-  const markets = over ? [] : expanded ? event.markets : event.markets.slice(0, 1);
-  const more = over ? 0 : Math.max(0, event.marketCount - 1);
-  const grouped = MARKET_GROUPS.map(([id, label]) => [label, markets.filter((market) => marketGroup(market.key) === id)] as const).filter(([, list]) => list.length > 0);
+  const main = over ? undefined : event.markets[0];
+  const inRow = main && main.selections.length <= 3 ? main : undefined;
+  const below = over || !expanded ? [] : event.markets.filter((market) => market.id !== inRow?.id);
+  const more = over ? 0 : Math.max(0, event.marketCount - (inRow ? 1 : 0));
+  const grouped = MARKET_GROUPS.map(([id, label]) => [label, below.filter((market) => marketGroup(market.key) === id)] as const).filter(([, list]) => list.length > 0);
   const toggleLabel = expanded ? t("Fewer markets") : tn(more, "{count} more market", "{count} more markets");
+  const scored = (event.live || over) && event.homeScore !== null && event.awayScore !== null;
+  const playing = event.live && !over;
+  const pause = over
+    ? { text: breakPause(event) ?? "", tone: " is-finished" }
+    : event.live && !event.bettable
+      ? // A goal or the last minutes say so; otherwise a break in play explains the pause better than "a moment".
+        { text: event.livePause === "goal" || event.livePause === "late" ? PAUSE_TEXT[event.livePause] : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed, tone: event.livePause === "goal" ? " is-goal" : "" }
+      : event.live && event.allMarketsSuspended
+        ? { text: PAUSE_TEXT.bookmaker, tone: "" }
+        : null;
+
+  const pick = (market: OddsEvent["markets"][number], selection: OddsSelection, label: string, className: string) => {
+    const isSelected = selected.has(selection.id);
+    const locked = !event.bettable || Boolean(market.suspended || selection.suspended);
+    return (
+      <button
+        key={selection.id}
+        type="button"
+        className={`${className}${isSelected ? " is-selected" : ""}`}
+        onClick={() => onPick(event, market.name, selection)}
+        aria-pressed={isSelected}
+        disabled={locked && !isSelected}
+        aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: pickLabel(selection.name, i18n), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
+      >
+        <span className="odds-selection-name">{label}</span>
+        <strong className="odds-price">
+          {locked ? "–" : selection.price.toFixed(2)}
+          {locked ? null : <PriceArrow move={moves.get(selection.id)} />}
+        </strong>
+      </button>
+    );
+  };
+
   return (
-    <article id={`match-${event.id}`} className={`card odds-event bet-match${event.live ? " is-live" : ""}${focused ? " is-focused" : ""}`}>
-      <header className="odds-event-header">
-        <span className="muted odds-league">
-          {event.league}
-          {event.country ? ` · ${event.country}` : ""}
-        </span>
-        <span className="odds-event-header-side">
+    <article id={`match-${event.id}`} className={`bm-match${playing ? " is-live" : ""}${over ? " is-over" : ""}${focused ? " is-focused" : ""}${expanded ? " is-expanded" : ""}`}>
+      <div className="bm-row">
+        <div className="bm-when">
+          {playing ? (
+            <>
+              <span className="live-dot" aria-hidden="true" />
+              <span>{event.period && breakPause(event) ? livePill(event, t) : event.elapsed !== null ? `${event.elapsed}'` : t("Live")}</span>
+            </>
+          ) : over ? (
+            <span>{livePill(event, t)}</span>
+          ) : (
+            <time dateTime={event.startsAt}>{date(event.startsAt, TIME)}</time>
+          )}
+        </div>
+        <div className="bm-teams">
+          <span className="bm-team">
+            <span className="bm-team-name">{event.homeTeam ?? event.name}</span>
+            {scored ? <span className="bm-score">{event.homeScore}</span> : null}
+          </span>
+          {event.awayTeam ? (
+            <span className="bm-team">
+              <span className="bm-team-name">{event.awayTeam}</span>
+              {scored ? <span className="bm-score">{event.awayScore}</span> : null}
+            </span>
+          ) : null}
+        </div>
+        <div className="bm-tools">
           <button type="button" className={`match-star${starred ? " is-starred" : ""}`} onClick={() => onStar(event.id)} aria-pressed={starred} aria-label={starred ? t("Remove {match} from favourites", { match: event.name }) : t("Add {match} to favourites", { match: event.name })}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
             </svg>
           </button>
-          {over ? (
-            <span className="status-pill">{livePill(event, t)}</span>
-          ) : event.live ? (
-            <span className="status-pill is-active">
-              <span className="live-dot" aria-hidden="true" />
-              {livePill(event, t)}
-            </span>
-          ) : (
-            <span className="status-pill">{date(event.startsAt, TIME)}</span>
-          )}
-          {/* Opens or closes the other markets from the top, so there's no scrolling down to close them. */}
-          {more > 0 ? (
-            <button type="button" className={`markets-toggle${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded} aria-label={toggleLabel}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </button>
-          ) : null}
-        </span>
-      </header>
-      <div className="odds-teams">
-        <span className="odds-team">
-          <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
-          {event.homeTeam ?? event.name}
-        </span>
-        {(event.live || over) && event.homeScore !== null && event.awayScore !== null ? (
-          <strong className="odds-score">
-            {event.homeScore} – {event.awayScore}
-          </strong>
-        ) : (
-          <span className="odds-vs">{t("vs")}</span>
-        )}
-        <span className="odds-team">
-          {event.awayTeam ?? ""}
-          <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
-        </span>
-      </div>
-      {over ? (
-        <p className="bet-paused is-finished">{t(breakPause(event) ?? "")}</p>
-      ) : event.live && !event.bettable ? (
-        <p className={`bet-paused${event.livePause === "goal" ? " is-goal" : ""}`}>
-          {/* A goal or the last minutes say so; otherwise a break in play explains the pause better than "a moment". */}
-          {t(event.livePause === "goal" || event.livePause === "late" ? PAUSE_TEXT[event.livePause] : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed)}
-        </p>
-      ) : event.live && event.allMarketsSuspended ? (
-        <p className="bet-paused">{t(PAUSE_TEXT.bookmaker)}</p>
-      ) : null}
-      {grouped.map(([label, list]) => (
-        <div key={label} className="odds-market-group">
-          {expanded && grouped.length > 1 ? <h3 className="odds-market-group-title">{t(label)}</h3> : null}
-          {list.map((market) => {
-            // A market with many outcomes (correct score, goalscorers) hides the ones off the board, unless they're on the slip.
-            const offered = market.selections.filter((selection) => !(selection.suspended && !market.suspended && market.selections.length > 3 && !selected.has(selection.id)));
-            const scorers = market.key.startsWith("scorer_");
-            const showAll = !scorers || allPlayers.has(market.id) || offered.length <= SCORERS_SHOWN + 2;
-            const visible = showAll ? offered : offered.filter((selection, index) => index < SCORERS_SHOWN || selected.has(selection.id));
-            return (
-              <div key={market.id} className="odds-market">
-                <div className="odds-market-head">
-                  <span className="odds-market-name">
-                    {ts(market.name)}
-                    {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
-                  </span>
-                  {/* A goalscorer list is too long for the chart. */}
-                  {scorers ? null : <MarketPriceHistory selections={market.selections} compact />}
-                </div>
-                <div className={`odds-selections${scorers ? " is-players" : ""}`}>
-                  {visible.map((selection) => {
-                    const isSelected = selected.has(selection.id);
-                    const locked = !event.bettable || Boolean(market.suspended || selection.suspended);
-                    return (
-                      <button
-                        key={selection.id}
-                        type="button"
-                        className={`odds-selection bet-pick${isSelected ? " is-selected" : ""}`}
-                        onClick={() => onPick(event, market.name, selection)}
-                        aria-pressed={isSelected}
-                        disabled={locked && !isSelected}
-                        aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: pickLabel(selection.name, i18n), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
-                      >
-                        <span className="odds-selection-name">{pickLabel(selection.name, i18n)}</span>
-                        <strong className="odds-price">
-                          {locked ? "–" : selection.price.toFixed(2)}
-                          {locked ? null : <PriceArrow move={moves.get(selection.id)} />}
-                        </strong>
-                      </button>
-                    );
-                  })}
-                </div>
-                {!showAll ? (
-                  <button type="button" className="text-button bet-all-players" onClick={() => setAllPlayers((current) => new Set(current).add(market.id))}>
-                    {tn(offered.length, "Show all {count} players", "Show all {count} players")}
-                  </button>
-                ) : null}
-                {/^(home_|away_)?cards_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes. Every yellow and red card counts as 1.")}</p> : null}
-                {/^(home_|away_)?corners_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes.")}</p> : null}
-                {market.key === "scorer_first" ? (
-                  <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, or comes on after the first goal, your stake comes back.")}</p>
-                ) : scorers ? (
-                  <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, your stake comes back.")}</p>
-                ) : null}
-                {market.key === "first_team_score" || market.key === "last_team_score" ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-      {expanded && loading ? (
-        <div className="loading-state bet-markets-loading">
-          <LoadingSpinner label="Loading markets" />
-        </div>
-      ) : null}
-      {statsOpen ? <MatchStatsPanel eventId={event.id} name={event.name} live={event.live} /> : null}
-      {more > 0 || hasStats ? (
-        <footer className="odds-event-footer">
           {hasStats ? (
-            <button type="button" className={`bet-match-stats${statsOpen ? " is-open" : ""}`} onClick={() => setStatsOpen((open) => !open)} aria-expanded={statsOpen}>
+            <button type="button" className={`bm-icon${statsOpen ? " is-active" : ""}`} onClick={() => setStatsOpen((open) => !open)} aria-pressed={statsOpen} aria-label={statsOpen ? t("Hide stats") : t("Stats")} title={statsOpen ? t("Hide stats") : t("Stats")}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 20V11M12 20V4M19 20v-6" />
               </svg>
-              {statsOpen ? t("Hide stats") : t("Stats")}
             </button>
           ) : null}
-          {more > 0 ? (
-            <button type="button" className={`bet-more-markets${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded}>
-              {toggleLabel}
+        </div>
+        <div className={`bm-odds${inRow ? ` has-${inRow.selections.length}` : ""}`}>
+          {inRow ? inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick")) : null}
+        </div>
+        {more > 0 ? (
+          <button type="button" className={`bm-more${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded} aria-label={toggleLabel} title={toggleLabel}>
+            {expanded ? (
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m6 9 6 6 6-6" />
+                <path d="m6 15 6-6 6 6" />
               </svg>
-            </button>
+            ) : (
+              `+${more}`
+            )}
+          </button>
+        ) : (
+          <span className="bm-more-spacer" aria-hidden="true" />
+        )}
+      </div>
+      {pause ? <p className={`bet-paused bm-note${pause.tone}`}>{t(pause.text)}</p> : null}
+      {statsOpen ? (
+        <div className="bm-stats">
+          <MatchStatsPanel eventId={event.id} name={event.name} live={event.live} />
+        </div>
+      ) : null}
+      {expanded ? (
+        <div className="bm-detail">
+          {inRow ? <p className="bm-detail-main">{ts(inRow.name)}</p> : null}
+          {grouped.map(([label, list]) => (
+            <div key={label} className="odds-market-group">
+              {grouped.length > 1 ? <h3 className="odds-market-group-title">{t(label)}</h3> : null}
+              {list.map((market) => {
+                // A market with many outcomes (correct score, goalscorers) hides the ones off the board, unless they're on the slip.
+                const offered = market.selections.filter((selection) => !(selection.suspended && !market.suspended && market.selections.length > 3 && !selected.has(selection.id)));
+                const scorers = market.key.startsWith("scorer_");
+                const showAll = !scorers || allPlayers.has(market.id) || offered.length <= SCORERS_SHOWN + 2;
+                const visible = showAll ? offered : offered.filter((selection, index) => index < SCORERS_SHOWN || selected.has(selection.id));
+                return (
+                  <div key={market.id} className="odds-market">
+                    <div className="odds-market-head">
+                      <span className="odds-market-name">
+                        {ts(market.name)}
+                        {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
+                      </span>
+                      {/* A goalscorer list is too long for the chart. */}
+                      {scorers ? null : <MarketPriceHistory selections={market.selections} compact />}
+                    </div>
+                    <div className={`odds-selections${scorers ? " is-players" : ""}`}>{visible.map((selection) => pick(market, selection, pickLabel(selection.name, i18n), "odds-selection bet-pick"))}</div>
+                    {!showAll ? (
+                      <button type="button" className="text-button bet-all-players" onClick={() => setAllPlayers((current) => new Set(current).add(market.id))}>
+                        {tn(offered.length, "Show all {count} players", "Show all {count} players")}
+                      </button>
+                    ) : null}
+                    {/^(home_|away_)?cards_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes. Every yellow and red card counts as 1.")}</p> : null}
+                    {/^(home_|away_)?corners_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes.")}</p> : null}
+                    {market.key === "scorer_first" ? (
+                      <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, or comes on after the first goal, your stake comes back.")}</p>
+                    ) : scorers ? (
+                      <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, your stake comes back.")}</p>
+                    ) : null}
+                    {market.key === "first_team_score" || market.key === "last_team_score" ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          {loading ? (
+            <div className="loading-state bet-markets-loading">
+              <LoadingSpinner label="Loading markets" />
+            </div>
           ) : null}
-        </footer>
+        </div>
       ) : null}
     </article>
   );
 });
+
+/** A pick's name in the match row: 1, X and 2 for the result, otherwise its own name. */
+function rowLabel(selection: OddsSelection, i18n: I18n): string {
+  if (selection.key === "home") return "1";
+  if (selection.key === "draw") return "X";
+  if (selection.key === "away") return "2";
+  return pickLabel(selection.name, i18n);
+}
+
+/** A day's matches by competition, in the order the competitions first come up. */
+function byLeague(events: OddsEvent[]): Array<{ key: string; league: string; country: string | null; events: OddsEvent[] }> {
+  const groups = new Map<string, { key: string; league: string; country: string | null; events: OddsEvent[] }>();
+  for (const event of events) {
+    const key = `${event.country ?? ""}|${event.league}`;
+    const group = groups.get(key);
+    if (group) group.events.push(event);
+    else groups.set(key, { key, league: event.league, country: event.country, events: [event] });
+  }
+  return Array.from(groups.values());
+}
 
 /** Just finished: the live list keeps it a few minutes, marked full time, instead of dropping it. */
 function finishedNow(event: OddsEvent): boolean {

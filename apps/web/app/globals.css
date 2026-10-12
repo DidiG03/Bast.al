@@ -13083,3 +13083,596 @@ button.is-blocked {
   border-radius: 6px;
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
+
+/* ============================================================
+   Bet page: a premium sportsbook list. Matches sit in one row
+   each, grouped by competition: time or minute, the two teams
+   with the score, the main market's prices in aligned columns,
+   and "+N" for the rest. Layered dark surfaces, hairline edges,
+   the lime accent kept for what can be acted on.
+   ============================================================ */
+
+.role-player {
+  --surface-1: #0f110a;
+  --surface-2: #14170e;
+  --surface-3: #1b1f14;
+  --surface-4: #23281a;
+  --hairline: rgb(255 255 255 / 6%);
+  --hairline-strong: rgb(255 255 255 / 11%);
+  --accent-soft: rgb(214 255 63 / 10%);
+  --text-2: #c7ceb4;
+  --radius-panel: 14px;
+  --radius-control: 10px;
+}
+
+.bet-page {
+  gap: 1.1rem;
+}
+
+/* Title and the Matches / Open bets / Settled switch on one line. */
+.bet-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+
+.bet-page-head h1 {
+  font-size: clamp(1.5rem, 1.2rem + 1vw, 1.9rem);
+  letter-spacing: -0.02em;
+}
+
+.role-player .bet-page-head .bet-tabs {
+  width: min(100%, 27rem);
+  padding: 0.2rem;
+  border-color: var(--hairline-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+}
+
+.role-player .bet-page-head .bet-tabs .tab-button {
+  min-height: 2.25rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.role-player .bet-page-head .bet-tabs .tab-button.is-active {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 25%) inset, 0 4px 14px rgb(214 255 63 / 18%);
+}
+
+/* Sports: a quiet strip; the chosen one is lit. */
+.role-player .bet-page .sport-switch {
+  justify-self: stretch;
+  padding: 0.2rem;
+  border-color: var(--hairline);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+}
+
+.role-player .bet-page button.sport-option {
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.role-player .bet-page button.sport-option:not(.is-active):hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.role-player .bet-page .sport-option svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Search and competition on one line, the days under them. */
+.bet-filters-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.bet-filters-row input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.role-player .bet-page .bet-filters input[type="search"],
+.role-player .bet-page .bet-league-select {
+  height: 2.6rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-control);
+  background-color: var(--surface-1);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.role-player .bet-page .bet-filters input[type="search"] {
+  padding-left: 2.4rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa189' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+  background-position: 0.85rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+}
+
+.role-player .bet-page .bet-filters input[type="search"]:focus,
+.role-player .bet-page .bet-league-select:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.role-player .bet-page .bet-league-select {
+  flex: 0 1 15rem;
+  min-width: 0;
+  padding-right: 2.2rem;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa189' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+  text-overflow: ellipsis;
+}
+
+.role-player .bet-page button.bet-chip {
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: var(--surface-1);
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}
+
+.role-player .bet-page button.bet-chip:not(.is-active):hover {
+  border-color: var(--hairline-strong);
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.role-player .bet-page button.bet-chip.is-active {
+  border-color: transparent;
+  background: var(--accent);
+  color: #0b1300;
+}
+
+.role-player .bet-page .bet-chip.is-active .bet-chip-count {
+  background: rgb(11 19 0 / 16%);
+  color: #0b1300;
+}
+
+/* The day's heading: small capitals over the competitions. */
+.bet-page .odds-day.stack {
+  gap: 0.75rem;
+}
+
+.bet-page .odds-day-label {
+  margin: 0.5rem 0 0;
+  color: var(--text-2);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* A competition: one panel, its name once at the top. */
+.bm-league {
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
+}
+
+.bm-league-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--hairline);
+  background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.bm-league-name {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-league-country {
+  flex: none;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.bm-league-count {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A match: one row. */
+.bm-match {
+  position: relative;
+  scroll-margin-top: 5rem;
+}
+
+.bm-match + .bm-match {
+  border-top: 1px solid var(--hairline);
+}
+
+.bm-match.is-live::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--accent);
+  content: "";
+  opacity: 0.8;
+}
+
+.bm-match.is-focused {
+  background: var(--accent-soft);
+}
+
+.bm-match.is-expanded {
+  background: var(--surface-2);
+}
+
+.bm-row {
+  display: grid;
+  grid-template-areas: "when teams tools odds more";
+  grid-template-columns: 3.75rem minmax(0, 1fr) auto minmax(11rem, 16rem) 2.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4rem;
+  padding: 0.55rem 1rem;
+  transition: background 120ms ease;
+}
+
+.bm-match:not(.is-expanded) .bm-row:hover {
+  background: rgb(255 255 255 / 2%);
+}
+
+.bm-when {
+  display: flex;
+  grid-area: when;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.bm-match.is-live .bm-when {
+  color: var(--accent);
+}
+
+.bm-match.is-over .bm-when {
+  color: var(--text-2);
+  font-size: 0.72rem;
+}
+
+.bm-teams {
+  display: grid;
+  grid-area: teams;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.bm-team {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.bm-team-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-score {
+  flex: none;
+  min-width: 1.1rem;
+  color: var(--text);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.bm-match.is-live .bm-score {
+  color: var(--accent);
+}
+
+.bm-tools {
+  display: flex;
+  grid-area: tools;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.role-player .bet-page button.bm-icon,
+.role-player .bet-page button.match-star {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.role-player .bet-page button.bm-icon:hover,
+.role-player .bet-page button.match-star:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.role-player .bet-page button.match-star.is-starred {
+  color: var(--warning);
+}
+
+.bm-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.role-player .bet-page button.bm-icon.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* The main market's prices: aligned columns, the same width on every row. */
+.bm-odds {
+  display: grid;
+  grid-area: odds;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.375rem;
+}
+
+.bm-odds.has-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bm-odds.has-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.role-player .bet-page button.bm-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-width: 0;
+  height: 2.625rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.bm-pick .odds-selection-name {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-pick .odds-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.role-player .bet-page button.bm-pick:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--surface-4);
+}
+
+.role-player .bet-page button.bm-pick:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.role-player .bet-page button.bm-pick:disabled {
+  background: var(--surface-2);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.role-player .bet-page button.bm-pick.is-selected {
+  border-color: transparent;
+  background: var(--accent);
+  box-shadow: 0 4px 14px rgb(214 255 63 / 22%);
+}
+
+.role-player .bet-page button.bm-pick.is-selected .odds-selection-name,
+.role-player .bet-page button.bm-pick.is-selected .odds-price,
+.role-player .bet-page button.bm-pick.is-selected .price-arrow {
+  color: #0b1300;
+}
+
+.role-player .bet-page button.bm-more {
+  display: inline-grid;
+  grid-area: more;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.625rem;
+  padding: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.role-player .bet-page button.bm-more:hover,
+.role-player .bet-page button.bm-more.is-open {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+
+.bm-more svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bm-more-spacer {
+  grid-area: more;
+}
+
+/* Why the match can't be bet on right now. */
+.bet-page .bet-paused.bm-note {
+  margin: -0.15rem 1rem 0.65rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.bm-stats {
+  padding: 0 1rem 0.85rem;
+}
+
+/* An opened match: every market, on a recessed surface. */
+.bm-detail {
+  display: grid;
+  gap: 0.9rem;
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px solid var(--hairline);
+  background: rgb(0 0 0 / 22%);
+}
+
+.bm-detail-main {
+  display: none;
+}
+
+.bm-detail .odds-market-group {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.bm-detail .odds-market-group-title {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bm-detail .odds-market {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.bm-detail .odds-market-name {
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.role-player .bet-page .bm-detail button.bet-pick {
+  min-height: 2.75rem;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.role-player .bet-page .bm-detail button.bet-pick:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--surface-4);
+}
+
+.role-player .bet-page .bm-detail button.bet-pick.is-selected {
+  border-color: transparent;
+  background: var(--accent);
+}
+
+/* "Show more matches" */
+.role-player .bet-page button.bet-show-more {
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+}
+
+/* The bet slip: the same panel language. */
+.role-player .bet-slip-desktop .bet-slip {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+  box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
+}
+
+/* Phones: the time and tools on top, the teams, then the prices across. */
+@media (max-width: 720px) {
+  .bm-row {
+    grid-template-areas:
+      "when tools"
+      "teams teams"
+      "odds more";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.45rem 0.5rem;
+    padding: 0.65rem 0.85rem 0.75rem;
+  }
+
+  .bm-league-head {
+    padding: 0.55rem 0.85rem;
+  }
+
+  .bet-page .bet-paused.bm-note {
+    margin: -0.2rem 0.85rem 0.65rem;
+  }
+
+  .bm-stats,
+  .bm-detail {
+    padding-inline: 0.85rem;
+  }
+
+  .role-player .bet-page .bet-league-select {
+    flex-basis: 9.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-player .bet-page button.bm-pick,
+  .bm-row {
+    transition: none;
+  }
+}

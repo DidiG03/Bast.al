@@ -13802,7 +13802,7 @@ button.is-blocked {
   font-variant-numeric: tabular-nums;
 }
 
-.role-player .bet-page button.bm-pick:not(:disabled):hover {
+.role-player .bet-page button.bm-pick:not(:disabled):not(.is-selected):hover {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   background: var(--surface-4);
 }
@@ -13934,7 +13934,7 @@ button.is-blocked {
   background: var(--surface-3);
 }
 
-.role-player .bet-page .bm-detail button.bet-pick:not(:disabled):hover {
+.role-player .bet-page .bm-detail button.bet-pick:not(:disabled):not(.is-selected):hover {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   background: var(--surface-4);
 }

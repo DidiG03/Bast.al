@@ -67,3 +67,38 @@ test("without statistics, cards come from the timeline and corners are unknown",
   const empty = parseMatchCentre({ ...raw, events: [], statistics: [] });
   assert.deepEqual([empty.moments, empty.yellow, empty.red], [[], null, null], "nothing known yet");
 });
+
+test("every number the feed has, home first, in a fixed order; expected goals and percentages read as numbers", () => {
+  const centre = parseMatchCentre({
+    ...raw,
+    statistics: [
+      { team: away, statistics: [{ type: "Fouls", value: 9 }, { type: "Ball Possession", value: "41%" }, { type: "expected_goals", value: "0.84" }, { type: "Passes %", value: "77%" }, { type: "Yellow Cards", value: 1 }, { type: "goals_prevented", value: null }] },
+      { team: home, statistics: [{ type: "Fouls", value: 12 }, { type: "Ball Possession", value: "59%" }, { type: "expected_goals", value: "1.91" }, { type: "Passes %", value: "85%" }, { type: "Yellow Cards", value: null }, { type: "goals_prevented", value: null }] },
+    ],
+  });
+  assert.deepEqual(centre.stats, [
+    { type: "expected_goals", home: 1.91, away: 0.84 },
+    { type: "Ball Possession", home: 59, away: 41 },
+    { type: "Fouls", home: 12, away: 9 },
+    { type: "Yellow Cards", home: 0, away: 1 },
+    { type: "Red Cards", home: 0, away: 1 },
+    { type: "Passes %", home: 85, away: 77 },
+  ]);
+  assert.deepEqual(parseMatchCentre({ ...raw, statistics: [] }).stats, [], "no numbers until the feed has statistics");
+});
+
+test("the team sheets, once the feed has both", () => {
+  const sheet = (team, coach) => ({
+    team,
+    coach: { name: coach },
+    formation: "4-3-3",
+    startXI: [{ player: { id: 1, name: "Strakosha", number: 1, pos: "G" } }, { player: { id: 2, name: "Hysaj", number: 2, pos: "D" } }],
+    substitutes: [{ player: { id: 3, name: "Berisha", number: 12, pos: null } }],
+  });
+  const centre = parseMatchCentre({ ...raw, lineups: [sheet(away, "Sylvinho"), sheet(home, "Kuqi")] });
+  assert.equal(centre.lineups.home.coach, "Kuqi", "home first even when the feed lists away first");
+  assert.deepEqual(centre.lineups.home.starting[0], { name: "Strakosha", number: 1, pos: "G" });
+  assert.deepEqual(centre.lineups.away.bench, [{ name: "Berisha", number: 12, pos: null }]);
+  assert.equal(parseMatchCentre({ ...raw, lineups: [sheet(home, "Kuqi")] }).lineups, null, "one team's sheet isn't enough");
+  assert.equal(parseMatchCentre(raw).lineups, null);
+});

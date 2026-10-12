@@ -12744,42 +12744,265 @@ button.is-blocked {
   font-size: 0.8rem;
 }
 
-.match-centre-stats {
-  width: 100%;
-  border-collapse: collapse;
+.match-centre-body {
+  border-top: 1px solid var(--border);
+}
+
+.match-centre-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.45rem 0.5rem 0;
+  overflow-x: auto;
+}
+
+.match-centre-tabs button {
+  flex: none;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.match-centre-tabs button.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+
+/* Every number as two bars meeting in the middle, home on the left. */
+.match-stats {
+  padding: 0.5rem 0.7rem 0.7rem;
+}
+
+.match-stats-teams {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.3rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.match-stats-teams span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-stats dl {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.match-stat dt {
+  margin-bottom: 0.15rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.match-stat dd {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr 2.6rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
 }
 
-.match-centre-stats th,
-.match-centre-stats td {
-  padding: 0.25rem 0.7rem;
-  text-align: center;
-}
-
-.match-centre-stats thead th {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.match-centre-stats thead th:first-child,
-.match-centre-stats td:first-child {
-  text-align: left;
-}
-
-.match-centre-stats thead th:last-child,
-.match-centre-stats td:last-child {
+.match-stat-value:last-child {
   text-align: right;
 }
 
-.match-centre-stats tbody th {
-  color: var(--muted);
-  font-weight: 500;
+.match-stat-value.is-ahead {
+  font-weight: 800;
 }
 
-.match-centre-stats td.is-ahead {
-  font-weight: 800;
+.match-stat-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+}
+
+.match-stat-bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+}
+
+.match-stat-bar.is-home {
+  justify-content: flex-end;
+}
+
+.match-stat-bar > span {
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+
+.match-stat-bar > span.is-ahead {
+  background: var(--accent);
+}
+
+/* The team sheets, side by side. */
+.match-lineups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  padding: 0.5rem 0.7rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.match-lineup {
+  min-width: 0;
+}
+
+.match-lineup h4,
+.match-lineup h5 {
+  margin: 0 0 0.3rem;
+  overflow: hidden;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-lineup h5 {
+  margin-top: 0.6rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.match-lineup ol {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match-lineup li {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr auto;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.match-lineup-number {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.match-lineup-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-lineup-pos {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.match-lineup-coach {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+}
+
+/* A match's stats, opened from its card on the Bet page. */
+.match-stats-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 55%, var(--bg-elevated));
+}
+
+.match-stats-panel > .match-centre-body {
+  border-top: none;
+}
+
+.match-stats-panel > .muted {
+  margin: 0;
+  padding: 0.7rem;
+  font-size: 0.85rem;
+}
+
+.match-stats-panel > .loading-state {
+  padding: 0.8rem;
+}
+
+.bet-match-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bet-match-stats svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.bet-match-stats.is-open {
+  color: var(--accent);
+}
+
+/* The star that puts a match in Favourites. */
+.match-star {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.match-star:hover {
+  color: var(--text);
+}
+
+.match-star svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.match-star.is-starred {
+  color: var(--warning);
+}
+
+.match-star.is-starred svg {
+  fill: currentColor;
+}
+
+.bet-chip-favourites > span[aria-hidden="true"] {
+  color: var(--warning);
 }
 
 .match-centre-moments {
@@ -12787,7 +13010,6 @@ button.is-blocked {
   gap: 0.15rem;
   margin: 0;
   padding: 0.3rem 0.5rem 0.6rem;
-  border-top: 1px solid var(--border);
   list-style: none;
   max-height: 16rem;
   overflow-y: auto;

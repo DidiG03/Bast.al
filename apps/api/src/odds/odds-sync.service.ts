@@ -72,6 +72,11 @@ const LIVE_INTEREST_MS = 2 * 60_000;
 const MATCH_CENTRE_AFTER_MS = 15 * 60_000;
 /** Matches whose match centre is fetched on one live sync: 3 requests' worth. */
 const MATCH_CENTRE_MAX = 60;
+/** A match someone opened the stats of stays on the live sync's list this long after they last looked. */
+const MATCH_CENTRE_INTEREST_MS = 2 * 60_000;
+/** Before kick-off, the match centre (the team sheets) is fetched from this long before, at most every 10 minutes. */
+const LINEUPS_BEFORE_MS = 90 * 60_000;
+const LINEUPS_EVERY_MS = 10 * 60_000;
 /** Live matches saved at the same time on each reading; each takes one database connection. */
 const LIVE_WRITERS = 6;
 /** A match's score comes from the live odds while they're this fresh; the fixtures list lags behind them. */
@@ -132,6 +137,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly days: number;
   /** Requests left on today's API-Football quota, from its last answer. */
   private quotaLeft: number | null = null;
+  /** Matches whose stats someone has open, and when they last asked. */
+  private readonly centreInterest = new Map<string, number>();
+  /** Match centres being fetched for someone right now, so viewers who ask together share one request. */
+  private readonly centreFetches = new Map<string, Promise<boolean>>();
   private leaguesChecked = false;
   /** When each day was last refreshed, if Redis is down. */
   private readonly refreshedAt = new Map<string, number>();
@@ -490,38 +499,98 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    */
   private async syncMatchCentres(): Promise<number> {
     const now = Date.now();
-    // Keep what the regular live sync still needs before the quota resets at midnight UTC, plus room for checking bets.
-    const liveRunsLeft = Math.ceil((86_400_000 - (now % 86_400_000)) / LIVE_INTERVAL_MS);
-    if (this.quotaLeft !== null && this.quotaLeft < Math.min(QUOTA_RESERVE, 2 * liveRunsLeft + 200)) return 0;
+    if (!this.centreQuotaOk(now)) return 0;
+    for (const [id, at] of this.centreInterest) if (now - at > MATCH_CENTRE_INTEREST_MS) this.centreInterest.delete(id);
+    // Matches a Player has a bet on, and those someone has the stats of open.
     const withBets = { markets: { some: { selections: { some: { OR: [{ bets: { some: {} } }, { legs: { some: {} } }] } } } } } satisfies Prisma.EventWhereInput;
+    const watched = { id: { in: [...this.centreInterest.keys()] } } satisfies Prisma.EventWhereInput;
     const due = await this.prisma.event.findMany({
       where: {
         provider: this.provider(),
         sport: "football",
         externalId: { not: null },
-        OR: [
-          { status: EventStatus.LIVE },
-          // Just finished: a few more times, for the final numbers (the feed can take a minute to complete them).
-          { status: EventStatus.COMPLETED, finishedAt: { gte: new Date(now - MATCH_CENTRE_AFTER_MS) }, OR: [{ matchCentreAt: null }, { matchCentreAt: { lt: new Date(now - 60_000) } }] },
+        AND: [
+          {
+            OR: [
+              { status: EventStatus.LIVE },
+              // Just finished: a few more times, for the final numbers (the feed can take a minute to complete them).
+              { status: EventStatus.COMPLETED, finishedAt: { gte: new Date(now - MATCH_CENTRE_AFTER_MS) }, OR: [{ matchCentreAt: null }, { matchCentreAt: { lt: new Date(now - 60_000) } }] },
+            ],
+          },
+          this.centreInterest.size > 0 ? { OR: [withBets, watched] } : withBets,
         ],
-        ...withBets,
       },
       select: { id: true, externalId: true },
       orderBy: { startsAt: "asc" },
       take: MATCH_CENTRE_MAX,
     });
     let saved = 0;
-    for (let i = 0; i < due.length; i += 20) {
-      const batch = due.slice(i, i + 20);
-      const byExternal = new Map(batch.map((event) => [event.externalId!, event.id]));
-      for (const raw of await this.client!.fixtureDetails(batch.map((event) => event.externalId!))) {
-        const eventId = byExternal.get(String(raw.fixture.id));
-        if (!eventId) continue;
-        await this.prisma.event.update({ where: { id: eventId }, data: { matchCentre: parseMatchCentre(raw) as unknown as Prisma.InputJsonValue, matchCentreAt: new Date() } });
-        saved++;
-      }
+    for (let i = 0; i < due.length; i += 20) saved += await this.saveMatchCentres(due.slice(i, i + 20));
+    return saved;
+  }
+
+  /** Fetches up to 20 matches' centres in one request and saves them. */
+  private async saveMatchCentres(batch: Array<{ id: string; externalId: string | null }>): Promise<number> {
+    const byExternal = new Map(batch.map((event) => [event.externalId!, event.id]));
+    let saved = 0;
+    for (const raw of await this.client!.fixtureDetails(batch.map((event) => event.externalId!))) {
+      const eventId = byExternal.get(String(raw.fixture.id));
+      if (!eventId) continue;
+      await this.prisma.event.update({ where: { id: eventId }, data: { matchCentre: parseMatchCentre(raw) as unknown as Prisma.InputJsonValue, matchCentreAt: new Date() } });
+      saved++;
     }
     return saved;
+  }
+
+  /**
+   * Room on today's quota for match centres: what the regular live sync
+   * still needs before the quota resets at midnight UTC is kept back, plus
+   * room for checking bets.
+   */
+  private centreQuotaOk(now: number): boolean {
+    const liveRunsLeft = Math.ceil((86_400_000 - (now % 86_400_000)) / LIVE_INTERVAL_MS);
+    return this.quotaLeft === null || this.quotaLeft >= Math.min(QUOTA_RESERVE, 2 * liveRunsLeft + 200);
+  }
+
+  /**
+   * Someone opened a football match's stats. While they keep looking, the
+   * live sync refreshes it with the matches that have bets; and if what's
+   * saved is out of date (never fetched, or older than a live sync, or not
+   * yet the final numbers), it's fetched now, once for everyone asking.
+   * Before kick-off only the team sheets come, from 90 minutes before.
+   * Without quota to spare, what's saved is what they get. True when it
+   * fetched.
+   */
+  async refreshMatchCentre(event: { id: string; sport: string; provider: string; externalId: string | null; status: EventStatus; startsAt: Date; finishedAt: Date | null; matchCentreAt: Date | null }): Promise<boolean> {
+    if (this.mode !== "api-football" || !this.client || event.sport !== "football" || event.provider !== this.provider() || !event.externalId) return false;
+    const now = Date.now();
+    const fetchedAt = event.matchCentreAt?.getTime() ?? null;
+    let stale: boolean;
+    if (event.status === EventStatus.LIVE) {
+      this.centreInterest.set(event.id, now);
+      stale = fetchedAt === null || now - fetchedAt > LIVE_INTERVAL_MS + 15_000;
+    } else if (event.status === EventStatus.COMPLETED) {
+      // The final numbers: fetched after the 15 minutes the feed takes to complete them, then kept.
+      const final = event.finishedAt ? event.finishedAt.getTime() + MATCH_CENTRE_AFTER_MS : null;
+      stale = fetchedAt === null || (final !== null && fetchedAt < final && now - fetchedAt > 60_000);
+    } else if (event.status === EventStatus.UPCOMING) {
+      stale = event.startsAt.getTime() - now < LINEUPS_BEFORE_MS && (fetchedAt === null || now - fetchedAt > LINEUPS_EVERY_MS);
+    } else {
+      stale = false;
+    }
+    if (!stale || !this.centreQuotaOk(now)) return false;
+    let running = this.centreFetches.get(event.id);
+    if (!running) {
+      running = this.saveMatchCentres([event])
+        .then((saved) => saved > 0)
+        .catch((error) => {
+          this.logger.warn(`Match centre for event ${event.id} not updated: ${error instanceof Error ? error.message : String(error)}`);
+          return false;
+        })
+        .finally(() => this.centreFetches.delete(event.id));
+      this.centreFetches.set(event.id, running);
+    }
+    return running;
   }
 
   private async syncStats(): Promise<number> {

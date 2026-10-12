@@ -43,6 +43,32 @@ export class OddsController {
     return this.odds.event(actor, id, query.ownerId);
   }
 
+  /** A football match's timeline, numbers and team sheets. */
+  @Get("events/:id/centre")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  matchCentre(@CurrentActor() actor: Actor, @Param("id") id: string) {
+    return this.odds.matchCentre(actor, id);
+  }
+
+  /** The matches this account starred. */
+  @Get("favourites")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  favourites(@CurrentActor() actor: Actor) {
+    return this.odds.favourites(actor);
+  }
+
+  @Put("favourites/:eventId")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  star(@CurrentActor() actor: Actor, @Param("eventId") eventId: string) {
+    return this.odds.setFavourite(actor, eventId, true);
+  }
+
+  @Delete("favourites/:eventId")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  unstar(@CurrentActor() actor: Actor, @Param("eventId") eventId: string) {
+    return this.odds.setFavourite(actor, eventId, false);
+  }
+
   /** A bet slip's picks: current price and whether each can still be bet on. */
   @Get("selections")
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)

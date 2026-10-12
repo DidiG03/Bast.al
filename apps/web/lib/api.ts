@@ -532,6 +532,11 @@ export type MatchMoment = {
 };
 
 /** A football match's timeline (newest first) and numbers, as home–away pairs; null when the feed doesn't have one yet. */
+/** One player on a team sheet: shirt number and position (G, D, M, F) when the feed has them. */
+export type LineupPlayer = { name: string; number: number | null; pos: string | null };
+
+export type TeamLineup = { formation: string | null; coach: string | null; starting: LineupPlayer[]; bench: LineupPlayer[] };
+
 export type MatchCentreData = {
   moments: MatchMoment[];
   corners: [number, number] | null;
@@ -539,6 +544,22 @@ export type MatchCentreData = {
   red: [number, number] | null;
   shotsOnTarget: [number, number] | null;
   possession: [number, number] | null;
+  /** Every number the feed has, home first, by the feed's name ("Total Shots", "expected_goals"). Missing on centres saved before it was added. */
+  stats?: Array<{ type: string; home: number; away: number }>;
+  /** The team sheets, once the feed has them. Not sent with bets; `/odds/events/:id/centre` has them. */
+  lineups?: { home: TeamLineup; away: TeamLineup } | null;
+};
+
+/** A football match's stats, from `/odds/events/:id/centre`. */
+export type MatchCentreResponse = {
+  id: string;
+  status: OddsEvent["status"];
+  elapsed: number | null;
+  period: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  centre: MatchCentreData | null;
+  updatedAt: string | null;
 };
 
 export type BetEvent = {

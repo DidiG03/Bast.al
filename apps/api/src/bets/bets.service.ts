@@ -92,9 +92,13 @@ function eventView(event: EventRow) {
     /** While live: the minute and the phase ("HT", "2H"). */
     elapsed: event.elapsed,
     period: event.period,
-    /** Football with a bet on it: the timeline and numbers (MatchCentre in odds/api-football.ts), or null. */
-    centre: (event.matchCentre as MatchCentre | null) ?? null,
+    /** Football with a bet on it: the timeline and numbers (MatchCentre in odds/api-football.ts), or null. The team sheets load on their own (/odds/events/:id/centre). */
+    centre: withoutLineups(event.matchCentre as MatchCentre | null),
   };
+}
+
+function withoutLineups(centre: MatchCentre | null): MatchCentre | null {
+  return centre ? { ...centre, lineups: null } : null;
 }
 
 export function betView(bet: BetRow) {

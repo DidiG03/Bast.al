@@ -3,6 +3,7 @@ import { EventStatus, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
+import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
@@ -20,6 +21,9 @@ const LIST_LIMIT = 2_000;
 type PricedEvent = Prisma.EventGetPayload<{ include: { markets: { include: { selections: true } }; _count: { select: { markets: true } } } }>;
 
 const COUNT_MARKETS = { _count: { select: { markets: true } } } as const;
+
+/** How many matches one account can star. */
+const MAX_FAVOURITES = 200;
 
 /**
  * How long one read of a match list serves everyone who asks for it, in ms.
@@ -241,6 +245,51 @@ export class OddsService {
     });
     if (!event || (event.hidden && actor.role !== Role.SUPER_ADMIN)) throw new NotFoundException("Match not found");
     return (await this.priced(actor, [event], ownerIdParam, new Date()))[0];
+  }
+
+  /**
+   * A football match's timeline, numbers and team sheets, for anyone who can
+   * see the match. Asking keeps them fresh (see OddsSyncService.refreshMatchCentre);
+   * everyone asking about the same match within 2 seconds shares one read.
+   */
+  async matchCentre(actor: Actor, id: string) {
+    const event = await this.kept(`centre:${id}`, 2_000, async () => {
+      const select = { id: true, sport: true, provider: true, externalId: true, hidden: true, status: true, startsAt: true, finishedAt: true, elapsed: true, period: true, homeScore: true, awayScore: true, matchCentre: true, matchCentreAt: true } as const;
+      const saved = await this.prisma.event.findUnique({ where: { id }, select });
+      // A hidden match isn't fetched for anyone.
+      if (!saved || saved.hidden || !(await this.sync.refreshMatchCentre(saved))) return saved;
+      return this.prisma.event.findUnique({ where: { id }, select });
+    });
+    if (!event || (event.hidden && actor.role !== Role.SUPER_ADMIN)) throw new NotFoundException("Match not found");
+    return {
+      id: event.id,
+      status: event.status,
+      elapsed: event.elapsed,
+      period: event.status === EventStatus.LIVE ? event.period : event.status === EventStatus.COMPLETED ? "FT" : null,
+      homeScore: event.homeScore,
+      awayScore: event.awayScore,
+      centre: (event.matchCentre as MatchCentre | null) ?? null,
+      updatedAt: event.matchCentreAt,
+    };
+  }
+
+  /** The matches this account starred, newest first. */
+  async favourites(actor: Actor): Promise<string[]> {
+    const rows = await this.prisma.favouriteEvent.findMany({ where: { userId: actor.id }, orderBy: { createdAt: "desc" }, select: { eventId: true } });
+    return rows.map((row) => row.eventId);
+  }
+
+  /** Stars a match, or takes the star off. Returns the starred matches. */
+  async setFavourite(actor: Actor, eventId: string, starred: boolean): Promise<string[]> {
+    if (starred) {
+      const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { hidden: true } });
+      if (!event || (event.hidden && actor.role !== Role.SUPER_ADMIN)) throw new NotFoundException("Match not found");
+      if ((await this.prisma.favouriteEvent.count({ where: { userId: actor.id } })) >= MAX_FAVOURITES) throw new BadRequestException("You can star up to 200 matches. Take the star off some first.");
+      await this.prisma.favouriteEvent.upsert({ where: { userId_eventId: { userId: actor.id, eventId } }, create: { userId: actor.id, eventId }, update: {} });
+    } else {
+      await this.prisma.favouriteEvent.deleteMany({ where: { userId: actor.id, eventId } });
+    }
+    return this.favourites(actor);
   }
 
   /**

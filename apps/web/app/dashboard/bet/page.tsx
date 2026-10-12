@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
-import { MatchCentre } from "../../../components/match-centre";
+import { MatchCentre, MatchStatsPanel } from "../../../components/match-centre";
 import { GreyhoundRaces } from "../../../components/greyhound-races";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
@@ -182,6 +182,11 @@ function BetPage() {
   const [search, setSearch] = useState("");
   /** "" = every day, "live" = playing now, otherwise a day's label (Today, Tomorrow, …). */
   const [day, setDay] = useState("");
+  /** The matches this account starred, and whether only those are showing. */
+  const [favourites, setFavourites] = useState<Set<string>>(new Set());
+  const [favouritesOnly, setFavouritesOnly] = useState(false);
+  const favouritesRef = useRef(favourites);
+  favouritesRef.current = favourites;
   const [betsVersion, setBetsVersion] = useState(0);
   const [limit, setLimit] = useState(MATCHES_SHOWN);
   /** Matches opened to show every market, and those markets once loaded. */
@@ -274,6 +279,38 @@ function BetPage() {
       if (opening && !detailsRef.current[id]) void loadDetail(id).catch(() => toast.error(t("Couldn't load the matches")));
     },
     [loadDetail, toast, t],
+  );
+
+  useEffect(() => {
+    void (async () => {
+      const token = await getToken();
+      if (!token) return;
+      setFavourites(new Set(await apiFetch<string[]>("/odds/favourites", token)));
+    })().catch(() => undefined);
+  }, [getToken]);
+
+  // The star changes at once; if saving it fails, it goes back and says why.
+  const toggleFavourite = useCallback(
+    async (id: string) => {
+      const starring = !favouritesRef.current.has(id);
+      const flip = (on: boolean) =>
+        setFavourites((current) => {
+          const next = new Set(current);
+          if (on) next.add(id);
+          else next.delete(id);
+          return next;
+        });
+      flip(starring);
+      try {
+        const token = await getToken();
+        if (!token) throw new Error(t("Couldn't save your favourites"));
+        await apiFetch<string[]>(`/odds/favourites/${encodeURIComponent(id)}`, token, { method: starring ? "PUT" : "DELETE" });
+      } catch (err) {
+        flip(!starring);
+        toast.error(err instanceof Error ? err.message : t("Couldn't save your favourites"));
+      }
+    },
+    [getToken, toast, t],
   );
 
   const loadInfo = useCallback(async () => {
@@ -452,10 +489,12 @@ function BetPage() {
   const liveLabel = t("Live now");
   const endedLabel = t("Just finished");
   // Worked out again only when the matches or the filters change: typing a stake leaves them as they are.
-  const { shown, allGroups } = useMemo(() => {
-    const matching = merged.filter(
+  const { shown, allGroups, starredCount } = useMemo(() => {
+    const listed = merged.filter(
       (event) => (finishedNow(event) || ((event.bettable || event.live) && event.markets.length > 0)) && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
     );
+    const starredCount = listed.filter((event) => favourites.has(event.id)).length;
+    const matching = favouritesOnly ? listed.filter((event) => favourites.has(event.id)) : listed;
     // Matches being played first, under "Live now"; those that just ended under their own heading; then the days ahead.
     const playing = matching.filter((event) => event.live && !finishedNow(event));
     const ended = matching.filter((event) => finishedNow(event));
@@ -469,8 +508,8 @@ function BetPage() {
       if (last && last[0] === heading) last[1].push(event);
       else allGroups.push([heading, [event]]);
     }
-    return { shown, allGroups };
-  }, [merged, league, query, liveLabel, endedLabel, i18n]);
+    return { shown, allGroups, starredCount };
+  }, [merged, league, query, liveLabel, endedLabel, i18n, favourites, favouritesOnly]);
   // A day that no longer has matches (a search, a league filter) falls back to every day.
   const dayShown = day === "" ? "" : day === "live" ? liveLabel : day;
   const groups = dayShown && allGroups.some(([label]) => label === dayShown) ? allGroups.filter(([label]) => label === dayShown) : allGroups;
@@ -587,12 +626,29 @@ function BetPage() {
           <div className={`stack bet-matches${focused ? " is-jumping" : ""}`}>
             <div className="bet-filters">
               <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => filter(() => setSearch(e.target.value))} aria-label={t("Search matches")} />
-              {allGroups.length > 1 ? (
+              {allGroups.length > 1 || favourites.size > 0 || favouritesOnly ? (
                 <div className="bet-chips bet-day-chips" role="group" aria-label={t("Day")}>
-                  <button type="button" className={`bet-chip${groups === allGroups ? " is-active" : ""}`} onClick={() => filter(() => setDay(""))} aria-pressed={groups === allGroups}>
+                  <button
+                    type="button"
+                    className={`bet-chip${groups === allGroups && !favouritesOnly ? " is-active" : ""}`}
+                    onClick={() =>
+                      filter(() => {
+                        setDay("");
+                        setFavouritesOnly(false);
+                      })
+                    }
+                    aria-pressed={groups === allGroups && !favouritesOnly}
+                  >
                     {t("All")}
                   </button>
-                  {allGroups.map(([label, list]) => {
+                  {favourites.size > 0 || favouritesOnly ? (
+                    <button type="button" className={`bet-chip bet-chip-favourites${favouritesOnly ? " is-active" : ""}`} onClick={() => filter(() => setFavouritesOnly(!favouritesOnly))} aria-pressed={favouritesOnly}>
+                      <span aria-hidden="true">★</span>
+                      {t("Favourites")}
+                      <span className="bet-chip-count">{starredCount}</span>
+                    </button>
+                  ) : null}
+                  {(allGroups.length > 1 ? allGroups : []).map(([label, list]) => {
                     const key = label === liveLabel ? "live" : label;
                     const active = groups !== allGroups && groups[0][0] === label;
                     return (
@@ -626,7 +682,9 @@ function BetPage() {
             ) : shown.length === 0 ? (
               <div className="card">
                 <p className="muted" style={{ margin: 0 }}>
-                  {events.length === 0
+                  {favouritesOnly && events.length > 0
+                    ? t("None of your favourites are on the list right now. Tap ☆ on a match to add it here.")
+                    : events.length === 0
                     ? sport === "mma"
                       ? t("No fights are open for bets right now. Check back soon.")
                       : sport === "basketball"
@@ -663,6 +721,8 @@ function BetPage() {
                         expanded={expanded.has(event.id)}
                         loading={expanded.has(event.id) && !details[event.id]}
                         onToggle={toggleExpanded}
+                        starred={favourites.has(event.id)}
+                        onStar={toggleFavourite}
                       />
                     ))}
                   </section>
@@ -749,6 +809,8 @@ function marketGroup(key: string): MarketGroup {
 
 /** Players shown in a goalscorer market before "Show all players". */
 const SCORERS_SHOWN = 12;
+/** A match's stats button shows from this long before kick-off, for the line-ups (the API fetches them from then too). */
+const STATS_BEFORE_MS = 90 * 60_000;
 
 /** Drawn again only when its own props change: a list of 240 matches redrawing on every keystroke made typing a stake lag. */
 const MatchCard = memo(function MatchCard({
@@ -760,6 +822,8 @@ const MatchCard = memo(function MatchCard({
   expanded,
   loading,
   onToggle,
+  starred,
+  onStar,
 }: {
   event: OddsEvent;
   selected: Set<string>;
@@ -770,12 +834,18 @@ const MatchCard = memo(function MatchCard({
   expanded: boolean;
   loading: boolean;
   onToggle: (eventId: string) => void;
+  /** In this account's favourites. */
+  starred: boolean;
+  onStar: (eventId: string) => void;
 }) {
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;
   /** Goalscorer markets showing every player. */
   const [allPlayers, setAllPlayers] = useState<Set<string>>(new Set());
+  const [statsOpen, setStatsOpen] = useState(false);
   const over = finishedNow(event);
+  // Football has stats once it's under way, and the line-ups from shortly before.
+  const hasStats = (event.sport ?? "football") === "football" && (event.live || over || new Date(event.startsAt).getTime() - Date.now() < STATS_BEFORE_MS);
   // A finished match shows its final score and no prices.
   const markets = over ? [] : expanded ? event.markets : event.markets.slice(0, 1);
   const more = over ? 0 : Math.max(0, event.marketCount - 1);
@@ -789,6 +859,11 @@ const MatchCard = memo(function MatchCard({
           {event.country ? ` · ${event.country}` : ""}
         </span>
         <span className="odds-event-header-side">
+          <button type="button" className={`match-star${starred ? " is-starred" : ""}`} onClick={() => onStar(event.id)} aria-pressed={starred} aria-label={starred ? t("Remove {match} from favourites", { match: event.name }) : t("Add {match} to favourites", { match: event.name })}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+            </svg>
+          </button>
           {over ? (
             <span className="status-pill">{livePill(event, t)}</span>
           ) : event.live ? (
@@ -899,14 +974,25 @@ const MatchCard = memo(function MatchCard({
           <LoadingSpinner label="Loading markets" />
         </div>
       ) : null}
-      {more > 0 ? (
+      {statsOpen ? <MatchStatsPanel eventId={event.id} name={event.name} live={event.live} /> : null}
+      {more > 0 || hasStats ? (
         <footer className="odds-event-footer">
-          <button type="button" className={`bet-more-markets${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded}>
-            {toggleLabel}
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
+          {hasStats ? (
+            <button type="button" className={`bet-match-stats${statsOpen ? " is-open" : ""}`} onClick={() => setStatsOpen((open) => !open)} aria-expanded={statsOpen}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 20V11M12 20V4M19 20v-6" />
+              </svg>
+              {statsOpen ? t("Hide stats") : t("Stats")}
+            </button>
+          ) : null}
+          {more > 0 ? (
+            <button type="button" className={`bet-more-markets${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded}>
+              {toggleLabel}
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+          ) : null}
         </footer>
       ) : null}
     </article>

@@ -797,7 +797,13 @@ type RawPerson = { id: number | null; name: string | null };
 /** A fixture fetched by id, which comes with its events, lineups and player numbers. */
 export type RawFixtureDetail = RawFixture & {
   events?: Array<{ time: { elapsed: number | null; extra?: number | null }; team: { id: number; name: string }; player: RawPerson; assist: RawPerson; type: string; detail: string }>;
-  lineups?: Array<{ team: { id: number; name: string }; startXI: Array<{ player: RawPerson }>; substitutes: Array<{ player: RawPerson }> }>;
+  lineups?: Array<{
+    team: { id: number; name: string };
+    coach?: { name: string | null } | null;
+    formation?: string | null;
+    startXI: Array<{ player: RawPerson & { number?: number | null; pos?: string | null } }>;
+    substitutes: Array<{ player: RawPerson & { number?: number | null; pos?: string | null } }>;
+  }>;
   players?: Array<{ team: { id: number; name: string }; players: Array<{ player: RawPerson; statistics: Array<{ games?: { minutes?: number | null } }> }> }>;
   statistics?: RawTeamStatistics[];
 };
@@ -817,6 +823,36 @@ export type MatchMoment = {
   detail: string | null;
 };
 
+/** One player on a team sheet: shirt number and position (G, D, M, F) when the feed has them. */
+export type LineupPlayer = { name: string; number: number | null; pos: string | null };
+
+/** One team's sheet: formation ("4-3-3"), coach, the starting eleven and the bench. */
+export type TeamLineup = { formation: string | null; coach: string | null; starting: LineupPlayer[]; bench: LineupPlayer[] };
+
+/**
+ * The match numbers shown, in this order, by the feed's names for them. The
+ * feed sends whichever it has for a match (smaller leagues get fewer).
+ */
+export const MATCH_STAT_TYPES = [
+  "expected_goals",
+  "Ball Possession",
+  "Total Shots",
+  "Shots on Goal",
+  "Shots off Goal",
+  "Blocked Shots",
+  "Shots insidebox",
+  "Shots outsidebox",
+  "Corner Kicks",
+  "Offsides",
+  "Fouls",
+  "Yellow Cards",
+  "Red Cards",
+  "Goalkeeper Saves",
+  "Total passes",
+  "Passes accurate",
+  "Passes %",
+] as const;
+
 /** A match's timeline and numbers so far, newest moment first. A count the feed doesn't have is null. */
 export type MatchCentre = {
   moments: MatchMoment[];
@@ -825,6 +861,10 @@ export type MatchCentre = {
   red: [number, number] | null;
   shotsOnTarget: [number, number] | null;
   possession: [number, number] | null;
+  /** Every number the feed has for the match, home first, in MATCH_STAT_TYPES order. */
+  stats: Array<{ type: (typeof MATCH_STAT_TYPES)[number]; home: number; away: number }>;
+  /** The team sheets, once the feed has them (usually from about an hour before kick-off). */
+  lineups: { home: TeamLineup; away: TeamLineup } | null;
 };
 
 /**
@@ -874,13 +914,37 @@ export function parseMatchCentre(raw: RawFixtureDetail): MatchCentre {
   };
   // Cards from the timeline when the statistics don't have them yet; a second yellow is a red there too.
   const count = (kind: MatchMoment["kind"]): [number, number] => [moments.filter((m) => m.kind === kind && m.side === "home").length, moments.filter((m) => m.kind === kind && m.side === "away").length];
+  const yellow = pair("Yellow Cards") ?? (stats.length === 0 && moments.length === 0 ? null : count("yellow"));
+  const red = pair("Red Cards") ?? (stats.length === 0 && moments.length === 0 ? null : count("red"));
+  const numbers: MatchCentre["stats"] = [];
+  for (const type of MATCH_STAT_TYPES) {
+    const found = type === "Yellow Cards" ? yellow : type === "Red Cards" ? red : pair(type);
+    // A card count from the timeline only shows next to the feed's other numbers.
+    if (found && (stats.length > 0 || (type !== "Yellow Cards" && type !== "Red Cards"))) numbers.push({ type, home: found[0], away: found[1] });
+  }
+  const sheet = (side: "home" | "away"): TeamLineup | null => {
+    const sheetRaw = (raw.lineups ?? []).find((entry) => sideOf(entry.team) === side);
+    if (!sheetRaw || (sheetRaw.startXI ?? []).length === 0) return null;
+    const player = ({ player }: { player: RawPerson & { number?: number | null; pos?: string | null } }): LineupPlayer | null =>
+      player?.name ? { name: player.name, number: player.number ?? null, pos: player.pos ?? null } : null;
+    return {
+      formation: sheetRaw.formation ?? null,
+      coach: sheetRaw.coach?.name ?? null,
+      starting: sheetRaw.startXI.map(player).filter((entry): entry is LineupPlayer => entry !== null),
+      bench: (sheetRaw.substitutes ?? []).map(player).filter((entry): entry is LineupPlayer => entry !== null),
+    };
+  };
+  const home = sheet("home");
+  const away = sheet("away");
   return {
     moments,
     corners: pair("Corner Kicks"),
-    yellow: pair("Yellow Cards") ?? (stats.length === 0 && moments.length === 0 ? null : count("yellow")),
-    red: pair("Red Cards") ?? (stats.length === 0 && moments.length === 0 ? null : count("red")),
+    yellow,
+    red,
     shotsOnTarget: pair("Shots on Goal"),
     possession: pair("Ball Possession"),
+    stats: numbers,
+    lineups: home && away ? { home, away } : null,
   };
 }
 

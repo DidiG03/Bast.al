@@ -7,6 +7,8 @@ import {
 } from "@nestjs/common";
 import Redis from "ioredis";
 import { Observable, Subscriber } from "rxjs";
+import { Role } from "@prisma/client";
+import type { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 
 /** Everything the browser can be told live. Account events go to that account; a price change goes to every open stream. */
@@ -18,7 +20,26 @@ export type RealtimeEvent =
   /** A Player's bets were placed, settled or voided: refetch them. */
   | { type: "bets.changed" }
   /** Live prices were just saved. Every open bet board refetches them; the rest of the dashboard does not re-render. */
-  | { type: "odds.changed" };
+  | { type: "odds.changed" }
+  /** Live prices just saved, already priced for the team receiving them: only what changed since the last one (see OddsService.pushLive). */
+  | { type: "odds.live"; at: string; events: LiveDelta[] };
+
+/**
+ * What changed on one live match. The header (score, minute, whether it
+ * takes bets) comes when any of it changed; `markets` are [market id,
+ * suspended] and `prices` [selection id, price, suspended] pairs that changed.
+ */
+export type LiveDelta = {
+  id: string;
+  header?: { status: string; live: boolean; elapsed: number | null; period: string | null; homeScore: number | null; awayScore: number | null; bettable: boolean; livePause: string | null; allMarketsSuspended: boolean };
+  markets?: Array<[string, boolean]>;
+  prices?: Array<[string, number, boolean]>;
+};
+
+/** Streams that get one team's live prices: its Players. */
+export const teamTopic = (ownerId: string | null) => `team:${ownerId ?? "none"}`;
+/** Streams of everyone else (Super Admin, Owners, Managers): they see feed prices, so they're told to fetch. */
+export const STAFF_TOPIC = "staff";
 
 const CHANNEL = "bastal:realtime";
 
@@ -32,6 +53,8 @@ const CHANNEL = "bastal:realtime";
 export class RealtimeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RealtimeService.name);
   private readonly listeners = new Map<string, Set<Subscriber<MessageEvent>>>();
+  /** The same streams by topic (see teamTopic, STAFF_TOPIC). */
+  private readonly topics = new Map<string, Set<Subscriber<MessageEvent>>>();
   private publisher?: Redis;
   private subscriber?: Redis;
   private lastErrorLog = 0;
@@ -68,24 +91,51 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     await Promise.allSettled([this.publisher?.quit(), this.subscriber?.quit()]);
   }
 
-  /** Live events for one account. Completes when the client disconnects. */
-  stream(userId: string): Observable<MessageEvent> {
+  /** Live events for one account, and for the topics it's on. Completes when the client disconnects. */
+  stream(userId: string, topics: string[] = []): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      let subscribers = this.listeners.get(userId);
-      if (!subscribers) {
-        subscribers = new Set();
-        this.listeners.set(userId, subscribers);
+      const keys: Array<[Map<string, Set<Subscriber<MessageEvent>>>, string]> = [[this.listeners, userId], ...topics.map((topic): [Map<string, Set<Subscriber<MessageEvent>>>, string] => [this.topics, topic])];
+      for (const [map, key] of keys) {
+        let subscribers = map.get(key);
+        if (!subscribers) {
+          subscribers = new Set();
+          map.set(key, subscribers);
+        }
+        subscribers.add(subscriber);
       }
-      subscribers.add(subscriber);
       return () => {
-        subscribers.delete(subscriber);
-        if (
-          subscribers.size === 0 &&
-          this.listeners.get(userId) === subscribers
-        )
-          this.listeners.delete(userId);
+        for (const [map, key] of keys) {
+          const subscribers = map.get(key);
+          if (!subscribers) continue;
+          subscribers.delete(subscriber);
+          if (subscribers.size === 0) map.delete(key);
+        }
       };
     });
+  }
+
+  /**
+   * The topics an account's stream is on: a Player gets their team's live
+   * prices (their Owner's, through their Manager if they have one); everyone
+   * else is staff.
+   */
+  async topicsFor(actor: Actor): Promise<string[]> {
+    if (actor.role !== Role.PLAYER) return [STAFF_TOPIC];
+    const parent = actor.parentId ? await this.prisma.user.findUnique({ where: { id: actor.parentId }, select: { id: true, role: true, parentId: true } }) : null;
+    const ownerId = parent?.role === Role.OWNER ? parent.id : parent?.role === Role.MANAGER ? parent.parentId : null;
+    return [teamTopic(ownerId)];
+  }
+
+  /** Tells every stream on a topic. A side effect: this never throws. */
+  async publishTopic(topic: string, event: RealtimeEvent) {
+    await this.publish(`topic:${topic}`, event);
+  }
+
+  /** Open streams on this instance: someone has the site open. */
+  listenerCount(): number {
+    let count = 0;
+    for (const subscribers of this.listeners.values()) count += subscribers.size;
+    return count;
   }
 
   /** Tells every open stream, whichever account it belongs to. A side effect: this never throws. */
@@ -134,6 +184,10 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
 
   private deliver(userId: string, event: RealtimeEvent) {
     const message: MessageEvent = { type: event.type, data: event };
+    if (userId.startsWith("topic:")) {
+      this.topics.get(userId.slice("topic:".length))?.forEach((subscriber) => subscriber.next(message));
+      return;
+    }
     if (userId === "*") {
       for (const subscribers of this.listeners.values()) subscribers.forEach((subscriber) => subscriber.next(message));
       return;

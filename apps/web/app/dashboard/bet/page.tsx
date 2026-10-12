@@ -23,6 +23,7 @@ import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
 import { useTopUpRequest } from "../../../components/top-up-request";
 import { breakPause, liveClock } from "../../../lib/live";
+import { applyDelta, applyToList, applyToSlip, byMatch, hasUnknownSelections } from "../../../lib/live-push";
 import { usePolling } from "../../../lib/use-polling";
 import { pickLabel } from "../../../lib/picks";
 import { addDays, dayKey } from "../../../lib/time";
@@ -34,6 +35,8 @@ type SlipMode = "singles" | "accumulator" | "system";
 
 /** How long a price shows its up or down arrow after it moves. */
 const MOVE_SHOWN_MS = 15_000;
+/** A match's markets fetched ahead of opening it are shown as they are for this long; older, they're fetched again as it opens. */
+const DETAIL_FRESH_MS = 10_000;
 
 type PriceMove = { up: boolean; until: number };
 /** One tap fills the stake on the ticket, in ALL. */
@@ -211,12 +214,22 @@ function BetPage() {
     setDay("");
   }, [sport]);
 
+  /** When each match's markets were last fetched, and the fetches under way (several asks share one). */
+  const detailAt = useRef(new Map<string, number>());
+  const detailLoads = useRef(new Map<string, Promise<void>>());
   const loadDetail = useCallback(
-    async (id: string) => {
-      const token = await getToken();
-      if (!token) return;
-      const full = await apiFetch<OddsEvent>(`/odds/events/${id}`, token, { revalidate: true });
-      setDetails((current) => (current[id] === full ? current : { ...current, [id]: full }));
+    (id: string) => {
+      const running = detailLoads.current.get(id);
+      if (running) return running;
+      const load = (async () => {
+        const token = await getToken();
+        if (!token) return;
+        const full = await apiFetch<OddsEvent>(`/odds/events/${id}`, token, { revalidate: true });
+        detailAt.current.set(id, Date.now());
+        setDetails((current) => (current[id] === full ? current : { ...current, [id]: full }));
+      })().finally(() => detailLoads.current.delete(id));
+      detailLoads.current.set(id, load);
+      return load;
     },
     [getToken],
   );
@@ -263,9 +276,24 @@ function BetPage() {
         else next.delete(id);
         return next;
       });
-      if (opening && !detailsRef.current[id]) void loadDetail(id).catch(() => toast.error(t("Couldn't load the matches")));
+      if (!opening) return;
+      if (!detailsRef.current[id]) void loadDetail(id).catch(() => toast.error(t("Couldn't load the matches")));
+      // Fetched ahead (see prefetchDetail) a while ago: shown at once, and fetched again behind it.
+      else if (Date.now() - (detailAt.current.get(id) ?? 0) > DETAIL_FRESH_MS) void loadDetail(id).catch(() => undefined);
     },
     [loadDetail, toast, t],
+  );
+
+  /**
+   * A finger or pointer on a match's "more markets" button: its markets start
+   * loading now, so they're there when it opens.
+   */
+  const prefetchDetail = useCallback(
+    (id: string) => {
+      if (detailsRef.current[id] && Date.now() - (detailAt.current.get(id) ?? 0) <= DETAIL_FRESH_MS) return;
+      void loadDetail(id).catch(() => undefined);
+    },
+    [loadDetail],
   );
 
   useEffect(() => {
@@ -374,10 +402,11 @@ function BetPage() {
     });
   }, [tab, listed, loadEvents, toast, t]);
 
-  // Prices move and matches kick off: everything every minute, and the live
-  // matches every 10 seconds while there are any. Not while the page is out of sight.
+  // Prices move and matches kick off: everything every minute. Live prices are
+  // pushed as they're saved (odds.live); the live matches are also fetched every
+  // 30 seconds in case a push was missed. Not while the page is out of sight.
   usePolling(() => void refreshAll().catch(() => undefined), 60_000, tab === "matches" && listed);
-  usePolling(() => void refreshAll("live").catch(() => undefined), 10_000, tab === "matches" && listed && hasLive);
+  usePolling(() => void refreshAll("live").catch(() => undefined), 30_000, tab === "matches" && listed && hasLive);
   // Races have no prices to follow, but a race pick on the slip closes a minute before the start.
   usePolling(() => void refreshSlip().catch(() => undefined), 30_000, tab === "matches" && sport === "greyhounds" && slip.some((item) => item.sp));
 
@@ -434,17 +463,62 @@ function BetPage() {
   }, [moves]);
 
   const oddsRefresh = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(oddsRefresh.current), []);
-  useRealtime((event) => {
-    if (event.type === "odds.changed") {
+  const slipRecheck = useRef<number | undefined>(undefined);
+  useEffect(
+    () => () => {
       window.clearTimeout(oddsRefresh.current);
-      oddsRefresh.current = window.setTimeout(() => void refreshAll("live").catch(() => undefined), 400);
+      window.clearTimeout(slipRecheck.current);
+    },
+    [],
+  );
+  /** The live list (and what's open) fetched again, once for several calls close together. */
+  const refetchLive = useCallback(() => {
+    window.clearTimeout(oddsRefresh.current);
+    oddsRefresh.current = window.setTimeout(() => void refreshAll("live").catch(() => undefined), 400);
+  }, [refreshAll]);
+  useRealtime((event) => {
+    // A Player's team's live prices, pushed as they're saved: applied as they come, nothing fetched.
+    if (event.type === "odds.live") {
+      if (sportRef.current !== "football" || !lists.current.live) return;
+      const deltas = byMatch(event.events);
+      const { list: live, missing } = applyToList(lists.current.live, deltas);
+      if (live !== lists.current.live) {
+        lists.current = { ...lists.current, live };
+        setEvents([...live, ...(lists.current.upcoming ?? [])]);
+      }
+      if (missing) refetchLive();
+      const opened = Array.from(expandedRef.current).filter((id) => deltas.has(id) && detailsRef.current[id]);
+      // A market that just appeared on an open match: that match is fetched again.
+      for (const id of opened) if (hasUnknownSelections(detailsRef.current[id], deltas.get(id))) void loadDetail(id).catch(() => undefined);
+      if (opened.length > 0)
+        setDetails((current) => {
+          let next = current;
+          for (const id of opened) {
+            const detail = current[id];
+            const updated = detail && applyDelta(detail, deltas.get(id));
+            if (updated && updated !== detail) next = { ...next, [id]: updated };
+          }
+          return next;
+        });
+      const bettable = new Map(live.map((match) => [match.id, match.bettable]));
+      const { items, recheck } = applyToSlip(slipRef.current, deltas, (id) => bettable.get(id));
+      if (items !== slipRef.current) setSlip(items);
+      if (recheck) {
+        window.clearTimeout(slipRecheck.current);
+        slipRecheck.current = window.setTimeout(() => void refreshSlip().catch(() => undefined), 300);
+      }
+      return;
+    }
+    if (event.type === "odds.changed") {
+      refetchLive();
       return;
     }
     if (event.type === "balance.changed" || event.type === "bets.changed" || event.type === "resync") {
       void loadInfo().catch(() => undefined);
       setBetsVersion((v) => v + 1);
     }
+    // Pushes sent while the stream was down are lost: the live matches are fetched again.
+    if (event.type === "resync") refetchLive();
   });
 
   /** A new search, league or day starts again from the top of the list. */
@@ -732,6 +806,7 @@ function BetPage() {
                             expanded={expanded.has(event.id)}
                             loading={expanded.has(event.id) && !details[event.id]}
                             onToggle={toggleExpanded}
+                            onPrefetch={prefetchDetail}
                             starred={favourites.has(event.id)}
                             onStar={toggleFavourite}
                           />
@@ -835,6 +910,7 @@ const MatchCard = memo(function MatchCard({
   expanded,
   loading,
   onToggle,
+  onPrefetch,
   starred,
   onStar,
 }: {
@@ -847,6 +923,8 @@ const MatchCard = memo(function MatchCard({
   expanded: boolean;
   loading: boolean;
   onToggle: (eventId: string) => void;
+  /** About to open: start loading its markets. */
+  onPrefetch: (eventId: string) => void;
   /** In this account's favourites. */
   starred: boolean;
   onStar: (eventId: string) => void;
@@ -991,7 +1069,7 @@ const MatchCard = memo(function MatchCard({
           {over ? <span className="bm-settled">{t("Settling")}</span> : inRow ? inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick")) : null}
         </div>
         {more > 0 ? (
-          <button type="button" className={`bm-more${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded} aria-label={toggleLabel} title={toggleLabel}>
+          <button type="button" className={`bm-more${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} onPointerEnter={() => !expanded && onPrefetch(event.id)} onTouchStart={() => !expanded && onPrefetch(event.id)} onFocus={() => !expanded && onPrefetch(event.id)} aria-expanded={expanded} aria-label={toggleLabel} title={toggleLabel}>
             {expanded ? (
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m6 15 6-6 6 6" />

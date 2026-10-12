@@ -1150,8 +1150,8 @@ export class ApiFootballClient {
  * Detected from the host string, so switching providers is just an env var
  * change (API_FOOTBALL_HOST) — no other config needed.
  */
-/** `onQuota` gets the requests left on today's plan, from each answer's rate-limit header. */
-export function httpFetchJson(host: string, apiKey: string, onQuota?: (left: number) => void): FetchJson {
+/** `onQuota` gets the requests left on today's plan and how many the plan allows, from each answer's rate-limit headers. */
+export function httpFetchJson(host: string, apiKey: string, onQuota?: (left: number, limit: number | null) => void): FetchJson {
   const rapidApi = host.includes("rapidapi.com");
   const base = rapidApi ? `${host}/v3` : host;
   return async (path, params) => {
@@ -1163,7 +1163,8 @@ export function httpFetchJson(host: string, apiKey: string, onQuota?: (left: num
       signal: AbortSignal.timeout(15_000),
     });
     const left = Number(res.headers.get("x-ratelimit-requests-remaining"));
-    if (onQuota && res.headers.has("x-ratelimit-requests-remaining") && Number.isFinite(left)) onQuota(left);
+    const limit = Number(res.headers.get("x-ratelimit-requests-limit"));
+    if (onQuota && res.headers.has("x-ratelimit-requests-remaining") && Number.isFinite(left)) onQuota(left, res.headers.has("x-ratelimit-requests-limit") && limit > 0 ? limit : null);
     if (!res.ok) throw new Error(`API-Football answered ${res.status} for ${path}`);
     const body = (await res.json()) as ApiResponse<unknown>;
     const errors = body.errors && typeof body.errors === "object" ? Object.values(body.errors as Record<string, string>) : [];

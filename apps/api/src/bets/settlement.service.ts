@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import { BalanceTransactionType, BetKind, BetStatus, EventStatus, NotificationSeverity, NotificationType, Prisma, Role, SelectionResult } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
@@ -8,7 +8,7 @@ import { POINTS_SPORTS, gradeBasketball, periodsResultOf } from "../odds/basketb
 import { gradeVolleyball, volleyballResultOf } from "../odds/volleyball";
 import { fightResultOf, gradeFight } from "../odds/mma";
 import { gradeTennis, tennisResultOf } from "../odds/tennis";
-import { UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
+import { OddsSyncService, UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
@@ -83,7 +83,9 @@ const hasOpenBets = {
 } satisfies Prisma.EventWhereInput;
 
 /**
- * Pays bets out. Every SETTLEMENT_INTERVAL_MS (one minute by default) it
+ * Pays bets out, as soon as the live sync sees a match finish
+ * (OddsSyncService.onFinished) and every SETTLEMENT_INTERVAL_MS (one minute
+ * by default) besides. Each round it
  * settles the open bets on matches the feed reports as finished (from the
  * 90-minute score) or cancelled (refunded), re-settles matches whose score
  * the feed corrected, and refunds bets on matches not played within
@@ -100,6 +102,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SettlementService.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  /** Asked to settle while a round was running: one more round right after it. */
+  private again = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -107,7 +111,11 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     private readonly notifications: NotificationsService,
     private readonly users: UsersService,
     private readonly audit: AuditService,
-  ) {}
+    @Optional() private readonly sync?: OddsSyncService,
+  ) {
+    // A match the live sync just saw finish is paid out now, not at the next round.
+    if (sync) sync.onFinished = () => this.settleDue();
+  }
 
   async onModuleInit() {
     await this.backfillJournal().catch((error) => this.logger.error(`Couldn't fill in the settlement journal: ${error instanceof Error ? error.message : String(error)}`));
@@ -149,17 +157,24 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
 
   /** Settles finished and cancelled matches, applies the feed's corrections, and refunds unplayed matches. Returns how many bets moved. */
   async settleDue(): Promise<number> {
-    if (this.running) return 0;
+    if (this.running) {
+      // A match may have finished after this round looked: it gets one more.
+      this.again = true;
+      return 0;
+    }
     this.running = true;
     let settled = 0;
     try {
-      // Each step on its own, so one failing doesn't hold up the others.
-      for (const step of [this.settleFinished, this.applyFeedCorrections, this.refundUnplayed]) {
-        settled += await step.call(this).catch((error: unknown) => {
-          this.logger.warn(`Settlement (${step.name}) failed: ${error instanceof Error ? error.message : String(error)}`);
-          return 0;
-        });
-      }
+      do {
+        this.again = false;
+        // Each step on its own, so one failing doesn't hold up the others.
+        for (const step of [this.settleFinished, this.applyFeedCorrections, this.refundUnplayed]) {
+          settled += await step.call(this).catch((error: unknown) => {
+            this.logger.warn(`Settlement (${step.name}) failed: ${error instanceof Error ? error.message : String(error)}`);
+            return 0;
+          });
+        }
+      } while (this.again);
     } finally {
       this.running = false;
     }

@@ -6,6 +6,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { GOAL_MARKET_KEYS } from "../bets/goals";
 import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLiveOdds, parseMarkets, parseMatchCentre } from "./api-football";
 import { savedCrests, savedMarks } from "./crest";
+import { PREMATCH_REFRESH_MS, RICH_PLAN, isDailyLimitError, msUntilReset, pacedInterval, quotaReserve } from "./feed-budget";
 import { bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
@@ -38,16 +39,6 @@ const DEFAULT_LEAGUES = [
 ];
 const DEFAULT_COUNTRIES = ["Albania", "Kosovo"];
 
-/**
- * How often each day's fixtures and pre-match prices are refreshed: today
- * every 30 minutes, tomorrow every 2 hours, then every 6, and the last two of
- * the week every 12. Prices a few days out barely move, so they're fetched
- * rarely; that keeps a wide league list inside API-Football's Pro plan
- * (7,500 requests a day).
- */
-const PREMATCH_REFRESH_MS = [30 * 60_000, 2 * 3_600_000, 6 * 3_600_000, 6 * 3_600_000, 6 * 3_600_000, 12 * 3_600_000];
-/** Below this many requests left today, only today's matches are refreshed. */
-const QUOTA_RESERVE = Number(process.env.API_FOOTBALL_QUOTA_RESERVE) || 600;
 /** API-Football's id for Bet365, the bookmaker whose prices we start from. */
 const DEFAULT_BOOKMAKER = 8;
 
@@ -59,25 +50,35 @@ type SyncSummary = { events: number; markets: number; live: number };
 export type CompetitionChoice = { leagues: number[]; countries: string[] };
 
 const LOCK_KEY = "bastal:odds-sync";
-/** Live updates have a lock of their own, so a long pre-match sync never holds them up. */
+/** Live prices and live scores have locks of their own, so a long pre-match sync never holds them up. */
 const LIVE_LOCK_KEY = "bastal:odds-sync:live";
+const SCORES_LOCK_KEY = "bastal:odds-sync:scores";
 /**
- * While someone has looked at live matches in the last LIVE_INTEREST_MS, live
- * prices are fetched every LIVE_FAST_INTERVAL_MS (one request) instead of
- * waiting for the regular live sync, until LIVE_WATCH_FLOOR requests are left
- * for bet checks and the score list.
+ * In-play prices for every live match (one request): every 5 seconds while
+ * someone is on the site or looked at live matches lately, every 20 when
+ * nobody is. The feed updates them about that often. Paced by the day's
+ * budget (feed-budget.ts).
  */
-const LIVE_FAST_INTERVAL_MS = Number(process.env.LIVE_FAST_INTERVAL_MS) || 15_000;
-/** The open board keeps its 15s price refresh until only this many requests are left today. */
-const LIVE_WATCH_FLOOR = 80;
-/** The regular live sync skips a second odds request when one already landed this recently. Scores still update. */
-const LIVE_ODDS_FRESH_MS = 20_000;
-/** The regular live sync: scores and in-play prices, two requests a run. */
-const LIVE_INTERVAL_MS = Number(process.env.ODDS_LIVE_INTERVAL_MS) || 45_000;
+const LIVE_ODDS_WATCHED_MS = Number(process.env.LIVE_ODDS_INTERVAL_MS) || 5_000;
+const LIVE_ODDS_IDLE_MS = 20_000;
+/** Live scores, minutes and finished matches: every 15 seconds, how often the feed updates them. */
+const LIVE_SCORES_MS = Number(process.env.ODDS_LIVE_INTERVAL_MS) || 15_000;
+/** Match centres of matches with bets or someone watching: every 30 seconds, up to 3 requests a run. */
+const MATCH_CENTRE_EVERY_MS = 30_000;
+/**
+ * The part of what's left today each live task may use. Scores (results,
+ * settlement) may use what's kept in reserve; prices and match centres stop
+ * at the reserve.
+ */
+const SHARE = { odds: 0.45, scores: 0.25, centres: 0.15 };
+/** While nothing can be afforded or the day's requests are used up, the loops look again this often. */
+const BUDGET_RECHECK_MS = 60_000;
+/** After the feed says the day's requests are used up, nothing is asked for this long; then one request checks. */
+const LIMIT_PAUSE_MS = 10 * 60_000;
 const LIVE_INTEREST_MS = 2 * 60_000;
 /** How long after a match ends its match centre is fetched once more, for the final numbers. */
 const MATCH_CENTRE_AFTER_MS = 15 * 60_000;
-/** Matches whose match centre is fetched on one live sync: 3 requests' worth. */
+/** Matches whose match centre is fetched on one run: 3 requests' worth. */
 const MATCH_CENTRE_MAX = 60;
 /** A match someone opened the stats of stays on the live sync's list this long after they last looked. */
 const MATCH_CENTRE_INTEREST_MS = 2 * 60_000;
@@ -111,27 +112,44 @@ const RESULT_RECHECK_EVERY_MS = 60 * 60_000;
  * - every ODDS_SYNC_INTERVAL_MS (10 minutes by default) it checks which days
  *   are due (see PREMATCH_REFRESH_MS) and fetches their fixtures and pre-match
  *   odds, for today and the next ODDS_SYNC_DAYS - 1 days;
- * - every ODDS_LIVE_INTERVAL_MS (45 seconds): scores for matches that are
- *   live or should have kicked off, only while there are any, plus in-play
- *   odds for the live ones (one request for all of them);
- * - every LIVE_FAST_INTERVAL_MS (15 seconds) while someone is watching live
- *   matches: the in-play odds again (one request), until LIVE_WATCH_FLOOR
- *   requests are left;
+ * - every LIVE_SCORES_MS (15 seconds) while matches are live or should have
+ *   kicked off: their scores (one request), and every MATCH_CENTRE_EVERY_MS
+ *   the match centres of those with bets or someone watching;
+ * - every LIVE_ODDS_WATCHED_MS (5 seconds) while anyone is around, otherwise
+ *   every LIVE_ODDS_IDLE_MS: in-play prices for every live match (one request);
  * - on every live bet: that match's odds straight from the feed (verifyLive).
- * Redis locks make sure only one API instance syncs at a time; pre-match and
- * live syncs lock separately.
+ * The live tasks are spaced out when the day's requests wouldn't last at
+ * their speed (feed-budget.ts). Redis locks make sure only one API instance
+ * syncs at a time; pre-match, live prices and live scores lock separately.
  */
 @Injectable()
 export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OddsSyncService.name);
   private readonly timers: NodeJS.Timeout[] = [];
+  /** Stops each repeating live loop (see loop). */
+  private readonly loopStops: Array<() => void> = [];
   private redis?: Redis;
-  private running = false;
-  private liveRunning = false;
+  private stopped = false;
+  /** Syncs running on this instance, by lock key. */
+  private readonly runningLocks = new Set<string>();
   /** When a Player or admin last looked at live matches. */
   private liveInterestAt = 0;
   /** When in-play prices were last fetched for the whole live board. */
   private lastLiveOddsAt = 0;
+  /** When match centres were last fetched on the live loop. */
+  private lastCentresAt = 0;
+  /** Until when nothing is asked of the feed: it said the day's requests are used up. */
+  private limitPausedUntil = 0;
+  /** Starts the live price loop early (someone just opened live matches after a quiet spell). */
+  private wakeOdds?: () => void;
+  /**
+   * Called with the matches whose live prices were just saved, after they're
+   * committed. OddsService sends each team its new prices from here; when
+   * nothing is listening, every open page is told to fetch them.
+   */
+  onLiveSaved?: (eventIds: string[]) => Promise<void>;
+  /** Called when matches just finished, once their stats and goals are in: SettlementService pays their bets now, not at its next round. */
+  onFinished?: () => Promise<unknown>;
   /** Checks with the feed for one match, shared by bets placed at the same moment. */
   private readonly verifying = new Map<string, { at: number; done: Promise<void> }>();
   readonly mode: FeedMode;
@@ -145,8 +163,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   private custom = false;
   private leagueList: { at: number; leagues: FeedLeague[] } | null = null;
   private readonly days: number;
-  /** Requests left on today's API-Football quota, from its last answer. */
+  /** Requests left on today's API-Football quota, and the plan's daily total, from its last answer. */
   private quotaLeft: number | null = null;
+  private quotaLimit: number | null = null;
   /** Matches whose stats someone has open, and when they last asked. */
   private readonly centreInterest = new Map<string, number>();
   /** Match centres being fetched for someone right now, so viewers who ask together share one request. */
@@ -162,7 +181,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const key = process.env.API_FOOTBALL_KEY?.trim();
     if (key) {
       this.mode = "api-football";
-      this.client = new ApiFootballClient(httpFetchJson(process.env.API_FOOTBALL_HOST?.trim() || "v3.football.api-sports.io", key, (left) => (this.quotaLeft = left)));
+      this.client = new ApiFootballClient(httpFetchJson(process.env.API_FOOTBALL_HOST?.trim() || "v3.football.api-sports.io", key, (left, limit) => {
+        this.quotaLeft = left;
+        if (limit !== null) this.quotaLimit = limit;
+      }));
     } else if (process.env.ODDS_FEED_MOCK === "true") {
       this.mode = "mock";
       this.client = new ApiFootballClient(mockFetchJson());
@@ -190,28 +212,110 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     // First full sync shortly after boot, then on the interval.
     this.timers.push(setTimeout(() => void this.scheduled("full"), 5_000));
     this.timers.push(setInterval(() => void this.scheduled("full"), fullEvery));
-    this.timers.push(setInterval(() => void this.scheduled("live"), LIVE_INTERVAL_MS));
-    this.timers.push(setInterval(() => void this.fastLive(), LIVE_FAST_INTERVAL_MS));
-  }
-
-  /** Someone is looking at live matches: fetch their prices more often for a while. */
-  noteLiveInterest() {
-    this.liveInterestAt = Date.now();
+    this.loop("live scores", 8_000, () => this.liveScoresRun(), () => this.liveScoresDelay());
+    this.loop("live odds", 10_000, () => this.liveOddsRun(), () => this.liveOddsDelay(), (wake) => (this.wakeOdds = wake));
   }
 
   /**
-   * The quick in-between live update: in-play prices only (one request),
-   * while someone is watching. It keeps going below the pre-match reserve so
-   * an open board stays current, and stops at a small floor so bet checks
-   * and the score list still have requests left.
+   * Someone is looking at live matches: their prices are fetched every
+   * LIVE_ODDS_WATCHED_MS for a while, starting now if the last fetch was
+   * from the slower pace.
    */
-  private async fastLive() {
-    if (Date.now() - this.liveInterestAt > LIVE_INTEREST_MS) return;
-    if (this.quotaLeft !== null && this.quotaLeft < LIVE_WATCH_FLOOR) return;
-    try {
-      await this.withLock(() => this.syncLiveOdds(), LIVE_LOCK_KEY);
-    } catch (error) {
-      this.logger.warn(`Quick live odds update failed: ${error instanceof Error ? error.message : String(error)}`);
+  noteLiveInterest() {
+    const quiet = !this.watched(Date.now());
+    this.liveInterestAt = Date.now();
+    if (quiet && Date.now() - this.lastLiveOddsAt > LIVE_ODDS_WATCHED_MS) this.wakeOdds?.();
+  }
+
+  /** Someone has the site open (a live stream) or looked at live matches lately. */
+  private watched(now: number): boolean {
+    return now - this.liveInterestAt <= LIVE_INTEREST_MS || (this.realtime?.listenerCount() ?? 0) > 0;
+  }
+
+  /**
+   * Runs `run` again and again, waiting `delay()` after each run ends (so a
+   * slow run never overlaps the next), first after `firstMs`. `onWake` gets
+   * a function that starts the next run now.
+   */
+  private loop(name: string, firstMs: number, run: () => Promise<void>, delay: () => number, onWake?: (wake: () => void) => void) {
+    let timer: NodeJS.Timeout | undefined;
+    let busy = false;
+    const tick = async () => {
+      timer = undefined;
+      busy = true;
+      try {
+        if (Date.now() >= this.limitPausedUntil) await run();
+      } catch (error) {
+        this.feedFailed(`Odds ${name} sync failed`, error);
+      } finally {
+        busy = false;
+      }
+      if (this.stopped) return;
+      const wait = Date.now() < this.limitPausedUntil ? Math.min(BUDGET_RECHECK_MS, this.limitPausedUntil - Date.now()) : delay();
+      timer = setTimeout(() => void tick(), Number.isFinite(wait) ? wait : BUDGET_RECHECK_MS);
+    };
+    timer = setTimeout(() => void tick(), firstMs);
+    this.loopStops.push(() => clearTimeout(timer));
+    onWake?.(() => {
+      if (busy || !timer || this.stopped) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => void tick(), 0);
+    });
+  }
+
+  /** Logs a failed feed call; if the day's requests are used up, stops asking for LIMIT_PAUSE_MS. */
+  private feedFailed(what: string, error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isDailyLimitError(error)) {
+      const first = Date.now() >= this.limitPausedUntil;
+      this.quotaLeft = 0;
+      this.limitPausedUntil = Date.now() + LIMIT_PAUSE_MS;
+      if (first) this.logger.warn(`API-Football's requests for today are used up; asking again in ${LIMIT_PAUSE_MS / 60_000} minutes`);
+      return;
+    }
+    this.logger.warn(`${what}: ${message}`);
+  }
+
+  /** Requests left above the reserve kept for scores and results. */
+  private spare(): number | null {
+    return this.quotaLeft === null ? null : this.quotaLeft - quotaReserve(this.quotaLimit);
+  }
+
+  private liveOddsDelay(): number {
+    const want = this.watched(Date.now()) ? LIVE_ODDS_WATCHED_MS : LIVE_ODDS_IDLE_MS;
+    return pacedInterval({ wantMs: want, perRun: 1, share: SHARE.odds, left: this.spare(), msLeft: msUntilReset(Date.now()) });
+  }
+
+  private liveScoresDelay(): number {
+    return pacedInterval({ wantMs: LIVE_SCORES_MS, perRun: 1, share: SHARE.scores, left: this.quotaLeft, msLeft: msUntilReset(Date.now()) });
+  }
+
+  private centresDelay(): number {
+    return pacedInterval({ wantMs: MATCH_CENTRE_EVERY_MS, perRun: 3, share: SHARE.centres, left: this.spare(), msLeft: msUntilReset(Date.now()) });
+  }
+
+  /** In-play prices for every live match. */
+  private async liveOddsRun() {
+    await this.withLock(() => this.syncLiveOdds(), LIVE_LOCK_KEY);
+  }
+
+  /**
+   * Scores and the minute for matches that are live or should have kicked
+   * off; when due, the match centres; and when a match just finished, its
+   * corners, cards and goals for settlement.
+   */
+  private async liveScoresRun() {
+    // Scores first, under the lock; match centres and settlement checks after it's free.
+    const finished = await this.withLock(() => this.syncLive(), SCORES_LOCK_KEY);
+    if (finished === null) return;
+    if (Date.now() - this.lastCentresAt >= this.centresDelay()) {
+      this.lastCentresAt = Date.now();
+      await this.syncMatchCentres().catch((error) => this.feedFailed("Match centres not updated", error));
+    }
+    if (finished > 0) {
+      await this.syncStats();
+      await this.syncGoals();
+      await this.onFinished?.().catch((error) => this.logger.warn(`Settling just-finished matches failed: ${error instanceof Error ? error.message : String(error)}`));
     }
   }
 
@@ -250,11 +354,26 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         return done;
       }),
     );
-    if (events.length > 0) await this.realtime?.publishAll({ type: "odds.changed" });
+    if (events.length > 0) await this.announceLive(events.map((event) => event.id));
+  }
+
+  /** Tells the pages about live prices just saved: each team gets its own (OddsService), or everyone is asked to fetch them. */
+  private async announceLive(eventIds: string[]) {
+    if (this.onLiveSaved) {
+      try {
+        await this.onLiveSaved(eventIds);
+        return;
+      } catch (error) {
+        this.logger.warn(`Live prices not sent to the pages: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    await this.realtime?.publishAll({ type: "odds.changed" });
   }
 
   async onModuleDestroy() {
+    this.stopped = true;
     this.timers.forEach(clearTimeout);
+    this.loopStops.forEach((stop) => stop());
     this.redis?.disconnect();
   }
 
@@ -266,48 +385,34 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     return full;
   }
 
-  private async scheduled(kind: "full" | "live") {
+  private async scheduled(kind: "full") {
+    if (Date.now() < this.limitPausedUntil) return;
     try {
-      if (kind === "full") {
-        await this.withLock(() => this.syncFull());
-        return;
-      }
-      // Prices first, under the lock. Match centres and settlement checks wait
-      // until the lock is free, so a goal's new prices aren't stuck behind them.
-      const finished = await this.withLock(() => this.syncLive(), LIVE_LOCK_KEY);
-      if (finished === null) return;
-      await this.syncMatchCentres().catch((error) => this.logger.warn(`Match centres not updated: ${error instanceof Error ? error.message : String(error)}`));
-      if (finished > 0) {
-        await this.syncStats();
-        await this.syncGoals();
-      }
+      await this.withLock(() => this.syncFull());
     } catch (error) {
+      this.feedFailed(`Odds ${kind} sync failed`, error);
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Odds ${kind} sync failed: ${message}`);
-      if (kind === "full") await this.recordStatus(`Failed: ${message}`, false);
+      await this.recordStatus(isDailyLimitError(error) ? "API-Football's requests for today are used up" : `Failed: ${message}`, false);
     }
   }
 
   /**
    * Runs `task` unless the same kind of sync (here or on another instance) is
-   * running. Pre-match and live syncs have separate locks.
+   * running. Pre-match, live prices and live scores have separate locks.
    */
   private async withLock<T>(task: () => Promise<T>, key: string = LOCK_KEY): Promise<T | null> {
-    const live = key === LIVE_LOCK_KEY;
-    if (live ? this.liveRunning : this.running) return null;
+    if (this.runningLocks.has(key)) return null;
     const token = `${process.pid}-${Date.now()}`;
     let locked = true;
     if (this.redis?.status === "ready") {
-      locked = (await this.redis.set(key, token, "PX", live ? 60_000 : 5 * 60_000, "NX").catch(() => "OK")) === "OK";
+      locked = (await this.redis.set(key, token, "PX", key === LOCK_KEY ? 5 * 60_000 : 60_000, "NX").catch(() => "OK")) === "OK";
     }
     if (!locked) return null;
-    if (live) this.liveRunning = true;
-    else this.running = true;
+    this.runningLocks.add(key);
     try {
       return await task();
     } finally {
-      if (live) this.liveRunning = false;
-      else this.running = false;
+      this.runningLocks.delete(key);
       if (this.redis?.status === "ready") {
         const current = await this.redis.get(key).catch(() => null);
         if (current === token) await this.redis.del(key).catch(() => undefined);
@@ -360,6 +465,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     return this.quotaLeft;
   }
 
+  /** How many requests a day the plan allows, as of its last answer. */
+  get requestsLimit(): number | null {
+    return this.quotaLimit;
+  }
+
   /**
    * Fetches fixtures and pre-match odds for every day that's due, or for all
    * of them when `force` is set (Super Admin's "Sync now").
@@ -373,9 +483,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     let markets = 0;
     let refreshed = 0;
     let saving = false;
+    const schedule = (this.quotaLimit ?? 0) >= RICH_PLAN ? PREMATCH_REFRESH_MS.rich : PREMATCH_REFRESH_MS.lean;
     for (let day = 0; day < this.days; day++) {
       const date = new Date(Date.now() + day * 86_400_000).toISOString().slice(0, 10);
-      if (day > 0 && this.quotaLeft !== null && this.quotaLeft < QUOTA_RESERVE) {
+      if (day > 0 && this.quotaLeft !== null && this.quotaLeft < quotaReserve(this.quotaLimit)) {
         saving = true;
         continue;
       }
@@ -407,11 +518,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           markets += parsed.length;
         }
       }
-      await this.markRefreshed(date, PREMATCH_REFRESH_MS[Math.min(day, PREMATCH_REFRESH_MS.length - 1)]);
+      await this.markRefreshed(date, schedule[Math.min(day, schedule.length - 1)]);
       refreshed++;
     }
     const live = (await this.syncLive()) ?? 0;
-    await this.syncMatchCentres().catch((error) => this.logger.warn(`Match centres not updated: ${error instanceof Error ? error.message : String(error)}`));
+    await this.syncMatchCentres().catch((error) => this.feedFailed("Match centres not updated", error));
     await this.syncStats();
     await this.syncGoals();
     await this.recheckResults();
@@ -459,8 +570,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Updates scores and in-play prices for matches that are live or should have
-   * started. Null when there is nothing to update. The count is how many
+   * Updates scores and the minute for matches that are live or should have
+   * started (in-play prices are syncLiveOdds'). Null when there is nothing to update. The count is how many
    * tracked matches had dropped off the live list (just finished).
    */
   private async syncLive(): Promise<number | null> {
@@ -468,7 +579,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const provider = this.provider();
     const tracked = await this.prisma.event.findMany({
       where: { provider, externalId: { not: null }, OR: [{ status: EventStatus.LIVE }, { status: EventStatus.UPCOMING, startsAt: { lte: new Date() } }] },
-      select: { id: true, externalId: true, homeScore: true, awayScore: true, liveStopped: true, liveOddsAt: true, liveCooldownUntil: true, liveCooldownReason: true, period: true, finishedAt: true },
+      select: { id: true, externalId: true, status: true, elapsed: true, homeScore: true, awayScore: true, liveStopped: true, liveOddsAt: true, liveCooldownUntil: true, liveCooldownReason: true, period: true, finishedAt: true },
     });
     if (tracked.length === 0) return null;
     const live = await client.liveFixtures();
@@ -479,6 +590,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const missing = [...trackedIds].filter((id) => !seen.has(id));
     const finished: FeedFixture[] = [];
     for (let i = 0; i < missing.length; i += 20) finished.push(...(await client.fixturesByIds(missing.slice(i, i + 20))));
+    /** Matches whose state the pages show changed here (kick-off, full time, the minute, a score): pushed to them below. */
+    const changed: string[] = [];
     for (const fixture of [...live.filter((f) => trackedIds.has(f.externalId)), ...finished]) {
       const saved = trackedBy.get(fixture.externalId)!;
       // While the live odds are fresh they carry the newer score; the fixtures list lags and would flip it back and forth.
@@ -492,13 +605,16 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
             false,
           );
       const pause = laterCooldown({ until: saved.liveCooldownUntil, reason: saved.liveCooldownReason }, cooldown);
+      const period = saved.period === "FT" && fixture.status === EventStatus.LIVE ? "FT" : fixture.period;
+      const scoreMoved = !oddsHaveScore && (saved.homeScore !== fixture.homeScore || saved.awayScore !== fixture.awayScore);
+      if (saved.status !== fixture.status || saved.elapsed !== fixture.elapsed || saved.period !== period || scoreMoved) changed.push(saved.id);
       await this.prisma.event.update({
         where: { provider_externalId: { provider, externalId: fixture.externalId } },
         data: {
           status: fixture.status,
           elapsed: fixture.elapsed,
           // The live odds can say full time before the fixtures list catches up; don't flip it back to "2H".
-          period: saved.period === "FT" && fixture.status === EventStatus.LIVE ? "FT" : fixture.period,
+          period,
           ...(fixture.status === EventStatus.COMPLETED && !saved.finishedAt ? { finishedAt: new Date() } : {}),
           ...score,
           ...savedCrests(fixture.homeLogo, fixture.awayLogo),
@@ -510,8 +626,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       });
       await this.recordResult(provider, fixture);
     }
-    // A fast refresh a moment ago already has these prices. Scores above still update.
-    if (Date.now() - this.lastLiveOddsAt >= LIVE_ODDS_FRESH_MS) await this.syncLiveOdds();
+    if (changed.length > 0) await this.announceLive(changed);
     return finished.length;
   }
 
@@ -528,7 +643,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * has a bet on, while it's live and once more in the first minutes after
    * it ends, so their bet shows who scored, who was booked and the corners.
    * Up to 20 matches per request (fixtures by id carry their events and
-   * statistics), on every live sync, while the day's quota has room.
+   * statistics), every MATCH_CENTRE_EVERY_MS, while the day's quota has room.
    */
   private async syncMatchCentres(): Promise<number> {
     const now = Date.now();
@@ -575,14 +690,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     return saved;
   }
 
-  /**
-   * Room on today's quota for match centres: what the regular live sync
-   * still needs before the quota resets at midnight UTC is kept back, plus
-   * room for checking bets.
-   */
+  /** Room on today's quota for match centres: above the reserve kept for scores and results, and the feed not paused. */
   private centreQuotaOk(now: number): boolean {
-    const liveRunsLeft = Math.ceil((86_400_000 - (now % 86_400_000)) / LIVE_INTERVAL_MS);
-    return this.quotaLeft === null || this.quotaLeft >= Math.min(QUOTA_RESERVE, 2 * liveRunsLeft + 200);
+    if (now < this.limitPausedUntil) return false;
+    const spare = this.spare();
+    return spare === null || spare > 0;
   }
 
   /**
@@ -601,7 +713,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     let stale: boolean;
     if (event.status === EventStatus.LIVE) {
       this.centreInterest.set(event.id, now);
-      stale = fetchedAt === null || now - fetchedAt > LIVE_INTERVAL_MS + 15_000;
+      stale = fetchedAt === null || now - fetchedAt > MATCH_CENTRE_EVERY_MS + 15_000;
     } else if (event.status === EventStatus.COMPLETED) {
       // The final numbers: fetched after the 15 minutes the feed takes to complete them, then kept.
       const final = event.finishedAt ? event.finishedAt.getTime() + MATCH_CENTRE_AFTER_MS : null;
@@ -784,7 +896,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       }),
     );
     this.lastLiveOddsAt = Date.now();
-    if (readings.length > 0) await this.realtime?.publishAll({ type: "odds.changed" });
+    if (readings.length > 0) await this.announceLive(readings.map((reading) => reading.eventId));
     return readings.length;
   }
 

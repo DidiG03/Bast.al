@@ -1,6 +1,6 @@
 import { Controller, MessageEvent, Sse, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { Observable, interval, map, merge, of, takeUntil, timer } from "rxjs";
+import { Observable, defer, from, interval, map, merge, mergeMap, of, takeUntil, timer } from "rxjs";
 import { AuthGuard } from "../auth/auth.guard";
 import { CurrentActor } from "../auth/current-actor.decorator";
 import type { Actor } from "../auth/permissions";
@@ -30,7 +30,8 @@ export class RealtimeController {
         data: { at: new Date().toISOString() },
         retry: 3_000,
       }),
-      this.realtime.stream(actor.id),
+      // A Player's stream also gets their team's live prices.
+      defer(() => from(this.realtime.topicsFor(actor).catch(() => [] as string[]))).pipe(mergeMap((topics) => this.realtime.stream(actor.id, topics))),
       interval(HEARTBEAT_MS).pipe(
         map((): MessageEvent => ({ type: "ping", data: "" })),
       ),

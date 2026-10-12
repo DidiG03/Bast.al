@@ -142,7 +142,7 @@ We use a **recursive CTE** on `parent_id`. Hierarchy is shallow (three levels un
 
 ## Odds feed
 
-Matches, live scores and pre-match odds come from [API-Football](https://www.api-football.com/) (api-sports.io). The API syncs fixtures and pre-match odds for today and the next four days: today's every 30 minutes, tomorrow's every 2 hours, and later days every 6 hours. Live scores and in-play odds update every 45 seconds while matches are on. With the default league list this stays around 3,000–6,000 requests a day, inside the Pro plan's 7,500; if fewer than `API_FOOTBALL_QUOTA_RESERVE` (600) are left, only today's matches keep refreshing until the quota resets. Every team starts from the feed price less Super Admin's base margin; an Owner can add or give back margin for their team and set their own price on any selection (Odds page). Managers and Players see their Owner's prices.
+Matches, live scores and pre-match odds come from [API-Football](https://www.api-football.com/) (api-sports.io). The API syncs fixtures and pre-match odds for today and the next six days. On a plan of 30,000 requests a day or more (Ultra: 75,000) today's are refreshed every 10 minutes, tomorrow's every 30, and later days every 2–4 hours; on a smaller plan (Pro: 7,500) every 30 minutes, 2 hours and 6–12 hours. While matches are on, in-play prices are fetched every 5 seconds while anyone is on the site (20 s otherwise), scores every 15 seconds and the match stats of matches with bets every 30. New live prices are pushed straight to the Players' pages, priced for their team, so nothing is fetched to show them. The plan's size and what's left come with each answer from API-Football: when what's left wouldn't last until the count resets (midnight UTC), the live updates slow down so it does, and `API_FOOTBALL_QUOTA_RESERVE` (8% of the plan) is always kept for live scores and results. If API-Football says the day's requests are used up, nothing is asked for 10 minutes, then one request checks. Every team starts from the feed price less Super Admin's base margin; an Owner can add or give back margin for their team and set their own price on any selection (Odds page). Managers and Players see their Owner's prices.
 
 Super Admin picks which competitions are synced under **Odds → Leagues**: single leagues or every league in a country, from the list of competitions API-Football has a season running for. It takes effect on the next sync, with no restart; matches already listed from a league that's turned off stay until they're played. Until Super Admin saves a pick, `API_FOOTBALL_LEAGUES` and `API_FOOTBALL_COUNTRIES` (or the built-in list) apply, and **Reset to defaults** goes back to them.
 
@@ -152,10 +152,10 @@ Super Admin picks which competitions are synced under **Odds → Leagues**: sing
 | `API_FOOTBALL_LEAGUES` | Optional comma-separated league ids, used until Super Admin picks leagues on the Odds page. Defaults to about 60 competitions (list in `apps/api/src/odds/odds-sync.service.ts`): the top two divisions and main cups of England, Spain, Italy, Germany and France, the rest of Europe's top divisions, UEFA club competitions, national-team tournaments, qualifiers and friendlies, and the main leagues of the Americas, Asia and Australia. Unknown ids are logged at startup. |
 | `API_FOOTBALL_COUNTRIES` | Optional comma-separated countries whose leagues are all synced. Defaults to `Albania,Kosovo`. |
 | `API_FOOTBALL_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `8` (Bet365). |
-| `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS` | Optional tuning: days ahead (7, at most 7), how often to check which days are due (10 min), live interval (45 s). |
-| `API_FOOTBALL_QUOTA_RESERVE` | Requests to keep in hand each day before only today's matches are refreshed. Defaults to `600`. |
+| `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS`, `LIVE_ODDS_INTERVAL_MS` | Optional tuning: days ahead (7, at most 7), how often to check which days are due (10 min), live scores (15 s), live prices while anyone is on the site (5 s). |
+| `API_FOOTBALL_QUOTA_RESERVE` | Requests kept each day for live scores and results; below it only today's matches are refreshed. Defaults to 8% of the plan, at least `600`. |
 | `ODDS_FEED_MOCK=true` | Local testing only: serves made-up matches in API-Football's format when no key is set. |
-| `LIVE_VERIFY`, `LIVE_GOAL_COOLDOWN_MS`, `LIVE_GOAL_MIN_PAUSE_MS`, `LIVE_SWING_COOLDOWN_MS`, `LIVE_REOPEN_COOLDOWN_MS`, `LIVE_SWING_POINTS`, `LIVE_CUTOFF_MINUTE`, `LIVE_FAST_INTERVAL_MS` | Live-betting protection (see below). Defaults: check each live bet with the feed, pause after a goal until the prices carry the new score and the bookmaker isn't blocking the match (30 s at least, 90 s at most), 30 s after a result's chance jumps 12 points in the match-result prices, 15 s after the bookmaker reopens a match, close from minute 89, and fetch live prices every 15 s while someone is watching. |
+| `LIVE_VERIFY`, `LIVE_GOAL_COOLDOWN_MS`, `LIVE_GOAL_MIN_PAUSE_MS`, `LIVE_SWING_COOLDOWN_MS`, `LIVE_REOPEN_COOLDOWN_MS`, `LIVE_SWING_POINTS`, `LIVE_CUTOFF_MINUTE` | Live-betting protection (see below). Defaults: check each live bet with the feed, pause after a goal until the prices carry the new score and the bookmaker isn't blocking the match (30 s at least, 90 s at most), 30 s after a result's chance jumps 12 points in the match-result prices, 15 s after the bookmaker reopens a match, and close from minute 89. |
 
 The API needs outbound access to `v3.football.api-sports.io`.
 
@@ -256,7 +256,7 @@ The API needs outbound access to `api.greyhoundapi.com`.
 
 Every live bet also waits 5 s. It is then checked with API-Football for that one match (bets on the same match at the same moment share one request). The bet is refused if the match is blocked, the score changed, the price moved, or the feed can't be reached. Players see why a match is paused ("Goal! Live betting reopens in a moment").
 
-Request use: one extra request per live bet. While someone has the live matches open, there is also one request every 15 s, which stops by itself when fewer than twice `API_FOOTBALL_QUOTA_RESERVE` requests are left for the day.
+Request use: one extra request per live bet, on top of the live updates above.
 
 ## Commands
 

@@ -1,8 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { EventStatus, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
+import { type LiveDelta, RealtimeService, STAFF_TOPIC, teamTopic } from "../realtime/realtime.service";
 import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin } from "./pricing";
@@ -21,6 +22,9 @@ const LIST_LIMIT = 2_000;
 type PricedEvent = Prisma.EventGetPayload<{ include: { markets: { include: { selections: true } }; _count: { select: { markets: true } } } }>;
 
 const COUNT_MARKETS = { _count: { select: { markets: true } } } as const;
+
+/** A live match's prices sent to a team are forgotten this long after its last update (it finished, or stopped being sent). */
+const LIVE_SENT_KEPT_MS = 30 * 60_000;
 
 /** How many matches one account can star. */
 const MAX_FAVOURITES = 200;
@@ -55,12 +59,98 @@ export class OddsService {
   private readonly inflight = new Map<string, Promise<unknown>>();
   /** Reads kept for a few seconds (see `kept`). */
   private readonly keptReads = new Map<string, { value: unknown; until: number }>();
+  /**
+   * What each team was last sent for each live match (see pushLive), so the
+   * next push carries only what changed: by topic, then match, a value per
+   * header, market and selection.
+   */
+  private readonly liveSent = new Map<string, Map<string, { at: number; values: Map<string, string> }>>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly sync: OddsSyncService,
-  ) {}
+    @Optional() private readonly realtime?: RealtimeService,
+  ) {
+    if (realtime) this.sync.onLiveSaved = (eventIds) => this.pushLive(eventIds);
+  }
+
+  /**
+   * Sends the live prices just saved straight to the pages, so a Player sees
+   * a price move, a goal or a pause the moment it's saved, without asking
+   * for the list again. Each team's Players get their own team's prices
+   * (live prices are the feed less the team margin; an Owner's own prices
+   * don't apply in play), and only what changed since that team's last push.
+   * Staff see feed prices, so their pages are told to fetch instead.
+   */
+  async pushLive(eventIds: string[]) {
+    if (!this.realtime || eventIds.length === 0) return;
+    const now = new Date();
+    const [events, platform, owners] = await Promise.all([
+      this.prisma.event.findMany({
+        where: { id: { in: [...new Set(eventIds)] } },
+        include: { markets: { select: { id: true, liveSuspended: true, selections: { select: { id: true, feedOdds: true, liveOdds: true, result: true, withdrawn: true } } } } },
+      }),
+      this.platform(),
+      this.prisma.user.findMany({ where: { role: Role.OWNER }, select: { id: true, oddsMargin: true } }),
+    ]);
+    const baseMargin = Number(platform.baseOddsMargin);
+    const teams = [{ topic: teamTopic(null), margin: 0 }, ...owners.map((owner) => ({ topic: teamTopic(owner.id), margin: num(owner.oddsMargin) ?? 0 }))];
+
+    for (const team of teams) {
+      let sent = this.liveSent.get(team.topic);
+      if (!sent) this.liveSent.set(team.topic, (sent = new Map()));
+      for (const [id, entry] of sent) if (now.getTime() - entry.at > LIVE_SENT_KEPT_MS) sent.delete(id);
+      const deltas: LiveDelta[] = [];
+      for (const event of events) {
+        const live = event.status === EventStatus.LIVE;
+        const before = sent.get(event.id)?.values ?? new Map<string, string>();
+        const values = new Map<string, string>();
+        const delta: LiveDelta = { id: event.id };
+        const header = {
+          status: event.status,
+          live,
+          elapsed: event.elapsed,
+          period: live ? event.period : event.status === EventStatus.COMPLETED ? "FT" : null,
+          homeScore: event.homeScore,
+          awayScore: event.awayScore,
+          bettable: eventOpen(event, now),
+          livePause: livePause(event, now),
+          allMarketsSuspended: live && event.markets.length > 0 && event.markets.every((market) => market.liveSuspended),
+        };
+        const headerKey = JSON.stringify(header);
+        values.set("h", headerKey);
+        if (before.get("h") !== headerKey) delta.header = header;
+        for (const market of event.markets) {
+          const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null));
+          values.set(`m:${market.id}`, suspended ? "1" : "0");
+          if (before.get(`m:${market.id}`) !== (suspended ? "1" : "0")) (delta.markets ??= []).push([market.id, suspended]);
+          for (const selection of market.selections) {
+            const quote = selectionQuote({
+              event,
+              market,
+              selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn },
+              baseMargin,
+              ownerMargin: team.margin,
+              override: null,
+              now,
+            });
+            const value = `${quote.price}|${quote.suspended ? 1 : 0}`;
+            values.set(`s:${selection.id}`, value);
+            if (before.get(`s:${selection.id}`) !== value) (delta.prices ??= []).push([selection.id, quote.price, quote.suspended]);
+          }
+        }
+        // A finished match is sent once more (its header) and then forgotten.
+        if (live) sent.set(event.id, { at: now.getTime(), values });
+        else sent.delete(event.id);
+        if (delta.header || delta.markets || delta.prices) deltas.push(delta);
+      }
+      if (deltas.length > 0) await this.realtime.publishTopic(team.topic, { type: "odds.live", at: now.toISOString(), events: deltas });
+    }
+    // The live lists kept for a few seconds are out of date now.
+    for (const key of this.keptReads.keys()) if (key.startsWith("list:") && key.includes(":live:")) this.keptReads.delete(key);
+    await this.realtime.publishTopic(STAFF_TOPIC, { type: "odds.changed" });
+  }
 
   async settings(actor: Actor, ownerIdParam?: string) {
     const [platform, ownerId] = await Promise.all([this.platform(), this.teamOwnerFor(actor, ownerIdParam)]);

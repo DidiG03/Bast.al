@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { NotificationItem } from "../lib/api";
+import type { LiveDelta } from "../lib/live-push";
 
 /** Mirrors the API's RealtimeEvent, plus `resync` which fires after a dropped stream comes back. */
 export type RealtimeEvent =
@@ -19,6 +20,8 @@ export type RealtimeEvent =
   | { type: "bets.changed" }
   /** Live prices were just saved. The bet board refetches; this does not re-render the dashboard. */
   | { type: "odds.changed" }
+  /** Live prices for this Player's team, only what changed (see lib/live-push.ts). */
+  | { type: "odds.live"; at: string; events: LiveDelta[] }
   | { type: "resync" };
 
 type Listener = (event: RealtimeEvent) => void;

@@ -4055,16 +4055,17 @@ button.odds-selection:hover,
   color: var(--accent);
 }
 
+/* Player controls: the panels' squared corners, not pills (the Bet page's language). */
 .role-player .odds-selection,
 .role-player .bet-chip,
 .role-player button:not(.secondary):not(.text-button) {
-  border-radius: 999px;
+  border-radius: var(--radius-control);
 }
 
 .role-player input,
 .role-player select {
-  border-radius: 999px;
-  padding-left: 1rem;
+  border-radius: var(--radius-control);
+  padding-left: 0.9rem;
 }
 
 /* Team crest placeholders */
@@ -4886,7 +4887,7 @@ button.is-blocked {
 }
 
 .money-topup {
-  border-radius: 999px;
+  border-radius: var(--radius-control, 10px);
 }
 
 .money-day {
@@ -13484,7 +13485,7 @@ button.is-blocked {
   text-overflow: ellipsis;
 }
 
-.role-player .bet-page button.bet-chip {
+.role-player button.bet-chip {
   min-height: 2rem;
   padding: 0.25rem 0.75rem;
   border: 1px solid var(--hairline-strong);
@@ -13494,19 +13495,19 @@ button.is-blocked {
   font-size: 0.8125rem;
 }
 
-.role-player .bet-page button.bet-chip:not(.is-active):hover {
+.role-player button.bet-chip:not(.is-active):hover {
   border-color: var(--hairline-strong);
   background: var(--surface-3);
   color: var(--text);
 }
 
-.role-player .bet-page button.bet-chip.is-active {
+.role-player button.bet-chip.is-active {
   border-color: transparent;
   background: var(--accent);
   color: #0b1300;
 }
 
-.role-player .bet-page .bet-chip.is-active .bet-chip-count {
+.role-player .bet-chip.is-active .bet-chip-count {
   background: rgb(11 19 0 / 16%);
   color: #0b1300;
 }
@@ -14673,4 +14674,124 @@ html:has(.role-player) body {
     border-top-color: var(--hairline-strong);
     background: color-mix(in srgb, #0c0f09 94%, transparent);
   }
+}
+
+/* ============================================================
+   Every Player page in the Bet page's language: hairline
+   panels, rows separated by hairlines rather than boxed one
+   by one, quiet tints, figures in tabular numbers.
+   ============================================================ */
+
+/* My money: each day's movements in one panel, a hairline between them. */
+.role-player .money-day-label {
+  margin: 0.5rem 0 0;
+  color: var(--text-2);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.role-player .money-list {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.role-player .money-row {
+  padding: 0.7rem 0.9rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.role-player .money-row + .money-row {
+  border-top: 1px solid var(--hairline);
+}
+
+.role-player .money-row:hover {
+  background: rgb(255 255 255 / 2%);
+}
+
+.role-player .money-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.role-player .money-amount {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bets: the same panel for every outcome, with a thin edge in its colour,
+   and the figures on a recessed strip along the bottom. */
+.role-player .bet-card,
+.role-player .bet-card.is-won,
+.role-player .bet-card.is-lost {
+  position: relative;
+  overflow: hidden;
+  gap: 0.7rem;
+  padding: 1rem 1.1rem 0;
+  border: 1px solid var(--hairline);
+  background: var(--surface-1);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
+}
+
+.role-player .bet-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: transparent;
+  content: "";
+}
+
+.role-player .bet-card.is-won::before {
+  background: #22c55e;
+}
+
+.role-player .bet-card.is-lost::before {
+  background: var(--danger);
+}
+
+.role-player .bet-card.is-void::before {
+  background: var(--muted);
+}
+
+.role-player .bet-card-numbers,
+.role-player .bet-card-numbers ~ * {
+  margin-inline: -1.1rem;
+  padding-inline: 1.1rem;
+  background: rgb(0 0 0 / 22%);
+}
+
+.role-player .bet-card-numbers {
+  padding-top: 0.75rem;
+  padding-bottom: 0.45rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.role-player .bet-card-numbers ~ * {
+  margin-top: -0.7rem;
+  padding-top: 0.35rem;
+}
+
+.role-player .bet-card > :last-child {
+  padding-bottom: 0.85rem;
+}
+
+.role-player .bet-card-numbers dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.role-player .bet-card-numbers dd {
+  color: var(--text);
+  font-weight: 700;
 }

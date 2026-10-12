@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRealtime } from "./realtime-provider";
 import { apiFetch, type NotificationItem, type NotificationPreferences, type NotificationResponse } from "../lib/api";
+import { formatMoney } from "../lib/format";
 import { msg } from "../lib/i18n/core";
-import { useI18n } from "./i18n-provider";
+import { pickLabel } from "../lib/picks";
+import { useI18n, type I18n } from "./i18n-provider";
 import { useToast } from "./toaster";
 
 const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
@@ -21,14 +23,91 @@ const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
 const CATEGORY_LABELS: Record<string, string> = { FINANCE: msg("Money"), ACCOUNT: msg("Account"), SECURITY: msg("Security"), SYSTEM: msg("System") };
 const SEVERITY_LABELS: Record<string, string> = { INFO: msg("Info"), SUCCESS: msg("Success"), WARNING: msg("Warning"), CRITICAL: msg("Critical") };
 
+/** What the API says about a settled bet besides its words (see SettlementService.announce). */
+type BetDetails = {
+  bet: "single" | "accumulator" | "builder" | "system";
+  outcome: "WON" | "LOST" | "VOID" | "CORRECTED" | "OPEN";
+  amount: number;
+  stake: number | null;
+  event?: string | null;
+  score?: string | null;
+  pick?: string | null;
+  market?: string | null;
+  odds?: number | null;
+  picks?: number | null;
+};
+
+/** A settled bet's details, or null for any other notification (and for those sent before the details were). */
+function betDetails(item: NotificationItem): BetDetails | null {
+  if (item.type !== "BET_SETTLED" || !item.metadata || typeof item.metadata !== "object") return null;
+  const details = item.metadata as Partial<BetDetails>;
+  return typeof details.outcome === "string" && typeof details.bet === "string" && typeof details.amount === "number" ? (details as BetDetails) : null;
+}
+
+/** `title` carries the amount for a toast; `short` leaves it to the amount beside it in the list. */
+type BetNotice = { title: string; short: string; detail: string; amount: string; tone: "won" | "lost" | "void" };
+
+const WON_TITLE: Record<BetDetails["bet"], string> = { single: msg("You won {amount}"), accumulator: msg("Your accumulator won {amount}"), builder: msg("Your bet builder won {amount}"), system: msg("Your system bet paid {amount}") };
+const WON_SHORT: Record<BetDetails["bet"], string> = { single: msg("You won"), accumulator: msg("Your accumulator won"), builder: msg("Your bet builder won"), system: msg("Your system bet paid out") };
+const LOST_TITLE: Record<BetDetails["bet"], string> = { single: msg("Bet lost"), accumulator: msg("Accumulator lost"), builder: msg("Bet builder lost"), system: msg("System bet lost") };
+const VOID_TITLE: Record<BetDetails["bet"], string> = { single: msg("Bet refunded"), accumulator: msg("Accumulator refunded"), builder: msg("Bet builder refunded"), system: msg("System bet refunded") };
+
+/**
+ * A settled bet said the way a Player reads it: who won or lost, which pick
+ * at what score, and the money: "You won 625.00 ALL · Tirana · Match winner ·
+ * Tirana v Partizani 2–1". A corrected result keeps the API's own words.
+ */
+function betNotice(details: BetDetails, i18n: Pick<I18n, "t" | "tn" | "ts">): BetNotice | null {
+  const { t, tn, ts } = i18n;
+  if (details.outcome !== "WON" && details.outcome !== "LOST" && details.outcome !== "VOID") return null;
+  const stake = details.stake !== null ? t("Stake {amount}", { amount: formatMoney(details.stake) }) : null;
+  const parts =
+    details.bet === "single"
+      ? [
+          details.picks && details.picks > 1 ? tn(details.picks, "{count} bet", "{count} bets") : details.pick ? pickLabel(details.pick, i18n) + (details.market ? ` · ${ts(details.market)}` : "") : null,
+          details.event ? `${details.event}${details.score ? ` ${details.score}` : ""}` : null,
+          stake,
+        ]
+      : [details.picks ? tn(details.picks, "{count} pick", "{count} picks") : null, details.odds ? `@ ${details.odds.toFixed(2)}` : null, stake];
+  const detail = parts.filter(Boolean).join(" · ");
+  if (details.outcome === "WON") return { title: t(WON_TITLE[details.bet], { amount: formatMoney(details.amount) }), short: t(WON_SHORT[details.bet]), detail, amount: `+${formatMoney(details.amount)}`, tone: "won" };
+  if (details.outcome === "LOST") {
+    const title = t(LOST_TITLE[details.bet]);
+    return { title, short: title, detail, amount: details.stake !== null ? `−${formatMoney(details.stake)}` : "", tone: "lost" };
+  }
+  const title = t(VOID_TITLE[details.bet]);
+  return { title, short: title, detail, amount: `+${formatMoney(details.amount)}`, tone: "void" };
+}
+
+/** Where this device remembers the newest bet result it has already shown, so a result pops up once. */
+const shownKey = (userId: string) => `bastal-results-shown:${userId}`;
+function readShown(userId: string): string | null {
+  try {
+    return window.localStorage.getItem(shownKey(userId));
+  } catch {
+    return null;
+  }
+}
+function saveShown(userId: string, at: string) {
+  try {
+    const before = window.localStorage.getItem(shownKey(userId));
+    if (!before || before < at) window.localStorage.setItem(shownKey(userId), at);
+  } catch {
+    // Private mode or storage blocked: results may pop up again next time, nothing worse.
+  }
+}
+/** Results older than this aren't brought up again on a device that has never shown any. */
+const AWAY_SUMMARY_MS = 24 * 3_600_000;
+
 function BellIcon() {
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>;
 }
 
 export function NotificationCenter() {
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
   const router = useRouter();
-  const { t, ts, date } = useI18n();
+  const i18n = useI18n();
+  const { t, tn, ts, date } = i18n;
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -38,14 +117,51 @@ export function NotificationCenter() {
 
   async function load() {
     const token = await getToken();
-    if (!token) return;
+    if (!token) return null;
     const result = await apiFetch<NotificationResponse>("/notifications", token);
     setItems(result.items);
     setUnreadCount(result.unreadCount);
+    return result;
+  }
+
+  /** A settled bet pops up: a win big and bright, a loss quiet; tapping it opens the bet. */
+  function showBet(item: NotificationItem, notice: BetNotice) {
+    const options = { title: notice.title, onClick: () => void deepLink(item) };
+    if (notice.tone === "won") toaster.success(notice.detail, { ...options, celebrate: true, duration: 10_000 });
+    else if (notice.tone === "lost") toaster.info(notice.detail, { ...options, loss: true, duration: 7_000 });
+    else toaster.info(notice.detail, options);
+  }
+
+  // Bets that settled while the Player was away: one toast with what happened, once per device.
+  function summarizeAway(list: NotificationItem[]) {
+    if (!userId) return;
+    const shown = readShown(userId);
+    const since = shown ?? new Date(Date.now() - AWAY_SUMMARY_MS).toISOString();
+    const missed = list.flatMap((item) => {
+      const details = !item.readAt && item.createdAt > since ? betDetails(item) : null;
+      const notice = details ? betNotice(details, i18n) : null;
+      return details && notice ? [{ item, details, notice }] : [];
+    });
+    if (missed.length === 0) return;
+    saveShown(userId, missed[0].item.createdAt);
+    if (missed.length === 1) return showBet(missed[0].item, missed[0].notice);
+    const won = missed.filter((entry) => entry.notice.tone === "won");
+    const lost = missed.filter((entry) => entry.notice.tone === "lost");
+    const winnings = won.reduce((sum, entry) => sum + entry.details.amount, 0);
+    const parts = [
+      won.length > 0 ? `${tn(won.length, "{count} bet won", "{count} bets won")} (+${formatMoney(winnings)})` : null,
+      lost.length > 0 ? tn(lost.length, "{count} bet lost", "{count} bets lost") : null,
+      missed.length > won.length + lost.length ? tn(missed.length - won.length - lost.length, "{count} bet refunded", "{count} bets refunded") : null,
+    ].filter(Boolean);
+    const open = () => router.push("/dashboard/bet?tab=settled");
+    if (won.length > 0) toaster.success(parts.join(" · "), { title: t("While you were away"), onClick: open, celebrate: true, duration: 12_000 });
+    else toaster.info(parts.join(" · "), { title: t("While you were away"), onClick: open, loss: lost.length > 0, duration: 9_000 });
   }
 
   useEffect(() => {
-    load().catch(() => toaster.error(t("Notifications aren't available right now")));
+    load()
+      .then((result) => (result ? summarizeAway(result.items) : undefined))
+      .catch(() => toaster.error(t("Notifications aren't available right now")));
     // getToken is stable for the Clerk session and this intentionally runs once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -55,6 +171,13 @@ export function NotificationCenter() {
       const incoming = event.notification;
       setItems((current) => current.some((item) => item.id === incoming.id) ? current : [incoming, ...current].slice(0, 50));
       if (!incoming.readAt) setUnreadCount((count) => count + 1);
+      const details = betDetails(incoming);
+      const notice = details ? betNotice(details, i18n) : null;
+      if (notice) {
+        if (userId) saveShown(userId, incoming.createdAt);
+        showBet(incoming, notice);
+        return;
+      }
       // New notifications pop up like every other message; a click opens the list.
       const show = incoming.severity === "CRITICAL" ? toaster.error : incoming.severity === "WARNING" ? toaster.warning : incoming.severity === "SUCCESS" ? toaster.success : toaster.info;
       // A settled bet opens the bet itself; a win gets a bigger, brighter toast that stays up longer.
@@ -157,13 +280,34 @@ export function NotificationCenter() {
             <span className="notification-panel-actions"><button type="button" className="text-button" onClick={openPreferences}>{t("Settings")}</button><button type="button" className="text-button" onClick={markAllRead} disabled={unreadCount === 0}>{t("Mark all read")}</button></span>
           </div>
           <div className="notification-list">
-            {items.length === 0 ? <p className="muted notification-empty">{t("You're all caught up.")}</p> : items.map((item) => (
-              <div key={item.id} className={`notification-item${item.readAt ? "" : " is-unread"} notification-severity-${item.severity.toLowerCase()}`}>
+            {items.length === 0 ? <p className="muted notification-empty">{t("You're all caught up.")}</p> : items.map((item) => {
+              const details = betDetails(item);
+              const notice = details ? betNotice(details, i18n) : null;
+              const when = <time dateTime={item.createdAt}>{date(item.createdAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time>;
+              return (
+              <div key={item.id} className={`notification-item${item.readAt ? "" : " is-unread"} notification-severity-${item.severity.toLowerCase()}${notice ? ` is-bet is-${notice.tone}` : ""}`}>
                 <span className="notification-item-dot" />
-                <button type="button" className="notification-item-content" onClick={() => { if (!item.readAt) markRead(item.id); if (deepLink(item)) setOpen(false); }}><span><strong>{ts(item.title)}</strong><span>{ts(item.message)}</span><small>{t(CATEGORY_LABELS[item.category] ?? item.category)} · {t(SEVERITY_LABELS[item.severity] ?? item.severity)}</small><time dateTime={item.createdAt}>{date(item.createdAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time></span></button>
+                <button type="button" className="notification-item-content" onClick={() => { if (!item.readAt) markRead(item.id); if (deepLink(item)) setOpen(false); }}>
+                  {notice ? (
+                    <>
+                      <span className={`notification-bet-icon is-${notice.tone}`} aria-hidden="true">{notice.tone === "won" ? "🏆" : notice.tone === "lost" ? "✕" : "↺"}</span>
+                      <span>
+                        <span className="notification-bet-head">
+                          <strong>{notice.short}</strong>
+                          {notice.amount ? <strong className={`notification-bet-amount is-${notice.tone}`}>{notice.amount}</strong> : null}
+                        </span>
+                        <span>{notice.detail}</span>
+                        {when}
+                      </span>
+                    </>
+                  ) : (
+                    <span><strong>{ts(item.title)}</strong><span>{ts(item.message)}</span><small>{t(CATEGORY_LABELS[item.category] ?? item.category)} · {t(SEVERITY_LABELS[item.severity] ?? item.severity)}</small>{when}</span>
+                  )}
+                </button>
                 <span className="notification-item-actions"><button type="button" onClick={() => archive(item.id)}>{t("Archive")}</button><button type="button" onClick={() => remove(item.id)}>{t("Delete")}</button></span>
               </div>
-            ))}
+              );
+            })}
           </div>
           {preferencesOpen && preferences ? <div className="notification-preferences"><strong>{t("Notification settings")}</strong>{(["inAppEnabled", "emailEnabled", "financeEnabled", "accountEnabled", "securityEnabled", "systemEnabled"] as const).map((key) => <label key={key}><input type="checkbox" checked={preferences[key]} onChange={(event) => updatePreference(key, event.target.checked)} /> {t(PREFERENCE_LABELS[key])}</label>)}</div> : null}
         </section>

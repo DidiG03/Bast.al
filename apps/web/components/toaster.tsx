@@ -4,7 +4,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useI18n } from "./i18n-provider";
 
 export type ToastKind = "success" | "error" | "warning" | "info";
-type ToastOptions = { title?: string; onClick?: () => void; duration?: number; /** A win: a bigger, brighter toast with a trophy. */ celebrate?: boolean };
+type ToastOptions = {
+  title?: string;
+  onClick?: () => void;
+  duration?: number;
+  /** A win: a bigger, brighter toast with a trophy. */
+  celebrate?: boolean;
+  /** A lost bet: a quiet toast with a red edge and a cross. */
+  loss?: boolean;
+};
 type Toast = ToastOptions & { id: number; kind: ToastKind; message: string };
 
 export type Toaster = {
@@ -84,9 +92,9 @@ function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
   return (
     <div className="toast-stack" aria-live="polite">
       {toasts.map((toast) => (
-        <div key={toast.id} className={`toast toast-${toast.kind}${toast.celebrate ? " toast-celebrate" : ""}`} role={toast.kind === "error" || toast.kind === "warning" ? "alert" : "status"}>
+        <div key={toast.id} className={`toast toast-${toast.kind}${toast.celebrate ? " toast-celebrate" : ""}${toast.loss ? " toast-loss" : ""}`} role={toast.kind === "error" || toast.kind === "warning" ? "alert" : "status"}>
           <span className="toast-icon" aria-hidden="true">
-            {toast.celebrate ? "🏆" : icon[toast.kind]}
+            {toast.celebrate ? "🏆" : toast.loss ? "✕" : icon[toast.kind]}
           </span>
           {toast.onClick ? (
             <button

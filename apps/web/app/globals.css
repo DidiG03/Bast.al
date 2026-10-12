@@ -14795,3 +14795,76 @@ html:has(.role-player) body {
   color: var(--text);
   font-weight: 700;
 }
+
+/* A lost bet: a quiet toast with a red edge and a cross. */
+.toast-loss {
+  --toast-color: var(--danger);
+}
+
+.toast-loss .toast-icon {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+}
+
+/* A settled bet in the notifications: what happened, the pick, and the money on the right. */
+.notification-item.is-bet .notification-item-content {
+  align-items: flex-start;
+}
+
+.notification-item.is-bet .notification-item-content > span:not(.notification-bet-icon) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.notification-bet-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.notification-bet-icon.is-won {
+  background: color-mix(in srgb, #22c55e 16%, transparent);
+}
+
+.notification-bet-icon.is-lost {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+
+.notification-bet-icon.is-void {
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  color: var(--muted);
+}
+
+.notification-item-content .notification-bet-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--text);
+  font-size: inherit;
+}
+
+.notification-bet-amount {
+  flex: none;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.notification-bet-amount.is-won {
+  color: #4ade80;
+}
+
+.notification-bet-amount.is-lost {
+  color: var(--danger);
+}
+
+.notification-bet-amount.is-void {
+  color: var(--muted);
+}

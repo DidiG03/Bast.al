@@ -19,7 +19,20 @@ import { systemOutcome } from "./system";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
 import { teamOf } from "./team";
 
-type Change = { playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean; builder?: boolean; system?: { won: number; lines: number } };
+type Change = { betId?: string; playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean; builder?: boolean; system?: { won: number; lines: number } };
+
+/** What a settled bet's notification says about it, besides its words: the page builds its message from these. */
+const NOTIFIED_BET = {
+  id: true,
+  kind: true,
+  stake: true,
+  odds: true,
+  selection: { select: { name: true, market: { select: { name: true, event: { select: { sport: true, resultHome: true, resultAway: true } } } } } },
+  _count: { select: { legs: true } },
+} satisfies Prisma.BetSelect;
+type NotifiedBet = Prisma.BetGetPayload<{ select: typeof NOTIFIED_BET }>;
+/** Sports whose result is a score worth showing next to the match's name. */
+const SCORED_SPORTS = new Set(["football", "basketball", "nfl", "volleyball", "handball"]);
 
 const money = (value: Prisma.Decimal | number) => `${Number(value).toFixed(2)} ALL`;
 
@@ -721,7 +734,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       await this.journal(tx, bet, status, payout);
       return true;
     });
-    return moved ? { playerId: bet.playerId, delta, status, voidReason } : null;
+    return moved ? { betId: bet.id, playerId: bet.playerId, delta, status, voidReason } : null;
   }
 
   /** Records in the settlement journal what this move changes in the team's results. */
@@ -756,6 +769,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     const players = [...new Set(changes.map((c) => c.playerId))];
     await this.realtime.publishBalances(players);
     for (const playerId of players) await this.realtime.publish(playerId, { type: "bets.changed" });
+    const betIds = [...new Set(changes.flatMap((c) => (c.betId ? [c.betId] : [])))];
+    const bets = new Map((betIds.length > 0 ? await this.prisma.bet.findMany({ where: { id: { in: betIds } }, select: NOTIFIED_BET }) : []).map((bet) => [bet.id, bet]));
 
     // Accumulators and bet builders get a message of their own, from where the whole bet now stands.
     for (const change of changes.filter((c) => c.accumulator)) {
@@ -765,7 +780,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         ? status === BetStatus.WON
           ? ["Your system bet paid out", `${change.system.won} of its ${change.system.lines} bets won. ${delta.isPositive() ? `${money(delta)} was added to your balance.` : back.trim()}`.trim()]
           : status === BetStatus.LOST
-            ? ["System bet settled", `None of your system bet's ${change.system.lines} bets won.${back}`]
+            ? ["System bet lost", `None of your system bet's ${change.system.lines} bets won.${back}`]
             : status === BetStatus.VOID
               ? ["System bet refunded", `Every pick in your system bet was void, so your stake went back to your balance.${back}`]
               : ["Result corrected", `A result in your system bet was corrected, so it's open again.${back}`]
@@ -773,17 +788,18 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         ? status === BetStatus.WON
           ? ["Your bet builder won", delta.isPositive() ? `${money(delta)} was added to your balance.` : back.trim() || "Your bet builder won."]
           : status === BetStatus.LOST
-            ? ["Bet builder settled", `Your bet builder lost.${back}`]
+            ? ["Bet builder lost", `Your bet builder lost.${back}`]
             : status === BetStatus.VOID
               ? ["Bet builder refunded", `A pick in your bet builder was void, so your stake went back to your balance.${back}`]
               : ["Result corrected", `A result in your bet builder was corrected, so it's open again.${back}`]
         : status === BetStatus.WON
           ? ["Your accumulator won", delta.isPositive() ? `${money(delta)} was added to your balance.` : back.trim() || "Your accumulator won."]
           : status === BetStatus.LOST
-            ? ["Accumulator settled", `Your accumulator lost.${back}`]
+            ? ["Accumulator lost", `Your accumulator lost.${back}`]
             : status === BetStatus.VOID
               ? ["Accumulator refunded", `Every pick in your accumulator was void, so your stake went back to your balance.${back}`]
               : ["Result corrected", `A result in your accumulator was corrected, so it's open again.${back}`];
+      const bet = change.betId ? bets.get(change.betId) : undefined;
       await this.notifications.create({
         userId: playerId,
         type: NotificationType.BET_SETTLED,
@@ -791,6 +807,15 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         title,
         message,
         deepLink: status === BetStatus.OPEN ? "/dashboard/bet?tab=open" : "/dashboard/bet?tab=settled",
+        metadata: {
+          bet: change.system ? "system" : change.builder ? "builder" : "accumulator",
+          outcome: status,
+          amount: Number(delta),
+          stake: bet ? Number(bet.stake) : null,
+          odds: bet?.odds ? Number(bet.odds) : null,
+          picks: bet ? bet._count.legs : null,
+          betId: change.betId ?? null,
+        },
       });
       if (delta.isNegative()) await this.afterTakingBack(playerId, delta);
     }
@@ -819,6 +844,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         title = "Bet refunded";
         message = `${eventName} was called off. ${money(delta)} went back to your balance.`;
       } else {
+        title = group.length === 1 ? "Bet lost" : "Bets lost";
         message = `${eventName}: ${group.length === 1 ? "your bet lost" : "your bets lost"}.`;
       }
       await this.notifications.create({
@@ -828,6 +854,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         title,
         message,
         deepLink: "/dashboard/bet?tab=settled",
+        metadata: singlesMetadata(group, kind, won, delta, bets),
       });
       if (delta.isNegative()) await this.afterTakingBack(playerId, delta);
     }
@@ -841,6 +868,32 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
 }
 
 const betSelectWithPlayer = { ...betSelect, player: { select: { id: true, username: true } } } satisfies Prisma.BetSelect;
+
+/**
+ * The details a match's settled singles notification carries, so the page can
+ * say which pick won or lost, at what score, and for how much: the outcome
+ * (WON when any of them won, VOID when all came back, CORRECTED or LOST), the
+ * money that moved, the stake, and the first pick's name, market and odds.
+ */
+function singlesMetadata(group: Change[], kind: "settled" | "corrected" | "voided", won: number, delta: Prisma.Decimal, bets: Map<string, NotifiedBet>) {
+  const found = group.flatMap((change) => (change.betId && bets.has(change.betId) ? [bets.get(change.betId)!] : []));
+  const first = found[0];
+  const event = first?.selection?.market.event;
+  const scored = event && SCORED_SPORTS.has(event.sport) && event.resultHome !== null && event.resultAway !== null;
+  return {
+    bet: "single",
+    outcome: kind === "voided" || group.every((c) => c.status === BetStatus.VOID) ? "VOID" : kind === "corrected" ? "CORRECTED" : won > 0 ? "WON" : "LOST",
+    amount: Number(delta),
+    stake: found.length > 0 ? found.reduce((sum, bet) => sum + Number(bet.stake), 0) : null,
+    event: group[0].eventName,
+    score: scored ? `${event.resultHome}–${event.resultAway}` : null,
+    pick: first?.selection?.name ?? null,
+    market: first?.selection?.market.name ?? null,
+    odds: first?.odds && found.length === 1 ? Number(first.odds) : null,
+    picks: group.length,
+    betId: first?.id ?? null,
+  };
+}
 
 /** What a settlement move says in the Player's balance ledger. */
 export function ledgerReason(from: BetStatus, to: BetStatus, delta: Prisma.Decimal, description: string | null, voidReason: string | null): string {

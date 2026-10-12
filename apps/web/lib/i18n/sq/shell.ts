@@ -47,7 +47,7 @@ export const shell: Record<string, string> = {
   "Notification settings": "Cilësimet e njoftimeve",
   "In the app": "Në aplikacion",
   "By email": "Me email",
-  "Info": "Info",
+  "Info": "Informacion",
   "Success": "Sukses",
   "Warning": "Paralajmërim",
   "Critical": "Kritike",

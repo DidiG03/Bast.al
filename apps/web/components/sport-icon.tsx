@@ -1,79 +1,118 @@
+import { useId, type ReactNode } from "react";
 import type { Sport } from "../lib/api";
 
-/** Each sport's icon, drawn in the text's colour: an outline with a soft fill, so it reads on the dark tabs and the bright one alike. */
+/** Line icons for the sports that aren't a ball. The balls are drawn in their real colors. */
 export function SportIcon({ sport }: { sport: Sport }) {
-  if (sport === "football")
-    // A football: the centre panel and the five around the edge filled in.
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="9.5" fill="currentColor" fillOpacity="0.16" />
-        <path d="M12 8.4 15.4 10.9 14.1 14.9H9.9L8.6 10.9Z M12.0 5.6 L15.9 3.3 L8.1 3.3Z M18.1 10.0 L21.4 13.0 L19.1 5.6Z M15.8 17.2 L14.0 21.3 L20.2 16.8Z M8.2 17.2 L3.8 16.8 L10.0 21.3Z M5.9 10.0 L4.9 5.6 L2.6 13.0Z" fill="currentColor" />
-        <path d="M12 8.4V5.6M15.4 10.9l2.7-.9M14.1 14.9l1.7 2.3M9.9 14.9l-1.7 2.3M8.6 10.9l-2.7-.9" />
-        <circle cx="12" cy="12" r="9.5" />
-      </svg>
-    );
+  const clip = `ball${useId().replace(/:/g, "")}`;
+  if (sport === "football") return <Football clip={clip} />;
+  if (sport === "basketball") return <Basketball clip={clip} />;
+  if (sport === "tennis") return <Tennis clip={clip} />;
+  if (sport === "volleyball") return <Volleyball clip={clip} />;
+  if (sport === "handball") return <Handball clip={clip} />;
+  if (sport === "nfl") return <NflBall />;
   if (sport === "greyhounds")
-    // A greyhound at full stretch, facing right: body and head filled, legs and tail drawn.
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          d="M6.5 10.2C8.5 8.6 12.5 8.4 15.6 9.4L18.6 6.6C19.2 6 20.2 5.9 20.8 6.4L23 8L22.6 8.8L20.2 8.9C19.3 9.4 18.6 10.6 18 12C17.4 13.4 16.2 13.9 14.8 13.6C12.8 13.1 11.4 12.3 10 12.5C8.6 12.7 7.4 13.2 6.6 13C5.6 12.6 5.6 11 6.5 10.2Z"
-          fill="currentColor"
-        />
-        <path d="M16 13.2 19.2 15.2 22.6 15.6M15 13.5l2.4 2.9 3.2 1.2M7.6 12.6l-3 3.2-3 .4M8.8 12.8 6.6 17l-3 1.2M6.6 10.6c-2-.4-3.6.2-5.2 1.8M19.2 6.6l-1-1.2 1.6.5" />
+        <path d="M2.4 13.4c2.4-1.5 5-1.6 7.2-.4 1.2.6 2.1.1 3.2-.8 1.5-1.2 3.1-2.5 5-2.8 1.1-.2 2.1.3 2.6 1.2" />
+        <path d="M20.2 10.5c.7.3 1.3.9 1.6 1.6" />
+        <path d="M18.2 8.8c-.3-1.2-1.1-1.7-1.8-1.1" />
+        <path d="M16.8 11.4c.7 1.1.3 2.3-.8 2.9" />
+        <path d="M15.6 14.2c-2.5.5-4.8.1-6.6.5-1.5.3-2.6-.3-3.4-1.3" />
+        <path d="M7.6 14.6 5.8 18.6M10.2 14.8 9.2 18.8M14.4 14.2 16.6 18.4M16.6 12.8 19.4 16.6" />
       </svg>
     );
-  if (sport === "basketball")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="9.5" fill="currentColor" fillOpacity="0.16" />
-        <circle cx="12" cy="12" r="9.5" />
-        <path d="M2.5 12h19M12 2.5v19M5.3 5.3C7.4 7.2 8.6 9.5 8.6 12s-1.2 4.8-3.3 6.7M18.7 5.3c-2.1 1.9-3.3 4.2-3.3 6.7s1.2 4.8 3.3 6.7" />
-      </svg>
-    );
-  if (sport === "nfl")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <ellipse cx="12" cy="12" rx="10" ry="5.8" transform="rotate(-45 12 12)" fill="currentColor" fillOpacity="0.16" />
-        <ellipse cx="12" cy="12" rx="10" ry="5.8" transform="rotate(-45 12 12)" />
-        {/* The laces along the seam, and a stripe near each end. */}
-        <path d="M9.2 14.8 14.8 9.2M9.6 12.6l1.8 1.8M11.1 11.1l1.8 1.8M12.6 9.6l1.8 1.8M5.4 14.2l4.4 4.4M14.2 5.4l4.4 4.4" />
-      </svg>
-    );
-  if (sport === "volleyball")
-    // A volleyball: three curved panels meeting in the middle.
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="9.5" fill="currentColor" fillOpacity="0.16" />
-        <circle cx="12" cy="12" r="9.5" />
-        <path d="M12 12c0-4 1.6-7.2 4.4-9M12 12c-3.5 2-7.1 2.2-10.2 1.1M12 12c3.5 2 5.4 5.1 5.9 8.3M7.6 3.6c2.6 2.4 3.8 5.3 3.4 8.6M21.4 11.2c-3.2-1.4-6.3-1.1-9 .8M5 18.6c2.4-2.6 5.3-4.1 7-6.6" />
-      </svg>
-    );
-  if (sport === "handball")
-    // A handball: its panels, a size smaller than a football.
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8.5" fill="currentColor" fillOpacity="0.16" />
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M12 3.5v17M3.5 12h17M6 6c2.5 1.8 3.8 3.8 3.8 6S8.5 16.2 6 18M18 6c-2.5 1.8-3.8 3.8-3.8 6s1.3 4.2 3.8 6" />
-      </svg>
-    );
-  if (sport === "tennis")
-    // A tennis ball: its two curved seams.
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="9.5" fill="currentColor" fillOpacity="0.16" />
-        <circle cx="12" cy="12" r="9.5" />
-        <path d="M5.2 5.4C8.6 8.6 8.6 15.4 5.2 18.6M18.8 5.4c-3.4 3.2-3.4 10 0 13.2" />
-      </svg>
-    );
-  // MMA: a fighter's glove, open at the fingers, with its wrist strap.
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6.5 11V7.6A3.6 3.6 0 0 1 10.1 4h3.6a4.8 4.8 0 0 1 4.8 4.8v4.6a5 5 0 0 1-5 5h-2.4a4.6 4.6 0 0 1-4.6-4.6z" fill="currentColor" fillOpacity="0.16" />
-      <path d="M6.5 11V7.6A3.6 3.6 0 0 1 10.1 4h3.6a4.8 4.8 0 0 1 4.8 4.8v4.6a5 5 0 0 1-5 5h-2.4a4.6 4.6 0 0 1-4.6-4.6z" />
-      <path d="M6.5 11.4h3.6a2.1 2.1 0 0 0 0-4.2H8.4M10.5 4v3.2M14 4.2v3M17.6 6.4 18.5 9" />
-      <path d="M8.6 18v2.6h7v-2.8" />
+      <circle cx="13.2" cy="8.8" r="4.5" />
+      <path d="M8.9 10.2H6.6a1.6 1.6 0 0 0 0 3.2h2.1" />
+      <path d="M10.6 13v4.2h5.2V13.6" />
+    </svg>
+  );
+}
+
+function Ball({ clip, base, shade, children }: { clip: string; base: string; shade: string; children?: ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" className="sport-ball" aria-hidden="true">
+      <defs>
+        <clipPath id={clip}>
+          <circle cx="12" cy="12" r="10" />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${clip})`}>
+        <circle cx="12" cy="12" r="10" fill={base} />
+        <circle cx="14.4" cy="15.4" r="8.6" fill={shade} />
+        <circle cx="8.4" cy="7.8" r="4.4" fill="#fff" opacity="0.38" />
+        {children}
+      </g>
+      <circle cx="12" cy="12" r="9.7" fill="none" stroke="rgb(0 0 0 / 40%)" strokeWidth="1" />
+    </svg>
+  );
+}
+
+function points(cx: number, cy: number, r: number, turn: number) {
+  return Array.from({ length: 5 }, (_, i) => {
+    const a = ((turn + i * 72) * Math.PI) / 180;
+    return `${cx + Math.cos(a) * r},${cy + Math.sin(a) * r}`;
+  }).join(" ");
+}
+
+function Football({ clip }: { clip: string }) {
+  return (
+    <Ball clip={clip} base="#f4f5f7" shade="#c8ccd3">
+      <polygon points={points(12, 12.15, 3.15, -90)} fill="#1a1a1a" />
+      {[-90, -18, 54, 126, 198].map((turn) => {
+        const a = (turn * Math.PI) / 180;
+        return <circle key={turn} cx={12 + Math.cos(a) * 10.5} cy={12.15 + Math.sin(a) * 10.5} r="3.35" fill="#1a1a1a" />;
+      })}
+    </Ball>
+  );
+}
+
+function Basketball({ clip }: { clip: string }) {
+  return (
+    <Ball clip={clip} base="#f97316" shade="#c2410c">
+      <path d="M12 2v20M2 12h20" stroke="#1c1917" strokeWidth="1.15" />
+      <path d="M4.8 4.9c2.1 1.9 3.3 4.3 3.3 7.1s-1.2 5.2-3.3 7.1M19.2 4.9c-2.1 1.9-3.3 4.3-3.3 7.1s1.2 5.2 3.3 7.1" stroke="#1c1917" strokeWidth="1.15" fill="none" />
+    </Ball>
+  );
+}
+
+function Tennis({ clip }: { clip: string }) {
+  return (
+    <Ball clip={clip} base="#d6ef4a" shade="#a8c72e">
+      <path d="M6.4 4.6c2.8 2.6 2.8 12.2 0 14.8M17.6 4.6c-2.8 2.6-2.8 12.2 0 14.8" stroke="#f8faf5" strokeWidth="1.35" fill="none" />
+    </Ball>
+  );
+}
+
+function Volleyball({ clip }: { clip: string }) {
+  return (
+    <Ball clip={clip} base="#f8fafc" shade="#d5dde8">
+      <path d="M12 2c5.2 3.2 7.4 7.2 6.2 12.2-2.6-1.6-5.4-1.6-8.2.2C7.2 8.6 8.2 4.2 12 2z" fill="#1d4ed8" />
+      <path d="M3.2 15.4c3.2-1.6 6.4-1.2 9.4 1.2 1.2 3.6.2 6.4-2.6 7.6-3.6-.2-6.2-2.2-7.2-5.2-.4-1.2-.2-2.4.4-3.6z" fill="#f5c518" />
+    </Ball>
+  );
+}
+
+function Handball({ clip }: { clip: string }) {
+  return (
+    <Ball clip={clip} base="#e11d2e" shade="#9f1239">
+      <path d="M7.2 5.4c2.2 2.1 3.3 4.2 3.3 6.6s-1.1 4.5-3.3 6.6M16.8 5.4c-2.2 2.1-3.3 4.2-3.3 6.6s1.1 4.5 3.3 6.6M3.6 12h16.8" stroke="#fff" strokeWidth="0.7" fill="none" opacity="0.9" />
+    </Ball>
+  );
+}
+
+function NflBall() {
+  return (
+    <svg viewBox="0 0 24 24" className="sport-ball" aria-hidden="true">
+      <g transform="rotate(-36 12 12)">
+        <ellipse cx="12" cy="12" rx="10.3" ry="6" fill="#8b5a32" />
+        <ellipse cx="13.4" cy="13.2" rx="7.4" ry="3.5" fill="#6b4122" />
+        <ellipse cx="9.2" cy="10.2" rx="3.4" ry="1.7" fill="#e2b48c" opacity="0.55" />
+        <path d="M6.4 10.5c.25 1.5.25 3 0 4.5M17.6 10.5c-.25 1.5-.25 3 0 4.5" stroke="#f6f1ea" strokeWidth="1.2" fill="none" />
+        <path d="M12 8.6v6.8" stroke="#f6f1ea" strokeWidth="0.6" fill="none" />
+        <path d="M10.5 10h3M10.5 12h3M10.5 14h3" stroke="#f6f1ea" strokeWidth="0.9" fill="none" />
+      </g>
     </svg>
   );
 }

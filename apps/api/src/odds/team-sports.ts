@@ -16,8 +16,8 @@ export type RawTeamGame = {
   id: number;
   date?: string;
   status?: { short?: string };
-  league?: { id?: number; name?: string };
-  country?: { name?: string };
+  league?: { id?: number; name?: string; logo?: string | null };
+  country?: { name?: string; flag?: string | null };
   teams?: { home?: { name?: string; logo?: string | null }; away?: { name?: string; logo?: string | null } };
   /** Volleyball: sets won. Handball: goals, extra time included after it. */
   scores?: RawSide;
@@ -33,6 +33,8 @@ export type TeamGame = {
   leagueId: number;
   league: string;
   country: string;
+  leagueLogo: string | null;
+  countryFlag: string | null;
   home: string;
   away: string;
   homeLogo: string | null;
@@ -59,6 +61,8 @@ export function parseTeamGame(raw: RawTeamGame, statuses: { finished: Set<string
     leagueId: raw.league.id,
     league: raw.league.name?.trim() || fallbackLeague,
     country: raw.country?.name?.trim() || "",
+    leagueLogo: crestUrl(raw.league.logo),
+    countryFlag: crestUrl(raw.country?.flag),
     home,
     away,
     homeLogo: crestUrl(raw.teams?.home?.logo),

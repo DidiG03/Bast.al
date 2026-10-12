@@ -4,7 +4,7 @@ import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { GOAL_MARKET_KEYS } from "../bets/goals";
 import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLiveOdds, parseMarkets, parseMatchCentre } from "./api-football";
-import { savedCrests } from "./crest";
+import { savedCrests, savedMarks } from "./crest";
 import { bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
@@ -487,6 +487,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           ...(fixture.status === EventStatus.COMPLETED && !saved.finishedAt ? { finishedAt: new Date() } : {}),
           ...score,
           ...savedCrests(fixture.homeLogo, fixture.awayLogo),
+          ...savedMarks(fixture.leagueLogo, fixture.countryFlag),
           liveCooldownUntil: pause.until,
           liveCooldownReason: pause.reason,
           syncedAt: new Date(),
@@ -822,6 +823,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       homeTeam: fixture.homeTeam,
       awayTeam: fixture.awayTeam,
       ...savedCrests(fixture.homeLogo, fixture.awayLogo),
+      ...savedMarks(fixture.leagueLogo, fixture.countryFlag),
       startsAt: fixture.startsAt,
       status: fixture.status,
       elapsed: fixture.elapsed,

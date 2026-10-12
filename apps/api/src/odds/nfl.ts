@@ -15,7 +15,7 @@ export const NFL_LEAGUE_ID = 1;
 
 export type RawNflGame = {
   game?: { id?: number; date?: { timestamp?: number }; status?: { short?: string } };
-  league?: { id?: number; name?: string; country?: { name?: string } };
+  league?: { id?: number; name?: string; logo?: string | null; country?: { name?: string; flag?: string | null } };
   teams?: { home?: { name?: string; logo?: string | null }; away?: { name?: string; logo?: string | null } };
   scores?: { home?: Record<string, number | null | undefined> & { total?: number | null }; away?: Record<string, number | null | undefined> & { total?: number | null } };
 };
@@ -36,18 +36,22 @@ export function parseNflGame(raw: RawNflGame): FeedGame | null {
   const status: GameStatus = FINISHED.has(short) ? "finished" : UPCOMING.has(short) ? "upcoming" : POSTPONED.has(short) ? "postponed" : CANCELLED.has(short) ? "cancelled" : "live";
   const h = raw.scores?.home?.total;
   const a = raw.scores?.away?.total;
+  const totals = Number.isInteger(h) && Number.isInteger(a) ? { home: h!, away: a! } : null;
   return {
     externalId: String(id),
     leagueId: raw.league.id,
     league: raw.league.name?.trim() || "NFL",
     country: raw.league.country?.name?.trim() || "",
+    leagueLogo: crestUrl(raw.league.logo),
+    countryFlag: crestUrl(raw.league.country?.flag),
     home,
     away,
     homeLogo: crestUrl(raw.teams?.home?.logo),
     awayLogo: crestUrl(raw.teams?.away?.logo),
     startsAt: new Date(timestamp * 1000),
     status,
-    score: status === "finished" && Number.isInteger(h) && Number.isInteger(a) ? { home: h!, away: a! } : null,
+    score: status === "finished" ? totals : null,
+    liveScore: status === "live" ? totals : null,
     periods: status === "finished" ? periodsOf(raw.scores?.home, raw.scores?.away, "overtime") : null,
   };
 }

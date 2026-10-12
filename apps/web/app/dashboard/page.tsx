@@ -2,10 +2,9 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { HelpTip } from "../../components/help-tip";
+import { HomeEventCard } from "../../components/home-event-card";
 import { NamedIcon } from "../../components/icons";
 import { PlayerSportTabs, type SportTab } from "../../components/player-sport-tabs";
-import { SportIcon } from "../../components/sport-icon";
-import { TeamCrest } from "../../components/team-crest";
 import { ToastOnMount } from "../../components/toast-on-mount";
 import {
   ActivityFeed,
@@ -38,19 +37,10 @@ import {
 import { getMe, serverApiFetch } from "../../lib/api-server";
 import { formatMoney, formatSignedMoney } from "../../lib/format";
 import { getT } from "../../lib/i18n/server";
-import { livePill } from "../../lib/live";
-import { addDays, dayKey, isDaysFromToday, startOfDay, startOfWeek } from "../../lib/time";
+import { addDays, startOfDay, startOfWeek } from "../../lib/time";
 
 const MATCH_TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
-/** "Today", "Tomorrow", or DD/MM/YYYY — so a match's day is never ambiguous. */
-function topEventDayLabel(iso: string): string {
-  const { t } = getT();
-  if (isDaysFromToday(iso, 0)) return t("Today");
-  if (isDaysFromToday(iso, 1)) return t("Tomorrow");
-  const [year, month, day] = dayKey(iso).split("-");
-  return `${day}/${month}/${year}`;
-}
 const DAY_MS = 86_400_000;
 const WEEKDAY: Intl.DateTimeFormatOptions = { weekday: "short" };
 const SHORT_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
@@ -677,40 +667,14 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
   ].slice(0, 6);
   const liveCount = (events: OddsEvent[]) => events.filter((event) => event.status === "LIVE").length;
 
-  const eventCard = (sport: Sport, event: OddsEvent, showSport: boolean) => (
-    <Link key={event.id} href={`/dashboard/bet?${sport === "football" ? "" : `sport=${sport}&`}match=${encodeURIComponent(event.id)}`} className="player-top-event">
-      <div className="player-top-event-head">
-        <span className="player-top-event-league">
-          {showSport ? <SportIcon sport={sport} /> : null}
-          {event.league}
-        </span>
-        <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>
-          {event.status === "LIVE" ? livePill(event, t) : `${topEventDayLabel(event.startsAt)} · ${date(event.startsAt, MATCH_TIME)}`}
-        </span>
-      </div>
-      <div className="player-top-event-teams">
-        <TeamCrest name={event.homeTeam ?? event.name} logo={event.homeLogo} />
-        <span>{event.homeTeam ?? event.name}</span>
-        {event.live && event.homeScore !== null && event.awayScore !== null ? (
-          <strong className="odds-score">
-            {event.homeScore} – {event.awayScore}
-          </strong>
-        ) : (
-          <span className="muted">{t("vs")}</span>
-        )}
-        <span>{event.awayTeam ?? ""}</span>
-        <TeamCrest name={event.awayTeam ?? "?"} logo={event.awayLogo} />
-      </div>
-    </Link>
-  );
   const tabs: SportTab[] =
     sports.length === 0
       ? []
       : [
           ...(sports.length > 1
-            ? [{ key: "all" as const, label: t("All"), live: liveCount(all.map(({ event }) => event)), panel: <div className="player-top-events">{all.map(({ sport, event }) => eventCard(sport, event, true))}</div> }]
+            ? [{ key: "all" as const, label: t("All"), live: liveCount(all.map(({ event }) => event)), panel: <div className="player-top-events">{all.map(({ sport, event }) => <HomeEventCard key={event.id} event={event} sport={sport} showSport />)}</div> }]
             : []),
-          ...sports.map(({ sport, label, events }) => ({ key: sport, label, live: liveCount(events), panel: <div className="player-top-events">{events.map((event) => eventCard(sport, event, false))}</div> })),
+          ...sports.map(({ sport, label, events }) => ({ key: sport, label, live: liveCount(events), panel: <div className="player-top-events">{events.map((event) => <HomeEventCard key={event.id} event={event} sport={sport} showSport={false} />)}</div> })),
         ];
 
   const continueGame = lastGame ? CASINO_GAMES[lastGame.game] : null;
@@ -720,9 +684,27 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
       {blocked ? <ToastOnMount kind="warning" message={blocked} /> : null}
       {me.parent ? null : <ToastOnMount kind="warning" message={t("Not yet assigned to a Manager or Owner.")} />}
 
+      {me.parent && !blocked ? (
+        <section className="stack">
+          <div className="page-title-row">
+            <h2 style={{ margin: 0 }}>
+              {t("Top events")}
+              <HelpTip text="Matches playing now first, then the matches of the next two days with the most ways to bet, for each sport. Tap one to go straight to its prices." />
+            </h2>
+            <Link href="/dashboard/bet">{t("View all")} →</Link>
+          </div>
+          {tabs.length === 0 ? (
+            <div className="card">
+              <p className="muted" style={{ margin: 0 }}>{t("No matches are open for bets right now. Check back soon.")}</p>
+            </div>
+          ) : (
+            <PlayerSportTabs tabs={tabs} label={t("Sport")} />
+          )}
+        </section>
+      ) : null}
+
       {me.parent && !blocked && lastGame && continueGame ? (
         <section className="stack">
-          <h2 style={{ margin: 0 }}>{lastGame.waiting ? t("Continue playing") : t("Play again")}</h2>
           <Link href={continueGame.href} className={`card player-continue${lastGame.waiting ? " is-waiting" : ""}`}>
             <span className="player-continue-icon" aria-hidden="true">
               {continueGame.icon}
@@ -744,25 +726,6 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
         </section>
       ) : null}
 
-      {me.parent && !blocked ? (
-        <section className="stack">
-          <div className="page-title-row">
-            <h2 style={{ margin: 0 }}>
-              {t("Top events")}
-              <HelpTip text="Matches playing now first, then the matches of the next two days with the most ways to bet, for each sport. Tap one to go straight to its prices." />
-            </h2>
-            <Link href="/dashboard/bet">{t("View all")} →</Link>
-          </div>
-          {tabs.length === 0 ? (
-            <div className="card">
-              <p className="muted" style={{ margin: 0 }}>{t("No matches are open for bets right now. Check back soon.")}</p>
-            </div>
-          ) : (
-            <PlayerSportTabs tabs={tabs} label={t("Sport")} />
-          )}
-        </section>
-      ) : null}
-
       {me.parent && !blocked && nextRaces.length > 0 ? (
         <section className="stack">
           <div className="page-title-row">
@@ -773,13 +736,17 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
             <Link href="/dashboard/bet?sport=greyhounds">{t("View all")} →</Link>
           </div>
           <div className="player-next-races">
-            {nextRaces.map((race) => (
-              <Link key={race.id} href="/dashboard/bet?sport=greyhounds" className="card player-next-race">
-                <span className="player-top-event-league">{race.league}</span>
-                <strong>{t("Race {number}", { number: race.race?.raceNumber ?? "" })}</strong>
-                <span className="status-pill">{date(race.startsAt, MATCH_TIME)}</span>
-              </Link>
-            ))}
+            {nextRaces.map((race) => {
+              const meta = [race.race?.distance ? `${race.race.distance} m` : null, race.race?.grade, race.race?.field ? tn(race.race.field, "{count} dog", "{count} dogs") : null].filter(Boolean).join(" · ");
+              return (
+                <Link key={race.id} href="/dashboard/bet?sport=greyhounds" className="card player-next-race">
+                  <span className="player-top-event-league">{race.league}</span>
+                  <strong>{t("Race {number}", { number: race.race?.raceNumber ?? "" })}</strong>
+                  {meta ? <span className="muted player-next-race-meta">{meta}</span> : null}
+                  <span className="status-pill">{date(race.startsAt, MATCH_TIME)}</span>
+                </Link>
+              );
+            })}
           </div>
         </section>
       ) : null}

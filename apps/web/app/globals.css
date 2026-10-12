@@ -3442,14 +3442,18 @@ button.odds-selection:hover,
   z-index: 30;
 }
 
-.bet-sheet-backdrop {
+.bet-sheet-backdrop,
+.role-player button.bet-sheet-backdrop:not(.secondary):not(.text-button) {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  min-height: 0;
   padding: 0;
+  border: 0;
   border-radius: 0;
   background: rgb(0 0 0 / 50%);
+  box-shadow: none;
 }
 
 .bet-sheet {
@@ -4007,8 +4011,66 @@ button.odds-selection:hover,
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+
+.player-top-event-body {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.player-top-prices {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.player-top-prices.has-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.player-top-prices.has-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.player-top-prices.has-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.player-top-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  min-width: 0;
+  height: 2.25rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-1);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.player-top-pick .odds-selection-name {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.player-top-pick:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.player-top-pick.is-selected,
+.player-top-pick.is-selected .odds-selection-name {
+  border-color: transparent;
+  background: var(--accent);
+  color: #0b1300;
 }
 
 .player-top-event-teams {
@@ -4044,7 +4106,7 @@ button.odds-selection:hover,
   vertical-align: -0.2rem;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -4460,10 +4522,10 @@ button.is-blocked {
   height: 1.15rem;
   min-height: 0;
   padding: 0;
-  border: 1.5px solid var(--warning);
+  border: 1.5px solid var(--hairline-strong);
   border-radius: 50%;
   background: transparent;
-  color: var(--warning);
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1;
@@ -4472,8 +4534,8 @@ button.is-blocked {
 
 .help-tip-button:hover,
 .help-tip-button[aria-expanded="true"] {
-  background: var(--warning);
-  color: var(--bg);
+  background: var(--surface-4);
+  color: var(--text);
 }
 
 .help-tip-bubble {
@@ -4484,7 +4546,7 @@ button.is-blocked {
   width: max-content;
   max-width: min(19rem, calc(100vw - 2rem));
   padding: 0.7rem 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border: 1px solid var(--hairline-strong);
   border-radius: 0.6rem;
   background: var(--bg-elevated);
   color: var(--text);
@@ -4502,7 +4564,7 @@ button.is-blocked {
 }
 
 @media (max-width: 640px) {
-  /* On a phone the bubble spans the screen under the title instead of hanging off the "!". */
+  /* On a phone the bubble spans the screen under the title instead of hanging off the "?". */
   .help-tip {
     position: static;
   }
@@ -4768,8 +4830,7 @@ button.is-blocked {
 .player-top-event-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .player-top-event-head .player-top-event-league {
@@ -5078,6 +5139,18 @@ button.is-blocked {
   max-width: 100%;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A winning margin names a team: wide enough to read, and the name can wrap. */
+.bet-page .odds-selections.is-margin {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+}
+
+.bet-page .odds-selections.is-margin .odds-selection-name {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: unset;
+  line-height: 1.25;
 }
 
 /* An opened match's markets, under short headings. */
@@ -8194,9 +8267,15 @@ button.is-blocked {
   height: 1.35rem;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.sport-option svg.sport-ball,
+.player-top-event-league svg.sport-ball {
+  stroke: none;
+  stroke-width: 0;
 }
 
 .sport-option.is-active {
@@ -8428,6 +8507,10 @@ button.is-blocked {
   justify-items: start;
   color: var(--text);
   text-decoration: none;
+}
+
+.player-next-race-meta {
+  font-size: 0.78rem;
 }
 
 /* Book of Ra: the slot cabinet in sandstone, gold and lapis; deep blue during free spins. */
@@ -13172,8 +13255,8 @@ button.is-blocked {
 }
 
 .role-player .bet-page .sport-option svg {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.3rem;
+  height: 1.3rem;
 }
 
 /* Search and competition on one line, the days under them. */
@@ -13337,8 +13420,8 @@ button.is-blocked {
 
 .bm-row {
   display: grid;
-  grid-template-areas: "when teams tools odds more";
-  grid-template-columns: 3.75rem minmax(0, 1fr) auto minmax(11rem, 16rem) 2.75rem;
+  grid-template-areas: "star when teams odds more";
+  grid-template-columns: 2rem 3.25rem minmax(0, 1fr) 20.5rem 6.75rem;
   align-items: center;
   gap: 0.75rem;
   min-height: 4rem;
@@ -13350,16 +13433,24 @@ button.is-blocked {
   background: rgb(255 255 255 / 2%);
 }
 
+.bm-row > .match-star {
+  grid-area: star;
+  justify-self: center;
+}
+
 .bm-when {
   display: flex;
   grid-area: when;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 0;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .bm-match.is-live .bm-when {
@@ -13374,15 +13465,29 @@ button.is-blocked {
 .bm-teams {
   display: grid;
   grid-area: teams;
+  grid-template-columns: minmax(0, 1fr) 1.75rem 2rem;
+  align-items: center;
+  column-gap: 0.35rem;
+  min-width: 0;
+}
+
+.bm-team-block {
+  display: grid;
   gap: 0.2rem;
   min-width: 0;
+}
+
+.bm-score-col {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: center;
 }
 
 .bm-team {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
+  justify-content: flex-start;
+  gap: 0.45rem;
   min-width: 0;
   color: var(--text);
   font-size: 0.9rem;
@@ -13391,6 +13496,7 @@ button.is-blocked {
 
 .bm-side {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 0.4rem;
   min-width: 0;
@@ -13410,21 +13516,26 @@ button.is-blocked {
 }
 
 .bm-score {
-  flex: none;
-  min-width: 1.1rem;
   color: var(--text);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: center;
 }
 
-.bm-match.is-live .bm-score {
-  color: var(--accent);
+.bm-settled {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 2.625rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .bm-tools {
   display: flex;
-  grid-area: tools;
+  flex: none;
   align-items: center;
   gap: 0.1rem;
 }
@@ -13487,10 +13598,10 @@ button.is-blocked {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.35rem;
+  gap: 0.3rem;
   min-width: 0;
-  height: 2.625rem;
-  padding: 0 0.7rem;
+  height: 2.75rem;
+  padding: 0 0.55rem;
   border: 1px solid var(--hairline);
   border-radius: 8px;
   background: var(--surface-3);
@@ -13499,13 +13610,11 @@ button.is-blocked {
   transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
 }
 
-.bm-pick .odds-selection-name {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.role-player .bet-page button.bm-pick .odds-selection-name {
+  flex: none;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  font-weight: 800;
 }
 
 .bm-pick .odds-price {
@@ -13545,12 +13654,17 @@ button.is-blocked {
 }
 
 .role-player .bet-page button.bm-more {
-  display: inline-grid;
+  display: inline-flex;
+  flex-direction: row;
   grid-area: more;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.625rem;
-  padding: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  min-width: 0;
+  height: 2.75rem;
+  padding: 0 0.4rem;
+  white-space: nowrap;
   border: 1px solid var(--hairline-strong);
   border-radius: 8px;
   background: transparent;
@@ -13558,7 +13672,13 @@ button.is-blocked {
   font-size: 0.78rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  line-height: 1.05;
   cursor: pointer;
+}
+
+.bm-more-word {
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .role-player .bet-page button.bm-more:hover,
@@ -13663,16 +13783,48 @@ button.is-blocked {
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
 }
 
-/* Phones: the time and tools on top, the teams, then the prices across. */
+/* Phones: the clock beside the teams, the prices on the next line, other markets under those. */
 @media (max-width: 720px) {
   .bm-row {
     grid-template-areas:
-      "when tools"
-      "teams teams"
-      "odds more";
-    grid-template-columns: minmax(0, 1fr) auto;
+      "star when teams"
+      "odds odds odds";
+    grid-template-columns: 2rem auto minmax(0, 1fr);
     gap: 0.45rem 0.5rem;
     padding: 0.65rem 0.85rem 0.75rem;
+  }
+
+  .bm-when {
+    justify-content: flex-start;
+  }
+
+  .bm-more-spacer {
+    display: none;
+  }
+
+  .bm-odds-legend {
+    display: none;
+  }
+
+  .role-player .bet-page button.bm-more {
+    grid-area: auto;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    display: inline-flex;
+    flex-direction: row;
+    gap: 0.35rem;
+    width: 100%;
+    min-width: 0;
+    height: 2rem;
+  }
+
+  .bm-more-word {
+    font-size: 0.75rem;
+  }
+
+  .bm-settled {
+    justify-content: flex-start;
+    min-height: 0;
   }
 
   .bm-league-head {
@@ -13780,6 +13932,12 @@ html:has(.role-player) body {
   flex-direction: column;
   gap: 0.45rem;
   padding: 0;
+}
+
+.role-player .dashboard-sidebar.is-collapsed .sidebar-link {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
 }
 
 .role-player .sidebar-nav {
@@ -13995,15 +14153,28 @@ html:has(.role-player) body {
 }
 
 .role-player .bet-page .bet-filters {
-  position: sticky;
-  top: 3.35rem;
-  z-index: 6;
   gap: 0.55rem;
   padding: 0.55rem;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-panel);
   background: var(--surface-1);
-  box-shadow: 0 12px 20px rgb(7 8 6 / 72%);
+}
+
+.role-player .bet-page .bet-day-chips {
+  position: sticky;
+  top: 3.35rem;
+  z-index: 6;
+  margin-top: -0.4rem;
+  padding: 0.35rem 0.15rem;
+  background: var(--bg);
+  box-shadow: 0 12px 16px rgb(7 8 6 / 45%);
+}
+
+/* An open match is what you're reading: the day chips scroll away with the filters. */
+.role-player .bet-page .bet-matches.is-reading .bet-day-chips {
+  position: static;
+  margin-top: 0;
+  box-shadow: none;
 }
 
 .role-player .bet-slip-desktop {
@@ -14020,8 +14191,10 @@ html:has(.role-player) body {
 }
 
 .role-player .bet-page .bet-day-chips {
-  flex-wrap: wrap;
-  overflow: visible;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
 }
 
 @media (min-width: 761px) and (max-width: 1099px) {
@@ -14056,14 +14229,196 @@ html:has(.role-player) body {
   background: var(--surface-4);
 }
 
-.role-player .bm-match.is-live .bm-when {
+.role-player .bm-match.is-live .bm-when,
+.role-player .bm-match.is-over .bm-when {
   align-self: center;
   justify-content: center;
-  width: fit-content;
+  width: 100%;
+  max-width: 3.25rem;
   min-height: 1.45rem;
-  padding: 0 0.4rem;
+  padding: 0 0.15rem;
   border-radius: 6px;
   background: var(--accent-soft);
+}
+
+.league-crest,
+.country-flag {
+  flex: none;
+  object-fit: contain;
+}
+
+.league-crest {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.country-flag {
+  width: 1.2rem;
+  height: 0.85rem;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+.bm-league-head {
+  align-items: center;
+}
+
+.bm-league-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  flex: 1;
+}
+
+@media (min-width: 721px) {
+  .bm-league-head {
+    display: grid;
+    grid-template-columns: 2rem 3.25rem minmax(0, 1fr) 20.5rem 6.75rem;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .bm-league-title {
+    grid-column: 1 / 4;
+  }
+
+  .bm-odds-legend {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.375rem;
+    color: var(--text-2);
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .bm-league-count {
+    justify-self: center;
+    margin-left: 0;
+  }
+}
+
+.line-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-left: auto;
+}
+
+.line-stepper button {
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.line-stepper button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.line-stepper span {
+  min-width: 2.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.odds-price.is-held {
+  color: var(--muted);
+}
+
+.bet-slip-balance {
+  margin: 0.15rem 0 0;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.player-top-event-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.player-top-when {
+  display: grid;
+  flex: none;
+  justify-items: center;
+  min-width: 2.6rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.player-top-when.is-live {
+  color: var(--accent);
+}
+
+.player-top-when time {
+  display: grid;
+}
+
+.player-top-sides {
+  display: grid;
+  flex: 1;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.player-top-side {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.player-top-side > span:nth-child(2) {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-top-score {
+  flex: none;
+  min-width: 1.35rem;
+  margin-left: 0.75rem;
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.player-top-side .team-crest,
+.player-top-side .team-badge {
+  width: 1.15rem;
+  height: 1.15rem;
+  font-size: 0.62rem;
+}
+
+.player-continue {
+  padding: 0.7rem 0.9rem;
+}
+
+.player-continue-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 10px;
+  font-size: 1.15rem;
 }
 
 .bm-team {
@@ -14124,7 +14479,7 @@ html:has(.role-player) body {
     background: color-mix(in srgb, #070806 90%, transparent);
   }
 
-  .role-player .bet-page .bet-filters {
+  .role-player .bet-page .bet-day-chips {
     top: calc(3.5rem + env(safe-area-inset-top));
   }
 

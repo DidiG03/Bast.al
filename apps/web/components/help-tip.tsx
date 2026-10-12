@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "./i18n-provider";
 
 /**
- * The "!" next to a card's title: tap it (or hover on a computer) to read, in
+ * The "?" next to a card's title: tap it (or hover on a computer) to read, in
  * plain words, what the card shows and how it works. `text` is English and is
  * shown in the reader's language; add its Albanian to lib/i18n/sq/help.ts.
  */
@@ -60,7 +60,7 @@ export function HelpTip({ text, vars }: { text: string; vars?: Record<string, st
           setPinned((value) => (hover && !value ? true : !value));
         }}
       >
-        !
+        ?
       </button>
       {open ? (
         <span id={id} role="tooltip" className={`help-tip-bubble${alignRight ? " is-right" : ""}`}>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
+import { LineFamily, bundleLines, resultHeads, visibleCountry } from "../../../components/line-market";
 import { MatchCentre, MatchStatsPanel } from "../../../components/match-centre";
 import { GreyhoundRaces } from "../../../components/greyhound-races";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
@@ -15,12 +16,13 @@ import { SportIcon } from "../../../components/sport-icon";
 import { TeamCrest } from "../../../components/team-crest";
 import { ApiError, apiFetch, type Bet, type BuilderQuote, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
+import { MAX_SLIP, readSlip, saveSlip, type SlipItem } from "../../../lib/slip";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
 import { useTopUpRequest } from "../../../components/top-up-request";
-import { breakPause, livePill } from "../../../lib/live";
+import { breakPause, liveClock } from "../../../lib/live";
 import { usePolling } from "../../../lib/use-polling";
 import { pickLabel } from "../../../lib/picks";
 import { addDays, dayKey } from "../../../lib/time";
@@ -30,33 +32,11 @@ type Tab = "matches" | "open" | "settled";
 /** "accumulator" combines the picks: an accumulator, or a bet builder when they're all from one match. "system" makes every double, treble… of them. */
 type SlipMode = "singles" | "accumulator" | "system";
 
-type SlipItem = {
-  selectionId: string;
-  eventId: string;
-  eventName: string;
-  startsAt: string;
-  market: string;
-  name: string;
-  odds: number;
-  /** The price when it was added, if the price has moved since. */
-  previousOdds?: number;
-  stake: string;
-  closed?: boolean;
-  /** A live pick whose market is suspended or whose prices went stale for now. */
-  paused?: boolean;
-  live?: boolean;
-  /** Greyhounds: paid at the starting price (or forecast dividend); `odds` is 0. Singles only. */
-  sp?: boolean;
-};
-
-/** Each account's slip is kept apart, so a Player on a shared phone never sees another one's picks. */
-const slipStorage = (userId: string) => `bastal-bet-slip:${userId}`;
 /** How long a price shows its up or down arrow after it moves. */
 const MOVE_SHOWN_MS = 15_000;
 
 type PriceMove = { up: boolean; until: number };
 const QUICK_STAKES = [5, 10, 20, 50];
-const MAX_SLIP = 10;
 /** Matches the API's cap on an accumulator's combined odds. */
 const MAX_ACCUMULATOR_ODDS = 5000;
 /** Matches drawn at first; "Show more matches" adds this many again, so a week of football doesn't slow a phone down. */
@@ -121,27 +101,6 @@ function combinedOdds(odds: number[]): number {
 function stakeValue(stake: string): number {
   const value = Number(stake);
   return Number.isFinite(value) && value > 0 ? Math.round(value * 100) / 100 : 0;
-}
-
-function readSlip(userId: string): SlipItem[] {
-  try {
-    // The slip used to be kept for whoever signed in last on this browser.
-    window.localStorage.removeItem("bastal-bet-slip");
-    const raw = window.localStorage.getItem(slipStorage(userId));
-    const parsed = raw ? (JSON.parse(raw) as SlipItem[]) : [];
-    // Live picks stay on the slip for the length of a match; the next odds refresh closes any that ended.
-    return Array.isArray(parsed) ? parsed.filter((item) => new Date(item.startsAt).getTime() > Date.now() - 3 * 3_600_000).slice(0, MAX_SLIP) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveSlip(userId: string, items: SlipItem[]) {
-  try {
-    window.localStorage.setItem(slipStorage(userId), JSON.stringify(items));
-  } catch {
-    // The slip still works for this visit.
-  }
 }
 
 export default function BetPageRoute() {
@@ -625,7 +584,7 @@ function BetPage() {
         </div>
       ) : tab === "matches" ? (
         <div className="bet-layout">
-          <div className={`stack bet-matches${focused ? " is-jumping" : ""}`}>
+          <div className={`stack bet-matches${focused ? " is-jumping" : ""}${expanded.size > 0 ? " is-reading" : ""}`}>
             <div className="bet-filters">
               <div className="bet-filters-row">
                 <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => filter(() => setSearch(e.target.value))} aria-label={t("Search matches")} />
@@ -640,7 +599,8 @@ function BetPage() {
                   </select>
                 ) : null}
               </div>
-              {allGroups.length > 1 || favourites.size > 0 || favouritesOnly ? (
+            </div>
+            {allGroups.length > 1 || favourites.size > 0 || favouritesOnly ? (
                 <div className="bet-chips bet-day-chips" role="group" aria-label={t("Day")}>
                   <button
                     type="button"
@@ -674,8 +634,7 @@ function BetPage() {
                     );
                   })}
                 </div>
-              ) : null}
-            </div>
+            ) : null}
 
             {events === null ? (
               <div className="loading-state">
@@ -715,8 +674,17 @@ function BetPage() {
                     {byLeague(dayEvents).map((group) => (
                       <div key={group.key} className="bm-league">
                         <h3 className="bm-league-head">
-                          <span className="bm-league-name">{group.league}</span>
-                          {group.country ? <span className="bm-league-country">{group.country}</span> : null}
+                          <span className="bm-league-title">
+                            {group.leagueLogo ? <img className="league-crest" src={group.leagueLogo} alt="" /> : null}
+                            {group.countryFlag ? <img className="country-flag" src={group.countryFlag} alt={group.country ?? ""} /> : null}
+                            <span className="bm-league-name">{group.league}</span>
+                            {visibleCountry(group.country, group.countryFlag) ? <span className="bm-league-country">{group.country}</span> : null}
+                          </span>
+                          <span className="bm-odds-legend" aria-hidden="true">
+                            {resultHeads(group.events[0]?.markets[0]?.selections).map((label) => (
+                              <span key={label}>{label}</span>
+                            ))}
+                          </span>
                           <span className="bm-league-count">{group.events.length}</span>
                         </h3>
                         {group.events.map((event) => (
@@ -754,7 +722,7 @@ function BetPage() {
         <MyBetsList status={tab} version={betsVersion} />
       )}
 
-      {slip.length > 0 && tab === "matches" ? (
+      {slip.length > 0 && tab === "matches" && !sheetOpen ? (
         <button type="button" className="bet-slip-bar" onClick={() => setSheetOpen(true)} aria-haspopup="dialog">
           <span className="bet-slip-count">{slip.length}</span>
           <span>{t("Bet slip")}</span>
@@ -867,6 +835,11 @@ const MatchCard = memo(function MatchCard({
   const toggleLabel = expanded ? t("Fewer markets") : tn(more, "{count} more market", "{count} more markets");
   const scored = (event.live || over) && event.homeScore !== null && event.awayScore !== null;
   const playing = event.live && !over;
+  const winnerHeld =
+    playing &&
+    event.bettable &&
+    !event.allMarketsSuspended &&
+    Boolean(inRow && inRow.key === "match_winner" && (inRow.suspended || inRow.selections.every((selection) => selection.suspended)) && more > 0);
   const pause = over
     ? { text: breakPause(event) ?? "", tone: " is-finished" }
     : event.live && !event.bettable
@@ -874,82 +847,114 @@ const MatchCard = memo(function MatchCard({
         { text: event.livePause === "goal" || event.livePause === "late" ? PAUSE_TEXT[event.livePause] : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed, tone: event.livePause === "goal" ? " is-goal" : "" }
       : event.live && event.allMarketsSuspended
         ? { text: PAUSE_TEXT.bookmaker, tone: "" }
-        : null;
+        : winnerHeld
+          ? { text: msg("The match winner is paused. The other markets are still open."), tone: "" }
+          : null;
 
   const pick = (market: OddsEvent["markets"][number], selection: OddsSelection, label: string, className: string) => {
     const isSelected = selected.has(selection.id);
-    // A match-level pause (a goal) still has prices: show them, but don't take the bet.
-    // A dash is only for a price the feed has actually taken off the board.
+    // A pause still shows the last price, greyed out, and won't take the bet.
+    // A dash is only for an outcome that has no price at all.
     const offBoard = Boolean(market.suspended || selection.suspended);
     const locked = !event.bettable || offBoard;
     return (
       <button
         key={selection.id}
         type="button"
-        className={`${className}${isSelected ? " is-selected" : ""}`}
+        className={`${className}${isSelected ? " is-selected" : ""}${offBoard ? " is-held" : ""}`}
         onClick={() => onPick(event, market.name, selection)}
         aria-pressed={isSelected}
         disabled={locked && !isSelected}
         aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: pickLabel(selection.name, i18n), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
       >
         <span className="odds-selection-name">{label}</span>
-        <strong className="odds-price">
-          {offBoard ? "–" : selection.price.toFixed(2)}
+        <strong className={`odds-price${offBoard ? " is-held" : ""}`}>
+          {offBoard && selection.price <= 1 ? "–" : selection.price.toFixed(2)}
           {offBoard ? null : <PriceArrow move={moves.get(selection.id)} />}
         </strong>
       </button>
     );
   };
 
+  const marketOutcomes = (market: OddsEvent["markets"][number]) => {
+    const offered = market.selections.filter((selection) => !(selection.suspended && !market.suspended && market.selections.length > 3 && !selected.has(selection.id)));
+    const scorers = market.key.startsWith("scorer_");
+    const scores = market.key === "correct_score" || market.key.endsWith("_correct_score");
+    const margin = market.key === "winning_margin" || market.key.endsWith("_winning_margin");
+    const limit = scorers ? SCORERS_SHOWN : 12;
+    const showAll = (!scorers && !scores) || allPlayers.has(market.id) || offered.length <= limit + 2;
+    const visible = showAll ? offered : offered.filter((selection, index) => index < limit || selected.has(selection.id));
+    return (
+      <>
+        <div className={`odds-selections${scorers ? " is-players" : ""}${margin ? " is-margin" : ""}`}>{visible.map((selection) => pick(market, selection, pickLabel(selection.name, i18n), "odds-selection bet-pick"))}</div>
+        {!showAll ? (
+          <button type="button" className="text-button bet-all-players" onClick={() => setAllPlayers((current) => new Set(current).add(market.id))}>
+            {scorers ? tn(offered.length, "Show all {count} players", "Show all {count} players") : tn(offered.length, "Show all {count} scores", "Show all {count} scores")}
+          </button>
+        ) : null}
+        {/^(home_|away_)?cards_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes. Every yellow and red card counts as 1.")}</p> : null}
+        {/^(home_|away_)?corners_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes.")}</p> : null}
+        {market.key === "scorer_first" ? (
+          <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, or comes on after the first goal, your stake comes back.")}</p>
+        ) : scorers ? (
+          <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, your stake comes back.")}</p>
+        ) : null}
+        {market.key === "first_team_score" || market.key === "last_team_score" ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
+      </>
+    );
+  };
+
   return (
     <article id={`match-${event.id}`} className={`bm-match${playing ? " is-live" : ""}${over ? " is-over" : ""}${focused ? " is-focused" : ""}${expanded ? " is-expanded" : ""}`}>
       <div className="bm-row">
+        <button type="button" className={`match-star${starred ? " is-starred" : ""}`} onClick={() => onStar(event.id)} aria-pressed={starred} aria-label={starred ? t("Remove {match} from favourites", { match: event.name }) : t("Add {match} to favourites", { match: event.name })}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+          </svg>
+        </button>
         <div className="bm-when">
-          {playing ? (
+          {playing || over ? (
             <>
-              <span className="live-dot" aria-hidden="true" />
-              <span>{event.period && breakPause(event) ? livePill(event, t) : event.elapsed !== null ? `${event.elapsed}'` : t("Live")}</span>
+              {playing ? <span className="live-dot" aria-hidden="true" /> : null}
+              <span>{liveClock(event, t)}</span>
             </>
-          ) : over ? (
-            <span>{livePill(event, t)}</span>
           ) : (
             <time dateTime={event.startsAt}>{date(event.startsAt, TIME)}</time>
           )}
         </div>
         <div className="bm-teams">
-          <span className="bm-team">
-            <span className="bm-side">
-              <TeamCrest name={event.homeTeam ?? event.name} logo={event.homeLogo} />
-              <span className="bm-team-name">{event.homeTeam ?? event.name}</span>
-            </span>
-            {scored ? <span className="bm-score">{event.homeScore}</span> : null}
-          </span>
-          {event.awayTeam ? (
+          <div className="bm-team-block">
             <span className="bm-team">
               <span className="bm-side">
-                <TeamCrest name={event.awayTeam} logo={event.awayLogo} />
-                <span className="bm-team-name">{event.awayTeam}</span>
+                <TeamCrest name={event.homeTeam ?? event.name} logo={event.homeLogo} />
+                <span className="bm-team-name">{event.homeTeam ?? event.name}</span>
               </span>
-              {scored ? <span className="bm-score">{event.awayScore}</span> : null}
             </span>
-          ) : null}
-        </div>
-        <div className="bm-tools">
-          <button type="button" className={`match-star${starred ? " is-starred" : ""}`} onClick={() => onStar(event.id)} aria-pressed={starred} aria-label={starred ? t("Remove {match} from favourites", { match: event.name }) : t("Add {match} to favourites", { match: event.name })}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
-            </svg>
-          </button>
-          {hasStats ? (
-            <button type="button" className={`bm-icon${statsOpen ? " is-active" : ""}`} onClick={() => setStatsOpen((open) => !open)} aria-pressed={statsOpen} aria-label={statsOpen ? t("Hide stats") : t("Stats")} title={statsOpen ? t("Hide stats") : t("Stats")}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 20V11M12 20V4M19 20v-6" />
-              </svg>
-            </button>
-          ) : null}
+            {event.awayTeam ? (
+              <span className="bm-team">
+                <span className="bm-side">
+                  <TeamCrest name={event.awayTeam} logo={event.awayLogo} />
+                  <span className="bm-team-name">{event.awayTeam}</span>
+                </span>
+              </span>
+            ) : null}
+          </div>
+          <div className="bm-score-col">
+            {scored ? <span className="bm-score">{event.homeScore}</span> : null}
+            {scored && event.awayTeam ? <span className="bm-score">{event.awayScore}</span> : null}
+          </div>
+          <div className="bm-tools">
+            {hasStats ? (
+              <button type="button" className={`bm-icon${statsOpen ? " is-active" : ""}`} onClick={() => setStatsOpen((open) => !open)} aria-pressed={statsOpen} aria-label={statsOpen ? t("Hide stats") : t("Stats")} title={statsOpen ? t("Hide stats") : t("Stats")}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 20V11M12 20V4M19 20v-6" />
+                </svg>
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className={`bm-odds${inRow ? ` has-${inRow.selections.length}` : ""}`}>
-          {inRow ? inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick")) : null}
+          {over ? <span className="bm-settled">{t("Settling")}</span> : inRow ? inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick")) : null}
         </div>
         {more > 0 ? (
           <button type="button" className={`bm-more${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} aria-expanded={expanded} aria-label={toggleLabel} title={toggleLabel}>
@@ -958,7 +963,10 @@ const MatchCard = memo(function MatchCard({
                 <path d="m6 15 6-6 6 6" />
               </svg>
             ) : (
-              `+${more}`
+              <>
+                <span className="bm-more-count">{more}</span>
+                <span className="bm-more-word">{tn(more, "market", "markets")}</span>
+              </>
             )}
           </button>
         ) : (
@@ -977,36 +985,25 @@ const MatchCard = memo(function MatchCard({
           {grouped.map(([label, list]) => (
             <div key={label} className="odds-market-group">
               {grouped.length > 1 ? <h3 className="odds-market-group-title">{t(label)}</h3> : null}
-              {list.map((market) => {
-                // A market with many outcomes (correct score, goalscorers) hides the ones off the board, unless they're on the slip.
-                const offered = market.selections.filter((selection) => !(selection.suspended && !market.suspended && market.selections.length > 3 && !selected.has(selection.id)));
-                const scorers = market.key.startsWith("scorer_");
-                const showAll = !scorers || allPlayers.has(market.id) || offered.length <= SCORERS_SHOWN + 2;
-                const visible = showAll ? offered : offered.filter((selection, index) => index < SCORERS_SHOWN || selected.has(selection.id));
+              {bundleLines(list).map((entry) => {
+                if ("kind" in entry) {
+                  return (
+                    <LineFamily key={entry.lines[0].id} lines={entry.lines}>
+                      {(market) => marketOutcomes(market)}
+                    </LineFamily>
+                  );
+                }
+                const scorers = entry.key.startsWith("scorer_");
                 return (
-                  <div key={market.id} className="odds-market">
+                  <div key={entry.id} className="odds-market">
                     <div className="odds-market-head">
                       <span className="odds-market-name">
-                        {ts(market.name)}
-                        {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
+                        {ts(entry.name)}
+                        {entry.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
                       </span>
-                      {/* A goalscorer list is too long for the chart. */}
-                      {scorers ? null : <MarketPriceHistory selections={market.selections} compact />}
+                      {scorers ? null : <MarketPriceHistory selections={entry.selections} compact />}
                     </div>
-                    <div className={`odds-selections${scorers ? " is-players" : ""}`}>{visible.map((selection) => pick(market, selection, pickLabel(selection.name, i18n), "odds-selection bet-pick"))}</div>
-                    {!showAll ? (
-                      <button type="button" className="text-button bet-all-players" onClick={() => setAllPlayers((current) => new Set(current).add(market.id))}>
-                        {tn(offered.length, "Show all {count} players", "Show all {count} players")}
-                      </button>
-                    ) : null}
-                    {/^(home_|away_)?cards_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes. Every yellow and red card counts as 1.")}</p> : null}
-                    {/^(home_|away_)?corners_/.test(market.key) ? <p className="muted odds-market-rule">{t("Settles on the official match stats after 90 minutes.")}</p> : null}
-                    {market.key === "scorer_first" ? (
-                      <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, or comes on after the first goal, your stake comes back.")}</p>
-                    ) : scorers ? (
-                      <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, your stake comes back.")}</p>
-                    ) : null}
-                    {market.key === "first_team_score" || market.key === "last_team_score" ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
+                    {marketOutcomes(entry)}
                   </div>
                 );
               })}
@@ -1032,13 +1029,16 @@ function rowLabel(selection: OddsSelection, i18n: I18n): string {
 }
 
 /** A day's matches by competition, in the order the competitions first come up. */
-function byLeague(events: OddsEvent[]): Array<{ key: string; league: string; country: string | null; events: OddsEvent[] }> {
-  const groups = new Map<string, { key: string; league: string; country: string | null; events: OddsEvent[] }>();
+function byLeague(events: OddsEvent[]): Array<{ key: string; league: string; country: string | null; leagueLogo: string | null; countryFlag: string | null; events: OddsEvent[] }> {
+  const groups = new Map<string, { key: string; league: string; country: string | null; leagueLogo: string | null; countryFlag: string | null; events: OddsEvent[] }>();
   for (const event of events) {
     const key = `${event.country ?? ""}|${event.league}`;
     const group = groups.get(key);
-    if (group) group.events.push(event);
-    else groups.set(key, { key, league: event.league, country: event.country, events: [event] });
+    if (group) {
+      group.events.push(event);
+      group.leagueLogo ??= event.leagueLogo ?? null;
+      group.countryFlag ??= event.countryFlag ?? null;
+    } else groups.set(key, { key, league: event.league, country: event.country, leagueLogo: event.leagueLogo ?? null, countryFlag: event.countryFlag ?? null, events: [event] });
   }
   return Array.from(groups.values());
 }
@@ -1291,12 +1291,9 @@ function BetSlip({
 
       {items.length === 0 ? (
         <div className="bet-slip-empty">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z" />
-            <path d="M13 5v2M13 11v2M13 17v0" />
-          </svg>
           <strong>{t("Your slip is empty")}</strong>
-          <p className="muted">{t("Tap a price to add a bet. Combine picks from different matches into an accumulator, or picks from one match into a bet builder.")}</p>
+          <p className="muted">{t("Tap a price to add a bet.")}</p>
+          {info ? <p className="bet-slip-balance">{t("Balance {amount}", { amount: formatMoney(info.balance) })}</p> : null}
         </div>
       ) : (
         <>

@@ -186,6 +186,13 @@ test("the half-time score is kept once the match has finished", () => {
   });
   assert.equal(fromId.homeLogo, "https://media.api-sports.io/football/teams/131.png", "the fixtures list has a team id, not a picture");
   assert.equal(fromId.awayLogo, "https://media.api-sports.io/football/teams/124.png");
+  const marked = parseFixture({
+    ...raw("NS", { home: null, away: null }, { home: null, away: null }),
+    league: { id: 71, name: "Serie A", country: "Brazil", season: 2026, flag: "https://media.api-sports.io/flags/br.svg" },
+    teams: { home: { id: 131, name: "Corinthians" }, away: { id: 124, name: "Fluminense" } },
+  });
+  assert.equal(marked.leagueLogo, "https://media.api-sports.io/football/leagues/71.png");
+  assert.equal(marked.countryFlag, "https://media.api-sports.io/flags/br.svg");
 });
 
 const d = (v) => new Prisma.Decimal(v);

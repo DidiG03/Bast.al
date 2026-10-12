@@ -14,3 +14,8 @@ export function crestUrl(value: unknown): string | null {
 export function savedCrests(home: string | null, away: string | null): { homeLogo?: string; awayLogo?: string } {
   return { ...(home ? { homeLogo: home } : {}), ...(away ? { awayLogo: away } : {}) };
 }
+
+/** A competition's crest and flag. A reading without one leaves what is already stored. */
+export function savedMarks(leagueLogo: string | null | undefined, countryFlag: string | null | undefined): { leagueLogo?: string; countryFlag?: string } {
+  return { ...(leagueLogo ? { leagueLogo } : {}), ...(countryFlag ? { countryFlag } : {}) };
+}

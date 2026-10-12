@@ -355,6 +355,8 @@ export class OddsService {
       awayTeam: event.awayTeam,
       homeLogo: event.homeLogo,
       awayLogo: event.awayLogo,
+      leagueLogo: event.leagueLogo,
+      countryFlag: event.countryFlag,
       startsAt: event.startsAt,
       status: event.status,
       elapsed: event.elapsed,
@@ -648,8 +650,14 @@ export class OddsService {
 
 /** A race's number, grade, distance and country; each dog's status is on its own pick (withdrawn = suspended). */
 function raceDetails(value: Prisma.JsonValue) {
-  const info = (value ?? {}) as { raceNumber?: number; grade?: string | null; distance?: number | null; region?: string };
-  return { raceNumber: info.raceNumber ?? null, grade: info.grade ?? null, distance: info.distance ?? null, region: info.region ?? null };
+  const info = (value ?? {}) as { raceNumber?: number; grade?: string | null; distance?: number | null; region?: string; runners?: unknown[] };
+  return {
+    raceNumber: info.raceNumber ?? null,
+    grade: info.grade ?? null,
+    distance: info.distance ?? null,
+    region: info.region ?? null,
+    field: Array.isArray(info.runners) ? info.runners.length : null,
+  };
 }
 
 /** The Owner a user belongs to: their parent if it's an Owner, otherwise their Manager's parent. */

@@ -3,7 +3,7 @@ import { EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { type FetchJson, httpFetchJson } from "./api-football";
-import { savedCrests } from "./crest";
+import { savedCrests, savedMarks } from "./crest";
 import { BASKETBALL_PROVIDER, type FeedGame, NBA_LEAGUE_ID, type OddsApiEvent, type RawGame, parseApiSportsOdds, parseGame, parseOddsApiEvent, periodsResultOf, teamKey } from "./basketball";
 import { OddsSyncService, movedLater } from "./odds-sync.service";
 
@@ -220,8 +220,9 @@ export class BasketballSyncService implements OnModuleInit, OnModuleDestroy {
 }
 
 /**
- * Saves a basketball or NFL game and, once it's over, its final score
- * (overtime included), which bets settle on like a football result. A score
+ * Saves a basketball or NFL game. A live total is the score on the board only.
+ * Once the game is over, the final score (overtime included) is the result
+ * bets settle on, like a football result. A score
  * that changes after it was settled is marked, so settlement settles the
  * game's bets again; a score Super Admin set by hand is left alone. Returns
  * the game's id.
@@ -230,6 +231,7 @@ export async function saveScoredGame(prisma: PrismaService, provider: string, sp
   const where = { provider_externalId: { provider, externalId: game.externalId } };
   const before = await prisma.event.findUnique({ where, select: { id: true, status: true, startsAt: true, resultHome: true, resultAway: true, resultSource: true, fightResult: true } });
   if ((!before && !create) || before?.resultSource === "manual") return before?.id ?? null;
+  const shown = game.score ?? game.liveScore;
   const status =
     game.status === "cancelled" ? EventStatus.CANCELLED
     : game.status === "postponed" ? EventStatus.POSTPONED
@@ -248,13 +250,13 @@ export async function saveScoredGame(prisma: PrismaService, provider: string, sp
     homeTeam: game.home,
     awayTeam: game.away,
     ...savedCrests(game.homeLogo, game.awayLogo),
+    ...savedMarks(game.leagueLogo, game.countryFlag),
     startsAt: game.startsAt,
     status,
     syncedAt: new Date(),
+    ...(shown ? { homeScore: shown.home, awayScore: shown.away } : {}),
     ...(game.score
       ? {
-          homeScore: game.score.home,
-          awayScore: game.score.away,
           resultHome: game.score.home,
           resultAway: game.score.away,
           // The quarters, for the period markets; the half-time score from them.

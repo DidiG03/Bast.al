@@ -3,7 +3,7 @@ import { EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { type FeedMarket, type FetchJson, httpFetchJson } from "./api-football";
-import { savedCrests } from "./crest";
+import { savedCrests, savedMarks } from "./crest";
 import { HANDBALL_PROVIDER, type HandballGame, parseHandballGame, parseHandballOdds } from "./handball";
 import { OddsSyncService, movedLater } from "./odds-sync.service";
 import { type RawGameOdds, type RawTeamGame, type TeamGame } from "./team-sports";
@@ -217,6 +217,7 @@ abstract class TeamSportSync<G extends TeamGame> implements OnModuleInit, OnModu
       homeTeam: game.home,
       awayTeam: game.away,
       ...savedCrests(game.homeLogo, game.awayLogo),
+      ...savedMarks(game.leagueLogo, game.countryFlag),
       startsAt: game.startsAt,
       status,
       syncedAt: new Date(),

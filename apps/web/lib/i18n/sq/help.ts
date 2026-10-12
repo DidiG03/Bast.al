@@ -58,11 +58,11 @@ export const help: Record<string, string> = {
 
   // Player home
   "The money you can bet with. Your Manager or Owner adds it. When you win, your winnings come back here.":
-    "Paratë me të cilat mund të vësh baste. Ti shton Menaxheri ose Pronari yt. Kur fiton, fitimet kthehen këtu.",
+    "Paratë me të cilat mund të vësh baste. T'i shton Menaxheri ose Pronari yt. Kur fiton, fitimet kthehen këtu.",
   "The biggest matches you can bet on right now. Tap one to see its prices and add a bet.":
     "Ndeshjet më të mëdha ku mund të vësh bast tani. Shtyp njërën për të parë koeficientët dhe për të shtuar një bast.",
   "Your bets. “Open” means the match is not finished yet. “Settled” means it is finished: you won, lost, or got your money back.":
-    "Bastet e tua. “Hapur” do të thotë që ndeshja ende nuk ka mbaruar. “Të mbyllura” do të thotë që ka mbaruar: fitove, humbe, ose t'u kthyen paratë.",
+    "Bastet e tua. “Hapur” do të thotë që ndeshja ende nuk ka mbaruar. “Të mbyllura” do të thotë që ka mbaruar: fitove, humbe, ose të kthehen paratë.",
 
   // Reports
   "Every account you can see, of every kind, counted together.": "Të gjitha llogaritë që mund të shohësh, të çdo lloji, të numëruara bashkë.",
@@ -219,7 +219,7 @@ export const help: Record<string, string> = {
 
   // Bet
   "The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: 10 ALL at 2.50 pays back 25 ALL if it wins.":
-    "Ndeshjet e kësaj dite. Shtyp një koeficient për ta shtuar në tiketë. Një numër më i lartë paguan më shumë, por fiton më rrallë. Shembull: 10 ALL me 2.50 kthejnë 25 ALL nëse fiton.",
+    "Ndeshjet e kësaj dite. Shtyp një koeficient për ta shtuar në biletë. Një numër më i lartë paguan më shumë, por fiton më rrallë. Shembull: 10 ALL me 2.50 kthejnë 25 ALL nëse fiton.",
   "Your bets went through. The money was taken from your balance. You can follow them in Open bets.":
     "Bastet e tua u pranuan. Paratë u morën nga balanca jote. Mund t'i ndjekësh te Baste të hapura.",
   "The picks you tapped. Type how much to bet on each, then press Place. “Singles” are separate bets. “Accumulator” joins them into one bet that pays much more but only wins if every pick wins.":

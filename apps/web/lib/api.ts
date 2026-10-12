@@ -451,7 +451,7 @@ export type PricePoint = { price: number; recordedAt: string };
 export type Sport = "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "tennis" | "volleyball" | "handball";
 
 /** Greyhounds: the race's details. A withdrawn dog shows as a suspended pick. */
-export type RaceInfo = { raceNumber: number | null; grade: string | null; distance: number | null; region: string | null };
+export type RaceInfo = { raceNumber: number | null; grade: string | null; distance: number | null; region: string | null; /** Dogs declared. */ field?: number | null };
 /** Greyhounds: the official result, once it's in. */
 export type RaceResult = { final: boolean; positions: Array<{ dogId: number; position: number; sp: number | null }>; forecastDividend: number | null; tricastDividend?: number | null };
 
@@ -469,6 +469,9 @@ export type OddsEvent = {
   /** Crest from the feed. Missing when that sport has no pictures, or until the next sync. */
   homeLogo?: string | null;
   awayLogo?: string | null;
+  /** Competition crest and country flag, when the feed sent them. */
+  leagueLogo?: string | null;
+  countryFlag?: string | null;
   startsAt: string;
   status: "UPCOMING" | "LIVE" | "COMPLETED" | "POSTPONED" | "CANCELLED";
   elapsed: number | null;

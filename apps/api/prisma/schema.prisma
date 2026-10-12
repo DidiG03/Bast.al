@@ -298,6 +298,9 @@ model Event {
   /// Crest from the feed, an https URL. Null when that feed has no picture (tennis, greyhounds).
   homeLogo           String?     @map("home_logo")
   awayLogo           String?     @map("away_logo")
+  /// The competition's crest and the country's flag, when the feed sends them.
+  leagueLogo         String?     @map("league_logo")
+  countryFlag        String?     @map("country_flag")
   homeScore          Int?        @map("home_score")
   awayScore          Int?        @map("away_score")
   /// Minutes played, while live.

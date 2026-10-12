@@ -21,6 +21,16 @@ const BREAK_PAUSES: Record<string, string> = {
 
 type T = (text: string, vars?: Record<string, string | number>) => string;
 
+/** Short codes for the match row. The full sentence stays in the banner under the row. */
+const CLOCK: Record<string, string> = { HT: "HT", FT: "FT", BT: "BT", SUSP: "INT", INT: "INT", ET: "ET", P: "PEN" };
+
+/** The clock on a match row: "67'", "HT", "FT". */
+export function liveClock(event: Pick<OddsEvent, "elapsed" | "period">, t: T): string {
+  const code = event.period ? CLOCK[event.period] : undefined;
+  if (code) return code;
+  return event.elapsed === null ? t("Live") : `${event.elapsed}'`;
+}
+
 /** A live match's pill: "Half-time" during the break, otherwise "Live 67'". */
 export function livePill(event: Pick<OddsEvent, "elapsed" | "period">, t: T): string {
   const pause = event.period ? BREAKS[event.period] : undefined;

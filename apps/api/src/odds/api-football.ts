@@ -19,7 +19,7 @@ export type ApiResponse<T> = {
 
 export type RawFixture = {
   fixture: { id: number; date: string; status: { short: string; elapsed: number | null } };
-  league: { id: number; name: string; country: string; season: number };
+  league: { id: number; name: string; country: string; season: number; logo?: string | null; flag?: string | null };
   teams: { home: { id?: number; name: string; logo?: string | null }; away: { id?: number; name: string; logo?: string | null } };
   goals: { home: number | null; away: number | null };
   /** `fulltime` is the score after 90 minutes, before any extra time. */
@@ -71,6 +71,9 @@ export type FeedFixture = {
   season: number;
   league: string;
   country: string;
+  /** Competition crest and country flag. The fixtures list often sends both. */
+  leagueLogo: string | null;
+  countryFlag: string | null;
   homeTeam: string;
   awayTeam: string;
   /** Crest URLs from the feed. Null when it didn't send one. */
@@ -120,6 +123,11 @@ function footballCrest(team: { id?: number; logo?: string | null }): string | nu
   return Number.isInteger(team.id) && team.id! > 0 ? `https://media.api-sports.io/football/teams/${team.id}.png` : null;
 }
 
+/** Same as a club crest: the fixtures list may send only the competition's id. */
+function footballLeagueLogo(league: { id: number; logo?: string | null }): string | null {
+  return crestUrl(league.logo) ?? (league.id > 0 ? `https://media.api-sports.io/football/leagues/${league.id}.png` : null);
+}
+
 export function parseFixture(raw: RawFixture): FeedFixture {
   const status = eventStatus(raw.fixture.status.short);
   // Bets are on 90 minutes. After extra time `goals` includes it, so prefer
@@ -133,6 +141,8 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     season: raw.league.season,
     league: raw.league.name,
     country: raw.league.country,
+    leagueLogo: footballLeagueLogo(raw.league),
+    countryFlag: crestUrl(raw.league.flag),
     homeTeam: raw.teams.home.name,
     awayTeam: raw.teams.away.name,
     homeLogo: footballCrest(raw.teams.home),

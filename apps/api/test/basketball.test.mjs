@@ -20,6 +20,9 @@ test("a game is read with its league, teams, status and, once over, its final sc
   const done = parseGame(games.find((g) => g.id === 512043));
   assert.deepEqual([done.status, done.score], ["finished", { home: 87, away: 97 }]);
   assert.equal(parseGame({ ...games[0], status: { short: "Q3" } }).status, "live");
+  const live = parseGame({ ...games[0], status: { short: "Q3" }, scores: { home: { total: 54 }, away: { total: 48 } } });
+  assert.equal(live.score, null, "a live total is not the result bets settle on");
+  assert.deepEqual(live.liveScore, { home: 54, away: 48 });
   assert.equal(parseGame({ ...games[0], status: { short: "POST" } }).status, "postponed");
 });
 

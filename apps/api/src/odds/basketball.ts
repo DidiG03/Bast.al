@@ -36,14 +36,18 @@ export type FeedGame = {
   leagueId: number;
   league: string;
   country: string;
+  leagueLogo: string | null;
+  countryFlag: string | null;
   home: string;
   away: string;
   homeLogo: string | null;
   awayLogo: string | null;
   startsAt: Date;
   status: GameStatus;
-  /** Final scores, overtime included, once it's over. */
+  /** Final scores, overtime included, once it's over. Bets settle on this. */
   score: { home: number; away: number } | null;
+  /** The score while the game is on, so the board can show it. Not a result. */
+  liveScore: { home: number; away: number } | null;
   /** Each quarter's score and the overtime's, once it's over, if the feed sent them all. */
   periods: GamePeriods | null;
 };
@@ -72,8 +76,8 @@ export type RawGame = {
   id: number;
   date?: string;
   status?: { short?: string };
-  league?: { id?: number; name?: string };
-  country?: { name?: string };
+  league?: { id?: number; name?: string; logo?: string | null };
+  country?: { name?: string; flag?: string | null };
   teams?: { home?: { name?: string; logo?: string | null }; away?: { name?: string; logo?: string | null } };
   scores?: { home?: RawScore; away?: RawScore };
 };
@@ -92,18 +96,22 @@ export function parseGame(raw: RawGame): FeedGame | null {
   const status: GameStatus = FINISHED.has(short) ? "finished" : UPCOMING.has(short) ? "upcoming" : POSTPONED.has(short) ? "postponed" : CANCELLED.has(short) ? "cancelled" : "live";
   const h = raw.scores?.home?.total;
   const a = raw.scores?.away?.total;
+  const totals = Number.isInteger(h) && Number.isInteger(a) ? { home: h!, away: a! } : null;
   return {
     externalId: String(raw.id),
     leagueId: raw.league.id,
     league: raw.league.name?.trim() || "Basketball",
     country: raw.country?.name?.trim() || "",
+    leagueLogo: crestUrl(raw.league.logo),
+    countryFlag: crestUrl(raw.country?.flag),
     home,
     away,
     homeLogo: crestUrl(raw.teams?.home?.logo),
     awayLogo: crestUrl(raw.teams?.away?.logo),
     startsAt,
     status,
-    score: status === "finished" && Number.isInteger(h) && Number.isInteger(a) ? { home: h!, away: a! } : null,
+    score: status === "finished" ? totals : null,
+    liveScore: status === "live" ? totals : null,
     periods: status === "finished" ? periodsOf(raw.scores?.home, raw.scores?.away, "over_time") : null,
   };
 }

@@ -17,7 +17,7 @@ import { useRealtime } from "../../components/realtime-provider";
 import { SportIcon } from "../../components/sport-icon";
 import { TeamCrest } from "../../components/team-crest";
 import { ApiError, type Bet, type BuilderQuote, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../lib/api";
-import { formatMoney } from "../../lib/format";
+import { formatMoney, formatStake } from "../../lib/format";
 import { MAX_SLIP, readSlip, saveSlip, type SlipItem } from "../../lib/slip";
 import { useIdempotencyKey } from "../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../components/i18n-provider";
@@ -38,7 +38,8 @@ type SlipMode = "singles" | "accumulator" | "system";
 const MOVE_SHOWN_MS = 15_000;
 
 type PriceMove = { up: boolean; until: number };
-const QUICK_STAKES = [5, 10, 20, 50];
+/** One tap fills the stake on the ticket, in ALL. */
+const QUICK_STAKES = [250, 500, 1000, 2500, 5000];
 /** Matches the API's cap on an accumulator's combined odds. */
 const MAX_ACCUMULATOR_ODDS = 5000;
 /** Matches drawn at first; "Show more matches" adds this many again, so a week of football doesn't slow a phone down. */
@@ -146,6 +147,32 @@ function BetPage() {
   const [slip, setSlip] = useState<SlipItem[]>([]);
   const [slipLoaded, setSlipLoaded] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetClosing, setSheetClosing] = useState(false);
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSheetClosing(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [sheetOpen]);
+  useEffect(() => {
+    if (!sheetClosing) return;
+    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 380;
+    const timer = window.setTimeout(() => {
+      setSheetOpen(false);
+      setSheetClosing(false);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [sheetClosing]);
+  function closeSheet() {
+    setSheetClosing(true);
+  }
   const [mode, setMode] = useState<SlipMode>("singles");
   const [accaStake, setAccaStake] = useState("");
   /** The system's line sizes, as "2,3,4". */
@@ -418,7 +445,14 @@ function BetPage() {
     return () => window.clearTimeout(timer);
   }, [moves]);
 
+  const oddsRefresh = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(oddsRefresh.current), []);
   useRealtime((event) => {
+    if (event.type === "odds.changed") {
+      window.clearTimeout(oddsRefresh.current);
+      oddsRefresh.current = window.setTimeout(() => void refreshAll("live").catch(() => undefined), 400);
+      return;
+    }
     if (event.type === "balance.changed" || event.type === "bets.changed" || event.type === "resync") {
       void loadInfo().catch(() => undefined);
       setBetsVersion((v) => v + 1);
@@ -517,7 +551,7 @@ function BetPage() {
         void loadInfo().catch(() => undefined);
       }}
       onOddsChanged={() => void refreshAll().catch(() => undefined)}
-      onClose={() => setSheetOpen(false)}
+      onClose={closeSheet}
     />
   );
   const slipSystem = mode === "system" ? chosenSystem(slip, systemKey) : null;
@@ -743,8 +777,8 @@ function BetPage() {
       ) : null}
 
       {sheetOpen ? (
-        <div className="bet-sheet-layer" role="dialog" aria-modal="true" aria-label={t("Bet slip")}>
-          <button type="button" className="bet-sheet-backdrop" aria-label={t("Close bet slip")} onClick={() => setSheetOpen(false)} />
+        <div className={`bet-sheet-layer${sheetClosing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-label={t("Bet slip")}>
+          <button type="button" className="bet-sheet-backdrop" aria-label={t("Close bet slip")} onClick={closeSheet} />
           <div className="bet-sheet">{slipPanel}</div>
         </div>
       ) : null}
@@ -1114,6 +1148,8 @@ function BetSlip({
   const idempotency = useIdempotencyKey();
   const topUp = useTopUpRequest();
   const [placing, setPlacing] = useState(false);
+  /** Set when a place was refused because the price moved, so the retry takes that new price. */
+  const [takeNewPrice, setTakeNewPrice] = useState(false);
   const toast = useToast();
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
 
@@ -1165,6 +1201,19 @@ function BetSlip({
   const overMax = info?.maxStake != null ? (system ? totalStake > info.maxStake : combined ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
   const tooLittle = info ? totalStake > info.balance : false;
   const moved = items.some((item) => item.previousOdds !== undefined);
+  const priceMoved = moved || takeNewPrice;
+  const summaryTitle = system
+    ? tn(systemLines, "{count} bet", "{count} bets", { count: systemLines })
+    : builder
+      ? t("Bet builder")
+      : acca
+        ? tn(items.length, "Accumulator · {count} pick", "Accumulator · {count} picks", { count: items.length })
+        : tn(items.length, "{count} separate bet", "{count} separate bets", { count: items.length });
+  const summaryHint = system
+    ? t("A lost pick only loses the bets it's in.")
+    : builder || acca
+      ? t("Every pick has to win.")
+      : t("Each bet wins or loses on its own.");
 
   let blocker: string | null = null;
   if (info?.blocked) blocker = ts(info.blocked);
@@ -1184,7 +1233,10 @@ function BetSlip({
   // Prices that moved since they were added: say so once per slip. The slip itself shows which ones.
   const movedShown = useRef(false);
   useEffect(() => {
-    if (items.length === 0) movedShown.current = false;
+    if (items.length === 0) {
+      movedShown.current = false;
+      setTakeNewPrice(false);
+    }
     else if (moved && !movedShown.current) {
       movedShown.current = true;
       toast.info(t("Some prices moved since you added them. The new price is what you get."));
@@ -1209,15 +1261,16 @@ function BetSlip({
     if (!token) return;
     setPlacing(true);
     if (hasLive) toast.info(t("Live bets take a few seconds to confirm. If the price or score changes meanwhile, you'll see the new price first."));
-    const body = JSON.stringify(
-      system
+    const body = JSON.stringify({
+      ...(system
         ? { system: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), sizes: systemChoice.sizes, lineStake: accaStakeValue } }
         : builder
-        ? { builder: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), odds: builderOdds, stake: accaStakeValue } }
-        : acca
-        ? { accumulator: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), stake: accaStakeValue } }
-        : { bets: items.map((item) => ({ selectionId: item.selectionId, stake: stakeValue(item.stake), odds: item.odds })) },
-    );
+          ? { builder: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), odds: builderOdds, stake: accaStakeValue } }
+          : acca
+            ? { accumulator: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), stake: accaStakeValue } }
+            : { bets: items.map((item) => ({ selectionId: item.selectionId, stake: stakeValue(item.stake), odds: item.odds })) }),
+      ...(priceMoved ? { acceptOddsChanges: true } : {}),
+    });
     try {
       const result = await apiFetch<PlaceBetsResponse>("/bets", token, { method: "POST", body, idempotencyKey: idempotency.keyFor("/bets", body) });
       idempotency.done();
@@ -1233,17 +1286,27 @@ function BetSlip({
               : t("Your bet is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
           : t("Your {count} bets are on. {amount} was taken from your balance.", { count: result.bets.length, amount: formatMoney(result.total) }),
       );
+      if (result.adjusted) toast.info(t("Placed at the latest price."));
+      setTakeNewPrice(false);
       onChange(() => []);
       onAccaStake("");
       onMode("singles");
       onPlaced();
     } catch (err) {
       const message = err instanceof Error ? err.message : t("Couldn't place your bets");
-      toast.error(message);
-      // A price moved or a match closed: fetch the latest so the slip shows it. The API's English says which.
-      if (/odds changed|closed|no longer exists|paused|score changed/i.test(err instanceof ApiError ? err.original : message)) {
+      const original = err instanceof ApiError ? err.original : message;
+      // A big move keeps the slip and asks for the new price. A goal, a pause, or a closed match still stops it.
+      if (/odds changed/i.test(original)) {
+        toast.info(message);
+        setTakeNewPrice(true);
         onOddsChanged();
         if (builder) setRequote((n) => n + 1);
+      } else {
+        toast.error(message);
+        if (/closed|no longer exists|paused|score changed/i.test(original)) {
+          onOddsChanged();
+          if (builder) setRequote((n) => n + 1);
+        }
       }
     } finally {
       setPlacing(false);
@@ -1309,9 +1372,10 @@ function BetSlip({
         </div>
       ) : (
         <>
+          <div className="bet-slip-body">
           {items.length >= 2 ? (
             <div className="bet-mode" role="group" aria-label={t("Bet type")}>
-              <button type="button" className={`bet-mode-option${!acca ? " is-active" : ""}`} aria-pressed={!acca} onClick={() => onMode("singles")}>
+              <button type="button" className={`bet-mode-option${mode === "singles" ? " is-active" : ""}`} aria-pressed={mode === "singles"} onClick={() => onMode("singles")}>
                 {t("Singles")}
               </button>
               <button type="button" className={`bet-mode-option${combined ? " is-active" : ""}`} aria-pressed={combined} onClick={() => onMode("accumulator")}>
@@ -1339,17 +1403,20 @@ function BetSlip({
             </label>
           ) : null}
           <div className="bet-quick" role="group" aria-label={system ? t("Stake per bet") : builder ? t("Bet builder stake") : acca ? t("Accumulator stake") : t("Same stake on every bet")}>
-            <span className="muted">{system ? t("Per bet") : combined ? t("Stake") : t("Stake each")}</span>
-            {QUICK_STAKES.map((amount) => (
-              <button
-                key={amount}
-                type="button"
-                className="bet-chip"
-                onClick={() => (combined || system ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
-              >
-                ${amount}
-              </button>
-            ))}
+            {QUICK_STAKES.map((amount) => {
+              const chosen = combined || system ? accaStakeValue === amount : items.length > 0 && items.every((item) => stakeValue(item.stake) === amount);
+              return (
+                <button
+                  key={amount}
+                  type="button"
+                  className={`bet-chip${chosen ? " is-active" : ""}`}
+                  aria-pressed={chosen}
+                  onClick={() => (combined || system ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
+                >
+                  {formatStake(amount)}
+                </button>
+              );
+            })}
           </div>
           <ul className="bet-slip-items">
             {items.map((item) => {
@@ -1376,8 +1443,6 @@ function BetSlip({
                     <span className={`bet-slip-odds${item.previousOdds !== undefined ? " has-moved" : ""}`}>
                       {item.closed ? (
                         <span className="error-text">{t("Closed")}</span>
-                      ) : item.paused ? (
-                        <span className="muted">{t("Paused")}</span>
                       ) : (
                         <>
                           {item.previousOdds !== undefined ? <s className="muted">{item.previousOdds.toFixed(2)}</s> : null}
@@ -1410,6 +1475,7 @@ function BetSlip({
                       </span>
                     )}
                   </div>
+                  {item.closed ? <p className="bet-slip-flag">{t("Remove it to continue.")}</p> : item.paused ? <p className="bet-slip-flag">{t("Paused. Wait a moment or remove it.")}</p> : null}
                 </li>
               );
             })}
@@ -1476,39 +1542,52 @@ function BetSlip({
             </div>
           ) : null}
 
-          <dl className="bet-slip-totals">
-            <div>
-              <dt className="muted">{t("Total stake")}</dt>
-              <dd>{formatMoney(totalStake)}</dd>
-            </div>
-            <div>
-              <dt className="muted">{t("Potential return")}</dt>
-              <dd>
-                <strong>{formatMoney(totalReturn)}</strong>
-                {hasSp && !combined && !system ? <span className="muted"> {t("+ SP bets")}</span> : null}
-              </dd>
-            </div>
-            {info ? (
-              <div>
-                <dt className="muted">{t("Balance after")}</dt>
-                <dd>{formatMoney(info.balance - totalStake)}</dd>
+          </div>
+          <div className="bet-slip-dock">
+            <div className="bet-slip-summary">
+              <div className="bet-slip-summary-lead">
+                <strong>{summaryTitle}</strong>
+                {blocker && needsMoney ? (
+                  <button type="button" className="text-button bet-slip-flag" onClick={() => void topUp.request()}>{blocker}</button>
+                ) : (
+                  <p className={blocker ? "bet-slip-flag" : "muted"}>{blocker ?? summaryHint}</p>
+                )}
               </div>
-            ) : null}
-          </dl>
-
-
-          <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing} aria-disabled={Boolean(blocker)}>
-            {placing
-              ? <LoadingSpinner label={hasLive ? "Confirming live bet" : "Placing"} size="small" />
-              : system
-                ? t("Place system bet · {amount}", { amount: formatMoney(totalStake) })
-                : builder
-                ? t("Place bet builder · {amount}", { amount: formatMoney(totalStake) })
-                : acca
-                ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
-                : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
-          </button>
-          {info ? <SlipLimits info={info} staking={totalStake} /> : null}
+              <dl>
+                <div>
+                  <dt className="muted">{t("Total stake")}</dt>
+                  <dd>{formatMoney(totalStake)}</dd>
+                </div>
+                <div>
+                  <dt className="muted">{t("If they win")}</dt>
+                  <dd>
+                    <strong>{formatMoney(totalReturn)}</strong>
+                    {hasSp && !combined && !system ? <span className="muted"> {t("+ SP bets")}</span> : null}
+                  </dd>
+                </div>
+                {info ? (
+                  <div>
+                    <dt className="muted">{t("Balance after")}</dt>
+                    <dd>{totalStake > 0 ? `${formatMoney(info.balance)} → ${formatMoney(info.balance - totalStake)}` : formatMoney(info.balance)}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </div>
+            <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing} aria-disabled={Boolean(blocker)}>
+              {placing
+                ? <LoadingSpinner label={hasLive ? "Confirming live bet" : "Placing"} size="small" />
+                : priceMoved
+                  ? t("Place at the new price · {amount}", { amount: formatMoney(totalStake) })
+                  : system
+                  ? t("Place system bet · {amount}", { amount: formatMoney(totalStake) })
+                  : builder
+                  ? t("Place bet builder · {amount}", { amount: formatMoney(totalStake) })
+                  : acca
+                  ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
+                  : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
+            </button>
+            {info ? <SlipLimits info={info} staking={totalStake} /> : null}
+          </div>
         </>
       )}
     </form>

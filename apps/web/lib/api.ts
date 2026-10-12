@@ -637,7 +637,7 @@ export type SlipInfo = {
   blocked: string | null;
 };
 
-export type PlaceBetsResponse = { bets: Bet[]; total: number };
+export type PlaceBetsResponse = { bets: Bet[]; total: number; adjusted?: boolean };
 
 /** The bet builder's price for picks from one match, and each pick's own price in it. */
 export type BuilderQuote = { odds: number; legs: Array<{ selectionId: string; odds: number }> };

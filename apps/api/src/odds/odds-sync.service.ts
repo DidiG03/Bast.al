@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import { BetStatus, EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
+import { RealtimeService } from "../realtime/realtime.service";
 import { GOAL_MARKET_KEYS } from "../bets/goals";
 import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLiveOdds, parseMarkets, parseMatchCentre } from "./api-football";
 import { savedCrests, savedMarks } from "./crest";
@@ -63,9 +64,14 @@ const LIVE_LOCK_KEY = "bastal:odds-sync:live";
 /**
  * While someone has looked at live matches in the last LIVE_INTEREST_MS, live
  * prices are fetched every LIVE_FAST_INTERVAL_MS (one request) instead of
- * every ODDS_LIVE_INTERVAL_MS, as long as the day's quota has room.
+ * waiting for the regular live sync, until LIVE_WATCH_FLOOR requests are left
+ * for bet checks and the score list.
  */
 const LIVE_FAST_INTERVAL_MS = Number(process.env.LIVE_FAST_INTERVAL_MS) || 15_000;
+/** The open board keeps its 15s price refresh until only this many requests are left today. */
+const LIVE_WATCH_FLOOR = 80;
+/** The regular live sync skips a second odds request when one already landed this recently. Scores still update. */
+const LIVE_ODDS_FRESH_MS = 20_000;
 /** The regular live sync: scores and in-play prices, two requests a run. */
 const LIVE_INTERVAL_MS = Number(process.env.ODDS_LIVE_INTERVAL_MS) || 45_000;
 const LIVE_INTEREST_MS = 2 * 60_000;
@@ -109,7 +115,8 @@ const RESULT_RECHECK_EVERY_MS = 60 * 60_000;
  *   live or should have kicked off, only while there are any, plus in-play
  *   odds for the live ones (one request for all of them);
  * - every LIVE_FAST_INTERVAL_MS (15 seconds) while someone is watching live
- *   matches: the in-play odds again (one request);
+ *   matches: the in-play odds again (one request), until LIVE_WATCH_FLOOR
+ *   requests are left;
  * - on every live bet: that match's odds straight from the feed (verifyLive).
  * Redis locks make sure only one API instance syncs at a time; pre-match and
  * live syncs lock separately.
@@ -123,6 +130,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   private liveRunning = false;
   /** When a Player or admin last looked at live matches. */
   private liveInterestAt = 0;
+  /** When in-play prices were last fetched for the whole live board. */
+  private lastLiveOddsAt = 0;
   /** Checks with the feed for one match, shared by bets placed at the same moment. */
   private readonly verifying = new Map<string, { at: number; done: Promise<void> }>();
   readonly mode: FeedMode;
@@ -146,7 +155,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   /** When each day was last refreshed, if Redis is down. */
   private readonly refreshedAt = new Map<string, number>();
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly realtime?: RealtimeService,
+  ) {
     const key = process.env.API_FOOTBALL_KEY?.trim();
     if (key) {
       this.mode = "api-football";
@@ -189,11 +201,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * The quick in-between live update: in-play prices only (one request),
-   * while someone is watching and today's quota has room to spare.
+   * while someone is watching. It keeps going below the pre-match reserve so
+   * an open board stays current, and stops at a small floor so bet checks
+   * and the score list still have requests left.
    */
   private async fastLive() {
     if (Date.now() - this.liveInterestAt > LIVE_INTEREST_MS) return;
-    if (this.quotaLeft !== null && this.quotaLeft < QUOTA_RESERVE * 2) return;
+    if (this.quotaLeft !== null && this.quotaLeft < LIVE_WATCH_FLOOR) return;
     try {
       await this.withLock(() => this.syncLiveOdds(), LIVE_LOCK_KEY);
     } catch (error) {
@@ -236,6 +250,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         return done;
       }),
     );
+    if (events.length > 0) await this.realtime?.publishAll({ type: "odds.changed" });
   }
 
   async onModuleDestroy() {
@@ -495,7 +510,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       });
       await this.recordResult(provider, fixture);
     }
-    await this.syncLiveOdds();
+    // A fast refresh a moment ago already has these prices. Scores above still update.
+    if (Date.now() - this.lastLiveOddsAt >= LIVE_ODDS_FRESH_MS) await this.syncLiveOdds();
     return finished.length;
   }
 
@@ -767,6 +783,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         }
       }),
     );
+    this.lastLiveOddsAt = Date.now();
+    if (readings.length > 0) await this.realtime?.publishAll({ type: "odds.changed" });
     return readings.length;
   }
 

@@ -549,30 +549,32 @@ export default function UsersPage() {
     return (
       <div className="tree-node" key={user.id}>
         <div className={`tree-row${selected.has(user.id) ? " is-selected" : ""}`}>
-          {selecting && user.id !== me?.id ? (
-            <input
-              type="checkbox"
-              className="tree-select"
-              checked={selected.has(user.id)}
-              onChange={() => toggleSelected(user.id)}
-              aria-label={t("Select {name}", { name: user.username })}
-            />
-          ) : null}
-          {hasChildren ? (
-            <button
-              type="button"
-              className={`tree-toggle${isExpanded ? " is-expanded" : ""}`}
-              onClick={() => toggleExpanded(user.id)}
-              aria-label={isExpanded ? t("Collapse {name}", { name: user.username }) : t("Expand {name}", { name: user.username })}
-              aria-expanded={isExpanded}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m9 6 6 6-6 6" />
-              </svg>
-            </button>
-          ) : (
-            <span className="tree-toggle-spacer" aria-hidden="true" />
-          )}
+          <div className="tree-lead">
+            {selecting && user.id !== me?.id ? (
+              <input
+                type="checkbox"
+                className="tree-select"
+                checked={selected.has(user.id)}
+                onChange={() => toggleSelected(user.id)}
+                aria-label={t("Select {name}", { name: user.username })}
+              />
+            ) : null}
+            {hasChildren ? (
+              <button
+                type="button"
+                className={`tree-toggle${isExpanded ? " is-expanded" : ""}`}
+                onClick={() => toggleExpanded(user.id)}
+                aria-label={isExpanded ? t("Collapse {name}", { name: user.username }) : t("Expand {name}", { name: user.username })}
+                aria-expanded={isExpanded}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+              </button>
+            ) : (
+              <span className="tree-toggle-spacer" aria-hidden="true" />
+            )}
+          </div>
           <div className="tree-identity">
             <span className="tree-name">
               <span className={`status-dot ${user.status === "ACTIVE" ? "is-active" : "is-suspended"}`} />
@@ -581,7 +583,7 @@ export default function UsersPage() {
             <span className="tree-meta">
               <span className="tree-role">{t(ROLE_NAMES[user.role])}</span>
               <span className="tree-status">{user.status === "ACTIVE" && lockedByAncestor(user) ? t("Locked (parent suspended)") : t(STATUS_NAMES[user.status])}</span>
-              {user.role !== "SUPER_ADMIN" ? <span className={`tree-balance${Number(user.balance) < 0 ? " ledger-negative" : ""}`}>{formatMoney(user.balance)}</span> : null}
+              {hasChildren && !isExpanded ? <span className="tree-count">{children.length}</span> : null}
               {user.role === "PLAYER" && openBets[user.id] ? (
                 <button
                   type="button"
@@ -593,9 +595,9 @@ export default function UsersPage() {
                   {tn(openBets[user.id].bets, "{count} open bet", "{count} open bets")}
                 </button>
               ) : null}
-              {hasChildren && !isExpanded ? <span className="tree-count">{children.length}</span> : null}
             </span>
           </div>
+          {user.role !== "SUPER_ADMIN" ? <span className={`tree-balance${Number(user.balance) < 0 ? " ledger-negative" : ""}`}>{formatMoney(user.balance)}</span> : <span className="tree-balance" />}
           {user.id !== me?.id && !selecting ? (
             <div className={`user-actions${canTopUp(user) ? " has-top-up" : ""}`}>
               {canTopUp(user) ? (
@@ -666,7 +668,9 @@ export default function UsersPage() {
                 </div>
               ) : null}
             </div>
-          ) : null}
+          ) : (
+            <span className="tree-actions-spacer" aria-hidden="true" />
+          )}
         </div>
         {hasChildren && isExpanded ? <div className="tree-children">{children.map((child) => renderTreeNode(child))}</div> : null}
       </div>

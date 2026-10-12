@@ -84,3 +84,15 @@ export function bigSwing(before: Array<number | null>, after: Array<number | nul
     return Math.abs(1 / next - 1 / old) >= SWING_POINTS;
   });
 }
+
+/**
+ * A price move small enough to take without asking again: under 2 percentage
+ * points of chance. 1.90 to 1.95 is about 1.3 points; 2.00 to 2.50 is about
+ * 10 and is not. A price of 1.00 or below is not a real price.
+ */
+export const SMALL_MOVE_POINTS = 0.02;
+
+export function smallPriceMove(before: number, after: number): boolean {
+  if (!(before > 1) || !(after > 1)) return false;
+  return Math.abs(1 / after - 1 / before) < SMALL_MOVE_POINTS;
+}

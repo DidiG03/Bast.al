@@ -10,6 +10,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import type { MatchCentre } from "../odds/api-football";
 import { RACE_CAP } from "../odds/greyhounds";
+import { smallPriceMove } from "../odds/live-guard";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
 import { MIN_STAKE } from "./bets.dto";
@@ -178,6 +179,8 @@ export class BetsService {
     const byId = new Map(selections.map((s) => [s.id, s]));
 
     const changed: string[] = [];
+    /** True when a bet is stored at a price the slip didn't show. A small move is taken; a big one needs the Player to confirm it. */
+    let adjusted = false;
     // Every pick's price at once, rather than a round of queries for each.
     const quotes = await this.odds.pricesForPlayer(actor.id, ids);
     /** Checks a pick is still open and at the price the Player saw. */
@@ -191,7 +194,11 @@ export class BetsService {
           live ? `Live bets on ${selection.market.event.name} are paused right now. Try again in a moment.` : `Bets are closed on ${selection.market.event.name}. Remove it from your slip.`,
         );
       }
-      if (!sp && Math.abs(odds - pick.odds) > 0.001) changed.push(`${selection.name} is now ${odds.toFixed(2)}`);
+      // A tick is taken at the price just found. A real move is refused unless the Player already chose the new price.
+      if (!sp && Math.abs(odds - pick.odds) > 0.001) {
+        if (input.acceptOddsChanges || smallPriceMove(pick.odds, odds)) adjusted = true;
+        else changed.push(`${selection.name} is now ${odds.toFixed(2)}`);
+      }
       return {
         /** Null for a race pick: it's paid at the starting price. */
         price: sp ? null : new Prisma.Decimal(odds.toFixed(2)),
@@ -249,13 +256,32 @@ export class BetsService {
     let pricedBuilder: (Awaited<ReturnType<BetsService["priceBuilderFor"]>> & { stake: Prisma.Decimal }) | null = null;
     if (input.builder) {
       const quote = await this.priceBuilderFor(actor.id, input.builder.legs.map((leg) => leg.selectionId));
-      if (Math.abs(Number(quote.odds) - input.builder.odds) > 0.001) changed.push(`the bet builder is now ${Number(quote.odds).toFixed(2)}`);
+      if (Math.abs(Number(quote.odds) - input.builder.odds) > 0.001) {
+        if (input.acceptOddsChanges || smallPriceMove(input.builder.odds, Number(quote.odds))) adjusted = true;
+        else changed.push(`the bet builder is now ${Number(quote.odds).toFixed(2)}`);
+      }
       pricedBuilder = { ...quote, stake: new Prisma.Decimal(input.builder.stake.toFixed(2)) };
     }
     if (changed.length > 0 && !input.acceptOddsChanges) {
       throw new ConflictException(`The odds changed: ${changed.join(", ")}. Check your slip and place it again.`);
     }
-    await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id);
+    const liveAdjusted = await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id);
+    if (liveAdjusted) {
+      adjusted = true;
+      // The wait can move a live leg. The combined price has to be worked out again from the prices that were stored.
+      if (pricedAcca) {
+        pricedAcca.odds = combinedOdds(pricedAcca.legs.map((leg) => leg.price!));
+        if (pricedAcca.odds.greaterThan(MAX_ACCUMULATOR_ODDS)) throw new BadRequestException(`An accumulator's combined odds can't be more than ${MAX_ACCUMULATOR_ODDS}. Remove a pick.`);
+      }
+      if (pricedSystem) {
+        const lineStake = new Prisma.Decimal(pricedSystem.info.lineStake.toFixed(2));
+        const { payout, topOdds } = systemMaxReturn(pricedSystem.legs.map((leg) => leg.price!), pricedSystem.info.sizes, lineStake);
+        if (topOdds.greaterThan(MAX_ACCUMULATOR_ODDS)) throw new BadRequestException(`A system's biggest line can't have odds of more than ${MAX_ACCUMULATOR_ODDS}. Remove a pick.`);
+        pricedSystem.maxReturn = payout;
+        pricedSystem.odds = payout.div(pricedSystem.stake).toDecimalPlaces(2, Prisma.Decimal.ROUND_UP);
+        pricedSystem.info = { ...pricedSystem.info, maxReturn: Number(payout) };
+      }
+    }
 
     const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : []), ...(pricedBuilder ? [pricedBuilder.stake] : []), ...(pricedSystem ? [pricedSystem.stake] : [])];
     const total = stakes.reduce((sum, stake) => sum.add(stake), new Prisma.Decimal(0));
@@ -401,7 +427,7 @@ export class BetsService {
     await this.realtime.publishBalances([actor.id]);
     await this.realtime.publish(actor.id, { type: "bets.changed" });
     await this.users.alertLowBalance(actor.id, Number(total));
-    return { bets: created.map(betView), total: Number(total) };
+    return { bets: created.map(betView), total: Number(total), adjusted };
   }
 
   /**
@@ -500,38 +526,51 @@ export class BetsService {
   /**
    * Live picks wait LIVE_BET_DELAY_MS (5 seconds by default) before they're
    * accepted, so nobody can bet on a goal they've seen before the feed has.
-   * Then each live match is checked with the feed itself (not our last copy,
-   * which can be a few seconds old): if the bookmaker has it blocked, a goal
-   * went in, or the price moved, the slip is refused and the Player sees the
-   * new price. If the feed can't be reached the slip is refused too.
-   * The other picks on the slip are checked again after the wait as well, so
-   * a match that kicked off (or was suspended) meanwhile isn't bet on at its
-   * pre-match price. LIVE_VERIFY=off skips the check with the feed.
+   * The bookmaker check starts about a second before that wait ends, not at
+   * the start: a check at the start would still be the pre-goal price. A
+   * small move found then is stored. A big move, a goal, or a suspended
+   * market still refuses the slip, and the Player sees the new price. If the
+   * feed can't be reached the slip is refused too. The other picks on the
+   * slip are checked again after the wait as well, so a match that kicked
+   * off (or was suspended) meanwhile isn't bet on at its pre-match price.
+   * LIVE_VERIFY=off skips the check with the feed. Returns whether a live
+   * price was updated.
    */
-  private async confirmLive(picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal | null; label: string }>, playerId: string) {
+  private async confirmLive(picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal | null; label: string }>, playerId: string): Promise<boolean> {
     const live = picks.filter((pick) => pick.live);
-    if (live.length === 0) return;
+    if (live.length === 0) return false;
     const delay = Number(process.env.LIVE_BET_DELAY_MS ?? 5_000);
-    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-    if (process.env.LIVE_VERIFY !== "off") {
-      try {
-        await this.sync.verifyLive(live.map((pick) => pick.eventId));
-      } catch {
-        throw new ConflictException("We couldn't confirm the live price with the bookmaker just now. Try again in a moment.");
-      }
-    }
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const lead = Math.min(1_000, Math.max(0, delay));
+    if (delay > lead) await wait(delay - lead);
+    const verify =
+      process.env.LIVE_VERIFY === "off"
+        ? null
+        : this.sync.verifyLive(live.map((pick) => pick.eventId)).catch(() => {
+            throw new ConflictException("We couldn't confirm the live price with the bookmaker just now. Try again in a moment.");
+          });
+    if (lead > 0) await wait(lead);
+    if (verify) await verify;
     for (const pick of picks.filter((p) => !p.live)) {
       const now = await this.odds.priceForPlayer(playerId, pick.selectionId);
       if (!now.bettable || now.live) throw new ConflictException(`Bets on ${pick.label} closed while your slip was being confirmed. Remove it and try again.`);
     }
+    let adjusted = false;
     for (const pick of live) {
       const now = await this.odds.priceForPlayer(playerId, pick.selectionId);
       if (!now.bettable) throw new ConflictException(`Live betting on ${pick.label} was paused while your bet was being confirmed. Try again in a moment.`);
       if (now.score !== pick.score) throw new ConflictException(`The score changed while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
-      if (Math.abs(now.odds - Number(pick.price)) > 0.001) {
-        throw new ConflictException(`The odds changed: ${pick.label} is now ${now.odds.toFixed(2)}. Check your slip and place it again.`);
+      if (pick.price !== null && Math.abs(now.odds - Number(pick.price)) > 0.001) {
+        // Only a small move is taken. Choosing the new price on the slip does not accept a goal-sized move during the wait.
+        if (smallPriceMove(Number(pick.price), now.odds)) {
+          pick.price = new Prisma.Decimal(now.odds.toFixed(2));
+          adjusted = true;
+        } else {
+          throw new ConflictException(`The odds changed: ${pick.label} is now ${now.odds.toFixed(2)}. Check your slip and place it again.`);
+        }
       }
     }
+    return adjusted;
   }
 
   /** The Player's own bets: open ones, or settled ones newest first. */

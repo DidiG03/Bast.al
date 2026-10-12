@@ -9,14 +9,16 @@ import Redis from "ioredis";
 import { Observable, Subscriber } from "rxjs";
 import { PrismaService } from "../prisma.service";
 
-/** Everything the browser can be told live. Each event only ever goes to the account it is about. */
+/** Everything the browser can be told live. Account events go to that account; a price change goes to every open stream. */
 export type RealtimeEvent =
   | { type: "notification.created"; notification: unknown }
   /** Read/archive/delete happened elsewhere (another tab or device): refetch the list. */
   | { type: "notifications.changed" }
   | { type: "balance.changed"; balance: number; balanceLimit: number }
   /** A Player's bets were placed, settled or voided: refetch them. */
-  | { type: "bets.changed" };
+  | { type: "bets.changed" }
+  /** Live prices were just saved. Every open bet board refetches them; the rest of the dashboard does not re-render. */
+  | { type: "odds.changed" };
 
 const CHANNEL = "bastal:realtime";
 
@@ -86,6 +88,11 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /** Tells every open stream, whichever account it belongs to. A side effect: this never throws. */
+  async publishAll(event: RealtimeEvent) {
+    await this.publish("*", event);
+  }
+
   /** A side effect, never the point of the call: this never throws. */
   async publish(userId: string, event: RealtimeEvent) {
     try {
@@ -126,9 +133,13 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
   }
 
   private deliver(userId: string, event: RealtimeEvent) {
+    const message: MessageEvent = { type: event.type, data: event };
+    if (userId === "*") {
+      for (const subscribers of this.listeners.values()) subscribers.forEach((subscriber) => subscriber.next(message));
+      return;
+    }
     const subscribers = this.listeners.get(userId);
     if (!subscribers) return;
-    const message: MessageEvent = { type: event.type, data: event };
     subscribers.forEach((subscriber) => subscriber.next(message));
   }
 

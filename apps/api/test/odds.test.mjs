@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
-import { bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "../dist/odds/live-guard.js";
+import { bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged, smallPriceMove } from "../dist/odds/live-guard.js";
 import { applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 
 test("a margin comes off the feed price and rounds down to the cent", () => {
@@ -256,6 +256,9 @@ test("live betting pauses after a goal, a price jump or a reopen, and in the las
   assert.equal(bigSwing([1.8, 3.6, 26.0], [1.75, 3.7, 34.0]), false, "a long shot drifting isn't a jump");
   assert.equal(bigSwing([2.0, 3.3, 3.8], [3.2, 3.4, 2.4]), true, "a red card: 50% down to 31%");
   assert.equal(bigSwing([null, 3.4], [1.2, 3.4]), false, "an outcome coming back isn't a jump");
+  assert.equal(smallPriceMove(1.9, 1.95), true, "a tick is taken");
+  assert.equal(smallPriceMove(2, 2.5), false, "2.00 to 2.50 is a real move");
+  assert.equal(smallPriceMove(1, 1.5), false, "a price of 1 is not a price");
 });
 
 test("live odds carry the score and minute they were made for, and can be fetched for one match", async () => {

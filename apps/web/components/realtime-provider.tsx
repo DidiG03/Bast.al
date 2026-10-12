@@ -17,6 +17,8 @@ export type RealtimeEvent =
   | { type: "notifications.changed" }
   | { type: "balance.changed"; balance: number; balanceLimit: number }
   | { type: "bets.changed" }
+  /** Live prices were just saved. The bet board refetches; this does not re-render the dashboard. */
+  | { type: "odds.changed" }
   | { type: "resync" };
 
 type Listener = (event: RealtimeEvent) => void;
@@ -159,6 +161,7 @@ export function RealtimeRefresh() {
     router.refresh();
   }, [inCasino, router]);
   useRealtime((event) => {
+    // A live-price tick is for the bet board's own refresh. Re-rendering the whole dashboard on each one would stutter every page.
     if (event.type !== "balance.changed" && event.type !== "bets.changed" && event.type !== "resync") return;
     // Every spin changes the balance. The games and the balance chip follow it live, and a whole
     // server render of the dashboard each time would stutter the reels, so in the casino it waits.

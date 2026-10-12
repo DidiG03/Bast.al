@@ -13676,3 +13676,443 @@ button.is-blocked {
     transition: none;
   }
 }
+
+/* ============================================================
+   Player shell. The match list already uses layered panels;
+   the frame around it should too: a quiet sidebar, a sticky
+   bar for the balance, and the work on a raised sheet.
+   ============================================================ */
+
+html:has(.role-player),
+html:has(.role-player) body {
+  background: #070806;
+}
+
+.role-player {
+  --bg: #070806;
+  --bg-elevated: #14180f;
+  --surface-1: #14180f;
+  --surface-2: #181d12;
+  --surface-3: #212818;
+  --surface-4: #2a331e;
+  --hairline: rgb(255 255 255 / 7%);
+  --hairline-strong: rgb(255 255 255 / 12%);
+  --sidebar-width: 15.25rem;
+  --sidebar-collapsed: 4.5rem;
+  background:
+    radial-gradient(900px 420px at 0% -10%, rgb(214 255 63 / 5%), transparent 60%),
+    var(--bg);
+}
+
+.role-player .dashboard-sidebar {
+  width: var(--sidebar-width);
+  gap: 0.85rem;
+  padding: 0.85rem 0.7rem 0.75rem;
+  background: transparent;
+  border-right: 0;
+}
+
+.role-player .dashboard-sidebar.is-collapsed {
+  width: var(--sidebar-collapsed);
+}
+
+.role-player .sidebar-header {
+  position: relative;
+  min-height: 2.4rem;
+  padding: 0 0.2rem 0 0.35rem;
+}
+
+.role-player .sidebar-brand {
+  gap: 0.6rem;
+  font-size: 0.975rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.role-player .sidebar-logo {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 7px;
+  font-size: 0.9rem;
+}
+
+.role-player .sidebar-collapse {
+  position: static;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.role-player .sidebar-collapse:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.role-player .dashboard-sidebar.is-collapsed .sidebar-header {
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0;
+}
+
+.role-player .sidebar-nav {
+  gap: 1rem;
+}
+
+.role-player .sidebar-section-label {
+  margin: 0 0.7rem 0.3rem;
+  color: var(--text-2);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.72;
+}
+
+.role-player .sidebar-link {
+  gap: 0.65rem;
+  min-height: 2.2rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.role-player .sidebar-link .sidebar-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--muted);
+}
+
+.role-player .sidebar-link:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.role-player .sidebar-link.is-active {
+  background: var(--surface-1);
+  box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--text);
+}
+
+.role-player .sidebar-link:active,
+.role-player .mobile-bottom-nav-link:active {
+  transform: none;
+}
+
+.role-player .sidebar-footer {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 12px;
+  background: var(--surface-1);
+}
+
+.role-player .sidebar-account {
+  flex: 1;
+  min-width: 0;
+  padding: 0.1rem 0.2rem;
+}
+
+.role-player .sidebar-footer button.sign-out-button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.role-player .sidebar-footer button.sign-out-button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.role-player .sidebar-footer .sign-out-button .control-label {
+  display: none;
+}
+
+.role-player .is-collapsed .sidebar-footer {
+  flex-direction: column;
+  padding: 0.4rem 0.2rem;
+}
+
+.role-player .dashboard-content,
+.role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content {
+  min-height: calc(100vh - 0.9rem);
+  margin: 0.45rem 0.45rem 0.45rem var(--sidebar-width);
+  padding: 0 1.35rem 2.75rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 16px;
+  background: #0c0f09;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset;
+}
+
+.role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content {
+  margin-left: var(--sidebar-collapsed);
+}
+
+.role-player .loading-state-page {
+  left: calc(var(--sidebar-width) + 0.45rem);
+}
+
+.role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content .loading-state-page {
+  left: calc(var(--sidebar-collapsed) + 0.45rem);
+}
+
+.role-player .dashboard-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  min-height: 3.35rem;
+  margin: 0 -1.35rem 1.15rem;
+  padding: 0 1.15rem;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 16px 16px 0 0;
+  background: #0c0f09;
+}
+
+.role-player .player-balance-chip {
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.35rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border-color: var(--hairline-strong);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.role-player .topbar-actions .language-toggle,
+.role-player .dashboard-topbar .notification-trigger {
+  display: grid;
+  width: 2.15rem;
+  min-width: 0;
+  height: 2.15rem;
+  min-height: 0;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.role-player .topbar-actions .language-toggle:hover,
+.role-player .dashboard-topbar .notification-trigger:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+/* Home, money and the slip share the same panel, not a pill-shaped card. */
+.role-player .card,
+.role-player .player-hero,
+.role-player .player-top-event,
+.role-player .player-quick-link,
+.role-player .player-continue,
+.role-player .player-next-race,
+.role-player .bet-card {
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.role-player .player-top-event,
+.role-player .player-quick-link,
+.role-player .player-continue,
+.role-player .player-next-race,
+.role-player .player-hero,
+.role-player .bet-card:not(.is-won):not(.is-lost) {
+  border-color: var(--hairline);
+  background: var(--surface-1);
+}
+
+.role-player .player-home h2,
+.role-player .page-title-row h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.role-player .page-title-row a {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.role-player .player-top-event:hover,
+.role-player .player-quick-link:hover,
+.role-player .player-next-race:hover,
+.role-player .player-continue:hover {
+  border-color: var(--hairline-strong);
+  background: var(--surface-2);
+}
+
+/* Bet page: the tools read as one bar, and the list is easier to scan. */
+.role-player .bet-page {
+  gap: 0.85rem;
+}
+
+.role-player .bet-page .sport-switch {
+  width: 100%;
+}
+
+.role-player .bet-page button.sport-option:not(.is-active) {
+  color: var(--text-2);
+}
+
+.role-player .bet-page .bet-filters {
+  position: sticky;
+  top: 3.35rem;
+  z-index: 6;
+  gap: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  box-shadow: 0 12px 20px rgb(7 8 6 / 72%);
+}
+
+.role-player .bet-slip-desktop {
+  top: 4.15rem;
+}
+
+.role-player .bet-page button.bet-place {
+  min-height: 2.75rem;
+  border-radius: 10px;
+}
+
+.role-player .bet-page button.bet-chip:not(.is-active) {
+  color: var(--text-2);
+}
+
+.role-player .bet-page .bet-day-chips {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+@media (min-width: 761px) and (max-width: 1099px) {
+  .role-player .bet-slip-bar {
+    left: calc(var(--sidebar-width) + 0.85rem);
+  }
+
+  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content .bet-slip-bar {
+    left: calc(var(--sidebar-collapsed) + 0.85rem);
+  }
+}
+
+.bet-page .odds-day-label::after {
+  flex: 1;
+  height: 1px;
+  margin-left: 0.35rem;
+  background: var(--hairline);
+  content: "";
+}
+
+.bm-league {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 4%) inset;
+}
+
+.bm-league-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--surface-4);
+}
+
+.role-player .bm-match.is-live .bm-when {
+  align-self: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 1.45rem;
+  padding: 0 0.4rem;
+  border-radius: 6px;
+  background: var(--accent-soft);
+}
+
+.bm-team {
+  font-size: 0.925rem;
+}
+
+.bm-pick .odds-selection-name {
+  color: var(--text-2);
+}
+
+.role-player .bet-slip-empty {
+  padding: 0.5rem 0.25rem 0.85rem;
+}
+
+.role-player .bet-slip-empty svg {
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+@media (max-width: 760px) {
+  .role-player .dashboard-sidebar {
+    width: min(18rem, 85vw);
+    padding-top: calc(1rem + env(safe-area-inset-top));
+    background: #0c0f09;
+    border-right: 1px solid var(--hairline-strong);
+  }
+
+  .role-player .dashboard-content,
+  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content {
+    min-height: 0;
+    margin: 0;
+    padding-top: calc(4.25rem + env(safe-area-inset-top));
+    padding-right: max(0.85rem, env(safe-area-inset-right));
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    padding-left: max(0.85rem, env(safe-area-inset-left));
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .role-player .loading-state-page,
+  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content .loading-state-page {
+    left: 0;
+  }
+
+  .role-player .dashboard-topbar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    justify-content: space-between;
+    height: calc(3.5rem + env(safe-area-inset-top));
+    min-height: 0;
+    margin: 0;
+    padding: env(safe-area-inset-top) max(0.75rem, env(safe-area-inset-right)) 0 max(0.75rem, env(safe-area-inset-left));
+    border-radius: 0;
+    background: color-mix(in srgb, #070806 90%, transparent);
+  }
+
+  .role-player .bet-page .bet-filters {
+    top: calc(3.5rem + env(safe-area-inset-top));
+  }
+
+  .role-player .bet-page-head .bet-tabs .tab-button {
+    padding-inline: 0.4rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .role-player .mobile-bottom-nav {
+    border-top-color: var(--hairline-strong);
+    background: color-mix(in srgb, #0c0f09 94%, transparent);
+  }
+}

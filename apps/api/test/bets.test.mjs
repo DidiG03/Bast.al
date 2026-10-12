@@ -180,6 +180,12 @@ test("the half-time score is kept once the match has finished", () => {
   assert.equal(crested.homeLogo, "https://media.api-sports.io/football/teams/42.png");
   assert.equal(crested.awayLogo, null, "only an https crest is kept");
   assert.equal(parseFixture(raw("NS", { home: null, away: null }, { home: null, away: null })).homeLogo, null);
+  const fromId = parseFixture({
+    ...raw("NS", { home: null, away: null }, { home: null, away: null }),
+    teams: { home: { id: 131, name: "Corinthians" }, away: { id: 124, name: "Fluminense" } },
+  });
+  assert.equal(fromId.homeLogo, "https://media.api-sports.io/football/teams/131.png", "the fixtures list has a team id, not a picture");
+  assert.equal(fromId.awayLogo, "https://media.api-sports.io/football/teams/124.png");
 });
 
 const d = (v) => new Prisma.Decimal(v);

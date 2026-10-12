@@ -485,7 +485,12 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           // The live odds can say full time before the fixtures list catches up; don't flip it back to "2H".
           period: saved.period === "FT" && fixture.status === EventStatus.LIVE ? "FT" : fixture.period,
           ...(fixture.status === EventStatus.COMPLETED && !saved.finishedAt ? { finishedAt: new Date() } : {}),
-          ...score, liveCooldownUntil: pause.until, liveCooldownReason: pause.reason, syncedAt: new Date() },
+          ...score,
+          ...savedCrests(fixture.homeLogo, fixture.awayLogo),
+          liveCooldownUntil: pause.until,
+          liveCooldownReason: pause.reason,
+          syncedAt: new Date(),
+        },
       });
       await this.recordResult(provider, fixture);
     }

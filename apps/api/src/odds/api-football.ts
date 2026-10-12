@@ -110,6 +110,16 @@ export function eventStatus(short: string): EventStatus {
   return EventStatus.UPCOMING;
 }
 
+/**
+ * The fixtures list sends a team id and name, not a picture. The crest lives
+ * at a fixed address for that id, the same one the match events use.
+ */
+function footballCrest(team: { id?: number; logo?: string | null }): string | null {
+  const sent = crestUrl(team.logo);
+  if (sent) return sent;
+  return Number.isInteger(team.id) && team.id! > 0 ? `https://media.api-sports.io/football/teams/${team.id}.png` : null;
+}
+
 export function parseFixture(raw: RawFixture): FeedFixture {
   const status = eventStatus(raw.fixture.status.short);
   // Bets are on 90 minutes. After extra time `goals` includes it, so prefer
@@ -125,8 +135,8 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     country: raw.league.country,
     homeTeam: raw.teams.home.name,
     awayTeam: raw.teams.away.name,
-    homeLogo: crestUrl(raw.teams.home.logo),
-    awayLogo: crestUrl(raw.teams.away.logo),
+    homeLogo: footballCrest(raw.teams.home),
+    awayLogo: footballCrest(raw.teams.away),
     startsAt: new Date(raw.fixture.date),
     status,
     elapsed: raw.fixture.status.elapsed,

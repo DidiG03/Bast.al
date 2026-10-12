@@ -101,12 +101,23 @@ async function proxy(request: NextRequest, parts: string[]) {
     return proxyStream(url, headers);
   }
 
-  const upstream = await fetch(url, {
-    method,
-    headers,
-    body: bodyText,
-    cache: "no-store",
-  });
+  const send = () => fetch(url, { method, headers, body: bodyText, cache: "no-store" });
+  let upstream: Response;
+  try {
+    upstream = await send();
+  } catch (error) {
+    // A connection to an API copy that just went away (a deploy swaps them over)
+    // fails before anything is answered: a read is asked once more. A change
+    // isn't, since its signature can only be used once.
+    if (method !== "GET" && method !== "HEAD") return unreachable();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    try {
+      upstream = await send();
+    } catch {
+      console.warn("API unreachable", targetPath, error);
+      return unreachable();
+    }
+  }
 
   // Passed on as it arrives rather than read in full first.
   const etag = upstream.headers.get("etag");
@@ -149,6 +160,11 @@ function proxyStream(url: URL, headers: Record<string, string>): Promise<Respons
     upstreamReq.on("error", reject);
     upstreamReq.end();
   });
+}
+
+/** The API couldn't be reached: a 502 the page shows as a message, not a server error. */
+function unreachable() {
+  return NextResponse.json({ message: "Couldn't reach the server. Try again in a moment." }, { status: 502, headers: { "cache-control": "no-store" } });
 }
 
 function sign(input: { secret: string; method: string; path: string; body: string }) {

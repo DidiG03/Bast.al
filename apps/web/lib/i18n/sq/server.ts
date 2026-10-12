@@ -313,6 +313,7 @@ export const server: Record<string, string> = {
   "Managers may only suspend Players": "Menaxherët mund të pezullojnë vetëm Lojtarë",
   "Managers may only unsuspend Players": "Menaxherët mund të riaktivizojnë vetëm Lojtarë",
   "Match not found": "Ndeshja nuk u gjet",
+  "Couldn't reach the server. Try again in a moment.": "Serveri nuk u arrit. Provo përsëri pas pak.",
   "You can star up to 200 matches. Take the star off some first.": "Mund të shënosh me yll deri në 200 ndeshje. Hiqja yllin disave më parë.",
   "Missing Svix signature headers": "Mungojnë kokat e nënshkrimit Svix",
   "Missing authentication token": "Mungon tokeni i autentifikimit",

@@ -495,8 +495,10 @@ function BetPage() {
     );
     const starredCount = listed.filter((event) => favourites.has(event.id)).length;
     const matching = favouritesOnly ? listed.filter((event) => favourites.has(event.id)) : listed;
-    // Matches being played first, under "Live now"; those that just ended under their own heading; then the days ahead.
-    const playing = matching.filter((event) => event.live && !finishedNow(event));
+    // Matches being played first, under "Live now" (those that can be bet on right now ahead of the paused ones);
+    // those that just ended under their own heading; then the days ahead.
+    const open = (event: OddsEvent) => (event.bettable && !event.allMarketsSuspended ? 0 : 1);
+    const playing = matching.filter((event) => event.live && !finishedNow(event)).sort((a, b) => open(a) - open(b));
     const ended = matching.filter((event) => finishedNow(event));
     const later = matching.filter((event) => !event.live && !finishedNow(event));
     const shown = [...playing, ...ended, ...later];
@@ -908,6 +910,8 @@ const MatchCard = memo(function MatchCard({
           {/* A goal or the last minutes say so; otherwise a break in play explains the pause better than "a moment". */}
           {t(event.livePause === "goal" || event.livePause === "late" ? PAUSE_TEXT[event.livePause] : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed)}
         </p>
+      ) : event.live && event.allMarketsSuspended ? (
+        <p className="bet-paused">{t(PAUSE_TEXT.bookmaker)}</p>
       ) : null}
       {grouped.map(([label, list]) => (
         <div key={label} className="odds-market-group">
@@ -1011,6 +1015,7 @@ const PAUSE_TEXT: Record<string, string> = {
   reopen: msg("Live betting is reopening. One moment."),
   late: msg("Live betting has closed for the last minutes of this match."),
   feed: msg("Live betting is paused for a moment."),
+  bookmaker: msg("The bookmaker has paused bets on this match. They reopen on their own."),
 };
 
 /** A green up arrow when a price went up, a red down arrow when it went down; nothing when it didn't move. */

@@ -482,6 +482,8 @@ export type OddsEvent = {
   livePause?: "goal" | "swing" | "reopen" | "late" | "feed" | null;
   /** In play. Prices are the feed's live prices less the team margin. */
   live: boolean;
+  /** Live, and the bookmaker has every market off the board for now. */
+  allMarketsSuspended?: boolean;
   /** Every market the match has. The list view (`view=list`) sends only the first; `/odds/events/:id` sends them all. */
   marketCount: number;
   markets: Array<{ id: string; key: string; name: string; /** Live only: off the board right now. */ suspended?: boolean; selections: OddsSelection[] }>;

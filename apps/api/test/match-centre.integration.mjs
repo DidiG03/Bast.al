@@ -171,6 +171,19 @@ test("at most 200 stars", async () => {
   await assert.rejects(odds.setFavourite(actor(other), live.id, true), /up to 200/);
 });
 
+test("a live match the bookmaker has every market off the board for says so; one market back and it doesn't", async () => {
+  await prisma.event.update({ where: { id: live.id }, data: { liveOddsAt: new Date() } });
+  const winner = await prisma.market.create({ data: { eventId: live.id, key: "match_winner", name: "Match winner", liveSuspended: true } });
+  await prisma.market.create({ data: { eventId: live.id, key: "goals_2_5", name: "Goals 2.5", liveSuspended: true } });
+  const flag = async () => {
+    odds.forgetLists();
+    return (await odds.events(actor(player), "live", undefined, "list")).find((event) => event.id === live.id).allMarketsSuspended;
+  };
+  assert.equal(await flag(), true);
+  await prisma.market.update({ where: { id: winner.id }, data: { liveSuspended: false } });
+  assert.equal(await flag(), false);
+});
+
 test("teardown", async () => {
   await prisma.$disconnect();
 });

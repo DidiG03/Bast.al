@@ -416,6 +416,7 @@ export const betting: Record<string, string> = {
   "Stats show here once the match starts. Line-ups come about an hour before kick-off.": "Statistikat shfaqen këtu sapo të fillojë ndeshja. Formacionet dalin rreth një orë para fillimit.",
   "No stats for this match yet.": "Ende nuk ka statistika për këtë ndeshje.",
   "Favourites": "Të preferuarat",
+  "The bookmaker has paused bets on this match. They reopen on their own.": "Bastorja ka pezulluar bastet për këtë ndeshje. Rihapen vetë.",
   "Add {match} to favourites": "Shto {match} te të preferuarat",
   "Remove {match} from favourites": "Hiq {match} nga të preferuarat",
   "Couldn't save your favourites": "Të preferuarat nuk u ruajtën",

@@ -335,7 +335,12 @@ export class OddsService {
     const showFeed = actor.role !== Role.PLAYER;
 
     // Someone is watching live matches: the live prices are fetched more often for a while.
-    if (events.some((event) => event.status === EventStatus.LIVE)) this.sync.noteLiveInterest();
+    const liveIds = events.filter((event) => event.status === EventStatus.LIVE).map((event) => event.id);
+    if (liveIds.length > 0) this.sync.noteLiveInterest();
+    // Live matches with a market still on the board (the list carries only each match's first market).
+    const withOpenMarket = new Set(
+      liveIds.length > 0 ? (await this.prisma.market.groupBy({ by: ["eventId"], where: { eventId: { in: liveIds }, liveSuspended: false } })).map((row) => row.eventId) : [],
+    );
 
     return events.map((event) => {
       const live = event.status === EventStatus.LIVE;
@@ -363,6 +368,8 @@ export class OddsService {
       /** Live only: why bets are paused right now (a goal, a price jump, the bookmaker, the last minutes). */
       livePause: livePause(event, now),
       live,
+      /** Live, and the bookmaker has every market off the board for now. */
+      allMarketsSuspended: live && event._count.markets > 0 && !withOpenMarket.has(event.id),
       /** Every market the match has; the list view sends only the first. */
       marketCount: event._count.markets,
       /** Greyhounds: the race's number, grade and distance, and once run, the finishing order with each dog's SP. */

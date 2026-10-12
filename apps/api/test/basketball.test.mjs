@@ -15,6 +15,8 @@ const nba = await read("odds-api-nba.json");
 test("a game is read with its league, teams, status and, once over, its final score", () => {
   const verona = parseGame(games.find((g) => g.id === 509592));
   assert.deepEqual([verona.leagueId, verona.league, verona.country, verona.home, verona.away, verona.status, verona.score], [52, "Lega A", "Italy", "Verona", "Olimpia Milano", "upcoming", null]);
+  assert.equal(verona.homeLogo, "https://media.api-sports.io/basketball/teams/716.png");
+  assert.equal(verona.awayLogo, "https://media.api-sports.io/basketball/teams/722.png");
   const done = parseGame(games.find((g) => g.id === 512043));
   assert.deepEqual([done.status, done.score], ["finished", { home: 87, away: 97 }]);
   assert.equal(parseGame({ ...games[0], status: { short: "Q3" } }).status, "live");

@@ -18,6 +18,8 @@ test("a game is read with its league, teams, kick-off, status and, once over, it
     [saints.externalId, saints.leagueId, saints.league, saints.country, saints.home, saints.away, saints.startsAt.toISOString(), saints.status, saints.score],
     ["21576", 1, "NFL", "USA", "New Orleans Saints", "Atlanta Falcons", "2026-10-06T00:15:00.000Z", "upcoming", null],
   );
+  assert.equal(saints.homeLogo, "https://media.api-sports.io/american-football/teams/27.png");
+  assert.equal(saints.awayLogo, "https://media.api-sports.io/american-football/teams/8.png");
   const done = parseNflGame(raw(21575));
   assert.deepEqual([done.status, done.score], ["finished", { home: 32, away: 26 }]);
   assert.deepEqual(parseNflGame(raw(24147)).score, { home: 34, away: 42 }, "after overtime (AOT): the total includes it");

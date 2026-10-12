@@ -12,6 +12,7 @@ import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { useToast } from "../../../components/toaster";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { TeamCrest } from "../../../components/team-crest";
 import { livePill } from "../../../lib/live";
 import { isDaysFromToday } from "../../../lib/time";
 
@@ -509,9 +510,15 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run, version }
       </header>
 
       <div className="odds-teams">
-        <span>{event.homeTeam ?? event.name}</span>
+        <span className="odds-team">
+          <TeamCrest name={event.homeTeam ?? event.name} logo={event.homeLogo} />
+          <span>{event.homeTeam ?? event.name}</span>
+        </span>
         {hasScore ? <strong className="odds-score">{event.homeScore} – {event.awayScore}</strong> : <span className="muted">v</span>}
-        <span>{event.awayTeam ?? ""}</span>
+        <span className="odds-team">
+          <span>{event.awayTeam ?? ""}</span>
+          <TeamCrest name={event.awayTeam ?? "?"} logo={event.awayLogo} />
+        </span>
       </div>
 
       {event.status === "LIVE" ? (

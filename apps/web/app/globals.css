@@ -3902,6 +3902,14 @@ button.odds-selection:hover,
   font-weight: 800;
 }
 
+.team-crest {
+  display: block;
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
 .odds-team {
   display: inline-flex;
   align-items: center;
@@ -4977,7 +4985,8 @@ button.is-blocked {
 }
 
 /* Home crest on the outside, then the name, so both names sit next to the score. */
-.bet-page .odds-teams > :first-child.odds-team .team-badge {
+.bet-page .odds-teams > :first-child.odds-team .team-badge,
+.bet-page .odds-teams > :first-child.odds-team .team-crest {
   order: 0;
 }
 
@@ -13378,6 +13387,20 @@ button.is-blocked {
   color: var(--text);
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+.bm-side {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.bm-side .team-crest,
+.bm-side .team-badge {
+  width: 1.15rem;
+  height: 1.15rem;
+  font-size: 0.62rem;
 }
 
 .bm-team-name {

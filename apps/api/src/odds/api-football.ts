@@ -1,5 +1,6 @@
 import { EventStatus } from "@prisma/client";
 import type { Goal, GoalRecord, Participant, Side } from "../bets/goals";
+import { crestUrl } from "./crest";
 
 /**
  * API-Football (api-sports.io) v3: the fixtures, live scores and pre-match
@@ -19,7 +20,7 @@ export type ApiResponse<T> = {
 export type RawFixture = {
   fixture: { id: number; date: string; status: { short: string; elapsed: number | null } };
   league: { id: number; name: string; country: string; season: number };
-  teams: { home: { id?: number; name: string }; away: { id?: number; name: string } };
+  teams: { home: { id?: number; name: string; logo?: string | null }; away: { id?: number; name: string; logo?: string | null } };
   goals: { home: number | null; away: number | null };
   /** `fulltime` is the score after 90 minutes, before any extra time. */
   score?: { halftime?: { home: number | null; away: number | null }; fulltime?: { home: number | null; away: number | null } };
@@ -72,6 +73,9 @@ export type FeedFixture = {
   country: string;
   homeTeam: string;
   awayTeam: string;
+  /** Crest URLs from the feed. Null when it didn't send one. */
+  homeLogo: string | null;
+  awayLogo: string | null;
   startsAt: Date;
   status: EventStatus;
   elapsed: number | null;
@@ -121,6 +125,8 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     country: raw.league.country,
     homeTeam: raw.teams.home.name,
     awayTeam: raw.teams.away.name,
+    homeLogo: crestUrl(raw.teams.home.logo),
+    awayLogo: crestUrl(raw.teams.away.logo),
     startsAt: new Date(raw.fixture.date),
     status,
     elapsed: raw.fixture.status.elapsed,

@@ -466,6 +466,9 @@ export type OddsEvent = {
   country: string | null;
   homeTeam: string | null;
   awayTeam: string | null;
+  /** Crest from the feed. Missing when that sport has no pictures, or until the next sync. */
+  homeLogo?: string | null;
+  awayLogo?: string | null;
   startsAt: string;
   status: "UPCOMING" | "LIVE" | "COMPLETED" | "POSTPONED" | "CANCELLED";
   elapsed: number | null;

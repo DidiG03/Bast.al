@@ -1,5 +1,6 @@
 import { type FeedMarket } from "./api-football";
 import { type RawBookmaker, type Values } from "./basketball";
+import { crestUrl } from "./crest";
 
 /**
  * What volleyball and handball share: API-Sports' game shape (the same in
@@ -17,7 +18,7 @@ export type RawTeamGame = {
   status?: { short?: string };
   league?: { id?: number; name?: string };
   country?: { name?: string };
-  teams?: { home?: { name?: string }; away?: { name?: string } };
+  teams?: { home?: { name?: string; logo?: string | null }; away?: { name?: string; logo?: string | null } };
   /** Volleyball: sets won. Handball: goals, extra time included after it. */
   scores?: RawSide;
   /** Volleyball: first … fifth set's points. Handball: first and second half's goals. */
@@ -34,6 +35,8 @@ export type TeamGame = {
   country: string;
   home: string;
   away: string;
+  homeLogo: string | null;
+  awayLogo: string | null;
   startsAt: Date;
   status: GameStatus;
 };
@@ -51,7 +54,18 @@ export function parseTeamGame(raw: RawTeamGame, statuses: { finished: Set<string
     : statuses.postponed.has(short) ? "postponed"
     : statuses.cancelled.has(short) ? "cancelled"
     : "live";
-  return { externalId: String(raw.id), leagueId: raw.league.id, league: raw.league.name?.trim() || fallbackLeague, country: raw.country?.name?.trim() || "", home, away, startsAt, status };
+  return {
+    externalId: String(raw.id),
+    leagueId: raw.league.id,
+    league: raw.league.name?.trim() || fallbackLeague,
+    country: raw.country?.name?.trim() || "",
+    home,
+    away,
+    homeLogo: crestUrl(raw.teams?.home?.logo),
+    awayLogo: crestUrl(raw.teams?.away?.logo),
+    startsAt,
+    status,
+  };
 }
 
 /** A whole number from the feed, or null. */

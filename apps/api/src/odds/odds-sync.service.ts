@@ -4,7 +4,8 @@ import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { GOAL_MARKET_KEYS } from "../bets/goals";
 import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLiveOdds, parseMarkets, parseMatchCentre } from "./api-football";
-import { bigSwing, cooldownFor, goalPauseOver, laterCooldown } from "./live-guard";
+import { savedCrests } from "./crest";
+import { bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
 /**
@@ -252,7 +253,19 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
 
   private async scheduled(kind: "full" | "live") {
     try {
-      await (kind === "full" ? this.withLock(() => this.syncFull()) : this.withLock(() => this.syncLive(), LIVE_LOCK_KEY));
+      if (kind === "full") {
+        await this.withLock(() => this.syncFull());
+        return;
+      }
+      // Prices first, under the lock. Match centres and settlement checks wait
+      // until the lock is free, so a goal's new prices aren't stuck behind them.
+      const finished = await this.withLock(() => this.syncLive(), LIVE_LOCK_KEY);
+      if (finished === null) return;
+      await this.syncMatchCentres().catch((error) => this.logger.warn(`Match centres not updated: ${error instanceof Error ? error.message : String(error)}`));
+      if (finished > 0) {
+        await this.syncStats();
+        await this.syncGoals();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Odds ${kind} sync failed: ${message}`);
@@ -382,7 +395,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       await this.markRefreshed(date, PREMATCH_REFRESH_MS[Math.min(day, PREMATCH_REFRESH_MS.length - 1)]);
       refreshed++;
     }
-    const live = await this.syncLive();
+    const live = (await this.syncLive()) ?? 0;
+    await this.syncMatchCentres().catch((error) => this.logger.warn(`Match centres not updated: ${error instanceof Error ? error.message : String(error)}`));
     await this.syncStats();
     await this.syncGoals();
     await this.recheckResults();
@@ -429,15 +443,19 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     if (countries.length > 0) this.logger.warn(`API-Football has no current leagues for ${countries.join(", ")}; check ${this.custom ? "the Leagues list on the Odds page" : "API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES"}`);
   }
 
-  /** Updates scores and status for matches that are live or should have started. */
-  private async syncLive(): Promise<number> {
+  /**
+   * Updates scores and in-play prices for matches that are live or should have
+   * started. Null when there is nothing to update. The count is how many
+   * tracked matches had dropped off the live list (just finished).
+   */
+  private async syncLive(): Promise<number | null> {
     const client = this.client!;
     const provider = this.provider();
     const tracked = await this.prisma.event.findMany({
       where: { provider, externalId: { not: null }, OR: [{ status: EventStatus.LIVE }, { status: EventStatus.UPCOMING, startsAt: { lte: new Date() } }] },
       select: { id: true, externalId: true, homeScore: true, awayScore: true, liveStopped: true, liveOddsAt: true, liveCooldownUntil: true, liveCooldownReason: true, period: true, finishedAt: true },
     });
-    if (tracked.length === 0) return 0;
+    if (tracked.length === 0) return null;
     const live = await client.liveFixtures();
     const seen = new Set(live.map((f) => f.externalId));
     const trackedIds = new Set(tracked.map((e) => e.externalId!));
@@ -446,7 +464,6 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const missing = [...trackedIds].filter((id) => !seen.has(id));
     const finished: FeedFixture[] = [];
     for (let i = 0; i < missing.length; i += 20) finished.push(...(await client.fixturesByIds(missing.slice(i, i + 20))));
-    let updated = 0;
     for (const fixture of [...live.filter((f) => trackedIds.has(f.externalId)), ...finished]) {
       const saved = trackedBy.get(fixture.externalId)!;
       // While the live odds are fresh they carry the newer score; the fixtures list lags and would flip it back and forth.
@@ -471,15 +488,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           ...score, liveCooldownUntil: pause.until, liveCooldownReason: pause.reason, syncedAt: new Date() },
       });
       await this.recordResult(provider, fixture);
-      updated++;
     }
     await this.syncLiveOdds();
-    await this.syncMatchCentres().catch((error) => this.logger.warn(`Match centres not updated: ${error instanceof Error ? error.message : String(error)}`));
-    if (finished.length > 0) {
-      await this.syncStats();
-      await this.syncGoals();
-    }
-    return updated;
+    return finished.length;
   }
 
   /**
@@ -765,16 +776,14 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     });
     const swing = await this.upsertLiveMarkets(eventId, odds.markets);
     const scored = odds.homeScore !== null && odds.awayScore !== null;
-    const cooldown = cooldownFor(
-      { homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped },
-      { homeScore: scored ? odds.homeScore : before.homeScore, awayScore: scored ? odds.awayScore : before.awayScore, stopped: odds.stopped },
-      swing,
-    );
+    const after = { homeScore: scored ? odds.homeScore : before.homeScore, awayScore: scored ? odds.awayScore : before.awayScore, stopped: odds.stopped };
+    const cooldown = cooldownFor({ homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped }, after, swing);
     let pause = laterCooldown({ until: before.liveCooldownUntil, reason: before.liveCooldownReason }, cooldown);
     if (cooldown && pause.until === cooldown.until) this.logger.log(`Live betting paused on event ${eventId} (${cooldown.reason}) until ${cooldown.until.toISOString()}`);
-    // After a goal: reopen as soon as the prices have caught up with it, instead of waiting out the whole pause.
+    // After a goal: reopen once the bookmaker is taking bets again and the minimum has passed.
+    // A price jump, or the bookmaker switching back on, is those prices arriving — not another pause.
     const now = new Date();
-    if (goalPauseOver(pause, { hasScore: scored, stopped: odds.stopped, pausesItself: cooldown !== null }, now)) {
+    if (goalPauseOver(pause, { hasScore: scored, stopped: odds.stopped, pausesItself: scoreChanged({ homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped }, after) }, now)) {
       this.logger.log(`Live betting reopened on event ${eventId}: the prices have caught up with the goal`);
       pause = { until: now, reason: null };
     }
@@ -807,6 +816,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       country: fixture.country,
       homeTeam: fixture.homeTeam,
       awayTeam: fixture.awayTeam,
+      ...savedCrests(fixture.homeLogo, fixture.awayLogo),
       startsAt: fixture.startsAt,
       status: fixture.status,
       elapsed: fixture.elapsed,

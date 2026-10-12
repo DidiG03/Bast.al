@@ -3,6 +3,7 @@ import { EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { type FetchJson, httpFetchJson } from "./api-football";
+import { savedCrests } from "./crest";
 import { BASKETBALL_PROVIDER, type FeedGame, NBA_LEAGUE_ID, type OddsApiEvent, type RawGame, parseApiSportsOdds, parseGame, parseOddsApiEvent, periodsResultOf, teamKey } from "./basketball";
 import { OddsSyncService, movedLater } from "./odds-sync.service";
 
@@ -246,6 +247,7 @@ export async function saveScoredGame(prisma: PrismaService, provider: string, sp
     country: game.country,
     homeTeam: game.home,
     awayTeam: game.away,
+    ...savedCrests(game.homeLogo, game.awayLogo),
     startsAt: game.startsAt,
     status,
     syncedAt: new Date(),

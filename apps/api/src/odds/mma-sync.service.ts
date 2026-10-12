@@ -3,6 +3,7 @@ import { EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { type FetchJson, httpFetchJson } from "./api-football";
+import { savedCrests } from "./crest";
 import { type FeedFight, MMA_PROVIDER, type RawFight, type RawFightResult, fightResult, fightResultOf, parseFight, parseFightOdds } from "./mma";
 import { OddsSyncService, movedLater } from "./odds-sync.service";
 
@@ -163,6 +164,7 @@ export class MmaSyncService implements OnModuleInit, OnModuleDestroy {
       country: fight.weightClass,
       homeTeam: fight.home,
       awayTeam: fight.away,
+      ...savedCrests(fight.homeLogo, fight.awayLogo),
       startsAt: fight.startsAt,
       status,
       fightResult: result ? (result as unknown as Prisma.InputJsonValue) : Prisma.DbNull,

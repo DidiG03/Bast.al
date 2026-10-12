@@ -173,6 +173,13 @@ test("the half-time score is kept once the match has finished", () => {
   const finished = { ...raw("FT", { home: 2, away: 1 }, { home: 2, away: 1 }), score: { halftime: { home: 1, away: 1 }, fulltime: { home: 2, away: 1 } } };
   assert.deepEqual(parseFixture(finished).halfTime, { home: 1, away: 1 });
   assert.equal(parseFixture(raw("FT", { home: 2, away: 1 }, { home: 2, away: 1 })).halfTime, null);
+  const crested = parseFixture({
+    ...raw("NS", { home: null, away: null }, { home: null, away: null }),
+    teams: { home: { name: "A", logo: "https://media.api-sports.io/football/teams/42.png" }, away: { name: "B", logo: "http://example.com/b.png" } },
+  });
+  assert.equal(crested.homeLogo, "https://media.api-sports.io/football/teams/42.png");
+  assert.equal(crested.awayLogo, null, "only an https crest is kept");
+  assert.equal(parseFixture(raw("NS", { home: null, away: null }, { home: null, away: null })).homeLogo, null);
 });
 
 const d = (v) => new Prisma.Decimal(v);

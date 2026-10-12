@@ -33,14 +33,17 @@ export type LivePause = "goal" | "swing" | "reopen" | "late" | "feed";
 
 export type LiveReading = { homeScore: number | null; awayScore: number | null; stopped: boolean };
 
+/** The score changed between two readings: a goal, or a goal taken back. The first reading of a match (no score yet) is not one. */
+export function scoreChanged(before: LiveReading, after: LiveReading): boolean {
+  return before.homeScore !== null && before.awayScore !== null && after.homeScore !== null && after.awayScore !== null && (before.homeScore !== after.homeScore || before.awayScore !== after.awayScore);
+}
+
 /**
  * The pause a new reading of a live match calls for, if any. `before` is what
  * we had saved; `swing` says the match-result prices jumped.
  */
 export function cooldownFor(before: LiveReading, after: LiveReading, swing: boolean, now: Date = new Date()): { until: Date; reason: LivePause } | null {
-  const scored =
-    before.homeScore !== null && before.awayScore !== null && after.homeScore !== null && after.awayScore !== null && (before.homeScore !== after.homeScore || before.awayScore !== after.awayScore);
-  if (scored && GOAL_COOLDOWN_MS > 0) return { until: new Date(now.getTime() + GOAL_COOLDOWN_MS), reason: "goal" };
+  if (scoreChanged(before, after) && GOAL_COOLDOWN_MS > 0) return { until: new Date(now.getTime() + GOAL_COOLDOWN_MS), reason: "goal" };
   if (swing && SWING_COOLDOWN_MS > 0) return { until: new Date(now.getTime() + SWING_COOLDOWN_MS), reason: "swing" };
   if (before.stopped && !after.stopped && REOPEN_COOLDOWN_MS > 0) return { until: new Date(now.getTime() + REOPEN_COOLDOWN_MS), reason: "reopen" };
   return null;
@@ -56,9 +59,11 @@ export function laterCooldown(current: { until: Date | null; reason: string | nu
 /**
  * Whether a goal's pause can end before GOAL_COOLDOWN_MS is up, on a new
  * reading of the match: the bookmaker isn't blocking it, the reading's prices
- * already carry the score (so they were made after the goal), the reading
- * doesn't call for a pause of its own (another goal, a jump, a reopening),
- * and at least GOAL_MIN_PAUSE_MS has gone by since the goal.
+ * already carry the score (so they were made after the goal), this reading
+ * isn't another goal, and at least GOAL_MIN_PAUSE_MS has gone by. A jump in
+ * the prices, or the bookmaker switching bets back on, is the market catching
+ * up — that must not keep the pause going, or the new prices stay hidden for
+ * the whole cooldown.
  */
 export function goalPauseOver(
   pause: { until: Date | null; reason: string | null },

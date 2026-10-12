@@ -32,6 +32,20 @@ const MATCHES: MockMatch[] = [
 
 const SEASON = 2026;
 
+/** API-Football crest ids for the clubs in the mock list. Albanian clubs are left out: a wrong crest is worse than none. */
+const MOCK_CRESTS: Record<string, string> = {
+  Arsenal: "https://media.api-sports.io/football/teams/42.png",
+  Chelsea: "https://media.api-sports.io/football/teams/49.png",
+  Liverpool: "https://media.api-sports.io/football/teams/40.png",
+  Newcastle: "https://media.api-sports.io/football/teams/34.png",
+  Inter: "https://media.api-sports.io/football/teams/505.png",
+  Juventus: "https://media.api-sports.io/football/teams/496.png",
+  "Real Madrid": "https://media.api-sports.io/football/teams/541.png",
+  "Bayern Munich": "https://media.api-sports.io/football/teams/157.png",
+  Barcelona: "https://media.api-sports.io/football/teams/529.png",
+  Sevilla: "https://media.api-sports.io/football/teams/536.png",
+};
+
 function fixture(match: MockMatch, now: number, anchor: number): RawFixture {
   const start = anchor + match.kickoff * 60_000;
   const minutes = Math.floor((now - start) / 60_000);
@@ -43,7 +57,7 @@ function fixture(match: MockMatch, now: number, anchor: number): RawFixture {
   return {
     fixture: { id: match.id, date: new Date(start).toISOString(), status: { short: status, elapsed } },
     league: { id: match.league[0], name: match.league[1], country: match.league[2], season: SEASON },
-    teams: { home: { name: match.home }, away: { name: match.away } },
+    teams: { home: { name: match.home, logo: MOCK_CRESTS[match.home] }, away: { name: match.away, logo: MOCK_CRESTS[match.away] } },
     goals: score,
     score: { fulltime: status === "FT" ? score : { home: null, away: null } },
   };

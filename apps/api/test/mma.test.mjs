@@ -20,6 +20,8 @@ test("a fight is read with its card, weight class, fighters and winner", () => {
     [fight.externalId, fight.card, fight.weightClass, fight.home, fight.away, fight.status, fight.winner],
     ["2909", "UFC 332: Silva vs. Wang", "Women's Flyweight", "Wang Cong", "Natalia Silva", "finished", "away"],
   );
+  assert.equal(fight.homeLogo, "https://media.api-sports.io/mma/fighters/2708.png");
+  assert.equal(fight.awayLogo, "https://media.api-sports.io/mma/fighters/2508.png");
   assert.equal(parseFight({ ...fights[0], status: { short: "NS" } }).status, "upcoming");
   assert.equal(parseFight({ ...fights[0], status: { short: "CANC" } }).status, "cancelled");
 });

@@ -1,4 +1,5 @@
 import { type FeedGame, type GameStatus, periodsOf } from "./basketball";
+import { crestUrl } from "./crest";
 
 /**
  * NFL: games, results and prices from API-Sports' American football API (the
@@ -15,7 +16,7 @@ export const NFL_LEAGUE_ID = 1;
 export type RawNflGame = {
   game?: { id?: number; date?: { timestamp?: number }; status?: { short?: string } };
   league?: { id?: number; name?: string; country?: { name?: string } };
-  teams?: { home?: { name?: string }; away?: { name?: string } };
+  teams?: { home?: { name?: string; logo?: string | null }; away?: { name?: string; logo?: string | null } };
   scores?: { home?: Record<string, number | null | undefined> & { total?: number | null }; away?: Record<string, number | null | undefined> & { total?: number | null } };
 };
 
@@ -42,6 +43,8 @@ export function parseNflGame(raw: RawNflGame): FeedGame | null {
     country: raw.league.country?.name?.trim() || "",
     home,
     away,
+    homeLogo: crestUrl(raw.teams?.home?.logo),
+    awayLogo: crestUrl(raw.teams?.away?.logo),
     startsAt: new Date(timestamp * 1000),
     status,
     score: status === "finished" && Number.isInteger(h) && Number.isInteger(a) ? { home: h!, away: a! } : null,

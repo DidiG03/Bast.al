@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
-import { bigSwing, cooldownFor, goalPauseOver, laterCooldown } from "../dist/odds/live-guard.js";
+import { bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "../dist/odds/live-guard.js";
 import { applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 
 test("a margin comes off the feed price and rounds down to the cent", () => {
@@ -244,7 +244,10 @@ test("live betting pauses after a goal, a price jump or a reopen, and in the las
   assert.equal(goalPauseOver(goalAgo(20), caughtUp, now), false, "never under 30 seconds");
   assert.equal(goalPauseOver(goalAgo(40), { ...caughtUp, stopped: true }, now), false, "the bookmaker still has it blocked");
   assert.equal(goalPauseOver(goalAgo(40), { ...caughtUp, hasScore: false }, now), false, "prices without a score can't show they're after the goal");
-  assert.equal(goalPauseOver(goalAgo(40), { ...caughtUp, pausesItself: true }, now), false, "another goal, a jump or a reopening");
+  assert.equal(goalPauseOver(goalAgo(40), { ...caughtUp, pausesItself: true }, now), false, "another goal on this reading");
+  assert.equal(scoreChanged(reading(0, 0), reading(1, 0)), true);
+  assert.equal(scoreChanged(reading(1, 0), reading(1, 0)), false, "the prices moving after a goal is not another goal");
+  assert.equal(scoreChanged(reading(null, null), reading(0, 0)), false);
   assert.equal(goalPauseOver({ ...goalAgo(40), reason: "swing" }, caughtUp, now), false, "only a goal's pause");
   assert.equal(goalPauseOver(goalAgo(95), caughtUp, now), false, "already over");
 

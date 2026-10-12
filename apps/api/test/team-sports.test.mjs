@@ -34,6 +34,8 @@ test("volleyball: finished, live and coming matches, with every set's points", (
   assert.deepEqual([live.status, live.live, live.score], ["live", { home: 0, away: 1 }, null]);
   const coming = parseVolleyballGame(vbGames.find((g) => g.id === 213932));
   assert.deepEqual([coming.status, coming.home, coming.away, coming.league], ["upcoming", "Altekma", "Gaziantep Genclik", "Turkish Cup"]);
+  assert.equal(coming.homeLogo, "https://media.api-sports.io/volley/teams/1275.png");
+  assert.equal(coming.awayLogo, "https://media.api-sports.io/volley/teams/3504.png");
   // Set points whose winners don't add up to the sets won aren't kept.
   const raw = structuredClone(vbGames.find((g) => g.id === 208029));
   raw.periods.fifth = { home: 15, away: 11 };
@@ -100,6 +102,8 @@ test("volleyball: every market settles on the sets won and the sets' points", ()
 test("handball: results on the 60 minutes, and the half-time score", () => {
   const ft = parseHandballGame(hbGames.find((g) => g.id === 202903));
   assert.deepEqual([ft.status, ft.score, ft.half], ["finished", { home: 22, away: 35 }, { home: 12, away: 15 }]);
+  assert.equal(ft.homeLogo, "https://media.api-sports.io/handball/teams/849.png");
+  assert.equal(ft.awayLogo, "https://media.api-sports.io/handball/teams/1843.png");
   const cancelled = parseHandballGame(hbGames.find((g) => g.id === 193811));
   assert.deepEqual([cancelled.status, cancelled.score], ["cancelled", null]);
   // After extra time the score includes it; regular time is the two halves.

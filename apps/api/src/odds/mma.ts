@@ -1,4 +1,5 @@
 import { SelectionResult } from "@prisma/client";
+import { crestUrl } from "./crest";
 
 /**
  * MMA from API-Sports (the same account as API-Football, its own quota):
@@ -28,6 +29,8 @@ export type FeedFight = {
   weightClass: string | null;
   home: string;
   away: string;
+  homeLogo: string | null;
+  awayLogo: string | null;
   startsAt: Date;
   status: FightStatus;
   /** Set once the fight is over: the winner flags from the feed. */
@@ -44,7 +47,7 @@ export type FightResult = {
   time: string | null;
 };
 
-type RawFighter = { id?: number; name?: string; winner?: boolean | null };
+type RawFighter = { id?: number; name?: string; logo?: string | null; winner?: boolean | null };
 export type RawFight = {
   id: number;
   date?: string;
@@ -73,6 +76,8 @@ export function parseFight(raw: RawFight): FeedFight | null {
     weightClass: raw.category?.trim() || null,
     home,
     away,
+    homeLogo: crestUrl(raw.fighters?.first?.logo),
+    awayLogo: crestUrl(raw.fighters?.second?.logo),
     startsAt,
     status,
     winner: raw.fighters?.first?.winner ? "home" : raw.fighters?.second?.winner ? "away" : null,

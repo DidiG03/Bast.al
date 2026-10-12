@@ -353,6 +353,8 @@ export class OddsService {
       country: event.country,
       homeTeam: event.homeTeam,
       awayTeam: event.awayTeam,
+      homeLogo: event.homeLogo,
+      awayLogo: event.awayLogo,
       startsAt: event.startsAt,
       status: event.status,
       elapsed: event.elapsed,

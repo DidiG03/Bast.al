@@ -12,6 +12,7 @@ import { useToast } from "../../../components/toaster";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
 import { SportIcon } from "../../../components/sport-icon";
+import { TeamCrest } from "../../../components/team-crest";
 import { ApiError, apiFetch, type Bet, type BuilderQuote, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
@@ -877,7 +878,10 @@ const MatchCard = memo(function MatchCard({
 
   const pick = (market: OddsEvent["markets"][number], selection: OddsSelection, label: string, className: string) => {
     const isSelected = selected.has(selection.id);
-    const locked = !event.bettable || Boolean(market.suspended || selection.suspended);
+    // A match-level pause (a goal) still has prices: show them, but don't take the bet.
+    // A dash is only for a price the feed has actually taken off the board.
+    const offBoard = Boolean(market.suspended || selection.suspended);
+    const locked = !event.bettable || offBoard;
     return (
       <button
         key={selection.id}
@@ -890,8 +894,8 @@ const MatchCard = memo(function MatchCard({
       >
         <span className="odds-selection-name">{label}</span>
         <strong className="odds-price">
-          {locked ? "–" : selection.price.toFixed(2)}
-          {locked ? null : <PriceArrow move={moves.get(selection.id)} />}
+          {offBoard ? "–" : selection.price.toFixed(2)}
+          {offBoard ? null : <PriceArrow move={moves.get(selection.id)} />}
         </strong>
       </button>
     );
@@ -914,12 +918,18 @@ const MatchCard = memo(function MatchCard({
         </div>
         <div className="bm-teams">
           <span className="bm-team">
-            <span className="bm-team-name">{event.homeTeam ?? event.name}</span>
+            <span className="bm-side">
+              <TeamCrest name={event.homeTeam ?? event.name} logo={event.homeLogo} />
+              <span className="bm-team-name">{event.homeTeam ?? event.name}</span>
+            </span>
             {scored ? <span className="bm-score">{event.homeScore}</span> : null}
           </span>
           {event.awayTeam ? (
             <span className="bm-team">
-              <span className="bm-team-name">{event.awayTeam}</span>
+              <span className="bm-side">
+                <TeamCrest name={event.awayTeam} logo={event.awayLogo} />
+                <span className="bm-team-name">{event.awayTeam}</span>
+              </span>
               {scored ? <span className="bm-score">{event.awayScore}</span> : null}
             </span>
           ) : null}

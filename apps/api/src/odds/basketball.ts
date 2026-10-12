@@ -1,4 +1,5 @@
 import { SelectionResult } from "@prisma/client";
+import { crestUrl } from "./crest";
 
 /**
  * Basketball: games and results from API-Sports' basketball API (the same
@@ -37,6 +38,8 @@ export type FeedGame = {
   country: string;
   home: string;
   away: string;
+  homeLogo: string | null;
+  awayLogo: string | null;
   startsAt: Date;
   status: GameStatus;
   /** Final scores, overtime included, once it's over. */
@@ -71,7 +74,7 @@ export type RawGame = {
   status?: { short?: string };
   league?: { id?: number; name?: string };
   country?: { name?: string };
-  teams?: { home?: { name?: string }; away?: { name?: string } };
+  teams?: { home?: { name?: string; logo?: string | null }; away?: { name?: string; logo?: string | null } };
   scores?: { home?: RawScore; away?: RawScore };
 };
 
@@ -96,6 +99,8 @@ export function parseGame(raw: RawGame): FeedGame | null {
     country: raw.country?.name?.trim() || "",
     home,
     away,
+    homeLogo: crestUrl(raw.teams?.home?.logo),
+    awayLogo: crestUrl(raw.teams?.away?.logo),
     startsAt,
     status,
     score: status === "finished" && Number.isInteger(h) && Number.isInteger(a) ? { home: h!, away: a! } : null,

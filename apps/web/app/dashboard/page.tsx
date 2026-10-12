@@ -5,6 +5,7 @@ import { HelpTip } from "../../components/help-tip";
 import { NamedIcon } from "../../components/icons";
 import { PlayerSportTabs, type SportTab } from "../../components/player-sport-tabs";
 import { SportIcon } from "../../components/sport-icon";
+import { TeamCrest } from "../../components/team-crest";
 import { ToastOnMount } from "../../components/toast-on-mount";
 import {
   ActivityFeed,
@@ -688,7 +689,7 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
         </span>
       </div>
       <div className="player-top-event-teams">
-        <span className="team-badge" aria-hidden="true">{(event.homeTeam ?? event.name).slice(0, 1)}</span>
+        <TeamCrest name={event.homeTeam ?? event.name} logo={event.homeLogo} />
         <span>{event.homeTeam ?? event.name}</span>
         {event.live && event.homeScore !== null && event.awayScore !== null ? (
           <strong className="odds-score">
@@ -698,7 +699,7 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
           <span className="muted">{t("vs")}</span>
         )}
         <span>{event.awayTeam ?? ""}</span>
-        <span className="team-badge" aria-hidden="true">{(event.awayTeam ?? "?").slice(0, 1)}</span>
+        <TeamCrest name={event.awayTeam ?? "?"} logo={event.awayLogo} />
       </div>
     </Link>
   );

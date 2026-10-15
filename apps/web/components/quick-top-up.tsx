@@ -11,6 +11,8 @@ import { useI18n } from "./i18n-provider";
 import { HelpTip } from "./help-tip";
 
 const PRESETS = [10, 20, 50, 100, 200, 500];
+/** Super Admin tops up Owners, who hand it on to their whole team: bigger steps. */
+const OWNER_PRESETS = [1000, 5000, 10000, 20000, 50000, 100000];
 
 type Props = {
   player: UserRow;
@@ -20,10 +22,12 @@ type Props = {
   approvalLimit: number;
   onClose: () => void;
   onDone: (message: string) => void;
+  /** Super Admin's credit is new money: it comes out of no balance and needs no approval. */
+  newMoney?: boolean;
 };
 
 /** One tap to send a Player a preset amount of credit. */
-export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }: Props) {
+export function QuickTopUp({ player, available, approvalLimit, onClose, onDone, newMoney = false }: Props) {
   const { getToken } = useAuth();
   const { t } = useI18n();
   const moneyKey = useIdempotencyKey();
@@ -31,10 +35,12 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
   const [sending, setSending] = useState<number | null>(null);
   const toast = useToast();
   const headroom = Math.max(0, Number(player.balanceLimit) - Number(player.balance));
+  const presets = newMoney ? OWNER_PRESETS : PRESETS;
+  const spendable = newMoney ? Number.POSITIVE_INFINITY : available;
 
   // A Player already at their limit can't take more; say so as the sheet opens.
   useEffect(() => {
-    if (headroom < PRESETS[0]) toast.warning(t("This Player is at their balance limit."));
+    if (headroom < presets[0]) toast.warning(newMoney ? t("{name} is at their balance limit.", { name: player.username }) : t("This Player is at their balance limit."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -74,20 +80,28 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="modal card top-up-sheet" role="dialog" aria-modal="true" aria-labelledby="top-up-title">
         <div className="modal-header">
-          <h2 id="top-up-title">{t("Top up {name}", { name: player.username })}<HelpTip text="Send money to this Player fast. Tap an amount, or type your own and press Send. It comes out of your balance straight away." /></h2>
+          <h2 id="top-up-title">
+            {t("Top up {name}", { name: player.username })}
+            {newMoney ? (
+              <HelpTip text="Send credit to this Owner. Tap an amount, or type your own and press Send. It is new money: it comes out of no balance, and the Owner hands it on to their team." />
+            ) : (
+              <HelpTip text="Send money to this Player fast. Tap an amount, or type your own and press Send. It comes out of your balance straight away." />
+            )}
+          </h2>
           <button type="button" className="modal-close secondary" onClick={onClose} aria-label={t("Close")}>×</button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          {t("Their balance:")} <strong>{formatMoney(player.balance)}</strong> · {t("Yours:")} <strong>{formatMoney(available)}</strong>
+          {t("Their balance:")} <strong>{formatMoney(player.balance)}</strong>
+          {newMoney ? null : <> · {t("Yours:")} <strong>{formatMoney(available)}</strong></>}
         </p>
         <div className="top-up-presets">
-          {PRESETS.map((amount) => (
+          {presets.map((amount) => (
             <button
               type="button"
               key={amount}
               className="secondary"
               onClick={() => send(amount)}
-              disabled={sending !== null || amount > available || amount > headroom}
+              disabled={sending !== null || amount > spendable || amount > headroom}
             >
               {sending === amount ? <LoadingSpinner label="Sending" size="small" /> : formatMoney(amount).replace(".00", "")}
             </button>
@@ -101,7 +115,7 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone }
           <button type="submit" disabled={sending !== null || !custom}>{t("Send")}</button>
         </form>
         <p className="muted top-up-note">
-          {t("Sends straight away. Anything over {amount} waits for approval.", { amount: formatMoney(approvalLimit) })}
+          {newMoney ? t("Sends straight away. It doesn't come out of any balance.") : t("Sends straight away. Anything over {amount} waits for approval.", { amount: formatMoney(approvalLimit) })}
         </p>
       </section>
     </div>

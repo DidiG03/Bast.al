@@ -156,12 +156,12 @@ export default function OddsPage() {
     <div className="stack">
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{t("Odds")}</h1>
+          <h1 style={{ margin: 0 }}>{t("Prices")}</h1>
           <p className="muted report-subtitle">{subtitle}</p>
         </div>
         {isAdmin && owners.length > 0 ? (
           <label className="odds-team-picker">
-            <span className="muted">{t("Prices for")}</span><HelpTip text="Pick “Base prices” to see the prices every team starts from, or pick an Owner to see and change that team's own prices." />
+            <span className="muted">{t("Prices for")}<HelpTip text="Pick “Base prices” to see the prices every team starts from, or pick an Owner to see and change that team's own prices." /></span>
             <select id="odds-owner" value={ownerId} onChange={(event) => setOwnerId(event.target.value)}>
               <option value="">{t("Base prices")}</option>
               {owners.map((owner) => (
@@ -269,9 +269,12 @@ export default function OddsPage() {
           </p>
         </div>
       ) : (
-        groups.map(([label, dayEvents]) => (
+        groups.map(([label, dayEvents], index) => (
           <section key={label} className="stack odds-day">
-            <h2 className="odds-day-label">{label}</h2><HelpTip text="All matches on this day with their prices. Tap a price to change it for this team. Hide takes a match off the site; Suspend stops new bets on it." />
+            <h2 className="odds-day-label">
+              {label}
+              {index === 0 ? <HelpTip text="All matches on this day with their prices. Tap a price to change it for this team. Hide takes a match off the site; Suspend stops new bets on it." /> : null}
+            </h2>
             {dayEvents.map((event) =>
               event.sport === "greyhounds" ? (
                 <RaceAdminCard key={event.id} event={event} canManage={Boolean(settings?.canManageEvents)} run={run} />
@@ -327,7 +330,7 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
     <section className="card odds-settings">
       {feed ? (
         <div className="odds-setting">
-          <span className="muted">{t("Odds feed")}</span><HelpTip text="Where the matches and prices come from (API-Football). It updates by itself; press Sync now to update right away." />
+          <span className="muted">{t("Odds feed")}<HelpTip text="Where the matches and prices come from (API-Football). It updates by itself; press Sync now to update right away." /></span>
           <strong>{feedLabel(feed, t)}</strong>
           <span className="muted odds-setting-note">
             {feed.syncedAt ? t("Last synced {when}", { when: date(feed.syncedAt, { dateStyle: "medium", timeStyle: "short" }) }) : t("Not synced yet")}
@@ -342,7 +345,7 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
       ) : null}
 
       <div className="odds-setting">
-        <span className="muted">{t("Base margin")}</span><HelpTip text="The house's cut on every price, for every team. A bigger margin means slightly lower prices for Players and more profit for you. Example: with 5%, a 2.00 price is shown as 1.90." />
+        <span className="muted">{t("Base margin")}<HelpTip text="The house's cut on every price, for every team. A bigger margin means slightly lower prices for Players and more profit for you. Example: with 5%, a 2.00 price is shown as 1.90." /></span>
         {settings.canEditBase ? (
           <form className="commission-input" onSubmit={saveBase}>
             <input id="odds-base-margin" type="number" inputMode="decimal" min={0} max={settings.limits.maxMargin} step="0.1" value={base} onChange={(event) => setBase(event.target.value)} aria-label={t("Base margin in percent")} />
@@ -357,7 +360,7 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
 
       {team ? (
         <div className="odds-setting">
-          <span className="muted">{settings.canEditTeam && settings.team?.ownerName && !ownerQuery ? t("Your team's margin") : t("{name}'s team margin", { name: team.ownerName })}</span><HelpTip text="Extra margin for this team only, added to the base margin. Higher means lower prices for its Players. A minus number gives its Players better prices." />
+          <span className="muted">{settings.canEditTeam && settings.team?.ownerName && !ownerQuery ? t("Your team's margin") : t("{name}'s team margin", { name: team.ownerName })}<HelpTip text="Extra margin for this team only, added to the base margin. Higher means lower prices for its Players. A minus number gives its Players better prices." /></span>
           {settings.canEditTeam ? (
             <form className="commission-input" onSubmit={saveTeam}>
               <input

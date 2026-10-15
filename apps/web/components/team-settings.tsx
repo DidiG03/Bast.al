@@ -76,7 +76,7 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
         ) : (
           <form className="stack" onSubmit={submit}>
             <label className="stack" style={{ gap: "0.35rem" }}>
-              <strong>{t("Low-balance alert")}</strong><HelpTip text="You get a notification when someone's balance falls below this amount, so you can top them up in time." />
+              <strong>{t("Low-balance alert")}<HelpTip text="You get a notification when someone's balance falls below this amount, so you can top them up in time." /></strong>
               <span className="muted">{t("You and their Manager or Owner get a notification when a Manager or Player drops below this. Leave blank to turn it off.")}</span>
               <div className="commission-input">
                 <span aria-hidden="true">ALL</span>
@@ -84,7 +84,7 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
               </div>
             </label>
             <label className="stack" style={{ gap: "0.35rem" }}>
-              <strong>{t("Managers' approval limit")}</strong><HelpTip text="The most a Manager can send to one Player without asking you. Bigger amounts wait for your OK." />
+              <strong>{t("Managers' approval limit")}<HelpTip text="The most a Manager can send to one Player without asking you. Bigger amounts wait for your OK." /></strong>
               <span className="muted">
                 {t("Your Managers can send up to this much to a Player without your approval. A limit you set on one Manager in their Balance window still wins. Leave blank for the standard {amount}.", { amount: formatMoney(standard) })}
               </span>

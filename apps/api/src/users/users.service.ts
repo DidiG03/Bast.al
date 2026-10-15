@@ -19,6 +19,7 @@ import { HierarchyService } from "./hierarchy.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { AuditQueryDto } from "./dto/audit-query.dto";
+import { MoneyQueryDto, type MoneyKind } from "./dto/money-query.dto";
 
 /** Fields safe to return to clients — never includes email/password/ciphertext. */
 const publicUserSelect = {
@@ -57,6 +58,18 @@ const HAS_HISTORY = "This account has bets or money history, so it can't be dele
 const BULK_LIMIT = 100;
 /** How long a Player waits between two top-up requests. */
 const TOP_UP_REQUEST_GAP_MS = 30 * 60_000;
+
+const TRANSFER_TYPES = [BalanceTransactionType.DELEGATION, BalanceTransactionType.RECLAIM, BalanceTransactionType.ADJUSTMENT];
+
+/** The ledger types behind each choice in the Money page's "What" filter; "all" has no filter. */
+const MONEY_KIND_TYPES: Record<Exclude<MoneyKind, "all">, BalanceTransactionType[]> = {
+  transfers: TRANSFER_TYPES,
+  given: [BalanceTransactionType.DELEGATION],
+  taken: [BalanceTransactionType.RECLAIM],
+  corrections: [BalanceTransactionType.ADJUSTMENT],
+  bets: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT],
+  casino: [BalanceTransactionType.CASINO],
+};
 
 function dateRange(from?: string, to?: string) {
   return from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {};
@@ -966,6 +979,143 @@ export class UsersService {
           actor: { username: incoming ? fromUser?.username ?? noCounterparty(entry.type) : toUser.username },
         };
       }),
+    };
+  }
+
+  /**
+   * The Money page: every money move in the actor's part of the tree, newest
+   * first, filtered by period, kind, status, person and who made it. The
+   * totals use the same filters except kind and status, so the page can show
+   * the whole picture next to whatever list is picked.
+   */
+  async moneyMovements(actor: Actor, query: MoneyQueryDto) {
+    if (actor.role === Role.PLAYER) throw new ForbiddenException("Financial reports are restricted");
+    const scope = await this.scopeIds(actor);
+    if (query.person && scope && !scope.includes(query.person)) {
+      throw new ForbiddenException("Target is outside your hierarchy subtree");
+    }
+    const limit = Math.min(query.limit ?? 50, 100);
+    const page = query.page ?? 1;
+    const search = query.search?.trim();
+    const searchIds = search
+      ? (await this.prisma.user.findMany({
+          where: { username: { contains: search, mode: "insensitive" }, ...(scope ? { id: { in: scope } } : {}) },
+          select: { id: true },
+          take: 500,
+        })).map((user) => user.id)
+      : null;
+
+    const filters: Prisma.BalanceTransactionWhereInput[] = [];
+    if (scope) filters.push({ OR: [{ toUserId: { in: scope } }, { fromUserId: { in: scope } }] });
+    if (query.from || query.to) filters.push(dateRange(query.from, query.to));
+    if (query.person) filters.push({ OR: [{ toUserId: query.person }, { fromUserId: query.person }] });
+    if (searchIds) filters.push({ OR: [{ toUserId: { in: searchIds } }, { fromUserId: { in: searchIds } }, { actorId: { in: searchIds } }] });
+    if (query.by === "me") filters.push({ actorId: actor.id });
+    // Bets and casino lines are made by the Player (or by nobody): both count as "others".
+    if (query.by === "others") filters.push({ OR: [{ actorId: null }, { actorId: { not: actor.id } }] });
+
+    const kindTypes = query.kind && query.kind !== "all" ? MONEY_KIND_TYPES[query.kind] : query.kind === "all" ? null : MONEY_KIND_TYPES.transfers;
+    const where: Prisma.BalanceTransactionWhereInput = {
+      AND: [...filters, ...(kindTypes ? [{ type: { in: kindTypes } }] : []), ...(query.status ? [{ status: query.status }] : [])],
+    };
+    const sumOf = (extra: Prisma.BalanceTransactionWhereInput) =>
+      this.prisma.balanceTransaction.aggregate({ where: { AND: [...filters, extra] }, _sum: { amount: true }, _count: { _all: true } });
+    const approved = BalanceTransactionStatus.APPROVED;
+
+    // With one person picked: what came to them and went out from them, kept apart.
+    const personSums = query.person
+      ? Promise.all([
+          sumOf({ type: BalanceTransactionType.DELEGATION, status: approved, toUserId: query.person }),
+          sumOf({ type: BalanceTransactionType.RECLAIM, status: approved, fromUserId: query.person }),
+          sumOf({ type: BalanceTransactionType.DELEGATION, status: approved, fromUserId: query.person }),
+          sumOf({ type: BalanceTransactionType.RECLAIM, status: approved, toUserId: query.person }),
+        ])
+      : Promise.resolve(null);
+
+    const [items, total, groups, received, takenFromYou, holdings, personTotals] = await Promise.all([
+      this.prisma.balanceTransaction.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          amount: true,
+          reason: true,
+          createdAt: true,
+          approvedAt: true,
+          betId: true,
+          fromUser: { select: { id: true, username: true, role: true } },
+          toUser: { select: { id: true, username: true, role: true } },
+          actor: { select: { id: true, username: true, role: true } },
+          approvedBy: { select: { id: true, username: true } },
+        },
+      }),
+      this.prisma.balanceTransaction.count({ where }),
+      this.prisma.balanceTransaction.groupBy({ by: ["type", "status"], where: { AND: filters }, _sum: { amount: true }, _count: { _all: true } }),
+      // Money that came to you from above, and money your parent took back from you: kept apart from what you gave your team.
+      actor.role === Role.SUPER_ADMIN ? null : sumOf({ type: BalanceTransactionType.DELEGATION, status: approved, toUserId: actor.id }),
+      actor.role === Role.SUPER_ADMIN ? null : sumOf({ type: BalanceTransactionType.RECLAIM, status: approved, fromUserId: actor.id }),
+      this.prisma.user.aggregate({
+        where: query.person ? { id: query.person } : scope ? { id: { in: scope.filter((id) => id !== actor.id) } } : { role: { not: Role.SUPER_ADMIN } },
+        _sum: { balance: true },
+        _count: { _all: true },
+      }),
+      personSums,
+    ]);
+
+    const bucket = (type: BalanceTransactionType, status: BalanceTransactionStatus = approved) => {
+      const row = groups.find((group) => group.type === type && group.status === status);
+      return { amount: Number(row?._sum.amount ?? 0), count: row?._count._all ?? 0 };
+    };
+    const pendingRows = groups.filter((group) => group.status === BalanceTransactionStatus.PENDING);
+    const delegated = bucket(BalanceTransactionType.DELEGATION);
+    const reclaimed = bucket(BalanceTransactionType.RECLAIM);
+    const receivedAmount = Number(received?._sum.amount ?? 0);
+    const takenFromYouAmount = Number(takenFromYou?._sum.amount ?? 0);
+    const given = delegated.amount - receivedAmount;
+    const takenBack = reclaimed.amount - takenFromYouAmount;
+    const me = actor.role === Role.SUPER_ADMIN ? null : await this.prisma.user.findUnique({ where: { id: actor.id }, select: { balance: true } });
+
+    return {
+      page,
+      limit,
+      total,
+      pages: Math.max(1, Math.ceil(total / limit)),
+      summary: {
+        given,
+        givenCount: delegated.count - (received?._count._all ?? 0),
+        takenBack,
+        takenBackCount: reclaimed.count - (takenFromYou?._count._all ?? 0),
+        net: given - takenBack,
+        received: receivedAmount,
+        takenFromYou: takenFromYouAmount,
+        corrections: bucket(BalanceTransactionType.ADJUSTMENT).amount,
+        pendingCount: pendingRows.reduce((sum, row) => sum + row._count._all, 0),
+        pendingAmount: pendingRows.reduce((sum, row) => sum + Number(row._sum.amount ?? 0), 0),
+        rejectedCount: groups.filter((group) => group.status === BalanceTransactionStatus.REJECTED).reduce((sum, row) => sum + row._count._all, 0),
+        // Stakes are stored as negative amounts; shown here as what was staked.
+        staked: -bucket(BalanceTransactionType.BET_STAKE).amount,
+        betCount: bucket(BalanceTransactionType.BET_STAKE).count,
+        paidOut: bucket(BalanceTransactionType.BET_SETTLEMENT).amount,
+        casinoNet: bucket(BalanceTransactionType.CASINO).amount,
+        yourBalance: me ? Number(me.balance) : null,
+        teamBalance: Number(holdings._sum.balance ?? 0),
+        teamAccounts: holdings._count._all,
+        person: personTotals
+          ? {
+              given: Number(personTotals[0]._sum.amount ?? 0),
+              givenCount: personTotals[0]._count._all,
+              takenBack: Number(personTotals[1]._sum.amount ?? 0),
+              takenBackCount: personTotals[1]._count._all,
+              gaveTheirTeam: Number(personTotals[2]._sum.amount ?? 0),
+              tookBackFromTheirTeam: Number(personTotals[3]._sum.amount ?? 0),
+            }
+          : null,
+      },
+      items: items.map((entry) => ({ ...entry, amount: Number(entry.amount) })),
     };
   }
 

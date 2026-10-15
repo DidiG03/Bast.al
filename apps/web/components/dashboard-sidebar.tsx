@@ -27,42 +27,93 @@ const ROLE_LABELS: Record<UserRole, string> = {
   PLAYER: msg("Player"),
 };
 
-/** What each role can open, grouped the way people think about the work. */
+/**
+ * What each role can open, named for the job it does. Staff get the same
+ * five or six tabs in the same order, so moving between roles (or helping
+ * someone with another role) never means learning a new layout:
+ * Overview, the people under you, Money, Bets, Earnings, and Settings.
+ */
 function navGroups(role: UserRole, casinoOpen: boolean): NavGroup[] {
   if (role === "PLAYER") {
     const play: NavLink[] = [{ href: "/dashboard", label: msg("Overview"), icon: "dashboard" }, { href: "/dashboard/bet", label: msg("Bet"), icon: "bet" }];
     if (casinoOpen) play.push({ href: "/dashboard/casino", label: msg("Casino"), icon: "casino" });
     return [
       { label: msg("Play"), links: play },
-      { label: msg("Account"), links: [{ href: "/dashboard/money", label: msg("My money"), icon: "wallet" }, { href: "/dashboard/security", label: msg("Security"), icon: "security" }] },
+      { label: msg("Account"), links: [{ href: "/dashboard/money", label: msg("My money"), icon: "wallet" }, { href: "/dashboard/security", label: msg("My account"), icon: "security" }] },
     ];
   }
-  const betting: NavLink[] = [{ href: "/dashboard/odds", label: msg("Odds"), icon: "odds" }];
-  if (role === "OWNER" || role === "SUPER_ADMIN") betting.push({ href: "/dashboard/risk", label: msg("Risk"), icon: "risk" });
-  // Owners and Managers see it read-only, limited to their own Players' bets.
-  betting.push({ href: "/dashboard/settlement", label: msg("Settlement"), icon: "settlement" });
-  // Whether it's open, and how it's doing per Player.
-  betting.push({ href: "/dashboard/casino", label: msg("Casino"), icon: "casino" });
+  if (role === "MANAGER") {
+    return [
+      {
+        label: msg("Every day"),
+        links: [
+          { href: "/dashboard", label: msg("Overview"), icon: "dashboard" },
+          { href: "/dashboard/people", label: msg("Players"), icon: "users" },
+          { href: "/dashboard/finance", label: msg("Money"), icon: "finance" },
+          { href: "/dashboard/settlement", label: msg("Bets"), icon: "settlement" },
+          { href: "/dashboard/commissions", label: msg("Earnings"), icon: "commissions" },
+        ],
+      },
+    ];
+  }
+  if (role === "OWNER") {
+    return [
+      {
+        label: msg("Every day"),
+        links: [
+          { href: "/dashboard", label: msg("Overview"), icon: "dashboard" },
+          { href: "/dashboard/people", label: msg("Team"), icon: "users" },
+          { href: "/dashboard/finance", label: msg("Money"), icon: "finance" },
+          { href: "/dashboard/settlement", label: msg("Bets"), icon: "settlement" },
+          { href: "/dashboard/commissions", label: msg("Earnings"), icon: "commissions" },
+        ],
+      },
+      { label: msg("Setup"), links: [{ href: "/dashboard/settings", label: msg("Settings"), icon: "sliders" }] },
+    ];
+  }
+  // Super Admin: the same everyday tabs as an Owner, then the betting desk, then setup.
   return [
     {
-      label: msg("Workspace"),
+      label: msg("Every day"),
       links: [
         { href: "/dashboard", label: msg("Overview"), icon: "dashboard" },
-        { href: "/dashboard/users", label: msg("Users"), icon: "users" },
-        { href: "/dashboard/reports", label: msg("Reports"), icon: "reports" },
+        { href: "/dashboard/people", label: msg("People"), icon: "users" },
+        { href: "/dashboard/finance", label: msg("Money"), icon: "finance" },
+        { href: "/dashboard/settlement", label: msg("Results"), icon: "settlement" },
+        { href: "/dashboard/commissions", label: msg("Earnings"), icon: "commissions" },
       ],
     },
     {
-      label: msg("Money"),
+      label: msg("Betting"),
       links: [
-        { href: "/dashboard/finance", label: msg("Finance"), icon: "finance" },
-        { href: "/dashboard/commissions", label: msg("Commissions"), icon: "commissions" },
+        { href: "/dashboard/odds", label: msg("Prices"), icon: "odds" },
+        { href: "/dashboard/risk", label: msg("Money at risk"), icon: "risk" },
+        { href: "/dashboard/casino", label: msg("Casino"), icon: "casino" },
       ],
     },
-    { label: msg("Betting"), links: betting },
-    { label: msg("Account"), links: [{ href: "/dashboard/security", label: msg("Security"), icon: "security" }] },
+    {
+      label: msg("Setup"),
+      links: [
+        { href: "/dashboard/reports", label: msg("Reports"), icon: "reports" },
+        { href: "/dashboard/settings", label: msg("Settings"), icon: "sliders" },
+      ],
+    },
   ];
 }
+
+/**
+ * Pages reached from a tab rather than having one: they light up that tab.
+ * Money at risk sits on the Bets tab, and a Player's or Manager's own page,
+ * prices and the Casino switch under the tab they're opened from.
+ */
+const TAB_OF: Array<[string, string]> = [
+  ["/dashboard/risk", "/dashboard/settlement"],
+  ["/dashboard/players", "/dashboard/people"],
+  ["/dashboard/users", "/dashboard/people"],
+  ["/dashboard/odds", "/dashboard/settings"],
+  ["/dashboard/casino", "/dashboard/settings"],
+  ["/dashboard/security", "/dashboard/settings"],
+];
 
 export function DashboardSidebar({ role, username, initialCollapsed, casinoOpen = false }: SidebarProps) {
   const pathname = usePathname();
@@ -110,15 +161,16 @@ export function DashboardSidebar({ role, username, initialCollapsed, casinoOpen 
 
   const groups = navGroups(role, casinoOpen);
   const links = groups.flatMap((group) => group.links);
-  // The bottom bar fits five tabs; Security, Reports, Settlement, Odds, then the Casino's figures move to the drawer when a role has more.
+  // The bottom bar fits five tabs; the rest stay in the drawer (Settings, Security, Reports, then the betting pages, Results last).
   let mobileLinks = links;
-  for (const href of ["/dashboard/security", "/dashboard/reports", "/dashboard/settlement", "/dashboard/odds", "/dashboard/casino"]) {
+  for (const href of ["/dashboard/settings", "/dashboard/security", "/dashboard/reports", "/dashboard/risk", "/dashboard/odds", "/dashboard/casino", "/dashboard/settlement"]) {
     if (mobileLinks.length > 5) mobileLinks = mobileLinks.filter((link) => link.href !== href);
   }
-  const isActive = (href: string) =>
-    href === "/dashboard"
-      ? pathname === href
-      : pathname === href || pathname.startsWith(`${href}/`);
+  const hrefs = new Set(links.map((link) => link.href));
+  const under = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  // A page without a tab of its own lights up the tab it belongs to.
+  const current = links.some((link) => link.href !== "/dashboard" && under(link.href)) ? pathname : TAB_OF.find(([page, tab]) => under(page) && hrefs.has(tab))?.[1] ?? pathname;
+  const isActive = (href: string) => (href === "/dashboard" ? current === href : current === href || current.startsWith(`${href}/`));
 
   return (
     <>
@@ -200,15 +252,16 @@ export function DashboardSidebar({ role, username, initialCollapsed, casinoOpen 
           ))}
         </nav>
         <div className="sidebar-footer">
-          <div className="sidebar-account">
+          {/* Your name opens your own account: password, devices, language. */}
+          <Link href="/dashboard/security" className="sidebar-account" title={t("My account")} onClick={() => setMobileOpen(false)}>
             <span className="sidebar-avatar" aria-hidden="true">
               {username.slice(0, 2).toUpperCase()}
             </span>
             <span className="sidebar-account-text">
               <span className="sidebar-account-name">{username}</span>
-              <span className="sidebar-account-role">{t(ROLE_LABELS[role])}</span>
+              <span className="sidebar-account-role">{t(ROLE_LABELS[role])} · {t("My account")}</span>
             </span>
-          </div>
+          </Link>
           <UserMenu />
         </div>
       </aside>

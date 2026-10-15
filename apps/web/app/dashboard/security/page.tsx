@@ -143,10 +143,33 @@ export default function SecurityPage() {
     <div className="stack security-page">
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{t("Security")}</h1>
-          <p className="muted report-subtitle">{t("Manage your signed-in devices and review recent account activity.")}</p>
+          <h1 style={{ margin: 0 }}>{t("My account")}</h1>
+          <p className="muted report-subtitle">{t("Your password, the devices you're signed in on, and the language.")}</p>
         </div>
       </div>
+      <section className="card account-settings">
+        <div className="account-setting">
+          <div>
+            <strong>{t("Password")}<HelpTip text="Change your password here. Use one you don't use anywhere else." /></strong>
+            <span className="muted">{t("Change your password or start a password reset.")}</span>
+          </div>
+          <a className="button-link" href="/security/recovery">{t("Open password recovery")}</a>
+        </div>
+        <div className="account-setting">
+          <div>
+            <strong>{t("Language")}<HelpTip text="Pick the language for this site. It only changes it on this device." /></strong>
+            <span className="muted">{t("Choose the language Bast.al is shown in on this device.")}</span>
+          </div>
+          <LanguagePicker />
+        </div>
+        <div className="account-setting">
+          <div>
+            <strong>{t("Sign out")}<HelpTip text="Leave your account on this device. You will need your username and password to come back." /></strong>
+            <span className="muted">{t("End your session on this device.")}</span>
+          </div>
+          <UserMenu />
+        </div>
+      </section>
       <section className="card stack">
         <div className="tree-header"><h2>{t("Active devices")}<HelpTip text="Phones and computers signed in to your account right now. If you see one that isn't yours, press Sign out next to it, then change your password." /></h2><div className="row tree-header-actions"><span className="muted">{tn(data.sessions.length, "{count} session", "{count} sessions")}</span><button type="button" className="secondary" onClick={revokeOthers}>{t("Sign out other devices")}</button></div></div>
         {data.sessions.length === 0 ? <p className="muted">{t("No active sessions found.")}</p> : data.sessions.map((session) => (
@@ -192,21 +215,6 @@ export default function SecurityPage() {
             </div>
           </div>
         ))}
-      </section>
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>{t("Password")}<HelpTip text="Change your password here. Use one you don't use anywhere else." /></h2>
-        <p className="muted">{t("Change your password or start a password reset.")}</p>
-        <a className="button-link" href="/security/recovery">{t("Open password recovery")}</a>
-      </section>
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>{t("Language")}<HelpTip text="Pick the language for this site. It only changes it on this device." /></h2>
-        <p className="muted" style={{ margin: 0 }}>{t("Choose the language Bast.al is shown in on this device.")}</p>
-        <LanguagePicker />
-      </section>
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>{t("Sign out")}<HelpTip text="Leave your account on this device. You will need your username and password to come back." /></h2>
-        <p className="muted" style={{ margin: 0 }}>{t("End your session on this device.")}</p>
-        <UserMenu />
       </section>
       {me?.role === "SUPER_ADMIN" && reset ? (
         <section className="card stack data-reset">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
+import { BetsTabs } from "../../../components/bets-tabs";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
@@ -39,6 +40,7 @@ export default function SettlementPage() {
   const { t, tn } = useI18n();
   const idempotency = useIdempotencyKey();
   const [canSettle, setCanSettle] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
   const [events, setEvents] = useState<SettlementEvent[] | null>(null);
   const [bets, setBets] = useState<AdminBet[] | null>(null);
   const [status, setStatus] = useState<BetStatus | "">("");
@@ -74,7 +76,10 @@ export default function SettlementPage() {
   useEffect(() => {
     void getToken()
       .then((token) => (token ? apiFetch<MeResponse>("/users/me", token) : null))
-      .then((me) => setCanSettle(me?.role === "SUPER_ADMIN"))
+      .then((me) => {
+        setCanSettle(me?.role === "SUPER_ADMIN");
+        setIsOwner(me?.role === "OWNER");
+      })
       .catch(() => undefined)
       .finally(() => setMeLoaded(true));
   }, [getToken]);
@@ -124,12 +129,13 @@ export default function SettlementPage() {
 
   return (
     <div className="stack">
+      {isOwner ? <BetsTabs /> : null}
       <div>
-        <h1 style={{ margin: 0 }}>{t("Settlement")}</h1>
+        <h1 style={{ margin: 0 }}>{canSettle ? t("Results") : t("Your players' bets")}</h1>
         <p className="muted report-subtitle">
           {canSettle
-            ? t("Bets settle by themselves a minute or so after the feed reports a final score, and again if the feed corrects that score within two days. Bets on a match that isn't played within 48 hours of kick-off are refunded. Use this page to correct a result, void a match, or void one bet. Every change is refunded or charged to the Player straight away and written to the audit log.")
-            : t("The matches your Players are betting on, and every bet they've placed. Bets settle by themselves a minute or so after the final score. If a result looks wrong, ask Super Admin to correct it.")}
+            ? t("Bets pay out by themselves a minute after the final score. Use this page to correct a result, or to void a match or one bet. Every change reaches the Player straight away and is written to the audit log.")
+            : t("Every match your players have bet on, and their bets. Winnings are paid by themselves a minute after the match ends. If a result looks wrong, ask Super Admin.")}
         </p>
       </div>
 

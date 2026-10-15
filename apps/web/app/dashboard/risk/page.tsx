@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
+import { BetsTabs } from "../../../components/bets-tabs";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
@@ -94,10 +95,11 @@ export default function RiskPage() {
 
   return (
     <div className="stack">
+      {me.role === "OWNER" ? <BetsTabs /> : null}
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{t("Risk")}</h1>
-          <p className="muted report-subtitle">{t("What the team pays out on each result of the matches with open bets. Worst first.")}</p>
+          <h1 style={{ margin: 0 }}>{t("Money at risk")}</h1>
+          <p className="muted report-subtitle">{t("How much your team would pay if each result of a match with open bets came in. Biggest first.")}</p>
         </div>
         {isAdmin && owners.length > 0 ? (
           <label className="odds-team-picker">
@@ -129,15 +131,15 @@ export default function RiskPage() {
           <section className="card stack">
             <dl className="bet-card-numbers risk-totals">
               <div>
-                <dt className="muted">{t("Open bets")}</dt><HelpTip text="Bets on matches that are not finished yet." />
+                <dt className="muted">{t("Open bets")}<HelpTip text="Bets on matches that are not finished yet." /></dt>
                 <dd>{view.totals.openBets}</dd>
               </div>
               <div>
-                <dt className="muted">{t("Staked")}</dt><HelpTip text="All the money Players put on those open bets." />
+                <dt className="muted">{t("Staked")}<HelpTip text="All the money Players put on those open bets." /></dt>
                 <dd>{formatMoney(view.totals.staked)}</dd>
               </div>
               <div>
-                <dt className="muted">{t("Biggest payout")}</dt><HelpTip text="The most you would have to pay if the worst result for you happens in one match." />
+                <dt className="muted">{t("Biggest payout")}<HelpTip text="The most you would have to pay if the worst result for you happens in one match." /></dt>
                 <dd>
                   <strong>{formatMoney(view.totals.worstCase)}</strong>
                 </dd>
@@ -190,7 +192,7 @@ function CapEditor({ cap, onSave }: { cap: number | null; onSave: (cap: number |
     return (
       <div className="risk-cap">
         <div>
-          <strong>{cap === null ? t("Payout cap: off") : t("Payout cap: {amount}", { amount: formatMoney(cap) })}</strong><HelpTip text="A safety limit. When one result of a match would make you pay more than this, new bets on that result are refused. Leave it off for no limit." />
+          <strong>{cap === null ? t("Payout cap: off") : t("Payout cap: {amount}", { amount: formatMoney(cap) })}<HelpTip text="A safety limit. When one result of a match would make you pay more than this, new bets on that result are refused. Leave it off for no limit." /></strong>
           <p className="muted" style={{ margin: 0 }}>
             {cap === null
               ? t("Set a cap to stop taking bets once one outcome would pay out more than you want to cover.")

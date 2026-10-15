@@ -681,15 +681,14 @@ function CasinoOverview({ me }: { me: MeResponse }) {
         ) : null}
       </section>
 
-      <div className="card stack commission-period">
-        <nav className="tabs-nav commission-range" aria-label={t("Period")}>
-          {RANGES.map(([value, label]) => (
-            <button type="button" key={value} className={`tab-button${range === value ? " is-active" : ""}`} aria-pressed={range === value} onClick={() => setRange(value)}>
-              {t(label)}
-            </button>
-          ))}
-        </nav>
-      </div>
+      {/* Just the period switch: a card around it only added empty space. */}
+      <nav className="tabs-nav commission-range" aria-label={t("Period")}>
+        {RANGES.map(([value, label]) => (
+          <button type="button" key={value} className={`tab-button${range === value ? " is-active" : ""}`} aria-pressed={range === value} onClick={() => setRange(value)}>
+            {t(label)}
+          </button>
+        ))}
+      </nav>
 
       <div className="report-grid">
         <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins + data.games.dice.spins + data.games.keno.spins + data.games.coinflip.spins + data.games.scratch.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />

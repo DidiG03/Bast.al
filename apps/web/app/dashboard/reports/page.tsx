@@ -24,7 +24,8 @@ export default async function ReportsPage() {
   if (!token) redirect("/sign-in");
 
   const me = await serverApiFetch<MeResponse>("/users/me", token);
-  if (me.role === "PLAYER") redirect("/dashboard");
+  // Managers and Owners have it all on their Overview and People pages.
+  if (["PLAYER", "MANAGER", "OWNER"].includes(me.role)) redirect("/dashboard");
   const report = await serverApiFetch<UserReport>("/users/report", token);
   const isOwner = me.role === "OWNER";
   const isManager = me.role === "MANAGER";
@@ -107,7 +108,7 @@ export default async function ReportsPage() {
           {report.recentAudit.length === 0 ? (
             <p className="muted">{t("No activity recorded yet.")}</p>
           ) : (
-            <div className="report-list">
+            <div className="report-list report-activity-list">
               {report.recentAudit.map((entry) => (
                 <div
                   className="report-list-row report-activity-row"

@@ -26,6 +26,7 @@ import { AdjustBalanceDto, ApprovalLimitDto, ApproveTransactionDto, BalanceLimit
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { ReassignUserDto } from "./dto/reassign-user.dto";
 import { AuditQueryDto } from "./dto/audit-query.dto";
+import { MoneyQueryDto } from "./dto/money-query.dto";
 import { ManagerCapacityDto } from "./dto/manager-capacity.dto";
 import { CommissionRateDto } from "./dto/commission.dto";
 import { BulkActionDto, TeamSettingsDto } from "./dto/team.dto";
@@ -344,6 +345,14 @@ export class UsersController {
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
   statement(@CurrentActor() actor: Actor, @Param("id") id: string, @Query("from") from?: string, @Query("to") to?: string) {
     return this.users.balanceStatement(actor, id, from, to);
+  }
+
+  @Get("money")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)
+  money(@CurrentActor() actor: Actor, @Query() query: MoneyQueryDto) {
+    return this.users.moneyMovements(actor, query);
   }
 
   @Get("financial-report")

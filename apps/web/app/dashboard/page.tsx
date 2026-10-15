@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { HelpTip } from "../../components/help-tip";
 import { HomeEventCard } from "../../components/home-event-card";
-import { NamedIcon } from "../../components/icons";
+import { NamedIcon, type IconName } from "../../components/icons";
 import { PlayerSportTabs, type SportTab } from "../../components/player-sport-tabs";
 import { ToastOnMount } from "../../components/toast-on-mount";
 import {
@@ -95,6 +95,28 @@ function PageHeader({ username, subtitle, now }: { username: string; subtitle: s
   );
 }
 
+/**
+ * The everyday jobs as big buttons at the top of the Overview, so nobody
+ * has to know which menu each one is under. A number shows when something
+ * is waiting.
+ */
+function QuickActions({ actions }: { actions: Array<{ href: string; label: string; icon: IconName; count?: number; primary?: boolean }> }) {
+  const { t } = getT();
+  return (
+    <nav className="quick-actions" aria-label={t("What do you want to do?")}>
+      {actions.map((action) => (
+        <Link key={action.href + action.label} href={action.href} className={`quick-action${action.primary ? " is-primary" : ""}`}>
+          <span className="quick-action-icon" aria-hidden="true">
+            <NamedIcon name={action.icon} className="quick-action-svg" />
+          </span>
+          <span className="quick-action-label">{action.label}</span>
+          {action.count ? <span className="quick-action-count">{action.count}</span> : null}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 function StatusDot({ status }: { status: UserRow["status"] }) {
   const { t } = getT();
   return (
@@ -164,6 +186,14 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
   return (
     <div className="overview">
       <PageHeader username={me.username} now={now} subtitle={t("How the whole platform is doing this week, and what each Owner owes you.")} />
+      <QuickActions
+        actions={[
+          { href: "/dashboard/people?add=owner", label: t("Add an owner"), icon: "userPlus", primary: true },
+          { href: "/dashboard/finance", label: t("Approve transfers"), icon: "check", count: pending?.length ?? 0 },
+          { href: "/dashboard/settlement", label: t("Check results"), icon: "settlement", count: needsSettlement },
+          { href: "/dashboard/odds", label: t("Set prices"), icon: "odds" },
+        ]}
+      />
 
       <div className="overview-layout">
         <div className="overview-main">
@@ -214,11 +244,11 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
               items={[
                 { label: t("Delegations to approve"), count: pending?.length ?? 0, href: "/dashboard/finance" },
                 { label: t("Matches needing a result"), count: needsSettlement, href: "/dashboard/settlement" },
-                { label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/users" },
+                { label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/people" },
               ]}
             />
           </Panel>
-          <Panel title={t("Platform")} help="How many Owners, Managers and Players there are, and all the money sitting in their balances together." icon="users" action={<Link href="/dashboard/users" className="panel-link">{t("Users")}</Link>}>
+          <Panel title={t("Platform")} help="How many Owners, Managers and Players there are, and all the money sitting in their balances together." icon="users" action={<Link href="/dashboard/people" className="panel-link">{t("People")}</Link>}>
             <Facts
               rows={[
                 { label: t("Owners"), value: count("OWNER") },
@@ -234,7 +264,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
         </aside>
       </div>
 
-      <Panel title={t("Owners this week")} help="One line for each Owner: how much their team bet and made this week, and how much they owe you. Status shows if you already collected it." icon="commissions" flush action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
+      <Panel title={t("Owners this week")} help="One line for each Owner: how much their team bet and made this week, and how much they owe you. Status shows if you already collected it." icon="commissions" flush action={<Link href="/dashboard/commissions" className="panel-link">{t("Earnings")}</Link>}>
         {week && week.owners.length > 0 ? (
           <table className="data-table">
             <thead>
@@ -252,10 +282,10 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
               {week.owners.map((owner) => (
                 <tr key={owner.id}>
                   <th scope="row" data-label={t("Owner")}>
-                    <span className="person">
+                    <Link href={`/dashboard/people/${owner.id}`} className="person">
                       <span className="person-avatar" aria-hidden="true">{owner.username.slice(0, 2).toUpperCase()}</span>
                       {owner.username}
-                    </span>
+                    </Link>
                   </th>
                   <td className="num" data-label={t("Rate")}>{owner.commissionRate}%</td>
                   <td className="num" data-label={t("Players")}>{owner.players}</td>
@@ -270,7 +300,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
             </tbody>
           </table>
         ) : (
-          <p className="panel-empty">{t("No Owners yet. Create one from the Users page.")}</p>
+          <p className="panel-empty">{t("No Owners yet. Add one from the People page.")}</p>
         )}
       </Panel>
     </div>
@@ -308,6 +338,14 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
   return (
     <div className="overview">
       <PageHeader username={me.username} now={now} subtitle={t("Your team's results this week, what you owe, and where your risk sits.")} />
+      <QuickActions
+        actions={[
+          { href: "/dashboard/people?add=player", label: t("Add a player"), icon: "userPlus", primary: true },
+          { href: "/dashboard/people?add=manager", label: t("Add a manager"), icon: "userPlus" },
+          { href: "/dashboard/finance", label: t("Approve transfers"), icon: "check", count: pending?.length ?? 0 },
+          { href: "/dashboard/settlement", label: t("See the bets"), icon: "settlement" },
+        ]}
+      />
 
       <div className="overview-layout">
         <div className="overview-main">
@@ -338,7 +376,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
             />
           </div>
 
-          <Panel title={t("Daily team profit")} help="One bar for each day. Above the line: your team made money that day. Below the line: your Players won money. Tap a bar to see the exact amount." icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
+          <Panel title={t("Daily team profit")} help="One bar for each day. Above the line: your team made money that day. Below the line: your Players won money. Tap a bar to see the exact amount." icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Earnings")}</Link>}>
             <BarChart
               points={chart}
               summary={
@@ -352,7 +390,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
         </div>
 
         <aside className="overview-rail">
-          <Panel title={t("Risk right now")} help="Bets that are not finished yet. “Worst case payout” is the most you could have to pay if the Players' picks win. The payout cap stops new bets that could pay more than it." icon="risk" action={<Link href="/dashboard/risk" className="panel-link">{t("Risk")}</Link>}>
+          <Panel title={t("Risk right now")} help="Bets that are not finished yet. “Worst case payout” is the most you could have to pay if the Players' picks win. The payout cap stops new bets that could pay more than it." icon="risk" action={<Link href="/dashboard/risk" className="panel-link">{t("Money at risk")}</Link>}>
             {risk ? (
               <div className="stack-tight">
                 <Facts
@@ -386,7 +424,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
             <AttentionList
               items={[
                 { label: t("Delegations to approve"), count: pending?.length ?? 0, href: "/dashboard/finance" },
-                { label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/users" },
+                { label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/people" },
               ]}
             />
           </Panel>
@@ -423,10 +461,10 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
               {week.managers.map((manager) => (
                 <tr key={manager.id}>
                   <th scope="row" data-label={t("Manager")}>
-                    <span className="person">
+                    <Link href={`/dashboard/people/${manager.id}`} className="person">
                       <span className="person-avatar" aria-hidden="true">{manager.username.slice(0, 2).toUpperCase()}</span>
                       {manager.username}
-                    </span>
+                    </Link>
                   </th>
                   <td className="num" data-label={t("Rate")}>{manager.commissionRate}%</td>
                   <td className="num" data-label={t("Players")}>{manager.players.length}</td>
@@ -455,7 +493,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
             </tbody>
           </table>
         ) : (
-          <p className="panel-empty">{t("No Managers yet. Add one from the Users page.")}</p>
+          <p className="panel-empty">{t("No managers yet. Add one on the Team page.")}</p>
         )}
       </Panel>
     </div>
@@ -492,6 +530,14 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
   return (
     <div className="overview">
       <PageHeader username={me.username} now={now} subtitle={t("Your Players, their balances, and what you've earned this week.")} />
+      <QuickActions
+        actions={[
+          { href: "/dashboard/people?add=player", label: t("Add a player"), icon: "userPlus", primary: true },
+          { href: "/dashboard/people", label: t("Give credit"), icon: "wallet" },
+          { href: "/dashboard/settlement", label: t("See the bets"), icon: "settlement" },
+          { href: "/dashboard/commissions", label: t("My earnings"), icon: "commissions" },
+        ]}
+      />
 
       <div className="overview-layout">
         <div className="overview-main">
@@ -534,7 +580,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
             />
           </div>
 
-          <Panel title={t("Your commission by week")} help="What you earned in each of the last weeks. Tap a bar to see the exact amount." icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Commissions")}</Link>}>
+          <Panel title={t("Your commission by week")} help="What you earned in each of the last weeks. Tap a bar to see the exact amount." icon="chart" action={<Link href="/dashboard/commissions" className="panel-link">{t("Earnings")}</Link>}>
             {chart.length > 0 ? (
               <BarChart
                 points={chart}
@@ -552,7 +598,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
         </div>
 
         <aside className="overview-rail">
-          <Panel title={t("Your team")} help="Your Players: how many you have, how many are blocked (suspended), and how much money they hold together." icon="users" action={<Link href="/dashboard/users" className="panel-link">{t("Players")}</Link>}>
+          <Panel title={t("Your team")} help="Your Players: how many you have, how many are blocked (suspended), and how much money they hold together." icon="users" action={<Link href="/dashboard/people" className="panel-link">{t("Players")}</Link>}>
             <Facts
               rows={[
                 { label: t("Players"), value: players.length },
@@ -563,7 +609,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
             />
           </Panel>
           <Panel title={t("Needs your attention")} help="Players who are almost out of money. Tap the line to see them and top them up." icon="inbox">
-            <AttentionList items={[{ label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/users" }]} />
+            <AttentionList items={[{ label: t("Low-balance alerts"), count: notifications.lowBalance, href: "/dashboard/people" }]} />
           </Panel>
           <Panel title={t("Latest updates")} help="Your newest notifications: money sent, approvals and alerts. The bell at the top of the page shows all of them." icon="bell" flush>
             <ActivityFeed items={notifications.latest} now={now} />
@@ -571,7 +617,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
         </aside>
       </div>
 
-      <Panel title={t("Players this week")} help="One line for each Player: how much they bet this week, and whether they won or lost." icon="users" flush action={<Link href="/dashboard/users" className="panel-link">{t("Manage Players")}</Link>}>
+      <Panel title={t("Players this week")} help="One line for each Player: how much they bet this week, and whether they won or lost." icon="users" flush action={<Link href="/dashboard/people" className="panel-link">{t("Manage Players")}</Link>}>
         {sortedPlayers.length > 0 ? (
           <table className="data-table">
             <thead>
@@ -590,7 +636,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
                 return (
                   <tr key={player.id}>
                     <th scope="row" data-label={t("Player")}>
-                      <Link href={`/dashboard/players/${player.id}`} className="person">
+                      <Link href={`/dashboard/people/${player.id}`} className="person">
                         <span className="person-avatar" aria-hidden="true">{player.username.slice(0, 2).toUpperCase()}</span>
                         {player.username}
                       </Link>
@@ -606,7 +652,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
             </tbody>
           </table>
         ) : (
-          <p className="panel-empty">{t("No Players yet. Add one from the Users page.")}</p>
+          <p className="panel-empty">{t("No players yet. Add one on the Players page.")}</p>
         )}
       </Panel>
     </div>
@@ -631,7 +677,7 @@ const CASINO_GAMES: Record<CasinoLastGame["game"], { href: string; icon: string;
   roulette: { href: "/dashboard/casino/roulette", icon: "🎡", name: "Roulette" },
   blackjack: { href: "/dashboard/casino/blackjack", icon: "🃏", name: "Blackjack" },
   mines: { href: "/dashboard/casino/mines", icon: "💎", name: "Mines" },
-  penalty: { href: "/dashboard/casino/penalty", icon: "⚽", name: "Penalty" },
+  penalty: { href: "/dashboard/casino/penalty", icon: "settlement", name: "Penalty" },
   plinko: { href: "/dashboard/casino/plinko", icon: "🔴", name: "Plinko" },
   dice: { href: "/dashboard/casino/dice", icon: "🎲", name: "Dice" },
   keno: { href: "/dashboard/casino/keno", icon: "🔢", name: "Keno" },

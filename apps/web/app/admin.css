@@ -1914,3 +1914,1609 @@ html:has(.role-admin) body {
     padding-top: 18vh;
   }
 }
+
+/* ============================================================
+   People, a person's page, quick actions and Settings: staff pages
+   built for big taps and plain words. Rows and buttons are at least
+   48px high, one main action per row, everything labelled.
+   ============================================================ */
+
+.role-admin a.sidebar-account {
+  color: inherit;
+  text-decoration: none;
+  border-radius: 10px;
+}
+
+.role-admin a.sidebar-account:hover {
+  background: var(--a-hover);
+}
+
+.segmented {
+  display: inline-flex;
+  max-width: 100%;
+  gap: 2px;
+  padding: 3px;
+  overflow-x: auto;
+  border: 1px solid var(--a-border);
+  border-radius: 9px;
+  background: var(--a-subtle);
+  scrollbar-width: none;
+  align-self: flex-start;
+}
+
+.role-admin .segmented > a,
+.role-admin .segmented > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--a-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.role-admin .segmented > a:hover,
+.role-admin .segmented > button:hover {
+  color: var(--a-text);
+  opacity: 1;
+}
+
+.role-admin .segmented > .is-active {
+  border-color: var(--a-border);
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow);
+  color: var(--a-text);
+}
+
+.segmented-count {
+  min-width: 1.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--a-hover);
+  color: var(--a-text-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.35rem;
+  text-align: center;
+}
+
+.people-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.people-toolbar .search-field {
+  flex: 1;
+}
+
+.people-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.people-list.is-flat {
+  border: 1px solid var(--a-border);
+  border-radius: 12px;
+}
+
+.people-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.75rem;
+  border-bottom: 1px solid var(--a-border);
+}
+
+.people-row:last-child {
+  border-bottom: 0;
+}
+
+.people-row.is-selected {
+  background: var(--a-subtle);
+}
+
+.people-select {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 1rem;
+  flex: 0 0 auto;
+}
+
+.people-row-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+  min-height: 4rem;
+  padding: 0.6rem 0.25rem 0.6rem 1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.people-row-main:hover {
+  background: var(--a-hover);
+}
+
+.people-row-main .person-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 0.8rem;
+}
+
+.people-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.people-row-text strong {
+  overflow: hidden;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.people-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--a-muted);
+  font-size: 0.8125rem;
+}
+
+.people-tag {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.people-tag.is-blocked {
+  background: var(--a-bad-bg);
+  color: var(--a-bad);
+}
+
+.people-tag.is-bets {
+  background: var(--a-warn-bg);
+  color: var(--a-warn);
+}
+
+.people-tag.is-active {
+  background: var(--a-good-bg);
+  color: var(--a-good);
+}
+
+.people-row.is-blocked .people-row-text strong,
+.people-row.is-blocked .people-row-balance {
+  color: var(--a-muted);
+}
+
+.people-row-balance {
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.people-row-chevron {
+  color: var(--a-faint);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.role-admin .people-row-action {
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  white-space: nowrap;
+}
+
+.people-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 2.5rem 1rem;
+  color: var(--a-muted);
+  text-align: center;
+}
+
+.person-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.person-hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+}
+
+.person-hero.is-blocked {
+  border-color: var(--a-bad);
+}
+
+.person-hero-who {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.person-hero-who h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.person-avatar.is-large {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 1.05rem;
+}
+
+.person-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0;
+  color: var(--a-muted);
+}
+
+.person-hero-balance {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+
+.person-hero-balance strong {
+  font-size: 1.9rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.person-more > summary {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.person-more[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+.person-footer {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0 1rem;
+}
+
+.role-admin .danger-text {
+  color: var(--a-bad);
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.quick-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 4rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--a-border);
+  border-radius: 12px;
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow);
+  color: var(--a-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.quick-action:hover {
+  border-color: var(--a-border-strong);
+  background: var(--a-hover);
+}
+
+.quick-action.is-primary {
+  border-color: var(--a-text);
+  background: var(--a-text);
+  color: var(--a-surface);
+}
+
+.quick-action.is-primary:hover {
+  border-color: var(--a-text);
+  background: var(--a-text);
+  opacity: 0.9;
+}
+
+.quick-action-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--a-subtle);
+  font-size: 1.1rem;
+}
+
+.quick-action.is-primary .quick-action-icon {
+  background: color-mix(in srgb, var(--a-surface) 16%, transparent);
+  color: var(--a-surface);
+}
+
+.quick-action-count {
+  margin-left: auto;
+  min-width: 1.6rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--a-bad);
+  color: #fff;
+  font-size: 0.8rem;
+  line-height: 1.6rem;
+  text-align: center;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: 0.75rem;
+}
+
+.role-admin .settings-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 5.5rem;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.role-admin .settings-card:hover {
+  border-color: var(--a-border-strong);
+  background: var(--a-hover);
+}
+
+.settings-card-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: var(--a-subtle);
+  font-size: 1.35rem;
+}
+
+.settings-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.settings-card-text strong {
+  font-size: 1rem;
+}
+
+.account-ready {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px dashed var(--a-border-strong);
+  border-radius: 12px;
+  background: var(--a-subtle);
+}
+
+.account-ready dt {
+  color: var(--a-muted);
+}
+
+.account-ready dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.05rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--a-muted);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+@media (max-width: 760px) {
+  .quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .person-hero-balance strong {
+    font-size: 1.6rem;
+  }
+
+  .people-row-main {
+    padding-left: 0.85rem;
+  }
+
+  .people-row-main .person-avatar {
+    display: none;
+  }
+}
+
+/* On a person's page the money history is the page itself: no box to scroll inside. */
+.person-page .ledger-list {
+  max-height: none;
+  overflow: visible;
+}
+
+/* The Owner's team as a tree: each Manager, with their Players indented under them. */
+.people-branch {
+  border-bottom: 1px solid var(--a-border);
+}
+
+.people-branch:last-child {
+  border-bottom: 0;
+}
+
+.people-branch-head {
+  display: flex;
+  align-items: center;
+}
+
+.people-branch-head > .people-row {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.people-branch-head > .people-row .people-row-main {
+  padding-left: 0.25rem;
+}
+
+.role-admin .people-fold {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-left: 0.5rem;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--a-muted);
+  cursor: pointer;
+}
+
+.role-admin .people-fold:hover:not(:disabled) {
+  background: var(--a-hover);
+  color: var(--a-text);
+}
+
+.role-admin .people-fold:disabled {
+  visibility: hidden;
+}
+
+.people-branch-children {
+  margin: 0 0 0.6rem 1.85rem;
+  border-left: 2px solid var(--a-border);
+}
+
+.people-branch-children .people-row:last-child {
+  border-bottom: 0;
+}
+
+.people-row.is-nested .people-row-main {
+  min-height: 3.5rem;
+  padding-left: 0.85rem;
+}
+
+.people-row.is-nested .person-avatar {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.7rem;
+}
+
+.people-branch-label {
+  padding: 0.85rem 1rem 0.5rem;
+  color: var(--a-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .people-branch-children {
+    margin-left: 1.1rem;
+  }
+}
+
+/* ============================================================
+   Buttons on staff pages: one height, one shape, four kinds.
+   - Primary (a plain <button>): filled, for the one main thing.
+   - .secondary: outlined, for everything else.
+   - .danger-button: red outline, for blocking, rejecting, deleting.
+   - .text-button: a link-like action inside a header or list.
+   Add .is-small for buttons inside list rows. Icons sit left of the
+   label at one size. :where() keeps these at zero weight, so any
+   component's own class still wins.
+   ============================================================ */
+
+:where(.role-admin) button:where(:not([class]), .secondary, .danger-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+:where(.role-admin) button:where(:not([class])) {
+  border-color: var(--a-text);
+}
+
+:where(.role-admin) button:where(.secondary) {
+  border-color: var(--a-border);
+}
+
+.role-admin button.is-small {
+  min-height: 2.125rem;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+/* Outlined in red: readable in light and dark, and clearly not the main action. */
+.role-admin button.danger-button {
+  border: 1px solid color-mix(in srgb, var(--a-bad) 45%, var(--a-border));
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow);
+  color: var(--a-bad);
+}
+
+.role-admin button.danger-button:not(:disabled):hover {
+  background: var(--a-bad-bg);
+  opacity: 1;
+}
+
+.role-admin .text-button {
+  min-height: 2rem;
+  padding: 0 0.25rem;
+  color: var(--a-text-2);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--a-border-strong);
+  text-underline-offset: 3px;
+}
+
+.role-admin .text-button:not(:disabled):hover {
+  color: var(--a-text);
+  text-decoration-color: currentColor;
+}
+
+.role-admin .text-button.danger-text {
+  color: var(--a-bad);
+}
+
+.button-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+/* Page headings: title and subtitle on the left, the page's buttons on the right, wrapping under on a phone. */
+.role-admin .page-title-row {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.role-admin .page-title-actions {
+  flex-wrap: wrap;
+}
+
+/* A person's page: their buttons in one row under their name, the red one set apart on the right. */
+.person-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--a-border);
+}
+
+.person-toolbar-end {
+  margin-left: auto;
+}
+
+.people-fold-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  transition: transform 0.15s ease;
+}
+
+.people-fold.is-open .people-fold-icon {
+  transform: rotate(90deg);
+}
+
+.quick-action-svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.settings-card-svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.settings-card-chevron {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  color: var(--a-faint);
+}
+
+.role-admin .settings-card-icon {
+  color: var(--a-text-2);
+}
+
+/* Approve / Reject pairs line up the same everywhere. */
+.role-admin .approval-actions,
+.role-admin .ledger-actions {
+  gap: 0.5rem;
+}
+
+@media (max-width: 760px) {
+  .person-hero-balance {
+    align-items: flex-start;
+  }
+
+  .person-toolbar > button {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-height: 2.75rem;
+  }
+
+  .person-toolbar-end {
+    margin-left: 0;
+  }
+
+  .role-admin .page-title-actions {
+    width: 100%;
+  }
+
+  .role-admin .page-title-actions > button {
+    flex: 1;
+    min-height: 2.75rem;
+  }
+}
+
+/* On/off settings (the Casino for the site, a team, one Player): the text on
+   the left, a sliding switch on the right, one line each. Labels stack as a
+   column elsewhere, so this sets the row back explicitly. */
+.role-admin .casino-switch {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--a-border);
+  color: var(--a-text);
+  cursor: pointer;
+}
+
+.role-admin .casino-switch:last-of-type {
+  border-bottom: 0;
+}
+
+.role-admin .casino-switch > span {
+  order: 1;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.875rem;
+}
+
+.role-admin .casino-switch > span strong {
+  font-weight: 600;
+}
+
+.role-admin .casino-switch input[type="checkbox"] {
+  order: 2;
+  position: relative;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 1.6rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--a-border-strong);
+  border-radius: 999px;
+  background: var(--a-bar);
+  box-shadow: none;
+  cursor: pointer;
+  appearance: none;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.role-admin .casino-switch input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.6rem - 6px);
+  height: calc(1.6rem - 6px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  transition: transform 150ms ease;
+}
+
+.role-admin .casino-switch input[type="checkbox"]:checked {
+  border-color: var(--a-good);
+  background: var(--a-good);
+}
+
+.role-admin .casino-switch input[type="checkbox"]:checked::after {
+  transform: translateX(1.15rem);
+}
+
+.role-admin .casino-switch input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.role-admin .casino-switch input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--a-text);
+  outline-offset: 2px;
+}
+
+/* My account: password, language and sign out as one list, each control on the right. */
+.role-admin .account-settings {
+  display: grid;
+  padding-block: 0.25rem;
+}
+
+.role-admin .account-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--a-border);
+}
+
+.role-admin .account-setting:last-child {
+  border-bottom: 0;
+}
+
+.role-admin .account-setting > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.role-admin .account-setting > div:first-child strong {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.role-admin .account-setting > div:first-child .muted {
+  font-size: 0.8125rem;
+}
+
+.role-admin .account-setting .button-link,
+.role-admin .account-setting .language-picker,
+.role-admin .account-setting .sign-out-button {
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0;
+}
+
+.role-admin .account-setting .button-link {
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+  border-color: var(--a-border-strong);
+  background: var(--a-surface);
+  color: var(--a-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.role-admin .account-setting .button-link:hover {
+  background: var(--a-hover);
+}
+
+.role-admin .account-setting .sign-out-button {
+  width: auto;
+}
+
+.role-admin .account-setting .language-picker {
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+}
+
+/* Commissions: the period tabs, the dates and Export on one line, no card around them. */
+.role-admin .period-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.role-admin .period-toolbar .commission-range {
+  margin: 0;
+}
+
+.role-admin .period-toolbar-label {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8125rem;
+}
+
+.role-admin .period-toolbar-export {
+  margin-left: auto;
+}
+
+/* Reports: the two columns keep their own height, and the activity list scrolls instead of stretching the page. */
+.role-admin .reports-columns {
+  align-items: start;
+}
+
+.role-admin .report-activity-list {
+  max-height: 34rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.role-admin .report-activity-row strong::first-letter {
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .role-admin .account-setting {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .role-admin .account-setting .button-link,
+  .role-admin .account-setting .language-picker,
+  .role-admin .account-setting .sign-out-button {
+    align-self: flex-start;
+  }
+
+  .role-admin .period-toolbar-export {
+    margin-left: auto;
+  }
+
+  .role-admin .period-toolbar .commission-range {
+    display: flex;
+    width: 100%;
+  }
+
+  .role-admin .period-toolbar .commission-range .tab-button {
+    flex: 1 1 auto;
+    padding-inline: 0.35rem;
+    font-size: 0.78rem;
+  }
+}
+
+/* Prices: the sport picker reads like every other set of tabs on the staff pages. */
+.role-admin .sport-switch {
+  gap: 2px;
+  padding: 3px;
+  border-color: var(--a-border);
+  border-radius: 9px;
+  background: var(--a-subtle);
+}
+
+.role-admin .sport-option {
+  min-height: 2rem;
+  padding: 0 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--a-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.role-admin .sport-option:hover {
+  color: var(--a-text);
+}
+
+.role-admin .sport-option.is-active {
+  border-color: var(--a-border);
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow);
+  color: var(--a-text);
+}
+
+.role-admin .sport-option svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Money: the date filter sits inside the list it filters. */
+.role-admin .finance-filter {
+  grid-template-columns: minmax(9rem, 12rem) minmax(9rem, 12rem) auto;
+  justify-content: start;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--a-border);
+}
+
+.role-admin .finance-filter .filter-bar-actions button {
+  min-height: 2.5rem;
+}
+
+/* A small "View details" under a row, and names that open the person's page. */
+.role-admin .row-detail-link {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+  color: var(--a-muted);
+  font-size: 0.8125rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.role-admin .row-detail-link:hover,
+.role-admin .row-name-link:hover {
+  color: var(--a-text);
+}
+
+.role-admin .row-name-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.role-admin .row-name-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .role-admin .finance-filter {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .role-admin .finance-filter input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .role-admin .finance-filter .filter-bar-actions button {
+    flex: 1 1 0;
+  }
+
+  .role-admin .finance-filter .filter-bar-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Person page: "More settings" opens like any other fold, with a line saying what's inside. */
+.role-admin .person-more > summary {
+  justify-content: space-between;
+  gap: 1rem;
+  list-style: none;
+}
+
+.role-admin .person-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.role-admin .person-more > summary > span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.role-admin .person-more > summary strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.role-admin .person-more > summary .muted {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.role-admin .person-more-chevron {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  color: var(--a-muted);
+  transition: transform 150ms ease;
+}
+
+.role-admin .person-more[open] .person-more-chevron {
+  transform: rotate(90deg);
+}
+
+/* Person page: commission and approval limit as two tidy rows, the text left and the box and Save right. */
+.role-admin .person-pay-limits {
+  gap: 0;
+}
+
+.role-admin .person-pay-limits > h2 {
+  margin-bottom: 0.25rem !important;
+}
+
+.role-admin .person-pay-limits .commission-field {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--a-border);
+}
+
+.role-admin .person-pay-limits .commission-field:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.role-admin .person-pay-limits .commission-field > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.role-admin .person-pay-limits .commission-field h2 {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.role-admin .person-pay-limits .commission-field p {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.role-admin .person-pay-limits .commission-input-row {
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.role-admin .person-pay-limits .commission-input-row > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.role-admin .person-pay-limits .approval-reset {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+@media (max-width: 640px) {
+  .role-admin .person-pay-limits .commission-field {
+    grid-template-columns: 1fr;
+  }
+
+  .role-admin .person-pay-limits .commission-input-row {
+    justify-content: flex-start;
+  }
+}
+
+/* "More settings": each limit on one row, the name left and the box and Save right. */
+.role-admin .person-more .inline-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--a-border);
+}
+
+.role-admin .person-more .inline-edit-form > label {
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.role-admin .person-more .inline-edit-form input {
+  width: 10rem;
+  flex: 0 0 auto;
+}
+
+.role-admin .person-more > .stack {
+  gap: 0;
+}
+
+@media (max-width: 640px) {
+  .role-admin .person-more .inline-edit-form > label {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+  }
+
+  .role-admin .person-more .inline-edit-form {
+    align-items: flex-end;
+  }
+
+  .role-admin .person-more .inline-edit-form input {
+    width: 100%;
+  }
+}
+
+/* Earnings: the pay button and its note wrap under the amount instead of squeezing the name. */
+.role-admin .report-list-row > div.commission-amount-block {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.role-admin .commission-row-actions,
+.role-admin .commission-payout-action {
+  flex-wrap: wrap;
+}
+
+.role-admin .report-list-row > div:first-child {
+  min-width: 8rem;
+}
+
+@media (max-width: 640px) {
+  .role-admin .commission-details > summary.report-list-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .role-admin .commission-details .commission-amount-block {
+    align-items: flex-start !important;
+    text-align: left !important;
+  }
+
+  .role-admin .commission-details .commission-row-actions,
+  .role-admin .commission-details .commission-payout-action {
+    justify-content: flex-start;
+  }
+}
+
+/* A card's heading row already gets the card's gap below it; no extra margin on top of that. */
+.role-admin .stack > .tree-header {
+  margin-bottom: 0;
+}
+
+/* Team list on a phone: the Credit button is just its + so the name keeps its room. */
+@media (max-width: 640px) {
+  .role-admin .people-row-action {
+    width: 2.125rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .role-admin .people-row-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+/* Money page: filters, the period's totals, and every money move. */
+.role-admin .money-filters {
+  gap: 0.9rem;
+}
+
+.role-admin .money-filter-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.role-admin .money-filter-top .tabs-nav {
+  margin: 0;
+}
+
+.role-admin .money-dates {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.role-admin .money-dates label,
+.role-admin .money-filter-grid label {
+  gap: 0.3rem;
+  color: var(--a-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.role-admin .money-dates input {
+  width: 10rem;
+}
+
+.role-admin .money-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.role-admin .money-filter-grid select,
+.role-admin .money-filter-grid input,
+.role-admin .money-dates input {
+  min-width: 0;
+  min-height: 2.5rem;
+  color: var(--a-text);
+  font-size: 0.875rem;
+}
+
+.role-admin .money-filter-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--a-border);
+  font-size: 0.8125rem;
+}
+
+.role-admin .money-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  margin: 0;
+  padding-block: 0.85rem;
+}
+
+.role-admin .money-strip > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.role-admin .money-strip dt {
+  font-size: 0.75rem;
+}
+
+.role-admin .money-strip dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.role-admin .money-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.role-admin .money-view-bar .tabs-nav {
+  margin: 0;
+}
+
+.role-admin .money-export {
+  margin-left: auto;
+}
+
+.role-admin .money-move {
+  align-items: flex-start;
+}
+
+.role-admin .money-move.is-muted .money-route,
+.role-admin .money-move.is-muted .money-move-side strong {
+  opacity: 0.6;
+}
+
+.role-admin .money-move-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.role-admin .money-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--a-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.role-admin .money-kind::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--a-faint);
+}
+
+.role-admin .money-kind.is-delegation::before {
+  background: var(--a-good);
+}
+
+.role-admin .money-kind.is-reclaim::before {
+  background: #d4a017;
+}
+
+.role-admin .money-kind.is-adjustment::before {
+  background: #7c8cf8;
+}
+
+.role-admin .money-kind.is-bet_stake::before,
+.role-admin .money-kind.is-bet_settlement::before {
+  background: #4aa8d8;
+}
+
+.role-admin .money-kind.is-casino::before {
+  background: #c06cd8;
+}
+
+.role-admin .money-status.is-pending {
+  border-color: transparent;
+  background: var(--a-warn-bg);
+}
+
+.role-admin .money-status.is-rejected {
+  border-color: transparent;
+  background: var(--a-bad-bg);
+  color: var(--a-bad);
+}
+
+.role-admin .money-route {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.role-admin .money-route span[aria-hidden] {
+  color: var(--a-muted);
+  font-weight: 400;
+}
+
+.role-admin .report-list-row > div.money-move-side {
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: 0.15rem;
+  text-align: right;
+}
+
+.role-admin .money-move-side strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.role-admin .money-move-side time {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.role-admin .money-move-side .row-detail-link {
+  align-self: flex-end;
+}
+
+.role-admin .money-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--a-border);
+  font-size: 0.8125rem;
+}
+
+.role-admin .money-person-row {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--a-border);
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.role-admin .money-person-row:last-child {
+  border-bottom: 0;
+}
+
+.role-admin .money-person-row:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.role-admin .money-person-net {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.role-admin .money-person-chevron {
+  width: 1rem;
+  height: 1rem;
+  color: var(--a-muted);
+}
+
+@media (max-width: 900px) {
+  .role-admin .money-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .role-admin .money-filter-grid label:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .role-admin .money-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .role-admin .money-filter-top .tabs-nav {
+    width: 100%;
+  }
+
+  .role-admin .money-dates {
+    width: 100%;
+  }
+
+  .role-admin .money-dates label {
+    flex: 1 1 0;
+  }
+
+  .role-admin .money-dates input {
+    width: 100%;
+  }
+
+  .role-admin .money-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .role-admin .money-move {
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .role-admin .report-list-row > div.money-move-side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    text-align: left;
+  }
+
+  .role-admin .money-move-side .row-detail-link {
+    align-self: auto;
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .role-admin .money-stats {
+    gap: 0.6rem;
+  }
+
+  .role-admin .money-stats .report-stat strong {
+    font-size: 1.05rem;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .role-admin .money-period {
+    display: flex;
+  }
+
+  .role-admin .money-period .tab-button {
+    flex: 1 1 auto;
+    padding-inline: 0.3rem;
+    font-size: 0.75rem;
+  }
+}
+
+.role-admin .person-ledger-actions {
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.role-admin .person-ledger-actions .row-detail-link {
+  margin: 0;
+}
+
+/* People on a phone: the view tabs share the width, and a long name wraps instead of being cut short. */
+@media (max-width: 640px) {
+  .role-admin .people-page .segmented {
+    display: flex;
+    width: 100%;
+  }
+
+  .role-admin .people-page .segmented > button {
+    flex: 1 1 auto;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0 0.3rem;
+    font-size: 0.78rem;
+  }
+
+  .role-admin .people-row-main {
+    gap: 0.5rem;
+  }
+
+  .role-admin .people-row-text strong {
+    overflow: visible;
+    font-size: 0.95rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .role-admin .people-row-balance {
+    font-size: 0.875rem;
+  }
+}
+
+/* A row with its own + button: on a phone the balance goes under the name, so the name keeps the width. */
+@media (max-width: 640px) {
+  .role-admin .people-row:has(.people-row-action) .people-row-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 0.5rem;
+    row-gap: 0.1rem;
+  }
+
+  .role-admin .people-row:has(.people-row-action) .people-row-text {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .role-admin .people-row:has(.people-row-action) .people-row-balance {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .role-admin .people-row:has(.people-row-action) .people-row-chevron {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}

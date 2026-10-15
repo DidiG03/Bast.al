@@ -83,7 +83,7 @@ export default async function DashboardLayout({
               <span className="sidebar-logo" aria-hidden="true">B</span>
               <span>Bast.al</span>
             </Link>
-            {isPlayer ? null : <DashboardTrail />}
+            {isPlayer ? null : <DashboardTrail role={me.role} />}
             {isPlayer ? (
               <BalanceChip balance={Number(me.balance)} title={t("Your balance, given to you by your Manager or Owner")} />
             ) : null}

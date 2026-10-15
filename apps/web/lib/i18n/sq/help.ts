@@ -212,8 +212,8 @@ export const help: Record<string, string> = {
   "Big money transfers from your team that need your OK before the money moves. Approve sends it; Reject cancels it and no money moves.":
     "Transferta të mëdha parash nga skuadra jote që duan miratimin tënd para se të lëvizin paratë. Mirato i dërgon; Refuzo i anulon dhe nuk lëvizin para.",
   "Money you sent and took back": "Paratë që dërgove dhe more mbrapsht",
-  "One line for each person right under you: how much money you sent them, how much you took back, and the difference on the right. Pick dates above and press Apply to change the period.":
-    "Një rresht për çdo person direkt nën ty: sa para i dërgove, sa more mbrapsht, dhe diferenca djathtas. Zgjidh datat sipër dhe shtyp Zbato për të ndryshuar periudhën.",
+  "One line for each person right under you: how much money you sent them, how much you took back, and the difference on the right. Pick dates and press Apply to change the period.":
+    "Një rresht për çdo person direkt nën ty: sa para i dërgove, sa more mbrapsht, dhe diferenca djathtas. Zgjidh datat dhe shtyp Zbato për të ndryshuar periudhën.",
   "The full record of one money move: who sent it, who got it, why, and who approved it. You can't change it; it stays as proof.":
     "Regjistri i plotë i një lëvizjeje parash: kush i dërgoi, kush i mori, pse, dhe kush e miratoi. Nuk mund ta ndryshosh; mbetet si provë.",
 
@@ -229,4 +229,14 @@ export const help: Record<string, string> = {
   "Matches playing now first, then the matches of the next two days with the most ways to bet, for each sport. Tap one to go straight to its prices.": "Fillimisht ndeshjet që po luhen tani, pastaj ndeshjet e dy ditëve të ardhshme me më shumë mënyra basti, për çdo sport. Prek njërën për të shkuar direkt te koeficientët e saj.",
   "For when you go live. Everything made while testing goes, so real users start from a clean app. Only you can do it, and you confirm it with your username and password.":
     "Për kur të nisësh punën e vërtetë. Gjithçka e krijuar gjatë provave fshihet, që përdoruesit e vërtetë të nisin në një aplikacion të pastër. Vetëm ti mund ta bësh, dhe e konfirmon me emrin e përdoruesit dhe fjalëkalimin.",
+  "All the credit sent down to the people in your team in this period, with the filters above.": "I gjithë krediti i dërguar te njerëzit e skuadrës sate në këtë periudhë, me filtrat sipër.",
+  "All the credit pulled back from people in your team in this period, with the filters above.": "I gjithë krediti i marrë mbrapsht nga njerëzit e skuadrës sate në këtë periudhë, me filtrat sipër.",
+  "Credit given minus credit taken back: how much more is out with your team than at the start of the period.": "Krediti i dhënë minus krediti i marrë mbrapsht: sa më shumë para ka skuadra jote se në fillim të periudhës.",
+  "The money in their balances right now, whatever period is picked.": "Paratë në balancat e tyre tani, cilado periudhë të jetë zgjedhur.",
+  "Each money move on its own line: who sent it, who got it, who did it and when. Tap Receipt to see the full record. Use the filters above to narrow it down.": "Çdo lëvizje parash në rreshtin e vet: kush i dërgoi, kush i mori, kush e bëri dhe kur. Shtyp Mandati për të parë regjistrimin e plotë. Përdor filtrat sipër për ta ngushtuar.",
+  "One line for each person right under you: how much money you sent them, how much you took back, and the difference on the right. Tap a line to see each of their moves.": "Një rresht për çdo person direkt nën ty: sa para i dërgove, sa more mbrapsht, dhe diferenca djathtas. Shtyp një rresht për të parë çdo lëvizje të tyre.",
+  "The credit sent to this person in this period.": "Krediti i dërguar te ky person në këtë periudhë.",
+  "The credit pulled back from this person in this period.": "Krediti i marrë mbrapsht nga ky person në këtë periudhë.",
+  "Credit given to this person minus credit taken back from them in this period.": "Krediti i dhënë këtij personi minus krediti i marrë mbrapsht prej tij në këtë periudhë.",
+  "Send credit to this Owner. Tap an amount, or type your own and press Send. It is new money: it comes out of no balance, and the Owner hands it on to their team.": "Dërgo kredit te ky Pronar. Prek një shumë, ose shkruaj tënden dhe shtyp Dërgo. Janë para të reja: nuk dalin nga asnjë balancë, dhe Pronari ia jep skuadrës së vet.",
 };

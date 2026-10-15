@@ -147,7 +147,7 @@ function PlayerList({ players }: { players: PlayerResult[] }) {
       {players.map((player) => (
         <div className="report-list-row" key={player.id}>
           <div>
-            <Link href={`/dashboard/players/${player.id}`} className="commission-player-link">{player.username}</Link>
+            <Link href={`/dashboard/people/${player.id}`} className="commission-player-link">{player.username}</Link>
             <span className="muted">
               {tn(player.bets, "{count} bet · {amount} staked", "{count} bets · {amount} staked", { amount: formatMoney(player.staked) })}
               {player.status === "SUSPENDED" ? ` · ${t("Suspended")}` : ""}
@@ -373,7 +373,7 @@ function TeamPerformance({ data }: { data: TeamCommissions }) {
                 <tr key={row.key}>
                   <th scope="row">
                     <span className="performance-player">
-                      <Link href={`/dashboard/players/${row.id}`} className="commission-player-link">{row.username}</Link>
+                      <Link href={`/dashboard/people/${row.id}`} className="commission-player-link">{row.username}</Link>
                       <span className="muted">{row.manager ?? t("No Manager")}</span>
                     </span>
                   </th>

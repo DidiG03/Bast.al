@@ -21,6 +21,7 @@ import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner
 import { useToast } from "../../../components/toaster";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { NamedIcon } from "../../../components/icons";
 
 type Range = "this-week" | "last-week" | "this-month" | "custom";
 
@@ -234,7 +235,7 @@ export default function CommissionsPage() {
     <div className="stack">
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{showingTeam && me?.role === "SUPER_ADMIN" && team ? t("{name}'s team", { name: team.owner.username }) : t("Commissions")}</h1>
+          <h1 style={{ margin: 0 }}>{showingTeam && me?.role === "SUPER_ADMIN" && team ? t("{name}'s team", { name: team.owner.username }) : t("Earnings")}</h1>
           <p className="muted report-subtitle">{subtitle}</p>
         </div>
         {me?.role === "SUPER_ADMIN" && ownerId ? (
@@ -244,7 +245,7 @@ export default function CommissionsPage() {
         ) : null}
       </div>
 
-      <div className="card stack commission-period">
+      <div className="period-toolbar">
         <nav className="tabs-nav commission-range" aria-label={t("Period")}>
           {RANGES.map(([value, label]) => (
             <button
@@ -258,23 +259,21 @@ export default function CommissionsPage() {
             </button>
           ))}
         </nav>
-        {range === "custom" ? (
-          <div className="filter-bar">
-            <label>{t("From")}<input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /></label>
-            <label>{t("To")}<input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></label>
-          </div>
-        ) : null}
-        <div className="commission-period-footer">
-          <span className="muted">
-            {current ? periodLabel(i18n, current.from, current.to) : range === "custom" ? t("Pick a start and end date") : ""}<HelpTip text="Choose which days to count. “This week” is still running, so it can't be paid yet. To pay or collect, choose “Last week” or your own dates that are over. Losses carry over: each payment covers everything since the last one, so a losing week is made up before anything more is paid. Export CSV saves the numbers as a file." />
-          </span>
-          {loading ? <LoadingSpinner label="Loading commissions" size="small" /> : null}
-          <button type="button" className="secondary" onClick={exportCsv} disabled={!current || loading}>
-            {t("Export CSV")}
-          </button>
-        </div>
+        <span className="muted period-toolbar-label">
+          {current ? periodLabel(i18n, current.from, current.to) : range === "custom" ? t("Pick a start and end date") : ""}<HelpTip text="Choose which days to count. “This week” is still running, so it can't be paid yet. To pay or collect, choose “Last week” or your own dates that are over. Losses carry over: each payment covers everything since the last one, so a losing week is made up before anything more is paid. Export CSV saves the numbers as a file." />
+        </span>
+        {loading ? <LoadingSpinner label="Loading commissions" size="small" /> : null}
+        <button type="button" className="secondary is-small period-toolbar-export" onClick={exportCsv} disabled={!current || loading}>
+          <NamedIcon name="download" className="button-icon" />
+          {t("Export CSV")}
+        </button>
       </div>
-
+      {range === "custom" ? (
+        <div className="card filter-bar">
+          <label>{t("From")}<input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /></label>
+          <label>{t("To")}<input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></label>
+        </div>
+      ) : null}
 
       {me?.role === "MANAGER" && mine ? <ManagerView data={mine} /> : null}
       {me?.role === "MANAGER" && history ? <ManagerHistory data={history} /> : null}

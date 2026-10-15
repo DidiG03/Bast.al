@@ -157,6 +157,37 @@ export const iconPaths = {
   ),
   check: <path d="m5 12 4 4 10-10" />,
   // A slot machine: three reels behind glass, and the lever.
+  plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
+  edit: (
+    <>
+      <path d="m4 16.5-.8 4.3 4.3-.8L19.8 7.7a2.1 2.1 0 0 0-3-3L4 16.5Z" />
+      <path d="m14.8 6.2 3 3" />
+    </>
+  ),
+  block: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m5.6 5.6 12.8 12.8" />
+    </>
+  ),
+  move: <path d="M7 7h11M7 7l3-3M7 7l3 3M17 17H6M17 17l-3-3M17 17l-3 3" />,
+  userPlus: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5" />
+      <path d="M19 8v6M16 11h6" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="3.8" />
+      <path d="M4.5 20.5c.8-3.9 3.7-6.2 7.5-6.2s6.7 2.3 7.5 6.2" />
+    </>
+  ),
+  sliders: <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M16 4v4M10 10v4M18 16v4" />,
+  download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
+  chevron: <path d="m9 6 6 6-6 6" />,
   casino: (
     <>
       <rect x="3" y="5" width="14" height="14" rx="2" />

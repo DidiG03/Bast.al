@@ -187,6 +187,7 @@ export const server: Record<string, string> = {
   "Commission for {period}": "Komision për {period}",
   "Returned when moved to {name}": "Kthyer kur u zhvendos te {name}",
   "Quick top-up": "Rimbushje e shpejtë",
+  "Taken back": "U mor mbrapsht",
   "Bulk top-up": "Rimbushje në grup",
   "Betting": "Baste",
 

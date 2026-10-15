@@ -15,11 +15,13 @@ type Props = {
   currentLimit: number | null;
   /** The Owner's default for all their Managers, if they set one. */
   teamLimit?: number | null;
+  /** Super Admin is looking: the Manager's Owner approves, not the viewer. */
+  forAdmin?: boolean;
   onSaved?: (limit: number | null) => void;
 };
 
 /** Owner (or Super Admin) sets how much a Manager can delegate without asking first. */
-export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, onSaved }: Props) {
+export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, onSaved, forAdmin = false }: Props) {
   const fallback = teamLimit ?? DEFAULT_APPROVAL_LIMIT;
   const { getToken } = useAuth();
   const { t } = useI18n();
@@ -58,7 +60,9 @@ export function ApprovalLimitControl({ userId, currentLimit, teamLimit = null, o
       <div>
         <h2>{t("Approval limit")}<HelpTip text="The most this Manager can send to one Player on their own. A bigger amount waits until you press Approve on the Finance page." /></h2>
         <p className="muted">
-          {t("This Manager can send up to this much to a Player without your approval. Anything larger waits for you.")}{" "}
+          {forAdmin
+            ? t("This Manager can send up to this much to a Player without their Owner's approval. Anything larger waits for the Owner.")
+            : t("This Manager can send up to this much to a Player without your approval. Anything larger waits for you.")}{" "}
           {teamLimit === null ? t("The standard limit is {amount}.", { amount: formatMoney(DEFAULT_APPROVAL_LIMIT) }) : t("Your team limit is {amount}.", { amount: formatMoney(teamLimit) })}
         </p>
       </div>

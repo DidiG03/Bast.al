@@ -19,7 +19,7 @@ const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 /** Balls that can be falling at once. */
 const MAX_IN_FLIGHT = 12;
 /** How long the ball takes from one row of pegs to the next, in milliseconds; quicker when the phone asks for less motion. */
-const STEP_MS = 105;
+const STEP_MS = 170;
 const STEP_MS_REDUCED = 35;
 /** Time between balls on autoplay. */
 const AUTO_MS = 380;

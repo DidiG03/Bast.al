@@ -227,6 +227,8 @@ export function BookGame() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [gamble, setGamble] = useState<CasinoGamble | null>(null);
+  /** The cards drawn at double or nothing this visit, newest first, for the gamble screen's "previous cards". */
+  const [drawn, setDrawn] = useState<CardSuit[]>([]);
   const [card, setCard] = useState<{
     suit: CardSuit;
     won: boolean;
@@ -395,6 +397,7 @@ export function BookGame() {
       });
       gambleKey.done();
       setCard({ suit: result.suit, won: result.won, win: result.win });
+      setDrawn((list) => [result.suit, ...list].slice(0, 5));
       slotSound.cardFlip();
       if (result.won) slotSound.gambleWin();
       else slotSound.gambleLose();
@@ -653,7 +656,8 @@ export function BookGame() {
                     <GamblePanel
                       gamble={gamble}
                       card={card}
-                      cardKey={recent[0]?.id}
+                      cardKey={`${drawn.length}`}
+                      history={drawn}
                       guessing={guessing}
                       onGuess={guess}
                       onTake={takeWin}

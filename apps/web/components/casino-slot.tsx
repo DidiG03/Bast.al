@@ -84,13 +84,28 @@ type Combo = {
   reel: ReelWin;
 };
 
+/** The lines a spin of `lines` plays: the first 5 or all 10. */
+const shapesOf = (game: CasinoState["game"], lines: number) => game.lineShapes.slice(0, lines);
+
+/** The Player's choice of 5 or 10 lines, kept on this device. */
+const LINES_KEY = "bastal-slot-lines";
+function savedLines(choices: number[], fallback: number): number {
+  try {
+    const value = Number(window.localStorage.getItem(LINES_KEY));
+    return choices.includes(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function combosFor(result: CasinoSpinResult, game: CasinoState["game"]): Combo[] {
-  const edges = lineEnds(game.lineShapes);
+  const shapes = shapesOf(game, result.linesPlayed ?? game.lines);
+  const edges = lineEnds(shapes);
   const combos: Combo[] = [...result.lines]
     .sort((a, b) => b.win - a.win)
     .map((won) => {
       const color = LINE_COLORS[won.line % LINE_COLORS.length];
-      const path = game.lineShapes[won.line].map((row, reel) => [reel, row] as [number, number]);
+      const path = shapes[won.line].map((row, reel) => [reel, row] as [number, number]);
       const ends: [number, number] = [edges.left[won.line], edges.right[won.line]];
       return { key: `line-${won.line}`, line: won.line + 1, symbol: won.symbol, count: won.count, amount: won.win, freeSpins: 0, reel: { cells: won.cells, color, path, ends } };
     });
@@ -160,6 +175,8 @@ export function SlotGame() {
   const [state, setState] = useState<CasinoState | null>(null);
   const [balance, setBalance] = useState(0);
   const [bet, setBet] = useState(1);
+  /** How many lines the next spin plays: the bet is split between them. */
+  const [lines, setLinesState] = useState(10);
   const [freeSpins, setFreeSpins] = useState<CasinoFreeSpins | null>(null);
   const [recent, setRecent] = useState<CasinoSpinRow[]>([]);
   const [grid, setGrid] = useState<SlotSymbol[][] | null>(null);
@@ -200,6 +217,7 @@ export function SlotGame() {
     setGrid((current) => current ?? next.grid ?? Array.from({ length: next.game.reels }, (_, reel) => Array.from({ length: next.game.rows }, (_, row) => next.game.symbols[(reel * 2 + row) % next.game.symbols.length])));
     const allowed = next.game.bets.filter((value) => next.maxStake === null || value <= next.maxStake);
     setBet((current) => (allowed.includes(current) ? current : allowed[0] ?? next.game.bets[0]));
+    setLinesState(savedLines(next.game.lineChoices ?? [next.game.lines], next.game.lines));
   }, [getToken, t]);
 
   useEffect(() => {
@@ -231,7 +249,7 @@ export function SlotGame() {
       const token = await getToken();
       if (!token) throw new Error(t("You're not signed in"));
       const path = "/casino/spin";
-      const body = JSON.stringify({ bet });
+      const body = JSON.stringify({ bet, lines });
       const result = await apiFetch<CasinoSpinResult>(path, token, { method: "POST", body, idempotencyKey: idempotency.keyFor(path, body) });
       idempotency.done();
       reels.current?.land(result.grid);
@@ -351,6 +369,23 @@ export function SlotGame() {
   const winCells = new Set(combos.flatMap((combo, index) => (showing === null || showing === index ? combo.reel.cells.map((cell) => cell.join(":")) : [])));
   // Free spins already won play on even if the Casino has closed since; the game stays up until the Player leaves.
   const finishing = Boolean(state.closed) && (playingFree || finishingFree);
+  /** The cards drawn at double or nothing, newest first. */
+  const gambleHistory = recent.flatMap((spin) => (spin.kind === "GAMBLE" && spin.gamble ? [spin.gamble.suit] : []));
+  const choices = state.game.lineChoices ?? [state.game.lines];
+  const otherLines = choices.find((choice) => choice !== lines) ?? lines;
+  /** 5 ⇄ 10 lines, remembered on this device. The wins on the reels belong to the last spin's lines, so they're cleared. */
+  function switchLines() {
+    setLinesState(otherLines);
+    setCombos([]);
+    setShowing(null);
+    setPinned(null);
+    reels.current?.clear();
+    try {
+      window.localStorage.setItem(LINES_KEY, String(otherLines));
+    } catch {
+      // Not remembered on this device; it opens on 10 lines next time.
+    }
+  }
   const canSpin = (!state.closed || playingFree) && !spinning && (reelsReady || plainGrid) && (playingFree || !tooBig(bet));
   /** Bets within the Player's limit for one bet; the balance is checked when they spin. */
   const allowedBets = state.game.bets.filter((value) => state.maxStake === null || value <= state.maxStake);
@@ -393,7 +428,7 @@ export function SlotGame() {
       <div className="page-title-row">
         <div>
           <h1 style={{ margin: 0 }}>{state.game.name}</h1>
-          <p className="muted report-subtitle">{t("5 reels, 5 lines, played with your balance.")}</p>
+          <p className="muted report-subtitle">{t("5 reels, 5 or 10 lines, played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to spin, and again to stop the reels.")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
@@ -431,7 +466,7 @@ export function SlotGame() {
             </header>
 
             <div className="slot-stage">
-              <LineMarkers side="left" shapes={state.game.lineShapes} lit={litLines} />
+              <LineMarkers side="left" shapes={shapesOf(state.game, lines)} lit={litLines} />
               <div className={`casino-window${lastWin?.big ? " is-big-win" : ""}`}>
                 {lastWin?.big ? (
                   <div className="casino-big-win" role="status">
@@ -456,10 +491,10 @@ export function SlotGame() {
                 {!reelsReady && !plainGrid ? <LoadingSpinner label="Setting up the reels" /> : null}
 
                 {(gamble && !auto) || card ? (
-                  <GamblePanel gamble={gamble} card={card} cardKey={recent[0]?.id} guessing={guessing} onGuess={guess} onTake={takeWin} onContinue={() => setCard(null)} />
+                  <GamblePanel gamble={gamble} card={card} cardKey={recent[0]?.id} history={gambleHistory} guessing={guessing} onGuess={guess} onTake={takeWin} onContinue={() => setCard(null)} />
                 ) : null}
               </div>
-              <LineMarkers side="right" shapes={state.game.lineShapes} lit={litLines} />
+              <LineMarkers side="right" shapes={shapesOf(state.game, lines)} lit={litLines} />
             </div>
 
             <footer className="slot-controls">
@@ -479,10 +514,16 @@ export function SlotGame() {
               >
                 <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
               </button>
-              <div className="slot-btn is-grey is-static">
+              <button
+                type="button"
+                className="slot-btn is-grey slot-lines"
+                onClick={switchLines}
+                disabled={spinning || auto || (state.game.lineChoices ?? []).length < 2}
+                aria-label={t("Lines: {count}. Tap to play {other}.", { count: lines, other: otherLines })}
+              >
                 <small>{t("Lines")}</small>
-                <b>{state.game.lines}</b>
-              </div>
+                <b>{lines}</b>
+              </button>
               <div className="slot-btn is-static slot-bet">
                 <small>
                   <button type="button" onClick={() => stepBet(-1)} disabled={spinning || auto || playingFree} aria-label={t("Lower the bet")}>
@@ -512,7 +553,7 @@ export function SlotGame() {
                 <span aria-hidden="true">⟳</span> {auto ? t("Stop") : t("Start")}
               </button>
             </footer>
-            {rulesOpen && fullScreen !== "off" ? <Rules game={state.game} bet={playingFree ? freeSpins.bet : bet} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
+            {rulesOpen && fullScreen !== "off" ? <Rules game={state.game} bet={playingFree ? freeSpins.bet : bet} lines={lines} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
           </section>
 
           {combos.length > 0 ? (
@@ -574,7 +615,7 @@ export function SlotGame() {
         )}
       </section>
 
-      {rulesOpen && fullScreen === "off" ? <Rules game={state.game} bet={playingFree ? freeSpins.bet : bet} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
+      {rulesOpen && fullScreen === "off" ? <Rules game={state.game} bet={playingFree ? freeSpins.bet : bet} lines={lines} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
     </div>
   );
 }
@@ -626,9 +667,9 @@ function PlainGrid({ grid, lit }: { grid: SlotSymbol[][]; lit: Set<string> | nul
   );
 }
 
-function Rules({ game, bet, onClose, i18n }: { game: CasinoState["game"]; bet: number; onClose: () => void; i18n: I18n }) {
+function Rules({ game, bet, lines, onClose, i18n }: { game: CasinoState["game"]; bet: number; lines: number; onClose: () => void; i18n: I18n }) {
   const { t, tn } = i18n;
-  const lineBet = bet / game.lines;
+  const lineBet = bet / lines;
   const money = (lineBets: number) => formatMoney(Math.floor(lineBets * lineBet * 100 + 1e-6) / 100);
   const paying = game.symbols.filter((symbol) => game.linePays[symbol]);
   return (
@@ -639,7 +680,7 @@ function Rules({ game, bet, onClose, i18n }: { game: CasinoState["game"]; bet: n
           <button type="button" className="modal-close secondary" onClick={onClose} aria-label={t("Close")}>×</button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          {t("Pays shown for a {amount} spin. A line pays when the same symbol lands on it 3, 4 or 5 times in a row from the left reel; cherries pay from 2.", { amount: formatMoney(bet) })}
+          {t("Pays shown for a {amount} spin on {lines} lines. A line pays when the same symbol lands on it 3, 4 or 5 times in a row from the left reel; cherries pay from 2.", { amount: formatMoney(bet), lines })}
         </p>
         <div className="casino-paytable">
           {paying.map((symbol) => (
@@ -663,19 +704,20 @@ function Rules({ game, bet, onClose, i18n }: { game: CasinoState["game"]; bet: n
             <span className="casino-pay-amounts">
               {(["3", "4", "5"] as const).map((count) => (
                 <span key={count}>
-                  <b>{count}×</b> {money(game.scatterPays[count])}
+                  <b>{count}×</b> {money(game.scatterPays[count] * lines)}
                 </span>
               ))}
             </span>
           </div>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          {t("Stars pay anywhere on the reels, not just on a line.")}
+          {t("Stars pay anywhere on the reels, not just on a line, and the same with 5 lines or 10.")}
         </p>
         <div className="stack-tight">
-          <strong>{t("The 5 lines")}</strong>
+          <strong>{t("The {count} lines", { count: lines })}</strong>
+          <p className="muted" style={{ margin: 0 }}>{t("The bet is split between the lines: 10 lines win smaller amounts more often, and pay back the same on average.")}</p>
           <div className="casino-lines">
-            {game.lineShapes.map((shape, index) => (
+            {shapesOf(game, lines).map((shape, index) => (
               <svg key={index} viewBox={`0 0 ${game.reels * 10} ${game.rows * 10}`} role="img" aria-label={t("Line {number}", { number: index + 1 })}>
                 {Array.from({ length: game.reels * game.rows }, (_, cell) => {
                   const reel = cell % game.reels;
@@ -700,14 +742,23 @@ function Rules({ game, bet, onClose, i18n }: { game: CasinoState["game"]; bet: n
   );
 }
 
+/** How long a right guess's card stays face up before it flashes again for the next guess. */
+const FACE_UP_MS = 1300;
+
 /**
- * Double or nothing after a win (both slots): the card, the win at stake,
- * red or black, and taking the win; then whether the guess was right.
+ * Double or nothing after a win (both slots), laid out like the classic
+ * fruit machines' gamble screen over the reels: the win at stake and what a
+ * right guess makes of it at the top left, the last cards drawn at the top
+ * right, a face-down card flashing red and black in the middle, and Red on
+ * the left, Black on the right with Take win between. A pick turns the card
+ * over: right, and it shows a moment before flashing again for the next
+ * guess; wrong, and it stays, with the win gone.
  */
 export function GamblePanel({
   gamble,
   card,
   cardKey,
+  history = [],
   guessing,
   onGuess,
   onTake,
@@ -717,47 +768,109 @@ export function GamblePanel({
   card: { suit: CardSuit; won: boolean; win: number } | null;
   /** Changes with each guess, so the card turns over again. */
   cardKey?: string;
+  /** The cards drawn so far, newest first; the last 5 show at the top right. */
+  history?: CardSuit[];
   guessing: boolean;
   onGuess(pick: CardColor): void;
   onTake(): void;
   onContinue(): void;
 }) {
   const { t, tn } = useI18n();
+  // A right guess with more to play shows its card face up for a moment, then the card flashes again.
+  const [faceUp, setFaceUp] = useState(Boolean(card));
+  useEffect(() => {
+    if (!card) {
+      setFaceUp(false);
+      return;
+    }
+    setFaceUp(true);
+    if (!card.won || !gamble) return;
+    const timer = window.setTimeout(() => setFaceUp(false), FACE_UP_MS);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card, cardKey]);
+  const flashing = !faceUp && Boolean(gamble);
+  // The flashing card's beat, while it waits for a pick.
+  useEffect(() => {
+    if (!flashing || guessing) return;
+    slotSound.startGambleBeat();
+    return () => slotSound.stopGambleBeat();
+  }, [flashing, guessing]);
+
+  const color = (suit: CardSuit) => (suit === "HEARTS" || suit === "DIAMONDS" ? "red" : "black");
+  const atStake = gamble?.amount ?? (card?.won ? card.win : 0);
+  const message = faceUp && card
+    ? card.won
+      ? t("Right! You now have {amount}.", { amount: formatMoney(card.win) })
+      : t("Wrong card. This win is lost.")
+    : t("Choose red or black, or take the win");
+
   return (
     <div className="slot-gamble">
-      <div className={`casino-gamble${card ? (card.won ? " is-won" : " is-lost") : ""}`} aria-live="polite">
-        <div className={`casino-card${card ? ` is-${card.suit === "HEARTS" || card.suit === "DIAMONDS" ? "red" : "black"}` : ""}`} key={cardKey}>
-          {card ? SUIT_MARKS[card.suit] : "?"}
+      <div className={`gamble-screen${faceUp && card ? (card.won ? " is-won" : " is-lost") : ""}`} aria-live="polite">
+        <div className="gamble-top">
+          <dl className="gamble-amounts">
+            <div>
+              <dt>{t("Gamble amount")}</dt>
+              <dd>{formatMoney(atStake)}</dd>
+            </div>
+            <div className="is-to-win">
+              <dt>{t("Gamble to win")}</dt>
+              <dd>{gamble ? formatMoney(gamble.amount * 2) : "–"}</dd>
+            </div>
+          </dl>
+          <div className="gamble-history">
+            <span>{t("Previous cards")}</span>
+            <ol aria-label={t("Previous cards")}>
+              {Array.from({ length: 5 }, (_, index) => {
+                const suit = history[index];
+                return suit ? (
+                  <li key={index} className={`gamble-mini is-${color(suit)}`}>{SUIT_MARKS[suit]}</li>
+                ) : (
+                  <li key={index} className="gamble-mini is-empty" aria-hidden="true" />
+                );
+              })}
+            </ol>
+          </div>
         </div>
-        <div className="casino-gamble-body">
-          {card ? <strong>{card.won ? t("Right! You now have {amount}.", { amount: formatMoney(card.win) }) : t("Wrong card. This win is lost.")}</strong> : <strong>{t("Double or nothing?")}</strong>}
+
+        <div className="gamble-table">
+          {faceUp && card ? (
+            <div key={`${cardKey ?? ""}-${card.suit}-${card.win}`} className={`gamble-card is-face is-${color(card.suit)}`} role="img" aria-label={t("The card: {suit}", { suit: SUIT_MARKS[card.suit] })}>
+              <span className="gamble-card-corner">{SUIT_MARKS[card.suit]}</span>
+              <span className="gamble-card-suit">{SUIT_MARKS[card.suit]}</span>
+              <span className="gamble-card-corner is-bottom">{SUIT_MARKS[card.suit]}</span>
+            </div>
+          ) : (
+            <div className={`gamble-card is-back${flashing ? " is-flashing" : ""}${guessing ? " is-fast" : ""}`} role="img" aria-label={t("A face-down card")} />
+          )}
+        </div>
+
+        <p className="gamble-message">
+          <strong>{message}</strong>
+          {gamble && !(faceUp && card) ? <small>{tn(gamble.stepsLeft, "{count} guess left.", "{count} guesses left.")}</small> : null}
+          {!gamble && faceUp && card?.won ? <small>{t("That's the most this win can be doubled. It's in your balance.")}</small> : null}
+        </p>
+
+        <div className="gamble-buttons">
           {gamble ? (
             <>
-              <span className="muted">
-                {t("Guess the card's colour: {amount} becomes {double}, or nothing.", { amount: formatMoney(gamble.amount), double: formatMoney(gamble.amount * 2) })}{" "}
-                {tn(gamble.stepsLeft, "{count} guess left.", "{count} guesses left.")}
-              </span>
-              <div className="casino-gamble-actions">
-                <button type="button" className="casino-pick is-red" disabled={guessing} onClick={() => onGuess("RED")}>
-                  {t("Red")} ♥♦
-                </button>
-                <button type="button" className="casino-pick is-black" disabled={guessing} onClick={() => onGuess("BLACK")}>
-                  {t("Black")} ♣♠
-                </button>
-                <button type="button" className="secondary" disabled={guessing} onClick={onTake}>
-                  {t("Take {amount}", { amount: formatMoney(gamble.amount) })}
-                </button>
-              </div>
+              <button type="button" className="gamble-pick is-red" disabled={guessing} onClick={() => onGuess("RED")}>
+                <span aria-hidden="true">♥♦</span>
+                {t("Red")}
+              </button>
+              <button type="button" className="gamble-take" disabled={guessing} onClick={onTake}>
+                {t("Take {amount}", { amount: formatMoney(gamble.amount) })}
+              </button>
+              <button type="button" className="gamble-pick is-black" disabled={guessing} onClick={() => onGuess("BLACK")}>
+                {t("Black")}
+                <span aria-hidden="true">♣♠</span>
+              </button>
             </>
           ) : (
-            <>
-              {card?.won ? <span className="muted">{t("That's the most this win can be doubled. It's in your balance.")}</span> : null}
-              <div className="casino-gamble-actions">
-                <button type="button" className="secondary" onClick={onContinue}>
-                  {t("Continue")}
-                </button>
-              </div>
-            </>
+            <button type="button" className="gamble-take" onClick={onContinue}>
+              {t("Continue")}
+            </button>
           )}
         </div>
       </div>

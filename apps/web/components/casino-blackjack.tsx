@@ -19,8 +19,12 @@ import { useIdempotencyKey } from "../lib/use-idempotency-key";
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 /** The dealer's chip tray, decoration only: a row of stacks by colour. */
 const TRAY = ["#1f9d55", "#2f6fd6", "#d8262c", "#f3c33b", "#f2f2f2", "#7fb8e6", "#f2f2f2", "#d8262c", "#2f6fd6", "#1f9d55"];
+/** How long between cards as they're dealt out, one after another (the card's flight is in globals.css). */
+const DEAL_GAP_MS = 400;
+/** A card's flight onto the table: the playing-card-in animation in globals.css. */
+const DEAL_FLIGHT_MS = 600;
 /** How long between the dealer's cards turning up at the end of a round. */
-const REVEAL_MS = 650;
+const REVEAL_MS = 1000;
 /** Insurance: the chips going down, then the dealer lifting the face-down card to look for blackjack. */
 const INSURE_MS = 650;
 const PEEK_MS = 1300;
@@ -88,15 +92,17 @@ export function BlackjackGame() {
     return () => clearTimeout(timer);
   }, [hint]);
 
-  // At the end of a round the dealer's cards turn up one at a time, then the result shows.
+  // At the end of a round the dealer's cards turn up one at a time, then the result shows; not before the cards
+  // being dealt have all landed (a round can end on the deal, with a blackjack).
   const dealerCount = round?.dealer.length ?? 0;
   const over = round?.phase === "DONE";
+  const dealtAt = useRef(0);
   useEffect(() => {
     if (!over || revealed >= dealerCount) return;
     const timer = setTimeout(() => {
       setRevealed((count) => count + 1);
       slotSound.cardDeal();
-    }, instant ? 0 : REVEAL_MS);
+    }, instant ? 0 : Math.max(REVEAL_MS, dealtAt.current - Date.now() + REVEAL_MS / 2));
     return () => clearTimeout(timer);
   }, [over, revealed, dealerCount, instant]);
   const settledShown = over && revealed >= dealerCount;
@@ -126,7 +132,9 @@ export function BlackjackGame() {
   function show(next: BlackjackRoundView, fresh: boolean) {
     const before = fresh ? 0 : (round?.hands.reduce((sum, hand) => sum + hand.cards.length, 0) ?? 0) + 2;
     const after = next.hands.reduce((sum, hand) => sum + hand.cards.length, 0) + 2;
-    for (let i = 0; i < Math.max(1, after - before); i++) setTimeout(() => slotSound.cardDeal(), i * 140);
+    const dealt = Math.max(1, after - before);
+    for (let i = 0; i < dealt; i++) setTimeout(() => slotSound.cardDeal(), i * DEAL_GAP_MS);
+    dealtAt.current = Date.now() + (fresh ? (dealt - 1) * DEAL_GAP_MS : 0) + DEAL_FLIGHT_MS;
     setRound(next);
     setRevealed(1);
     if (next.phase === "DONE") void refreshRecent();
@@ -553,7 +561,7 @@ const FIGURES: Record<string, string> = { K: "♚", Q: "♛", J: "♞" };
 /** A playing card, drawn in markup: rank and suit in the corners, the suit large in the middle. Null is a card face down; `flip` turns it over where it lies (the dealer's face-down card) instead of dealing it in. */
 function PlayingCard({ card, order, fresh, flip = false, peek = null }: { card: string | null; order: number; fresh: boolean; flip?: boolean; peek?: "peeking" | "peeked" | null }) {
   // The first four cards come out one after another; later ones straight away.
-  const style = { animationDelay: fresh ? `${order * 140}ms` : "0ms" } as CSSProperties;
+  const style = { animationDelay: fresh ? `${order * DEAL_GAP_MS}ms` : "0ms" } as CSSProperties;
   if (!card) return <span className={`playing-card is-back${peek ? ` is-${peek}` : ""}`} style={style} aria-label="?" />;
   const rank = rankLabel(card);
   const suit = SUIT_SYMBOLS[card[1]];

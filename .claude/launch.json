@@ -9,6 +9,15 @@
         "dev"
       ],
       "port": 3000
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "API_FOOTBALL_KEY= GREYHOUND_API_KEY= ODDS_API_KEY= TENNIS_API_KEY= npm run start:dev --workspace apps/api"
+      ],
+      "port": 4000
     }
   ]
 }

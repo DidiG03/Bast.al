@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { SeededRandomNumberGenerator } = require("pokie");
-const { BETS, GAMBLE_LIMIT, GAMBLE_STEPS, LINES, LINE_PAYS, LINE_SHAPES, REEL_STRIPS, ROWS, SCATTER, SCATTER_PAYS, SUITS, colorOf, playRound } = require("../dist/casino/game.js");
+const { BETS, GAMBLE_LIMIT, GAMBLE_STEPS, LINES, LINE_CHOICES, LINE_PAYS, LINE_SHAPES, REEL_STRIPS, ROWS, SCATTER, SCATTER_PAYS, SUITS, colorOf, playRound } = require("../dist/casino/game.js");
 
 /** A random source that stops each reel where we say. */
 const stopsAt = (...stops) => {
@@ -35,8 +35,10 @@ function stopWithout(reel, ...symbols) {
 
 test("the reels, lines and bets are what the rules say", () => {
   assert.equal(REEL_STRIPS.length, 5);
-  assert.equal(LINES, 5);
+  assert.deepEqual([...LINE_CHOICES], [5, 10]);
+  assert.equal(LINES, 10, "10 lines unless the Player picks 5");
   assert.equal(LINE_SHAPES.length, LINES);
+  assert.equal(new Set(LINE_SHAPES.map((shape) => shape.join(""))).size, LINES, "no line twice");
   assert.ok(LINE_SHAPES.every((shape) => shape.length === 5 && shape.every((row) => row >= 0 && row < ROWS)));
   assert.deepEqual([...BETS], [50, 100, 250, 500, 1000, 2500]);
   for (const strip of REEL_STRIPS) assert.ok(strip.includes(SCATTER));
@@ -75,13 +77,28 @@ test("2 cherries pay; 2 of anything else doesn't", () => {
 test("3 or more stars anywhere pay, and never on a line", () => {
   for (const stars of [3, 4, 5]) {
     const stops = REEL_STRIPS.map((_, reel) => (reel < stars ? stopFor(reel, SCATTER, reel % ROWS) : stopWithout(reel, SCATTER)));
-    const round = playRound(stopsAt(...stops));
-    const landed = round.grid.flat().filter((symbol) => symbol === SCATTER).length;
-    assert.equal(landed, stars);
-    assert.equal(round.scatter.count, stars);
-    assert.equal(round.scatter.win, SCATTER_PAYS[stars]);
-    assert.equal(round.lines.some((line) => line.symbol === SCATTER), false);
+    for (const lines of LINE_CHOICES) {
+      const round = playRound(stopsAt(...stops), lines);
+      const landed = round.grid.flat().filter((symbol) => symbol === SCATTER).length;
+      assert.equal(landed, stars);
+      assert.equal(round.scatter.count, stars);
+      // In line bets: the same times the whole bet with 5 lines or 10.
+      assert.equal(round.scatter.win, SCATTER_PAYS[stars] * lines);
+      assert.equal(round.lines.some((line) => line.symbol === SCATTER), false);
+    }
   }
+});
+
+test("5 lines play the first 5; a win on lines 6 to 10 only pays with 10", () => {
+  // Line 7 (index 6) runs middle, top, top, top, middle: cherries on its first two cells.
+  const stops = [stopFor(0, "CHERRY", 1), stopFor(1, "CHERRY", 0), stopWithout(2, "CHERRY", SCATTER), stopWithout(3, SCATTER), stopWithout(4, SCATTER)];
+  const ten = playRound(stopsAt(...stops), 10);
+  const five = playRound(stopsAt(...stops), 5);
+  assert.deepEqual(ten.grid, five.grid, "the reels land the same way");
+  assert.equal(ten.played, 10);
+  assert.equal(five.played, 5);
+  assert.ok(ten.lines.some((line) => line.line === 6 && line.symbol === "CHERRY"));
+  assert.ok(five.lines.every((line) => line.line < 5), "a 5-line spin never pays on lines 6 to 10");
 });
 
 test("the same seed plays the same rounds", () => {

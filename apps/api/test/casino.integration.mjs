@@ -55,8 +55,8 @@ function stopsWhere(wanted) {
 const losing = stopsWhere((round) => round.win === 0);
 /** Four sevens on the middle row, then a lemon. */
 const sevens = REEL_STRIPS.map((strip, reel) => (strip.indexOf(reel < 4 ? "SEVEN" : "LEMON") - 1 + strip.length) % strip.length);
-/** A small win: 10 line bets, 200 on a 100 spin. */
-const smallWin = stopsWhere((round) => round.win === 10);
+/** A small win on 10 lines: 20 line bets, 200 on a 100 spin. */
+const smallWin = stopsWhere((round) => round.win === 20);
 const RED = SUITS.indexOf("HEARTS");
 const BLACK = SUITS.indexOf("SPADES");
 
@@ -119,7 +119,8 @@ test("a losing spin takes the stake, and shows in the ledger and the journal wit
 
 test("a win adds to the balance, and the day's line keeps adding up", async () => {
   casino.rng = stopsAt(sevens);
-  const result = await casino.spin(cara, 250);
+  // 5 lines: a line bet is 50 ALL.
+  const result = await casino.spin(cara, 250, 5);
   const paid = result.lines.reduce((sum, line) => sum + line.win, 0) + (result.scatter?.win ?? 0);
   assert.ok(result.lines.some((line) => line.symbol === "SEVEN" && line.count === 4), "four sevens on the middle row");
   assert.ok(result.win >= 50000, "1,000 line bets at 50 ALL");
@@ -346,5 +347,5 @@ test("teardown", async () => {
   await prisma.$disconnect();
 });
 
-// Keeps LINES in use: a line bet is a fifth of the bet.
-assert.equal(LINES, 5);
+// Keeps LINES in use: a spin plays 10 lines unless it picks 5.
+assert.equal(LINES, 10);

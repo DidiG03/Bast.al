@@ -133,7 +133,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
     let disposed = false;
     let teardown = () => undefined as void;
     (async () => {
-      const [{ Application, CanvasSource, Container, Graphics, Sprite, Texture }, { ReelSetBuilder, SpriteSymbol, SpeedPresets, WinPresenter, anticipationForScatters }] = await Promise.all([
+      const [{ Application, CanvasSource, Container, Graphics, Sprite, Texture }, { ReelSetBuilder, SpriteSymbol, SpeedPresets, SpinTextureCache, StaticSpinSymbol, WinPresenter, anticipationForScatters, prewarmSpinTextures }] = await Promise.all([
         import("pixi.js"),
         import("pixi-reels"),
       ]);
@@ -158,13 +158,18 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       const textures = Object.fromEntries(
         symbols.map((symbol) => [symbol, new Texture({ source: new CanvasSource({ resource: drawPicture(symbol, CELL * SHARPNESS), resolution: SHARPNESS }) })]),
       );
+      // While a reel spins its symbols are smeared up and down, like real reels going round, and sharp again as it
+      // stops. The smeared pictures are made once, here, so the first spin doesn't stall making them.
+      const spinTextures = new SpinTextureCache({ renderer: app.renderer, blur: { strength: CELL * 0.1 } });
+      const sprite = () => new SpriteSymbol({ textures });
+      prewarmSpinTextures({ cache: spinTextures, ids: [...symbols], createSymbol: sprite, width: CELL, height: CELL });
       const reelSet = new ReelSetBuilder()
         .reels(reels)
         .visibleCells(rows)
         .symbolSize(CELL, CELL)
         .symbolGap(GAP, 0)
         .symbols((registry) => {
-          for (const symbol of symbols) registry.register(symbol, SpriteSymbol, { textures: { [symbol]: textures[symbol] } });
+          for (const symbol of symbols) registry.register(symbol, StaticSpinSymbol, { createInner: sprite, cache: spinTextures, blurRampMs: 120 });
         })
         .weights(Object.fromEntries(symbols.map((symbol) => [symbol, weights[symbol] ?? 1])))
         .speed("normal", SpeedPresets.NORMAL)
@@ -345,6 +350,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         motion.spinning = true;
         presenter.destroy();
         reelSet.destroy();
+        spinTextures.destroy();
         app.destroy(true, { children: true, texture: true });
       };
       onReady();

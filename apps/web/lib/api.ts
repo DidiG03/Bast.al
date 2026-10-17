@@ -748,14 +748,18 @@ export type CasinoState = {
     name: string;
     reels: number;
     rows: number;
+    /** The most lines, played unless the Player picks fewer. */
     lines: number;
+    /** The line counts a spin can play (5 or 10). Missing from an older API: then only `lines`. */
+    lineChoices?: number[];
     bets: number[];
     symbols: SlotSymbol[];
     scatter: SlotSymbol;
-    /** For each line, the row it runs through on each reel. */
+    /** For each line, the row it runs through on each reel; a 5-line spin plays the first 5. */
     lineShapes: number[][];
-    /** In line bets (a fifth of the bet): [2, 3, 4, 5] in a row; 0 doesn't pay. */
+    /** In line bets (the bet split between the lines played): [2, 3, 4, 5] in a row; 0 doesn't pay. */
     linePays: Partial<Record<SlotSymbol, [number, number, number, number]>>;
+    /** In times the whole bet, whatever the lines. */
     scatterPays: Record<"3" | "4" | "5", number>;
     payoutRate: number;
     /** Double or nothing: at most this many guesses, and never for more than this many dollars. */
@@ -768,6 +772,8 @@ export type CasinoState = {
 export type CasinoWinningLine = { line: number; symbol: SlotSymbol; count: number; cells: Array<[number, number]>; win: number };
 
 export type CasinoSpinResult = {
+  /** How many lines the spin played. */
+  linesPlayed?: number;
   spin: CasinoSpinRow;
   grid: SlotSymbol[][];
   lines: CasinoWinningLine[];

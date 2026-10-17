@@ -14,7 +14,7 @@ import { Idempotent } from "../idempotency/idempotency.interceptor";
 import { clientIp } from "../security/client-ip";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { CasinoService } from "./casino.service";
-import { BETS } from "./game";
+import { BETS, LINE_CHOICES, type LineCount } from "./game";
 import { MAX_SPOTS } from "./roulette";
 import { RouletteService } from "./roulette.service";
 import { BlackjackService } from "./blackjack.service";
@@ -40,6 +40,11 @@ class SpinDto {
   @IsNumber()
   @IsIn([...BETS])
   bet!: number;
+
+  @ApiProperty({ enum: LINE_CHOICES, required: false, description: "How many lines to play: the bet is split between them. 10 when left out." })
+  @IsOptional()
+  @IsIn([...LINE_CHOICES])
+  lines?: LineCount;
 }
 
 class BookSpinDto {
@@ -258,7 +263,7 @@ export class CasinoController {
   @Throttle({ default: { limit: 90, ttl: 60_000 } })
   @Idempotent()
   spin(@CurrentActor() actor: Actor, @Body() body: SpinDto, @Req() req: AuthenticatedRequest) {
-    return this.casino.spin(actor, body.bet, clientIp(req));
+    return this.casino.spin(actor, body.bet, body.lines, clientIp(req));
   }
 
   /** Double or nothing on the last win. Like a spin, a repeated request gets the first answer back. */

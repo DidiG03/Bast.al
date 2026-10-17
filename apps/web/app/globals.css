@@ -5761,20 +5761,21 @@ button.is-blocked {
   height: auto;
 }
 
-/* Double or nothing, over the reels. */
+/* Double or nothing: its own screen over the reels, a dark card table. */
 .slot-gamble {
   position: absolute;
   inset: 0;
   z-index: 3;
   display: grid;
-  place-items: center;
-  padding: 0.6rem;
-  background: rgba(10, 6, 30, 0.72);
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(46, 14, 70, 0.92), rgba(8, 4, 18, 0.97) 70%);
+  animation: gamble-in 220ms ease-out;
 }
 
-.slot-gamble .casino-gamble {
-  width: min(100%, 30rem);
-  color: var(--text);
+@keyframes gamble-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .slot-controls {
@@ -5931,6 +5932,111 @@ button.is-blocked {
 
 .slot-start span {
   font-size: 1.5rem;
+}
+
+/*
+ * Sizzling Hot's own touches (not Book of Ra, which has its own cabinet):
+ * flames licking up behind the title, a fiery title, a gold frame round the
+ * reels and a fiery win amount.
+ */
+.slot-cabinet:not(.is-book) .slot-marquee {
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 22% 120% at 12% 115%, rgba(255, 214, 64, 0.75), transparent 70%),
+    radial-gradient(ellipse 26% 140% at 34% 120%, rgba(255, 150, 20, 0.8), transparent 70%),
+    radial-gradient(ellipse 24% 130% at 58% 118%, rgba(255, 214, 64, 0.7), transparent 70%),
+    radial-gradient(ellipse 26% 140% at 82% 120%, rgba(255, 150, 20, 0.8), transparent 70%),
+    linear-gradient(180deg, #5a0703, #b3120c 55%, #e5340f);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 210, 120, 0.25);
+}
+
+/* A second layer of flames that flickers over the first. */
+.slot-cabinet:not(.is-book) .slot-marquee::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 14% 95% at 22% 112%, rgba(255, 240, 150, 0.85), transparent 70%),
+    radial-gradient(ellipse 16% 105% at 47% 115%, rgba(255, 190, 40, 0.8), transparent 70%),
+    radial-gradient(ellipse 14% 95% at 70% 112%, rgba(255, 240, 150, 0.85), transparent 70%),
+    radial-gradient(ellipse 16% 100% at 94% 115%, rgba(255, 190, 40, 0.8), transparent 70%);
+  content: "";
+  transform-origin: 50% 100%;
+  animation: slot-flames 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes slot-flames {
+  0% {
+    opacity: 0.55;
+    transform: scaleY(0.85);
+  }
+  40% {
+    opacity: 0.95;
+    transform: scaleY(1.1) translateX(1.5%);
+  }
+  70% {
+    opacity: 0.7;
+    transform: scaleY(0.95) translateX(-1%);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1.15);
+  }
+}
+
+.slot-cabinet:not(.is-book) .slot-title {
+  padding: 0 0.15em;
+  background: linear-gradient(180deg, #fffbe0 8%, #ffd21a 38%, #ff8a00 66%, #e01b00 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 2px 0 #4a0400) drop-shadow(0 0 1px #4a0400) drop-shadow(0 0 10px rgba(255, 170, 0, 0.55));
+}
+
+/* Gold round the reels, outside the silver bars; the line numbers sit over it. */
+.slot-cabinet:not(.is-book) .casino-window {
+  box-shadow:
+    0 0 0 1px #3a1a00,
+    0 0 0 3px #f0c040,
+    0 0 0 4px #fff1a8,
+    0 0 0 5px #a86c00,
+    0 10px 22px rgba(0, 0, 0, 0.5);
+}
+
+.slot-cabinet:not(.is-book) .casino-window.is-big-win {
+  animation: slot-gold-glow 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes slot-gold-glow {
+  from {
+    box-shadow: 0 0 0 1px #3a1a00, 0 0 0 3px #f0c040, 0 0 0 4px #fff1a8, 0 0 0 5px #a86c00, 0 0 12px 4px rgba(255, 190, 40, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0 1px #3a1a00, 0 0 0 3px #ffe27a, 0 0 0 4px #fffbe0, 0 0 0 5px #d99a00, 0 0 36px 10px rgba(255, 190, 40, 0.6);
+  }
+}
+
+.slot-cabinet:not(.is-book) .slot-markers {
+  position: relative;
+  z-index: 1;
+}
+
+.slot-cabinet:not(.is-book) .slot-message.is-win span {
+  background: linear-gradient(180deg, #fff6b0 15%, #ffcc00 50%, #ff7a00 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 1.25rem;
+  filter: drop-shadow(0 0 6px rgba(255, 150, 0, 0.6));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot-cabinet:not(.is-book) .slot-marquee::before,
+  .slot-cabinet:not(.is-book) .casino-window.is-big-win {
+    animation: none;
+  }
 }
 
 /* A phone held upright: the game waits for it to be turned. */
@@ -6285,118 +6391,332 @@ button.is-blocked {
   box-shadow: 0 0 0 3px var(--accent);
 }
 
-.casino-gamble {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.8rem 1rem;
-  border: 1px solid color-mix(in srgb, #f5c542 45%, var(--border));
-  border-radius: 14px;
-  background: color-mix(in srgb, #f5c542 7%, var(--bg-elevated));
-}
-
-.casino-gamble.is-lost {
-  border-color: color-mix(in srgb, var(--danger, #e0453a) 55%, var(--border));
-  background: color-mix(in srgb, var(--danger, #e0453a) 8%, var(--bg-elevated));
-}
-
-.casino-card {
+/*
+ * Double or nothing: the classic fruit machines' gamble screen, over the
+ * reels. Our own card backs and layout: amounts top left, previous cards
+ * top right, a card flashing red and black, Red left and Black right.
+ */
+.gamble-screen {
   display: grid;
-  flex: none;
-  place-items: center;
-  width: 3.6rem;
-  height: 5rem;
-  border: 2px solid #d9d2c0;
-  border-radius: 10px;
-  background: repeating-linear-gradient(45deg, #8a1c14 0 6px, #6d140e 6px 12px);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: clamp(0.35rem, 1.6vw, 0.8rem);
+  width: 100%;
+  height: 100%;
+  padding: clamp(0.5rem, 2vw, 1rem);
   color: #fff;
-  font-size: 1.8rem;
+  font-family: inherit;
+  text-transform: uppercase;
+}
+
+.gamble-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.gamble-amounts {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.gamble-amounts > div {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.gamble-amounts dt,
+.gamble-history > span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: clamp(0.58rem, 1.4vw, 0.72rem);
   font-weight: 800;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  letter-spacing: 0.06em;
 }
 
-.casino-card.is-red,
-.casino-card.is-black {
+.gamble-amounts dd {
+  margin: 0;
+  color: var(--slot-gold);
+  font-size: clamp(0.9rem, 2.6vw, 1.35rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+.gamble-amounts .is-to-win dd {
+  color: #fff6c9;
+}
+
+.gamble-screen.is-won .gamble-amounts dd {
+  animation: gamble-pulse 520ms ease-out 2;
+}
+
+.gamble-history {
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
+}
+
+.gamble-history ol {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gamble-mini {
+  display: grid;
+  place-items: center;
+  width: clamp(1.4rem, 4vw, 2rem);
+  aspect-ratio: 5 / 7;
+  border: 1px solid #d9d2c0;
+  border-radius: 4px;
   background: #fbf8f1;
-  font-size: 2.6rem;
-  animation: casino-card-flip 360ms ease-out;
+  font-size: clamp(0.8rem, 2.4vw, 1.15rem);
+  line-height: 1;
 }
 
-.casino-card.is-red {
+.gamble-mini.is-red {
   color: #d1242f;
 }
 
-.casino-card.is-black {
+.gamble-mini.is-black {
   color: #15191e;
 }
 
-@keyframes casino-card-flip {
+.gamble-mini.is-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  background: transparent;
+}
+
+.gamble-table {
+  display: grid;
+  min-height: 0;
+  place-items: center;
+  perspective: 900px;
+}
+
+.gamble-card {
+  position: relative;
+  height: min(100%, 13rem);
+  min-height: 5rem;
+  aspect-ratio: 5 / 7;
+  border: 3px solid #f4efe2;
+  border-radius: clamp(8px, 1.6vw, 14px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+/* The back: a lattice in a frame, on red or black. */
+.gamble-card.is-back {
+  background-color: #b3161c;
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0 7px, rgba(255, 255, 255, 0.16) 7px 9px),
+    repeating-linear-gradient(-45deg, transparent 0 7px, rgba(255, 255, 255, 0.16) 7px 9px),
+    radial-gradient(circle at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.45) 100%);
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline-offset: -9px;
+}
+
+/* Waiting for a pick: the back flashes between red and black. */
+.gamble-card.is-flashing {
+  animation: gamble-flash 520ms steps(1, end) infinite;
+}
+
+.gamble-card.is-flashing.is-fast {
+  animation-duration: 180ms;
+}
+
+@keyframes gamble-flash {
+  0% {
+    background-color: #b3161c;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 26px rgba(255, 60, 60, 0.55);
+  }
+  50% {
+    background-color: #1b1f27;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 26px rgba(255, 255, 255, 0.25);
+  }
+}
+
+/* The face: the suit big in the middle and small in the corners, turning over as it shows. */
+.gamble-card.is-face {
+  display: grid;
+  place-items: center;
+  background: #fbf8f1;
+  animation: gamble-turn 380ms ease-out;
+}
+
+.gamble-card.is-face.is-red {
+  color: #d1242f;
+}
+
+.gamble-card.is-face.is-black {
+  color: #15191e;
+}
+
+.gamble-card-suit {
+  font-size: clamp(2.6rem, 9vw, 5.5rem);
+  line-height: 1;
+}
+
+.gamble-card-corner {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.45rem;
+  font-size: clamp(0.9rem, 2.6vw, 1.4rem);
+  line-height: 1;
+}
+
+.gamble-card-corner.is-bottom {
+  top: auto;
+  right: 0.45rem;
+  bottom: 0.35rem;
+  left: auto;
+  transform: rotate(180deg);
+}
+
+.gamble-screen.is-won .gamble-card {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 0 3px var(--slot-gold), 0 0 34px rgba(243, 195, 59, 0.75);
+}
+
+.gamble-screen.is-lost .gamble-card {
+  animation: gamble-turn 380ms ease-out, gamble-shake 420ms ease-in-out 380ms;
+  filter: saturate(0.6) brightness(0.85);
+}
+
+@keyframes gamble-turn {
   from {
-    transform: rotateY(90deg);
+    transform: rotateY(90deg) scale(0.96);
   }
   to {
-    transform: rotateY(0);
+    transform: rotateY(0) scale(1);
   }
 }
 
-.casino-gamble-body {
+@keyframes gamble-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+@keyframes gamble-pulse {
+  50% {
+    transform: scale(1.12);
+    color: #fff;
+  }
+}
+
+.gamble-message {
   display: grid;
-  gap: 0.35rem;
-  min-width: 0;
+  justify-items: center;
+  gap: 0.15rem;
+  margin: 0;
+  text-align: center;
 }
 
-.casino-gamble-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.2rem;
+.gamble-message strong {
+  color: var(--slot-gold);
+  font-size: clamp(0.75rem, 2.2vw, 1.05rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
 }
 
-.casino-pick {
-  min-width: 6.5rem;
-  min-height: 2.6rem;
-  border-radius: 999px;
+.gamble-screen.is-lost .gamble-message strong {
+  color: #ff6b5f;
+}
+
+.gamble-message small {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: clamp(0.6rem, 1.6vw, 0.75rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.gamble-buttons {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: clamp(0.35rem, 1.6vw, 0.75rem);
+}
+
+.gamble-buttons > :only-child {
+  grid-column: 2;
+}
+
+.gamble-pick,
+.gamble-take {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: clamp(2.4rem, 7vw, 3.1rem);
+  padding: 0 clamp(0.6rem, 2vw, 1.2rem);
+  border: 2px solid var(--slot-gold);
+  border-radius: 10px;
   color: #fff;
-  font-weight: 800;
+  font-size: clamp(0.78rem, 2.2vw, 1.05rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25), 0 3px 0 rgba(0, 0, 0, 0.45);
+  cursor: pointer;
 }
 
-.casino-pick.is-red {
-  background: #c8232c;
+.gamble-pick.is-red {
+  background: linear-gradient(180deg, #ef3b3b, #a6111a);
 }
 
-.casino-pick.is-black {
-  border: 1px solid #4a515a;
-  background: #15191e;
+.gamble-pick.is-black {
+  background: linear-gradient(180deg, #3a414c, #0e1116);
 }
 
-.casino-pick:disabled {
-  opacity: 0.55;
+.gamble-take {
+  background: linear-gradient(180deg, #3b2a06, #1d1403);
+  color: var(--slot-gold);
+}
+
+.gamble-pick:hover:not(:disabled),
+.gamble-take:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.gamble-pick:active:not(:disabled),
+.gamble-take:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.2), 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+.gamble-pick:disabled,
+.gamble-take:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .casino-card.is-red,
-  .casino-card.is-black {
+  .gamble-card.is-flashing,
+  .gamble-card.is-face,
+  .gamble-screen.is-lost .gamble-card,
+  .gamble-screen.is-won .gamble-amounts dd {
     animation: none;
   }
 }
 
 @media (max-width: 520px) {
-  .casino-gamble {
-    align-items: flex-start;
-  }
-
-  .casino-gamble-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .casino-pick {
-    min-width: 0;
-    white-space: nowrap;
-  }
-
-  .casino-gamble-actions .secondary {
-    grid-column: 1 / -1;
+  .gamble-take {
+    padding: 0 0.5rem;
+    font-size: 0.7rem;
   }
 }
 
@@ -7206,7 +7526,7 @@ button.is-blocked {
 
 /* The room around the table: dark, with the light on the table. */
 .blackjack-cabinet {
-  --card-w: clamp(3.2rem, 6.5vw, 4.8rem);
+  --card-w: clamp(4rem, 6.5vw, 4.8rem);
   --felt: #0d7a3d;
   --gold: #e9c46a;
   background: radial-gradient(ellipse at 50% 20%, #2b1a10, #120a05 70%);
@@ -7489,7 +7809,7 @@ button.is-blocked {
 
 /* The Player's cards: bigger than the dealer's, and lower, in the middle of the free felt above the controls. */
 .blackjack-player {
-  --card-w: clamp(3.4rem, 8.5vw, 6.4rem);
+  --card-w: clamp(4.8rem, 8.5vw, 6.4rem);
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -7721,7 +8041,7 @@ button.is-blocked {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.45);
   font-family: Georgia, "Times New Roman", serif;
   font-weight: 700;
-  animation: playing-card-in 340ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  animation: playing-card-in 600ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
 
 .playing-card.is-red {
@@ -8178,8 +8498,9 @@ button.is-blocked {
 
 /* A phone held sideways: a smaller table, everything on one row of controls. */
 @media (orientation: landscape) and (max-height: 520px) {
+  /* Bigger than the old 2.5rem cards, still short enough for the felt. The player's cards stay larger than the dealer's. */
   .blackjack-cabinet {
-    --card-w: 2.5rem;
+    --card-w: clamp(2.9rem, 16.5vh, 4.4rem);
   }
 
   .blackjack-table {
@@ -8190,7 +8511,7 @@ button.is-blocked {
   .blackjack-felt {
     gap: 0;
     min-height: 0;
-    padding: 1.5rem 0.8rem 0.6rem;
+    padding: 1.05rem 0.6rem 0.1rem;
   }
 
   .blackjack-tray span {
@@ -8203,15 +8524,20 @@ button.is-blocked {
   }
 
   .blackjack-print {
-    width: min(100%, 22rem);
-    margin: -0.5rem 0 -0.9rem;
+    width: min(100%, 17rem);
+    margin: -0.65rem 0 -1.35rem;
+  }
+
+  /* A slightly tighter fan, so a bigger card still clears the chips and the move buttons. */
+  .blackjack-cards > .playing-card + .playing-card {
+    margin-left: calc(var(--card-w) * -0.5);
   }
 
   .blackjack-player {
-    --card-w: 2.5rem;
-    gap: 1.2rem;
-    min-height: calc(var(--card-w) * 1.4 + 2.2rem);
-    padding-top: 0.3rem;
+    --card-w: clamp(3.5rem, 20vh, 5rem);
+    gap: 1rem;
+    min-height: calc(var(--card-w) * 1.4 + 2rem);
+    padding-top: 0;
   }
 
   .blackjack-hand {
@@ -8388,6 +8714,17 @@ button.is-blocked {
     font-size: 0.72rem;
   }
 
+}
+
+/* Very short phones: keep the cards inside the rail. */
+@media (orientation: landscape) and (max-height: 340px) {
+  .blackjack-cabinet {
+    --card-w: clamp(2.4rem, 13.5vh, 3.6rem);
+  }
+
+  .blackjack-player {
+    --card-w: clamp(2.8rem, 16vh, 4rem);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -12020,6 +12357,21 @@ button.is-blocked {
 @media (max-width: 560px) {
   .dice-tray.is-3d {
     aspect-ratio: 2.6 / 1;
+  }
+}
+
+/*
+ * A narrow cabinet (a phone): the controls sit under the table, so the Play
+ * button comes first in them, right under the result, above Manual and Auto
+ * and the stakes, instead of at the very bottom. A stake problem shows under it.
+ */
+@container (max-width: 759.98px) {
+  .dice-controls > .dice-go {
+    order: -2;
+  }
+
+  .dice-controls > .dice-problem {
+    order: -1;
   }
 }
 

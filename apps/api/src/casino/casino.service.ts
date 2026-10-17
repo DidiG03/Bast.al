@@ -19,6 +19,7 @@ import {
   GAMBLE_LIMIT,
   GAMBLE_STEPS,
   LINES,
+  LINE_CHOICES,
   LINE_PAYS,
   LINE_SHAPES,
   PAYOUT_RATE,
@@ -31,6 +32,7 @@ import {
   colorOf,
   playRound,
   type CardColor,
+  type LineCount,
   type Round,
 } from "./game";
 
@@ -38,8 +40,8 @@ const RECENT = 10;
 
 const money = (value: Prisma.Decimal | number) => `${Number(value).toFixed(2)} ALL`;
 
-/** Line bets (a fifth of the bet) in dollars. */
-const inMoney = (bet: Prisma.Decimal, lineBets: number) => Number(bet.div(LINES).mul(lineBets).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN));
+/** Line bets in ALL: a line bet is the bet split between the lines played. */
+const inMoney = (bet: Prisma.Decimal, lines: LineCount, lineBets: number) => Number(bet.div(lines).mul(lineBets).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN));
 
 /** One line per Player per day in their balance ledger, updated with every spin. */
 const ledgerLineId = (playerId: string, at: Date) => `casino_${playerId}_${dayKey(at)}`;
@@ -195,13 +197,17 @@ export class CasinoService {
         name: GAME_NAME,
         reels: REELS,
         rows: ROWS,
+        /** The most lines, and the lines a spin plays unless it picks fewer. */
         lines: LINES,
+        lineChoices: LINE_CHOICES,
         bets: BETS,
         symbols: SYMBOLS,
         scatter: SCATTER,
+        /** All 10 lines; a 5-line spin plays the first 5. */
         lineShapes: LINE_SHAPES,
-        /** In line bets (a fifth of the bet): [2, 3, 4, 5] in a row; 0 doesn't pay. */
+        /** In line bets (the bet split between the lines played): [2, 3, 4, 5] in a row; 0 doesn't pay. */
         linePays: LINE_PAYS,
+        /** In times the whole bet, whatever the lines. */
         scatterPays: SCATTER_PAYS,
         payoutRate: PAYOUT_RATE,
         gambleSteps: GAMBLE_STEPS,
@@ -213,15 +219,17 @@ export class CasinoService {
   /**
    * One spin. A Player with free spins left from the old game plays one of
    * those, at the bet that won them, whatever `bet` says; otherwise `bet` is
-   * one of BETS. A spin ends any double or nothing still open: that win stays
-   * in the balance, where it already is.
+   * one of BETS. `lines` (5 or 10) splits the bet between that many lines;
+   * it doesn't change what the spin costs. A spin ends any double or nothing
+   * still open: that win stays in the balance, where it already is.
    */
-  async spin(actor: Actor, bet: number, ipAddress?: string) {
+  async spin(actor: Actor, bet: number, lines: LineCount = LINES, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const closed = await this.closedReason(actor);
     // Free spins already won are still played if the Casino has closed since.
     if (closed && !(await this.prisma.casinoFreeSpins.findFirst({ where: { playerId: actor.id, remaining: { gt: 0 } }, select: { playerId: true } }))) throw new ForbiddenException(closed);
     if (!BETS.some((allowed) => allowed === bet)) throw new BadRequestException(`Choose a bet of ${BETS.map((b) => money(b)).join(", ")}`);
+    if (!LINE_CHOICES.includes(lines)) throw new BadRequestException("Choose 5 or 10 lines");
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -235,9 +243,9 @@ export class CasinoService {
       const stake = free ? new Prisma.Decimal(0) : playedAt;
       if (!free) await this.limits.assertCanPlace(actor.id, Number(stake), 0, tx);
 
-      const round: Round = playRound(this.rng);
-      // A line bet is a fifth of the bet; every bet is a whole number of cents per line, so this is exact.
-      const win = playedAt.div(LINES).mul(round.win).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+      const round: Round = playRound(this.rng, lines);
+      // A line bet is the bet split between the lines; every bet is a whole number of cents per line, so this is exact.
+      const win = playedAt.div(lines).mul(round.win).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
       const net = win.sub(stake);
       // A paid spin needs the stake in the balance; a free spin costs nothing, so it plays even on an empty balance.
       const moved = await tx.user.updateMany({ where: { id: actor.id, ...(free ? {} : { balance: { gte: stake } }) }, data: { balance: { increment: net } } });
@@ -270,7 +278,7 @@ export class CasinoService {
           freeSpinsWon: 0,
           grid: round.grid,
           stops: round.stops,
-          lines: { lines: round.lines, scatter: round.scatter },
+          lines: { lines: round.lines, scatter: round.scatter, played: lines },
           createdAt: now,
         },
         select: spinSelect,
@@ -295,8 +303,10 @@ export class CasinoService {
     return {
       spin: spinView(result.spin),
       grid: result.round.grid,
-      lines: result.round.lines.map((line) => ({ ...line, win: inMoney(result.spin.bet, line.win) })),
-      scatter: result.round.scatter ? { ...result.round.scatter, win: inMoney(result.spin.bet, result.round.scatter.win) } : null,
+      lines: result.round.lines.map((line) => ({ ...line, win: inMoney(result.spin.bet, lines, line.win) })),
+      scatter: result.round.scatter ? { ...result.round.scatter, win: inMoney(result.spin.bet, lines, result.round.scatter.win) } : null,
+      /** How many lines the spin played. */
+      linesPlayed: lines,
       win: Number(result.win),
       free: result.free,
       freeSpinsWon: 0,

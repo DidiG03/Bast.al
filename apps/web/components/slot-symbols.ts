@@ -1,370 +1,568 @@
 import type { SlotSymbol } from "../lib/api";
 
 /**
- * The casino slot's symbol pictures, drawn in code: big fruit, sevens and a
- * star on the dark reel, outlined in black with a white border. No image files, so there's nothing to license or
- * load. The pictures are shapes, not emoji: phones draw emoji in a canvas
- * unreliably (iPhone Safari leaves big ones blank), and they'd look different
- * on every phone. Each is drawn once per size and kept.
+ * The casino slot's symbol pictures, drawn in code in the classic fruit
+ * machine look: glossy, lit from the top left, each with a bright highlight,
+ * a soft light round its far edge and a thin dark outline, on the dark blue
+ * reel. No image files, so there's nothing to license or load. The pictures
+ * are shapes, not emoji: phones draw emoji in a canvas unreliably (iPhone
+ * Safari leaves big ones blank), and they'd look different on every phone.
+ * The 7 is a shape too, not a letter, so it's the same with every font.
+ * Each is drawn once per size and kept.
  */
 
 /** Draws a picture in a 100 × 100 box. */
 type Icon = (ctx: CanvasRenderingContext2D) => void;
-type Look = { icon: Icon; glints: Array<[number, number, number]> };
+type Look = { icon: Icon; glints: Array<[number, number, number]>; glow?: string };
 
-const INK = "#15191e";
+const INK = "#14060a";
 
-function gradient(ctx: CanvasRenderingContext2D, y0: number, y1: number, stops: string[]): CanvasGradient {
-  const fill = ctx.createLinearGradient(0, y0, 0, y1);
-  stops.forEach((color, index) => fill.addColorStop(index / (stops.length - 1), color));
+/** A fixed random sequence, so every lemon's peel looks the same. */
+function seeded(seed: number) {
+  let state = seed;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+}
+
+/** A shiny ball's colour: lightest where the light hits (top left), darkest at the far edge. */
+function ballFill(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, stops: Array<[number, string]>) {
+  const fill = ctx.createRadialGradient(cx - r * 0.38, cy - r * 0.42, r * 0.04, cx - r * 0.08, cy - r * 0.08, r * 1.12);
+  for (const [at, color] of stops) fill.addColorStop(at, color);
   return fill;
 }
 
-/** Fills and outlines the current path. */
-function paint(ctx: CanvasRenderingContext2D, fill: string | CanvasGradient, line = 2.5) {
-  ctx.fillStyle = fill;
-  ctx.fill();
-  ctx.lineWidth = line;
-  ctx.strokeStyle = INK;
-  ctx.stroke();
+/** Light bouncing back onto the far, bottom-right edge. Draw inside a clip to the shape. */
+function rim(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
+  const light = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.95, cx - r * 0.3, cy - r * 0.3, r * 1.45);
+  light.addColorStop(0, "rgba(0,0,0,0)");
+  light.addColorStop(1, color);
+  ctx.fillStyle = light;
+  ctx.fillRect(cx - r * 1.6, cy - r * 1.6, r * 3.2, r * 3.2);
 }
 
-/** A round fruit with a shine: plum, orange. */
-function fruit(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, light: string, dark: string) {
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  const fill = ctx.createRadialGradient(cx - rx * 0.35, cy - ry * 0.4, rx * 0.1, cx, cy, Math.max(rx, ry));
-  fill.addColorStop(0, light);
-  fill.addColorStop(1, dark);
-  paint(ctx, fill, 3);
-}
-
-function shine(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number) {
-  ctx.fillStyle = "rgba(255,255,255,0.6)";
-  ctx.beginPath();
-  ctx.ellipse(x, y, rx, ry, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function leaf(ctx: CanvasRenderingContext2D, x: number, y: number, turn: number, length = 26) {
+/** The highlight: a soft white oval, and a small sharp spot in it. */
+function highlight(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, turn: number, strength = 0.9) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(turn);
+  ctx.scale(1, ry / rx);
+  const soft = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+  soft.addColorStop(0, `rgba(255,255,255,${strength})`);
+  soft.addColorStop(0.45, `rgba(255,255,255,${strength * 0.45})`);
+  soft.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = soft;
   ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.quadraticCurveTo(length / 2, -length / 2.6, length, 0);
-  ctx.quadraticCurveTo(length / 2, length / 2.6, 0, 0);
-  paint(ctx, gradient(ctx, -10, 10, ["#8fe36b", "#2f8f2a"]), 2);
+  ctx.arc(0, 0, rx, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.ellipse(-rx * 0.12, -rx * 0.05, rx * 0.32, rx * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
-const cherry: Icon = (ctx) => {
-  ctx.lineCap = "round";
-  ctx.strokeStyle = "#3d6b1f";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(30, 66);
-  ctx.quadraticCurveTo(40, 30, 62, 12);
-  ctx.moveTo(70, 70);
-  ctx.quadraticCurveTo(66, 36, 62, 12);
+/** Pitted peel: each pit a dark dot with a lit edge. Draw inside a clip to the fruit. */
+function pits(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, count: number, dark: string, light: string, seed: number) {
+  const random = seeded(seed);
+  for (let i = 0; i < count; i += 1) {
+    const x = x0 + random() * (x1 - x0);
+    const y = y0 + random() * (y1 - y0);
+    const r = 0.7 + random() * 0.7;
+    ctx.fillStyle = light;
+    ctx.beginPath();
+    ctx.arc(x + 0.5, y + 0.5, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function outline(ctx: CanvasRenderingContext2D, width = 1.8) {
+  ctx.lineWidth = width;
+  ctx.strokeStyle = INK;
+  ctx.lineJoin = "round";
   ctx.stroke();
-  leaf(ctx, 62, 13, -0.35, 28);
-  for (const [x, y] of [[28, 72], [72, 74]]) {
-    fruit(ctx, x, y, 23, 22, "#ff6b6b", "#9b0d16");
-    shine(ctx, x - 8, y - 8, 4.5, 8);
+}
+
+/** A shiny leaf with a centre vein and side veins. */
+function leaf(ctx: CanvasRenderingContext2D, x: number, y: number, turn: number, length: number, width = 0.42) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(turn);
+  const half = length * width;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(length * 0.25, -half, length * 0.7, -half * 0.9, length, 0);
+  ctx.bezierCurveTo(length * 0.7, half * 0.8, length * 0.25, half * 0.9, 0, 0);
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, -half, 0, half);
+  fill.addColorStop(0, "#a6ee6a");
+  fill.addColorStop(0.45, "#3fae2a");
+  fill.addColorStop(1, "#155c12");
+  ctx.fillStyle = fill;
+  ctx.fill();
+  outline(ctx, 1.5);
+  ctx.strokeStyle = "rgba(225,255,170,0.5)";
+  ctx.lineWidth = 0.9;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(length * 0.06, 0);
+  ctx.quadraticCurveTo(length * 0.5, -half * 0.12, length * 0.92, 0);
+  for (const at of [0.3, 0.5, 0.7]) {
+    ctx.moveTo(length * at, -half * 0.06);
+    ctx.lineTo(length * (at + 0.12), -half * 0.55);
+    ctx.moveTo(length * at, -half * 0.02);
+    ctx.lineTo(length * (at + 0.12), half * 0.5);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A round stalk: a dark edge and a lighter middle. */
+function stalk(ctx: CanvasRenderingContext2D, draw: () => void, width: number, dark: string, light: string) {
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  draw();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = width + 2.2;
+  ctx.stroke();
+  ctx.strokeStyle = dark;
+  ctx.lineWidth = width;
+  ctx.stroke();
+  ctx.strokeStyle = light;
+  ctx.lineWidth = width * 0.4;
+  ctx.save();
+  ctx.translate(-width * 0.18, -width * 0.18);
+  ctx.beginPath();
+  draw();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A shiny ball of fruit: colour, light off its far edge, a highlight, an outline. */
+function ball(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, stops: Array<[number, string]>, rimColor: string, extra?: () => void) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = ballFill(ctx, cx, cy, r, stops);
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  rim(ctx, cx, cy, r, rimColor);
+  extra?.();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  outline(ctx);
+  highlight(ctx, cx - r * 0.4, cy - r * 0.42, r * 0.36, r * 0.22, -0.7);
+}
+
+const CHERRY_RED: Array<[number, string]> = [
+  [0, "#ffb3a6"],
+  [0.12, "#ff4a3d"],
+  [0.4, "#e3001b"],
+  [0.75, "#8e0010"],
+  [1, "#3a0006"],
+];
+
+const cherry: Icon = (ctx) => {
+  const left = { x: 29, y: 68, r: 22 };
+  const right = { x: 70, y: 73, r: 23 };
+  // Stalks from each cherry up to where they join, under the leaf.
+  stalk(ctx, () => {
+    ctx.moveTo(left.x + 3, left.y - left.r + 4);
+    ctx.bezierCurveTo(36, 36, 48, 20, 62, 11);
+    ctx.moveTo(right.x - 1, right.y - right.r + 4);
+    ctx.bezierCurveTo(68, 40, 64, 24, 62, 11);
+  }, 3.6, "#4e8a1e", "rgba(200,240,120,0.85)");
+  leaf(ctx, 62, 11, -0.3, 30, 0.4);
+  for (const { x, y, r } of [left, right]) {
+    ball(ctx, x, y, r, CHERRY_RED, "rgba(255,90,130,0.75)", () => {
+      // The dip where the stalk goes in.
+      ctx.strokeStyle = "rgba(70,0,8,0.65)";
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.ellipse(x + 1, y - r + 5, 5.5, 2.4, 0, 0.15, Math.PI - 0.15);
+      ctx.stroke();
+    });
   }
 };
 
+/** The lemon's outline: an oval with a pointed nub at each end. */
+function lemonPath(ctx: CanvasRenderingContext2D) {
+  ctx.beginPath();
+  ctx.moveTo(-50, 3);
+  ctx.quadraticCurveTo(-47, -3, -41, -5);
+  ctx.bezierCurveTo(-33, -38, 30, -40, 41, -9);
+  ctx.quadraticCurveTo(47, -9, 51, -3);
+  ctx.quadraticCurveTo(47, 4, 41, 6);
+  ctx.bezierCurveTo(31, 39, -30, 41, -41, 10);
+  ctx.quadraticCurveTo(-47, 10, -50, 3);
+  ctx.closePath();
+}
+
 const lemon: Icon = (ctx) => {
-  // Tilted, with a pointed nub at each end, a pitted peel that turns orange
-  // underneath, and a soft orange shading "smile".
   ctx.save();
   ctx.translate(50, 52);
-  ctx.rotate(-0.42);
-  const outline = () => {
-    ctx.beginPath();
-    ctx.moveTo(-50, 3);
-    ctx.quadraticCurveTo(-47, -3, -41, -5);
-    ctx.bezierCurveTo(-33, -38, 30, -40, 41, -9);
-    ctx.quadraticCurveTo(47, -9, 51, -3);
-    ctx.quadraticCurveTo(47, 4, 41, 6);
-    ctx.bezierCurveTo(31, 39, -30, 41, -41, 10);
-    ctx.quadraticCurveTo(-47, 10, -50, 3);
-    ctx.closePath();
-  };
-  outline();
-  const fill = ctx.createRadialGradient(-4, -14, 3, 0, 0, 50);
-  fill.addColorStop(0, "#fffbd2");
-  fill.addColorStop(0.4, "#ffe43c");
-  fill.addColorStop(0.8, "#f8b400");
-  fill.addColorStop(1, "#ee8a00");
-  paint(ctx, fill, 3.5);
-
+  ctx.rotate(-0.38);
+  lemonPath(ctx);
+  ctx.fillStyle = ballFill(ctx, 0, 0, 46, [
+    [0, "#fffde0"],
+    [0.15, "#fff04a"],
+    [0.45, "#ffd200"],
+    [0.8, "#e08e00"],
+    [1, "#9a5600"],
+  ]);
+  ctx.fill();
   ctx.save();
-  outline();
+  lemonPath(ctx);
   ctx.clip();
-  // Orange underneath.
-  const under = ctx.createLinearGradient(0, -10, 0, 40);
-  under.addColorStop(0, "rgba(240, 120, 0, 0)");
-  under.addColorStop(1, "rgba(240, 110, 0, 0.45)");
-  ctx.fillStyle = under;
-  ctx.fillRect(-52, -42, 104, 84);
-  // Peel pores, in a fixed pattern so every lemon looks the same.
-  ctx.fillStyle = "rgba(190, 110, 0, 0.28)";
-  for (let i = 0; i < 46; i += 1) {
-    const x = -38 + ((i * 37) % 76);
-    const y = -28 + ((i * 23) % 58);
-    ctx.beginPath();
-    ctx.arc(x, y, 1.1, 0, Math.PI * 2);
-    ctx.fill();
+  // Greener nubs.
+  for (const x of [-48, 49]) {
+    const nub = ctx.createRadialGradient(x, 0, 0, x, 0, 12);
+    nub.addColorStop(0, "rgba(150,170,0,0.55)");
+    nub.addColorStop(1, "rgba(150,170,0,0)");
+    ctx.fillStyle = nub;
+    ctx.fillRect(x - 12, -12, 24, 24);
   }
+  pits(ctx, -44, -34, 44, 34, 110, "rgba(180,110,0,0.2)", "rgba(255,255,220,0.3)", 7);
+  rim(ctx, 0, 0, 46, "rgba(255,245,170,0.7)");
   ctx.restore();
-
-  // The shading smile: a wide soft stroke under a narrow stronger one.
-  ctx.lineCap = "round";
-  for (const [width, alpha] of [[10, 0.22], [4.5, 0.6]] as const) {
-    ctx.strokeStyle = `rgba(230, 95, 0, ${alpha})`;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(-30, 16);
-    ctx.quadraticCurveTo(0, 34, 32, 12);
-    ctx.stroke();
-  }
+  lemonPath(ctx);
+  outline(ctx, 2);
+  highlight(ctx, -14, -17, 17, 7, -0.12);
   ctx.restore();
 };
 
 const orange: Icon = (ctx) => {
-  ctx.beginPath();
-  ctx.ellipse(50, 52, 44, 42, 0, 0, Math.PI * 2);
-  const fill = ctx.createRadialGradient(36, 34, 4, 50, 52, 48);
-  fill.addColorStop(0, "#ffd9a0");
-  fill.addColorStop(0.35, "#ffa23a");
-  fill.addColorStop(1, "#e85d04");
-  paint(ctx, fill, 3);
-  // Peel: a red shading streak low down, and pores.
-  ctx.strokeStyle = "rgba(200, 40, 10, 0.7)";
-  ctx.lineWidth = 3.5;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(24, 70);
-  ctx.quadraticCurveTo(48, 86, 76, 68);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(70, 40);
-  ctx.quadraticCurveTo(80, 52, 76, 62);
-  ctx.stroke();
-  ctx.fillStyle = "rgba(160, 60, 0, 0.3)";
-  for (const [x, y] of [[30, 56], [42, 66], [58, 60], [66, 74], [38, 44], [62, 46], [50, 78], [26, 42]]) {
-    ctx.beginPath();
-    ctx.arc(x, y, 1.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // The stalk end.
-  ctx.fillStyle = "#6b8e23";
-  ctx.beginPath();
-  ctx.arc(54, 14, 3, 0, Math.PI * 2);
-  ctx.fill();
-};
-
-const plum: Icon = (ctx) => {
-  // Lying on its side, tilted, with the stalk at the end.
+  const [cx, cy, r] = [50, 53, 43];
+  ball(ctx, cx, cy, r, [
+    [0, "#fff0cf"],
+    [0.12, "#ffbe55"],
+    [0.42, "#ff8a00"],
+    [0.78, "#cf4f00"],
+    [1, "#6a2200"],
+  ], "rgba(255,190,90,0.7)", () => {
+    pits(ctx, cx - r, cy - r, cx + r, cy + r, 170, "rgba(150,55,0,0.2)", "rgba(255,230,170,0.25)", 21);
+    // The dip round the stalk end.
+    const dip = ctx.createRadialGradient(cx + 4, cy - r + 6, 0, cx + 4, cy - r + 6, 11);
+    dip.addColorStop(0, "rgba(120,40,0,0.55)");
+    dip.addColorStop(1, "rgba(120,40,0,0)");
+    ctx.fillStyle = dip;
+    ctx.fillRect(cx - 10, cy - r - 6, 28, 26);
+  });
+  // A little green star where the stalk was.
   ctx.save();
-  ctx.translate(48, 54);
-  ctx.rotate(-0.42);
+  ctx.translate(cx + 4, cy - r + 6);
   ctx.beginPath();
-  ctx.ellipse(0, 0, 46, 32, 0, 0, Math.PI * 2);
-  const fill = ctx.createRadialGradient(-14, -14, 4, 0, 0, 50);
-  fill.addColorStop(0, "#a98bff");
-  fill.addColorStop(0.45, "#5a2bd6");
-  fill.addColorStop(1, "#2a0c7a");
-  paint(ctx, fill, 3);
-  ctx.strokeStyle = "rgba(20, 0, 60, 0.5)";
-  ctx.lineWidth = 2.5;
+  for (let i = 0; i < 10; i += 1) {
+    const reach = i % 2 === 0 ? 6 : 2.4;
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+    ctx.lineTo(Math.cos(angle) * reach, Math.sin(angle) * reach * 0.55);
+  }
+  ctx.closePath();
+  ctx.fillStyle = "#4f8f1c";
+  ctx.fill();
+  outline(ctx, 1.2);
+  ctx.fillStyle = "#6b4a12";
   ctx.beginPath();
-  ctx.moveTo(-40, 6);
-  ctx.quadraticCurveTo(0, 22, 42, 4);
-  ctx.stroke();
-  ctx.strokeStyle = "#7a4a12";
-  ctx.lineWidth = 5;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(44, -4);
-  ctx.lineTo(54, -8);
-  ctx.stroke();
+  ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 };
 
-const grapes: Icon = (ctx) => {
-  // A tilted bunch: big glossy berries overlapping, front ones lower down,
-  // with leaves and a curly tendril at the stalk.
+const plum: Icon = (ctx) => {
   ctx.save();
-  ctx.translate(48, 58);
-  ctx.rotate(0.45);
-  ctx.scale(0.76, 0.76);
-
-  leaf(ctx, 4, -44, -2.4, 30);
-  leaf(ctx, 6, -46, -0.6, 32);
-  leaf(ctx, 2, -42, -1.5, 26);
-  ctx.strokeStyle = "#3d8a2a";
+  ctx.translate(48, 56);
+  ctx.rotate(-0.4);
+  const body = () => {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 45, 34, 0, 0, Math.PI * 2);
+  };
+  body();
+  ctx.fillStyle = ballFill(ctx, 0, 0, 44, [
+    [0, "#e2ccff"],
+    [0.14, "#9a6cff"],
+    [0.42, "#5c22d6"],
+    [0.78, "#2e0a86"],
+    [1, "#10023a"],
+  ]);
+  ctx.fill();
+  ctx.save();
+  body();
+  ctx.clip();
+  // The bloom: a faint dusty haze on the skin.
+  const bloom = ctx.createRadialGradient(-6, -10, 4, 0, 0, 46);
+  bloom.addColorStop(0, "rgba(220,210,255,0.22)");
+  bloom.addColorStop(1, "rgba(220,210,255,0)");
+  ctx.fillStyle = bloom;
+  ctx.fillRect(-50, -40, 100, 80);
+  rim(ctx, 0, 0, 40, "rgba(170,130,255,0.75)");
+  // The groove along it: a shadow with a lit edge.
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(20,0,60,0.6)";
   ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-42, 2);
+  ctx.bezierCurveTo(-18, 18, 18, 18, 44, -2);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(200,170,255,0.5)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(-40, -1);
+  ctx.bezierCurveTo(-18, 14, 18, 14, 42, -5);
+  ctx.stroke();
+  ctx.restore();
+  body();
+  outline(ctx, 2);
+  highlight(ctx, -16, -16, 16, 8, -0.2);
+  ctx.restore();
+  // The stalk and a leaf, at the top-right end.
+  stalk(ctx, () => {
+    ctx.moveTo(84, 36);
+    ctx.quadraticCurveTo(88, 28, 92, 24);
+  }, 3.4, "#6e4a16", "rgba(220,180,110,0.8)");
+  leaf(ctx, 88, 29, -2.3, 24, 0.42);
+};
+
+const GRAPE: Array<[number, string]> = [
+  [0, "#f2d6ff"],
+  [0.15, "#c06af0"],
+  [0.45, "#7d1fb8"],
+  [0.8, "#3d0a6a"],
+  [1, "#16022c"],
+];
+
+const grapes: Icon = (ctx) => {
+  // A bunch hanging from the top, the lower berries in front.
+  ctx.save();
+  ctx.translate(50, 54);
+  ctx.scale(0.9, 0.9);
+  ctx.translate(-50, -50);
+  const berries: Array<[number, number]> = [
+    [34, 30], [52, 27], [70, 31],
+    [26, 46], [44, 44], [62, 44], [78, 47],
+    [34, 61], [52, 60], [70, 62],
+    [42, 76], [60, 76],
+    [51, 90],
+  ];
+  // The stalk, then the vine leaf behind the top of the bunch.
+  stalk(ctx, () => {
+    ctx.moveTo(52, 20);
+    ctx.quadraticCurveTo(54, 10, 62, 4);
+  }, 3.4, "#6e5a16", "rgba(230,200,120,0.8)");
+  leaf(ctx, 50, 18, -2.75, 32, 0.5);
+  leaf(ctx, 56, 16, -0.45, 30, 0.5);
+  // A curly tendril.
+  ctx.strokeStyle = "#4e8a1e";
+  ctx.lineWidth = 1.6;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(10, -48);
-  ctx.bezierCurveTo(22, -60, 34, -52, 28, -44);
-  ctx.bezierCurveTo(24, -40, 20, -46, 25, -48);
+  ctx.moveTo(60, 8);
+  ctx.bezierCurveTo(72, 0, 82, 8, 76, 14);
+  ctx.bezierCurveTo(72, 18, 68, 12, 73, 10);
   ctx.stroke();
-
-  const berries = [
-    [-22, -30], [2, -34], [26, -28],
-    [-30, -8], [-5, -11], [20, -6],
-    [-18, 12], [7, 10], [30, 14],
-    [-8, 31], [17, 30],
-    [4, 48],
-  ];
+  const r = 11.5;
   for (const [x, y] of berries) {
+    // A soft shadow on the berries behind.
+    const shade = ctx.createRadialGradient(x + 2, y + 3, r * 0.6, x + 2, y + 3, r * 1.45);
+    shade.addColorStop(0, "rgba(10,0,20,0.55)");
+    shade.addColorStop(1, "rgba(10,0,20,0)");
+    ctx.fillStyle = shade;
     ctx.beginPath();
-    ctx.arc(x, y, 14, 0, Math.PI * 2);
-    const fill = ctx.createRadialGradient(x - 5, y - 6, 1, x, y, 15);
-    fill.addColorStop(0, "#a9c3ff");
-    fill.addColorStop(0.45, "#3d63e0");
-    fill.addColorStop(1, "#13207a");
-    paint(ctx, fill, 2.5);
-    ctx.fillStyle = "rgba(255,255,255,0.7)";
-    ctx.beginPath();
-    ctx.ellipse(x - 5, y - 6, 3.2, 2.2, -0.6, 0, Math.PI * 2);
+    ctx.arc(x + 2, y + 3, r * 1.45, 0, Math.PI * 2);
     ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = ballFill(ctx, x, y, r, GRAPE);
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    rim(ctx, x, y, r, "rgba(230,150,255,0.7)");
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    outline(ctx, 1.4);
+    highlight(ctx, x - r * 0.38, y - r * 0.42, r * 0.42, r * 0.26, -0.7, 0.85);
   }
   ctx.restore();
 };
 
 const melon: Icon = (ctx) => {
-  // Half a watermelon seen at an angle: the cut face on the left, the
-  // striped rind curving away to the right.
-  const rind = () => {
-    ctx.beginPath();
-    ctx.moveTo(34, 8);
-    ctx.bezierCurveTo(70, 2, 98, 30, 97, 58);
-    ctx.bezierCurveTo(96, 86, 70, 100, 38, 96);
-    ctx.lineTo(34, 8);
-    ctx.closePath();
-  };
-  rind();
-  const green = ctx.createRadialGradient(62, 40, 6, 62, 54, 52);
-  green.addColorStop(0, "#a8ec7a");
-  green.addColorStop(0.55, "#4cb233");
-  green.addColorStop(1, "#1d6a17");
-  paint(ctx, green, 3.5);
-  ctx.save();
-  rind();
-  ctx.clip();
-  // Dark stripes that bend round the rind and meet at its ends, a little jagged.
-  ctx.strokeStyle = "#0f4d10";
-  ctx.lineWidth = 6;
-  ctx.lineJoin = "round";
-  for (const bow of [20, 34, 48]) {
-    ctx.beginPath();
-    for (let step = 0; step <= 16; step += 1) {
-      const t = step / 16;
-      const jag = step % 2 === 0 ? -1.8 : 1.8;
-      ctx.lineTo(44 + Math.sin(t * Math.PI) * bow + jag, 6 + t * 90);
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  // The cut face: a pale ring, then the flesh.
-  ctx.beginPath();
-  ctx.ellipse(36, 52, 28, 44, -0.06, 0, Math.PI * 2);
-  paint(ctx, gradient(ctx, 8, 96, ["#f4fbd8", "#d9eeb0"]), 3.5);
-  ctx.beginPath();
-  ctx.ellipse(36, 52, 23.5, 38.5, -0.06, 0, Math.PI * 2);
-  const flesh = ctx.createRadialGradient(30, 40, 3, 36, 52, 40);
-  flesh.addColorStop(0, "#ffb3a8");
-  flesh.addColorStop(0.4, "#f2584d");
-  flesh.addColorStop(1, "#c41f22");
-  ctx.fillStyle = flesh;
-  ctx.fill();
-  // A deeper red ring just inside the edge, and a little texture.
-  ctx.strokeStyle = "rgba(160, 15, 20, 0.55)";
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.ellipse(36, 52, 20, 34, -0.06, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(190, 30, 30, 0.35)";
-  ctx.lineWidth = 2;
-  ctx.lineCap = "round";
-  for (const [x1, y1, x2, y2] of [[28, 58, 34, 66], [40, 36, 44, 44], [26, 44, 30, 50], [42, 62, 40, 72], [34, 74, 38, 80]]) {
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-  ctx.fillStyle = "#3a0a06";
-  for (const [x, y] of [[44, 32], [24, 62], [46, 56], [32, 78], [22, 40]]) {
-    ctx.beginPath();
-    ctx.ellipse(x, y, 1.4, 2.4, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-};
-
-const seven: Icon = (ctx) => {
-  // A bold slanted 7 with a dark 3D edge under a yellow-to-red face.
+  // A whole watermelon lying tilted, with dark jagged stripes running end to end.
   ctx.save();
   ctx.translate(50, 54);
-  ctx.transform(1, 0, -0.18, 1, 0, 0);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `900 118px "Arial Black", "Helvetica Neue", Arial, sans-serif`;
+  ctx.rotate(-0.32);
+  const [rx, ry] = [47, 36];
+  const body = () => {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  };
+  body();
+  ctx.fillStyle = ballFill(ctx, 0, 0, 44, [
+    [0, "#e9ffc8"],
+    [0.14, "#9be05a"],
+    [0.42, "#3f9f25"],
+    [0.78, "#1b6413"],
+    [1, "#062a06"],
+  ]);
+  ctx.fill();
+  ctx.save();
+  body();
+  ctx.clip();
   ctx.lineJoin = "round";
-  ctx.fillStyle = "#4a0000";
-  for (let step = 1; step <= 7; step += 1) ctx.fillText("7", step, step);
-  ctx.lineWidth = 7;
+  ctx.lineCap = "round";
+  for (const across of [-0.86, -0.52, -0.17, 0.17, 0.52, 0.86]) {
+    ctx.beginPath();
+    for (let step = 0; step <= 40; step += 1) {
+      const t = -1 + (step / 40) * 2;
+      const bulge = Math.sqrt(Math.max(0, 1 - t * t));
+      const jag = Math.sin(step * 2.1 + across * 9) * 1.6 * bulge;
+      ctx.lineTo(t * rx, across * ry * bulge + jag);
+    }
+    ctx.strokeStyle = "rgba(8,58,10,0.9)";
+    ctx.lineWidth = 6.5;
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(4,36,6,0.6)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+  rim(ctx, 0, 0, 42, "rgba(190,255,150,0.6)");
+  ctx.restore();
+  body();
+  outline(ctx, 2);
+  // The stalk end, and a long shine along the top.
+  ctx.fillStyle = "#c9b45a";
+  ctx.beginPath();
+  ctx.ellipse(-rx + 3, 0, 2.5, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 1.2);
+  highlight(ctx, -10, -20, 22, 7, -0.05, 0.85);
+  ctx.restore();
+};
+
+/** The 7, as a shape: a bar with a short leg at its left end, and a slanted stem. */
+function sevenPath(ctx: CanvasRenderingContext2D) {
+  ctx.beginPath();
+  ctx.moveTo(14, 9);
+  ctx.lineTo(87, 9);
+  ctx.lineTo(87, 24);
+  ctx.bezierCurveTo(72, 42, 62, 64, 59, 92);
+  ctx.lineTo(35, 92);
+  ctx.bezierCurveTo(38, 66, 50, 46, 64, 29);
+  ctx.lineTo(31, 29);
+  ctx.lineTo(29, 37);
+  ctx.lineTo(13, 37);
+  ctx.closePath();
+}
+
+const seven: Icon = (ctx) => {
+  // A red 7 with a gold edge, standing out from a dark red block behind it.
+  ctx.save();
+  ctx.translate(2, 0);
+  for (let step = 6; step >= 1; step -= 1) {
+    ctx.save();
+    ctx.translate(step * 0.7, step * 0.9);
+    sevenPath(ctx);
+    ctx.fillStyle = step === 6 ? INK : "#4d0003";
+    ctx.fill();
+    ctx.restore();
+  }
+  sevenPath(ctx);
+  ctx.lineWidth = 10;
   ctx.strokeStyle = INK;
-  ctx.strokeText("7", 7, 7);
-  ctx.strokeText("7", 0, 0);
-  const face = ctx.createLinearGradient(0, -50, 0, 50);
-  face.addColorStop(0, "#ffd21f");
-  face.addColorStop(0.45, "#ff6a00");
-  face.addColorStop(1, "#d10a0a");
+  ctx.lineJoin = "round";
+  ctx.stroke();
+  const gold = ctx.createLinearGradient(0, 6, 0, 94);
+  gold.addColorStop(0, "#fffbe0");
+  gold.addColorStop(0.18, "#ffd53a");
+  gold.addColorStop(0.45, "#b97700");
+  gold.addColorStop(0.62, "#ffe27a");
+  gold.addColorStop(1, "#a26200");
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = gold;
+  ctx.stroke();
+  const face = ctx.createLinearGradient(0, 9, 0, 92);
+  face.addColorStop(0, "#ff8a72");
+  face.addColorStop(0.2, "#ff2a1a");
+  face.addColorStop(0.6, "#d0000c");
+  face.addColorStop(1, "#6a0004");
   ctx.fillStyle = face;
-  ctx.fillText("7", 0, 0);
+  ctx.fill();
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = "rgba(60,0,0,0.8)";
+  ctx.stroke();
+  // Gloss on the top half, and a lit inner edge.
+  ctx.save();
+  sevenPath(ctx);
+  ctx.clip();
+  const gloss = ctx.createLinearGradient(0, 9, 0, 40);
+  gloss.addColorStop(0, "rgba(255,255,255,0.75)");
+  gloss.addColorStop(0.5, "rgba(255,255,255,0.25)");
+  gloss.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 9, 100, 31);
+  ctx.translate(1.2, 1.4);
+  sevenPath(ctx);
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = "rgba(255,170,150,0.55)";
+  ctx.stroke();
+  ctx.restore();
   ctx.restore();
 };
 
 const star: Icon = (ctx) => {
-  // A faceted gold star: each point has a light and a dark side.
+  // A gold star with a light and a dark side to each point. Its glow is drawn on the reel (see LOOKS).
+  const [cx, cy] = [50, 53];
   const points = Array.from({ length: 10 }, (_, i) => {
-    const radius = i % 2 === 0 ? 48 : 21;
+    const radius = i % 2 === 0 ? 48 : 20;
     const angle = -Math.PI / 2 + (i * Math.PI) / 5;
-    return [50 + radius * Math.cos(angle), 54 + radius * Math.sin(angle)] as const;
+    return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)] as const;
   });
-  ctx.beginPath();
-  points.forEach(([x, y]) => ctx.lineTo(x, y));
-  ctx.closePath();
+  const shape = () => {
+    ctx.beginPath();
+    points.forEach(([x, y]) => ctx.lineTo(x, y));
+    ctx.closePath();
+  };
+  shape();
   ctx.lineJoin = "round";
-  paint(ctx, gradient(ctx, 6, 100, ["#fff3a0", "#f5c518", "#b97a00"]), 3.5);
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
   for (let i = 0; i < 10; i += 1) {
     const [x1, y1] = points[i];
     const [x2, y2] = points[(i + 1) % 10];
+    // The half of a point on its clockwise side is lit, the other half in shade.
+    const lit = i % 2 === 0;
+    const tip = lit ? [x1, y1] : [x2, y2];
+    const fill = ctx.createLinearGradient(cx, cy, tip[0], tip[1]);
+    fill.addColorStop(0, lit ? "#fffbe0" : "#ffcf3a");
+    fill.addColorStop(0.55, lit ? "#ffe45c" : "#e09a00");
+    fill.addColorStop(1, lit ? "#ffc21a" : "#8c4f00");
     ctx.beginPath();
-    ctx.moveTo(50, 54);
+    ctx.moveTo(cx, cy);
     ctx.lineTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.closePath();
-    ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.28)" : "rgba(120,60,0,0.28)";
+    ctx.fillStyle = fill;
     ctx.fill();
-  }
-  ctx.strokeStyle = "rgba(90,50,0,0.6)";
-  ctx.lineWidth = 1.5;
-  for (const [x, y] of points) {
-    ctx.beginPath();
-    ctx.moveTo(50, 54);
-    ctx.lineTo(x, y);
+    // Fills the hairline between the halves.
+    ctx.strokeStyle = fill;
+    ctx.lineWidth = 0.6;
     ctx.stroke();
   }
+  shape();
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = "#7a4300";
+  ctx.stroke();
 };
 
-/** A white four-point glint, like light catching a shiny fruit. */
+/** A white four-point glint, like light catching something shiny. */
 function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
   const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 0.8);
   glow.addColorStop(0, "rgba(255,255,255,0.85)");
@@ -383,17 +581,17 @@ function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number)
   ctx.fill();
 }
 
-/** Each picture, and where its glints go (in its 100 × 100 box). */
+/** Each picture, and where its glints go (in its 100 × 100 box). The fruit shine on their own. */
 const LOOKS: Record<SlotSymbol, Look> = {
-  SEVEN: { icon: seven, glints: [[66, 18, 10]] },
-  MELON: { icon: melon, glints: [[28, 34, 12], [92, 64, 7]] },
-  GRAPES: { icon: grapes, glints: [[40, 44, 11]] },
-  PLUM: { icon: plum, glints: [[36, 38, 11]] },
-  ORANGE: { icon: orange, glints: [[40, 34, 12]] },
-  LEMON: { icon: lemon, glints: [[46, 40, 12]] },
-  CHERRY: { icon: cherry, glints: [[20, 62, 9], [64, 64, 9]] },
-  STAR: { icon: star, glints: [[50, 28, 9]] },
-}
+  SEVEN: { icon: seven, glints: [[78, 14, 9]] },
+  MELON: { icon: melon, glints: [] },
+  GRAPES: { icon: grapes, glints: [] },
+  PLUM: { icon: plum, glints: [] },
+  ORANGE: { icon: orange, glints: [] },
+  LEMON: { icon: lemon, glints: [] },
+  CHERRY: { icon: cherry, glints: [] },
+  STAR: { icon: star, glints: [[50, 52, 12]], glow: "255,214,90" },
+};
 
 const drawn = new Map<string, HTMLCanvasElement>();
 
@@ -423,7 +621,7 @@ function border(ctx: CanvasRenderingContext2D, shape: HTMLCanvasElement, radius:
 
 /**
  * A square picture of a symbol, `size` pixels across: the symbol big on the
- * dark reel, with a black outline and a white border round it, like a sticker.
+ * dark blue reel, with a thin dark edge and a soft shadow under it.
  */
 export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement {
   const key = `${symbol}:${size}`;
@@ -436,11 +634,11 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
   // GPU canvas waits for the GPU, which the spinning reels keep busy.
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
-  // The reel behind it.
+  // The reel behind it: dark blue, lighter in the middle, as if lit from the front.
   const reel = ctx.createLinearGradient(0, 0, size, 0);
-  reel.addColorStop(0, "#0d0d2e");
-  reel.addColorStop(0.5, "#17174a");
-  reel.addColorStop(1, "#0d0d2e");
+  reel.addColorStop(0, "#07082a");
+  reel.addColorStop(0.5, "#16195a");
+  reel.addColorStop(1, "#07082a");
   ctx.fillStyle = reel;
   ctx.fillRect(0, 0, size, size);
 
@@ -451,12 +649,28 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
     art.width = size;
     art.height = size;
     const artCtx = art.getContext("2d", { willReadFrequently: true })!;
-    const box = size * 0.84;
+    const box = size * 0.9;
     artCtx.translate((size - box) / 2, (size - box) / 2);
     artCtx.scale(box / 100, box / 100);
     look.icon(artCtx);
-    border(ctx, silhouette(art, "#ffffff"), size * 0.045);
-    border(ctx, silhouette(art, "#000000"), size * 0.022);
+    if (look.glow) {
+      const glow = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * 0.5);
+      glow.addColorStop(0, `rgba(${look.glow},0.6)`);
+      glow.addColorStop(0.5, `rgba(${look.glow},0.2)`);
+      glow.addColorStop(1, `rgba(${look.glow},0)`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, size, size);
+    }
+    // A soft shadow under the picture, then a thin dark edge round it.
+    const shadow = silhouette(art, "#000000");
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = size * 0.05;
+    ctx.shadowOffsetX = size * 0.012;
+    ctx.shadowOffsetY = size * 0.025;
+    ctx.drawImage(shadow, 0, 0);
+    ctx.restore();
+    border(ctx, shadow, size * 0.012);
     ctx.drawImage(art, 0, 0);
     ctx.save();
     ctx.translate((size - box) / 2, (size - box) / 2);

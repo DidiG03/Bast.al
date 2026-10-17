@@ -18,6 +18,9 @@ let keepAlive: AudioBufferSourceNode | null = null;
 let ticking: ReturnType<typeof setInterval> | null = null;
 /** Stops the ticking if a landing is missed; cleared with it, so an earlier spin's never cuts a later one short. */
 let tickingLimit: ReturnType<typeof setTimeout> | null = null;
+/** Double or nothing's beat while the card flashes, and its safety stop. */
+let gambleBeat: ReturnType<typeof setInterval> | null = null;
+let gambleBeatLimit: ReturnType<typeof setTimeout> | null = null;
 let on = readSetting();
 
 function readSetting(): boolean {
@@ -229,6 +232,26 @@ export const slotSound = {
   /** Double or nothing: the card turning over. */
   cardFlip() {
     noise(0, 0.14, { filter: "bandpass", freq: 2400, sweepTo: 700, gain: 0.2 });
+  },
+
+  /** Double or nothing: the flashing card's beat, two notes in turn, in time with the card. */
+  startGambleBeat() {
+    this.stopGambleBeat();
+    if (!ready()) return;
+    let high = false;
+    gambleBeat = setInterval(() => {
+      high = !high;
+      tone(high ? 880 : 660, 0, 0.07, { type: "square", gain: 0.05 });
+    }, 260);
+    // Never beat forever if the screen is left without stopping it.
+    gambleBeatLimit = setTimeout(() => this.stopGambleBeat(), 60000);
+  },
+
+  stopGambleBeat() {
+    if (gambleBeat) clearInterval(gambleBeat);
+    if (gambleBeatLimit) clearTimeout(gambleBeatLimit);
+    gambleBeat = null;
+    gambleBeatLimit = null;
   },
 
   /** A right guess: two bright notes up. */

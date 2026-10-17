@@ -11,16 +11,19 @@ import {
 } from "pokie";
 
 /**
- * Bast.al's slot: a classic fruit game. 5 reels, 3 rows, 5 fixed lines,
- * fruit and sevens, a star that pays anywhere, no wilds and no free spins.
+ * Bast.al's slot: a classic fruit game. 5 reels, 3 rows, 5 or 10 lines (the
+ * Player picks), fruit and sevens, a star that pays anywhere, no wilds and
+ * no free spins.
  * After a win the Player can try "double or nothing" (see casino.service.ts).
  * The maths runs on pokie (github.com/sta-ger/pokie): it lands the reels and
  * works out every line and scatter win. This file is the game's whole
  * definition, used as it is by the API, the tests and the payout-rate
  * simulation (scripts/casino-rtp.mjs), so what's proved is what's played.
  *
- * Amounts here are in line bets: a spin costs LINES line bets, and a win of
- * 25 pays 25 line bets. The API turns them into money.
+ * Amounts here are in line bets: a spin costs as many line bets as it plays
+ * lines (the bet is split between them), and a win of 25 pays 25 line bets.
+ * The API turns them into money. Every line sees the same odds, so 5 or 10
+ * lines pay back the same on average: 10 just wins smaller amounts more often.
  */
 
 /** What Players see the game called. Change it here; the web app shows whatever this says. */
@@ -28,10 +31,14 @@ export const GAME_NAME = "Sizzling Hot";
 
 export const REELS = 5;
 export const ROWS = 3;
-export const LINES = 5;
-/** What spins pay back on average, in percent of what they cost, as measured (see REEL_MAKEUP). */
+/** How many lines a spin can play; the first is the classic 5. */
+export const LINE_CHOICES = [5, 10] as const;
+export type LineCount = (typeof LINE_CHOICES)[number];
+/** The most lines, and what a spin plays unless it says otherwise. */
+export const LINES: LineCount = 10;
+/** What spins pay back on average, in percent of what they cost, as measured (see REEL_MAKEUP); the same for 5 and 10 lines. */
 export const PAYOUT_RATE = 90.7;
-/** What a spin can cost, in dollars. A line bet is a fifth of it. */
+/** What a spin can cost, in ALL, whatever the lines. A line bet is that split between the lines played. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 
 export const SYMBOLS = ["SEVEN", "MELON", "GRAPES", "PLUM", "ORANGE", "LEMON", "CHERRY", "STAR"] as const;
@@ -55,17 +62,28 @@ export const LINE_PAYS: Record<Paying, [number, number, number, number]> = {
   CHERRY: [5, 10, 40, 200],
 };
 
-/** Stars anywhere, in line bets: 2, 10 and 50 times the whole bet. */
-export const SCATTER_PAYS: Record<3 | 4 | 5, number> = { 3: 10, 4: 50, 5: 250 };
+/** Stars anywhere, in times the whole bet (so the same whatever the lines): 2, 10 and 50. */
+export const SCATTER_PAYS: Record<3 | 4 | 5, number> = { 3: 2, 4: 10, 5: 50 };
 
-/** The 5 lines: for each reel, which row (0 top, 2 bottom) the line runs through. */
+/**
+ * The 10 lines: for each reel, which row (0 top, 2 bottom) the line runs
+ * through. A 5-line spin plays the first 5; they're the same 10 as Book of Ra.
+ */
 export const LINE_SHAPES: number[][] = [
   [1, 1, 1, 1, 1],
   [0, 0, 0, 0, 0],
   [2, 2, 2, 2, 2],
   [0, 1, 2, 1, 0],
   [2, 1, 0, 1, 2],
+  [1, 2, 2, 2, 1],
+  [1, 0, 0, 0, 1],
+  [2, 2, 1, 0, 0],
+  [0, 0, 1, 2, 2],
+  [2, 1, 1, 1, 0],
 ];
+
+/** The lines a spin of `lines` plays. */
+export const shapesFor = (lines: LineCount) => LINE_SHAPES.slice(0, lines);
 
 /**
  * How many of each symbol are on each reel. Together with the pays above,
@@ -96,7 +114,7 @@ function layOut(makeup: Record<SlotSymbol, number>): SlotSymbol[] {
 /** The reels as they're printed: each one's symbols in order, wrapping round. */
 export const REEL_STRIPS: SlotSymbol[][] = REEL_MAKEUP.map(layOut);
 
-function buildConfig(): VideoSlotConfig<SlotSymbol> {
+function buildConfig(lines: LineCount): VideoSlotConfig<SlotSymbol> {
   const config = new VideoSlotConfig<SlotSymbol>();
   config.setAvailableBets([1]);
   config.setReelsNumber(REELS);
@@ -104,7 +122,7 @@ function buildConfig(): VideoSlotConfig<SlotSymbol> {
   config.setWildSymbols([]);
   config.setScatterSymbols([SCATTER]);
   config.setAvailableSymbols([...SYMBOLS]);
-  config.setLinesDefinitions(new CustomLinesDefinitions().fromMap(Object.fromEntries(LINE_SHAPES.map((shape, index) => [String(index), shape]))));
+  config.setLinesDefinitions(new CustomLinesDefinitions().fromMap(Object.fromEntries(shapesFor(lines).map((shape, index) => [String(index), shape]))));
   // Lines are checked from 2 in a row; anything the pays below leave at 0 doesn't count as a win.
   config.setLinesPatterns(new LeftToRightLinesPatterns(REELS, 2));
   config.setSymbolsSequences(REEL_STRIPS.map((strip) => new SymbolsSequence<SlotSymbol>().fromArray(strip)));
@@ -116,12 +134,12 @@ function buildConfig(): VideoSlotConfig<SlotSymbol> {
   for (const [symbol, pays] of Object.entries(LINE_PAYS) as Array<[Paying, number[]]>) {
     pays.forEach((pay, index) => paytable.setPayoutForSymbol(symbol, index + 2, pay));
   }
-  for (const [count, pay] of Object.entries(SCATTER_PAYS)) paytable.setPayoutForSymbol(SCATTER, Number(count), pay);
+  // Stars are worked out below, from the whole bet; pokie only needs them set apart as the scatter.
   config.setPaytable(paytable);
   return config;
 }
 
-const config = buildConfig();
+const configs: Record<LineCount, VideoSlotConfig<SlotSymbol>> = { 5: buildConfig(5), 10: buildConfig(10) };
 const secure = new SecureRandomNumberGenerator();
 
 export type WinningLine = {
@@ -142,8 +160,10 @@ export type Round = {
   /** Where each reel stopped on its strip, so a round can be checked later. */
   stops: number[];
   lines: WinningLine[];
-  /** Stars anywhere, when there are 3 or more. */
+  /** Stars anywhere, when there are 3 or more; `win` is in line bets, like the rest. */
   scatter: { count: number; cells: Array<[number, number]>; win: number } | null;
+  /** How many lines the round played. */
+  played: LineCount;
   /** Everything the round pays, in line bets. */
   win: number;
 };
@@ -151,14 +171,18 @@ export type Round = {
 /** How many times the reels may land again before a round is given up. */
 const LANDINGS = 1000;
 
-/** Five sevens on a line: the reels never stop that way. */
-const fiveSevens = (grid: SlotSymbol[][]) => LINE_SHAPES.some((shape) => shape.every((row, reel) => grid[reel][row] === "SEVEN"));
+/** Five sevens on a line being played: the reels never stop that way. */
+const fiveSevens = (grid: SlotSymbol[][], lines: LineCount) => shapesFor(lines).some((shape) => shape.every((row, reel) => grid[reel][row] === "SEVEN"));
 
-/** Plays one round. Uses crypto.randomInt unless a test or the simulation passes its own random source. */
-export function playRound(rng: RandomNumberGenerating = secure): Round {
+/**
+ * Plays one round on `played` lines. Uses crypto.randomInt unless a test or
+ * the simulation passes its own random source.
+ */
+export function playRound(rng: RandomNumberGenerating = secure, played: LineCount = LINES): Round {
+  const config = configs[played];
   const generator = new SymbolsCombinationsGenerator<SlotSymbol>(config, rng);
   let combination = generator.generateSymbolsCombination();
-  for (let landing = 1; fiveSevens(combination.toMatrix()); landing++) {
+  for (let landing = 1; fiveSevens(combination.toMatrix(), played); landing++) {
     if (landing >= LANDINGS) throw new Error("The reels couldn't land");
     combination = generator.generateSymbolsCombination();
   }
@@ -182,7 +206,7 @@ export function playRound(rng: RandomNumberGenerating = secure): Round {
   const cells: Array<[number, number]> = [];
   grid.forEach((column, reel) => column.forEach((symbol, row) => symbol === SCATTER && cells.push([reel, row])));
   const stars = Math.min(cells.length, 5) as 3 | 4 | 5;
-  const scatter = cells.length >= 3 ? { count: cells.length, cells, win: SCATTER_PAYS[stars] } : null;
+  const scatter = cells.length >= 3 ? { count: cells.length, cells, win: SCATTER_PAYS[stars] * played } : null;
 
   const lineWin = lines.reduce((sum, line) => sum + line.win, 0);
   return {
@@ -190,6 +214,7 @@ export function playRound(rng: RandomNumberGenerating = secure): Round {
     stops: generator.getLastStopPositions(),
     lines: lines.sort((a, b) => a.line - b.line),
     scatter,
+    played,
     win: lineWin + (scatter?.win ?? 0),
   };
 }

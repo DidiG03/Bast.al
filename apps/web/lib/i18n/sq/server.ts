@@ -677,4 +677,5 @@ export const server: Record<string, string> = {
   "Result (60 minutes)": "Rezultati (60 minuta)",
   "A volleyball result is the sets won: 3–0, 3–1, 3–2, or the other way round": "Rezultati i volejbollit janë setet e fituara: 3–0, 3–1, 3–2, ose anasjelltas",
   "A football or handball score can't be more than 99": "Rezultati i futbollit ose hendbollit nuk mund të jetë mbi 99",
+  "Choose 5 or 10 lines": "Zgjidh 5 ose 10 linja",
 };

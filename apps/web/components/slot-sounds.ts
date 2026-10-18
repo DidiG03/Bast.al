@@ -22,6 +22,12 @@ let tickingLimit: ReturnType<typeof setTimeout> | null = null;
 let gambleBeat: ReturnType<typeof setInterval> | null = null;
 let gambleBeatLimit: ReturnType<typeof setTimeout> | null = null;
 let on = readSetting();
+/**
+ * Which slot sounds the reels make: "classic" is Sizzling Hot's old electronic fruit machine (a quick run of
+ * notes while the reels roll, a stepped "dun" as each lands, credits counting up in rising ticks); "standard" is
+ * everything else's.
+ */
+let voice: "standard" | "classic" = "standard";
 
 function readSetting(): boolean {
   try {
@@ -123,6 +129,11 @@ export const slotSound = {
     } else this.unlock();
   },
 
+  /** The slot's sound set; a game sets it while it's open and puts it back when it closes. */
+  setVoice(next: "standard" | "classic") {
+    voice = next;
+  },
+
   /** Call from a tap: browsers only start sound after the Player has touched the page. */
   unlock() {
     if (!on || typeof window === "undefined") return;
@@ -167,6 +178,12 @@ export const slotSound = {
 
   /** The lever: a click and a short rising whoosh as the reels set off. */
   spinStart() {
+    if (voice === "classic") {
+      // Two quick electronic blips.
+      tone(1047, 0, 0.05, { type: "square", gain: 0.06 });
+      tone(1568, 0.045, 0.07, { type: "square", gain: 0.05 });
+      return;
+    }
     noise(0, 0.05, { freq: 2500, gain: 0.25 });
     noise(0.02, 0.28, { filter: "bandpass", freq: 300, sweepTo: 1800, gain: 0.12 });
   },
@@ -175,7 +192,18 @@ export const slotSound = {
   startTicking() {
     this.stopTicking();
     if (!ready()) return;
-    ticking = setInterval(() => noise(0, 0.018, { filter: "highpass", freq: 3200, gain: 0.07 }), 62);
+    if (voice === "classic") {
+      // A quick rolling run of soft notes, round and round, with a faint tick under each.
+      const run = [523, 659, 784, 659];
+      let step = 0;
+      ticking = setInterval(() => {
+        tone(run[step % run.length], 0, 0.04, { type: "triangle", gain: 0.04 });
+        noise(0, 0.012, { filter: "highpass", freq: 4200, gain: 0.03 });
+        step += 1;
+      }, 55);
+    } else {
+      ticking = setInterval(() => noise(0, 0.018, { filter: "highpass", freq: 3200, gain: 0.07 }), 62);
+    }
     // Never tick forever if a landing is missed.
     tickingLimit = setTimeout(() => this.stopTicking(), 9000);
   },
@@ -189,6 +217,13 @@ export const slotSound = {
 
   /** A reel landing: a low thunk, a little higher for each reel to the right. */
   reelStop(reel: number) {
+    if (voice === "classic") {
+      // A deep "dun", one step up the scale for each reel to the right, on a soft thud.
+      const notes = [196, 220, 262, 294, 330, 392];
+      tone(notes[Math.min(reel, notes.length - 1)], 0, 0.18, { type: "triangle", gain: 0.3 });
+      tone(110, 0, 0.1, { type: "sine", gain: 0.22, slideTo: 60 });
+      return;
+    }
     tone(150 + reel * 12, 0, 0.12, { type: "sine", gain: 0.35, slideTo: 70 });
     noise(0, 0.04, { freq: 900, gain: 0.15 });
   },
@@ -202,6 +237,13 @@ export const slotSound = {
 
   /** A win: a rising jingle; a big win gets a longer fanfare. */
   win(big: boolean) {
+    if (voice === "classic") {
+      // A short chip-tune fanfare; a big win runs on higher and holds the last note.
+      const run = big ? [784, 988, 1175, 1568, 1175, 1568, 1976, 2349] : [1047, 1319, 1568, 2093];
+      run.forEach((freq, index) => tone(freq, index * 0.07, 0.1, { type: "square", gain: 0.07 }));
+      if (big) tone(2349, run.length * 0.07, 0.5, { type: "square", gain: 0.06 });
+      return;
+    }
     const notes = big ? [523, 659, 784, 1047, 784, 1047, 1319, 1568] : [659, 784, 1047, 1319];
     notes.forEach((freq, index) => tone(freq, index * (big ? 0.11 : 0.08), big ? 0.22 : 0.16, { type: "square", gain: 0.11 }));
     if (big) tone(2093, notes.length * 0.11, 0.6, { type: "triangle", gain: 0.12 });
@@ -209,8 +251,21 @@ export const slotSound = {
 
   /** Coins counting up while a win ticks into the meter. */
   coins(milliseconds: number) {
+    if (voice === "classic") {
+      // The credits counting up: quick ticks climbing in pitch the whole way, then a ding.
+      const ticks = Math.min(48, Math.max(6, Math.round(milliseconds / 45)));
+      for (let i = 0; i < ticks; i += 1) tone(700 * 2 ** ((i / ticks) * 1.6), (i * milliseconds) / ticks / 1000, 0.035, { type: "square", gain: 0.045 });
+      tone(2093, milliseconds / 1000, 0.3, { type: "triangle", gain: 0.12 });
+      return;
+    }
     const count = Math.min(40, Math.max(4, Math.round(milliseconds / 55)));
     for (let i = 0; i < count; i += 1) tone(1900 + (i % 3) * 180, (i * milliseconds) / count / 1000, 0.05, { type: "square", gain: 0.05 });
+  },
+
+  /** Sizzling Hot: the winning symbols catching fire, a whoosh with a few crackles. */
+  ignite() {
+    noise(0, 0.5, { filter: "lowpass", freq: 300, sweepTo: 2600, gain: 0.16 });
+    for (let i = 0; i < 9; i += 1) noise(0.05 + Math.random() * 0.75, 0.014, { filter: "highpass", freq: 2800 + Math.random() * 2400, gain: 0.04 + Math.random() * 0.06 });
   },
 
   /** Mines: a coin landing on a safe tile. Each later gem sits a little higher. */

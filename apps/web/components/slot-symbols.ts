@@ -3,8 +3,8 @@ import type { SlotSymbol } from "../lib/api";
 /**
  * The casino slot's symbol pictures, drawn in code in the classic fruit
  * machine look: glossy, lit from the top left, each with a bright highlight,
- * a soft light round its far edge and a thin dark outline, on the dark blue
- * reel. No image files, so there's nothing to license or load. The pictures
+ * a soft light round its far edge, and a heavy dark outline with a thin light
+ * line round it, on the near-black reel. No image files, so there's nothing to license or load. The pictures
  * are shapes, not emoji: phones draw emoji in a canvas unreliably (iPhone
  * Safari leaves big ones blank), and they'd look different on every phone.
  * The 7 is a shape too, not a letter, so it's the same with every font.
@@ -13,7 +13,8 @@ import type { SlotSymbol } from "../lib/api";
 
 /** Draws a picture in a 100 × 100 box. */
 type Icon = (ctx: CanvasRenderingContext2D) => void;
-type Look = { icon: Icon; glints: Array<[number, number, number]>; glow?: string };
+/** `plate`: a red square behind the picture (the star). */
+type Look = { icon: Icon; glints: Array<[number, number, number]>; glow?: string; plate?: boolean };
 
 const INK = "#14060a";
 
@@ -38,12 +39,14 @@ function rim(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, c
   const light = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.95, cx - r * 0.3, cy - r * 0.3, r * 1.45);
   light.addColorStop(0, "rgba(0,0,0,0)");
   light.addColorStop(1, color);
+  ctx.globalAlpha = 0.6;
   ctx.fillStyle = light;
   ctx.fillRect(cx - r * 1.6, cy - r * 1.6, r * 3.2, r * 3.2);
+  ctx.globalAlpha = 1;
 }
 
 /** The highlight: a soft white oval, and a small sharp spot in it. */
-function highlight(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, turn: number, strength = 0.9) {
+function highlight(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, turn: number, strength = 0.6) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(turn);
@@ -56,9 +59,9 @@ function highlight(ctx: CanvasRenderingContext2D, x: number, y: number, rx: numb
   ctx.beginPath();
   ctx.arc(0, 0, rx, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = `rgba(255,255,255,${Math.min(1, strength * 1.1)})`;
   ctx.beginPath();
-  ctx.ellipse(-rx * 0.12, -rx * 0.05, rx * 0.32, rx * 0.2, 0, 0, Math.PI * 2);
+  ctx.ellipse(-rx * 0.12, -rx * 0.05, rx * 0.26, rx * 0.16, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -244,10 +247,10 @@ const orange: Icon = (ctx) => {
   ball(ctx, cx, cy, r, [
     [0, "#fff0cf"],
     [0.12, "#ffbe55"],
-    [0.42, "#ff8a00"],
-    [0.78, "#cf4f00"],
-    [1, "#6a2200"],
-  ], "rgba(255,190,90,0.7)", () => {
+    [0.42, "#f98400"],
+    [0.78, "#b84400"],
+    [1, "#5a1c00"],
+  ], "rgba(255,180,80,0.6)", () => {
     pits(ctx, cx - r, cy - r, cx + r, cy + r, 170, "rgba(150,55,0,0.2)", "rgba(255,230,170,0.25)", 21);
     // The dip round the stalk end.
     const dip = ctx.createRadialGradient(cx + 4, cy - r + 6, 0, cx + 4, cy - r + 6, 11);
@@ -279,18 +282,18 @@ const orange: Icon = (ctx) => {
 const plum: Icon = (ctx) => {
   ctx.save();
   ctx.translate(48, 56);
-  ctx.rotate(-0.4);
+  ctx.rotate(-0.36);
   const body = () => {
     ctx.beginPath();
-    ctx.ellipse(0, 0, 45, 34, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 47, 30, 0, 0, Math.PI * 2);
   };
   body();
   ctx.fillStyle = ballFill(ctx, 0, 0, 44, [
-    [0, "#e2ccff"],
-    [0.14, "#9a6cff"],
-    [0.42, "#5c22d6"],
-    [0.78, "#2e0a86"],
-    [1, "#10023a"],
+    [0, "#cdbcff"],
+    [0.14, "#6c4fd6"],
+    [0.42, "#3a1e9e"],
+    [0.78, "#1c0a5e"],
+    [1, "#08022a"],
   ]);
   ctx.fill();
   ctx.save();
@@ -320,22 +323,21 @@ const plum: Icon = (ctx) => {
   ctx.restore();
   body();
   outline(ctx, 2);
-  highlight(ctx, -16, -16, 16, 8, -0.2);
-  ctx.restore();
-  // The stalk and a leaf, at the top-right end.
+  highlight(ctx, -16, -14, 16, 7, -0.15);
+  // A short stalk at its right end.
   stalk(ctx, () => {
-    ctx.moveTo(84, 36);
-    ctx.quadraticCurveTo(88, 28, 92, 24);
-  }, 3.4, "#6e4a16", "rgba(220,180,110,0.8)");
-  leaf(ctx, 88, 29, -2.3, 24, 0.42);
+    ctx.moveTo(44, -4);
+    ctx.quadraticCurveTo(49, -6, 53, -11);
+  }, 3.2, "#7a5a1c", "rgba(230,200,120,0.8)");
+  ctx.restore();
 };
 
 const GRAPE: Array<[number, string]> = [
-  [0, "#f2d6ff"],
-  [0.15, "#c06af0"],
-  [0.45, "#7d1fb8"],
-  [0.8, "#3d0a6a"],
-  [1, "#16022c"],
+  [0, "#d8e2ff"],
+  [0.15, "#6f8cf0"],
+  [0.45, "#2c43b8"],
+  [0.8, "#121d6e"],
+  [1, "#050a30"],
 ];
 
 const grapes: Icon = (ctx) => {
@@ -356,8 +358,8 @@ const grapes: Icon = (ctx) => {
     ctx.moveTo(52, 20);
     ctx.quadraticCurveTo(54, 10, 62, 4);
   }, 3.4, "#6e5a16", "rgba(230,200,120,0.8)");
-  leaf(ctx, 50, 18, -2.75, 32, 0.5);
-  leaf(ctx, 56, 16, -0.45, 30, 0.5);
+  leaf(ctx, 54, 19, -1.25, 30, 0.5);
+  leaf(ctx, 58, 20, -0.3, 30, 0.5);
   // A curly tendril.
   ctx.strokeStyle = "#4e8a1e";
   ctx.lineWidth = 1.6;
@@ -383,7 +385,7 @@ const grapes: Icon = (ctx) => {
     ctx.fill();
     ctx.save();
     ctx.clip();
-    rim(ctx, x, y, r, "rgba(230,150,255,0.7)");
+    rim(ctx, x, y, r, "rgba(150,180,255,0.65)");
     ctx.restore();
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -449,20 +451,20 @@ const melon: Icon = (ctx) => {
 /** The 7, as a shape: a bar with a short leg at its left end, and a slanted stem. */
 function sevenPath(ctx: CanvasRenderingContext2D) {
   ctx.beginPath();
-  ctx.moveTo(14, 9);
-  ctx.lineTo(87, 9);
-  ctx.lineTo(87, 24);
-  ctx.bezierCurveTo(72, 42, 62, 64, 59, 92);
-  ctx.lineTo(35, 92);
-  ctx.bezierCurveTo(38, 66, 50, 46, 64, 29);
-  ctx.lineTo(31, 29);
-  ctx.lineTo(29, 37);
-  ctx.lineTo(13, 37);
+  ctx.moveTo(9, 7);
+  ctx.lineTo(91, 7);
+  ctx.lineTo(91, 27);
+  ctx.bezierCurveTo(75, 45, 65, 66, 62, 93);
+  ctx.lineTo(31, 93);
+  ctx.bezierCurveTo(34, 68, 46, 48, 61, 31);
+  ctx.lineTo(28, 31);
+  ctx.lineTo(26, 39);
+  ctx.lineTo(9, 39);
   ctx.closePath();
 }
 
 const seven: Icon = (ctx) => {
-  // A red 7 with a gold edge, standing out from a dark red block behind it.
+  // A red 7 lit to yellow, in a heavy black outline, standing out from a dark red block behind it.
   ctx.save();
   ctx.translate(2, 0);
   for (let step = 6; step >= 1; step -= 1) {
@@ -474,39 +476,29 @@ const seven: Icon = (ctx) => {
     ctx.restore();
   }
   sevenPath(ctx);
-  ctx.lineWidth = 10;
+  ctx.lineWidth = 9;
   ctx.strokeStyle = INK;
   ctx.lineJoin = "round";
   ctx.stroke();
-  const gold = ctx.createLinearGradient(0, 6, 0, 94);
-  gold.addColorStop(0, "#fffbe0");
-  gold.addColorStop(0.18, "#ffd53a");
-  gold.addColorStop(0.45, "#b97700");
-  gold.addColorStop(0.62, "#ffe27a");
-  gold.addColorStop(1, "#a26200");
-  ctx.lineWidth = 7;
-  ctx.strokeStyle = gold;
-  ctx.stroke();
-  const face = ctx.createLinearGradient(0, 9, 0, 92);
-  face.addColorStop(0, "#ff8a72");
-  face.addColorStop(0.2, "#ff2a1a");
-  face.addColorStop(0.6, "#d0000c");
+  // Red, lit to orange and yellow across from the top left.
+  const face = ctx.createLinearGradient(18, 8, 78, 92);
+  face.addColorStop(0, "#ffd04a");
+  face.addColorStop(0.22, "#ff8a12");
+  face.addColorStop(0.5, "#ec2a0c");
+  face.addColorStop(0.8, "#b8060a");
   face.addColorStop(1, "#6a0004");
   ctx.fillStyle = face;
   ctx.fill();
-  ctx.lineWidth = 1.4;
-  ctx.strokeStyle = "rgba(60,0,0,0.8)";
-  ctx.stroke();
   // Gloss on the top half, and a lit inner edge.
   ctx.save();
   sevenPath(ctx);
   ctx.clip();
-  const gloss = ctx.createLinearGradient(0, 9, 0, 40);
-  gloss.addColorStop(0, "rgba(255,255,255,0.75)");
-  gloss.addColorStop(0.5, "rgba(255,255,255,0.25)");
+  const gloss = ctx.createLinearGradient(0, 7, 0, 40);
+  gloss.addColorStop(0, "rgba(255,255,255,0.5)");
+  gloss.addColorStop(0.5, "rgba(255,255,255,0.15)");
   gloss.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = gloss;
-  ctx.fillRect(0, 9, 100, 31);
+  ctx.fillRect(0, 7, 100, 33);
   ctx.translate(1.2, 1.4);
   sevenPath(ctx);
   ctx.lineWidth = 2.2;
@@ -586,11 +578,11 @@ const LOOKS: Record<SlotSymbol, Look> = {
   SEVEN: { icon: seven, glints: [[78, 14, 9]] },
   MELON: { icon: melon, glints: [] },
   GRAPES: { icon: grapes, glints: [] },
-  PLUM: { icon: plum, glints: [] },
+  PLUM: { icon: plum, glints: [[40, 33, 6]] },
   ORANGE: { icon: orange, glints: [] },
   LEMON: { icon: lemon, glints: [] },
   CHERRY: { icon: cherry, glints: [] },
-  STAR: { icon: star, glints: [[50, 52, 12]], glow: "255,214,90" },
+  STAR: { icon: star, glints: [[50, 52, 10]], plate: true },
 };
 
 const drawn = new Map<string, HTMLCanvasElement>();
@@ -619,9 +611,60 @@ function border(ctx: CanvasRenderingContext2D, shape: HTMLCanvasElement, radius:
   }
 }
 
+/** The symbol's picture alone, `size` pixels square on a transparent background, or null for a symbol this game doesn't have. */
+const arts = new Map<string, HTMLCanvasElement | null>();
+const BOX = 0.9;
+
+function artOf(symbol: SlotSymbol, size: number): HTMLCanvasElement | null {
+  const key = `${symbol}:${size}`;
+  if (arts.has(key)) return arts.get(key)!;
+  const look: Look | undefined = LOOKS[symbol];
+  let art: HTMLCanvasElement | null = null;
+  if (look) {
+    art = document.createElement("canvas");
+    art.width = size;
+    art.height = size;
+    const ctx = art.getContext("2d", { willReadFrequently: true })!;
+    const box = size * BOX;
+    ctx.translate((size - box) / 2, (size - box) / 2);
+    ctx.scale(box / 100, box / 100);
+    look.icon(ctx);
+  }
+  arts.set(key, art);
+  return art;
+}
+
+/** The star's red square: a bevelled plate, lighter at the top, in a dark edge. */
+function plate(ctx: CanvasRenderingContext2D, size: number) {
+  const side = size * 0.72;
+  const x = (size - side) / 2;
+  const y = (size - side) / 2 + size * 0.02;
+  ctx.fillStyle = "#1a0000";
+  ctx.fillRect(x - size * 0.012, y - size * 0.012, side + size * 0.024, side + size * 0.024);
+  const red = ctx.createLinearGradient(0, y, 0, y + side);
+  red.addColorStop(0, "#ff3a26");
+  red.addColorStop(0.5, "#d8120a");
+  red.addColorStop(1, "#8e0604");
+  ctx.fillStyle = red;
+  ctx.fillRect(x, y, side, side);
+  ctx.strokeStyle = "rgba(255,170,150,0.55)";
+  ctx.lineWidth = size * 0.01;
+  ctx.strokeRect(x + size * 0.012, y + size * 0.012, side - size * 0.024, side - size * 0.024);
+}
+
+/** The reel behind a symbol: near black, with a hint of dark blue at the top. */
+function reelBackground(ctx: CanvasRenderingContext2D, size: number) {
+  const reel = ctx.createLinearGradient(0, 0, 0, size);
+  reel.addColorStop(0, "#0c1446");
+  reel.addColorStop(0.4, "#050818");
+  reel.addColorStop(1, "#010103");
+  ctx.fillStyle = reel;
+  ctx.fillRect(0, 0, size, size);
+}
+
 /**
  * A square picture of a symbol, `size` pixels across: the symbol big on the
- * dark blue reel, with a thin dark edge and a soft shadow under it.
+ * near-black reel, in a heavy dark outline with a thin light line round it.
  */
 export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement {
   const key = `${symbol}:${size}`;
@@ -633,26 +676,13 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
   // Drawn on the CPU: the picture is read back (as an image address, or into the reels' textures), and reading a
   // GPU canvas waits for the GPU, which the spinning reels keep busy.
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-
-  // The reel behind it: dark blue, lighter in the middle, as if lit from the front.
-  const reel = ctx.createLinearGradient(0, 0, size, 0);
-  reel.addColorStop(0, "#07082a");
-  reel.addColorStop(0.5, "#16195a");
-  reel.addColorStop(1, "#07082a");
-  ctx.fillStyle = reel;
-  ctx.fillRect(0, 0, size, size);
+  reelBackground(ctx, size);
 
   // A symbol this game doesn't have (from an older game's spin) is left blank rather than breaking the page.
   const look: Look | undefined = LOOKS[symbol];
-  if (look) {
-    const art = document.createElement("canvas");
-    art.width = size;
-    art.height = size;
-    const artCtx = art.getContext("2d", { willReadFrequently: true })!;
-    const box = size * 0.9;
-    artCtx.translate((size - box) / 2, (size - box) / 2);
-    artCtx.scale(box / 100, box / 100);
-    look.icon(artCtx);
+  const art = artOf(symbol, size);
+  if (look && art) {
+    if (look.plate) plate(ctx, size);
     if (look.glow) {
       const glow = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * 0.5);
       glow.addColorStop(0, `rgba(${look.glow},0.6)`);
@@ -670,8 +700,11 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
     ctx.shadowOffsetY = size * 0.025;
     ctx.drawImage(shadow, 0, 0);
     ctx.restore();
-    border(ctx, shadow, size * 0.012);
+    // A thin light line round a heavy dark one.
+    border(ctx, silhouette(art, "#d9dbe6"), size * 0.03);
+    border(ctx, shadow, size * 0.017);
     ctx.drawImage(art, 0, 0);
+    const box = size * BOX;
     ctx.save();
     ctx.translate((size - box) / 2, (size - box) / 2);
     ctx.scale(box / 100, box / 100);
@@ -679,6 +712,221 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
     ctx.restore();
   }
   drawn.set(key, canvas);
+  return canvas;
+}
+
+/** How many pictures a burning symbol's flames go through; they loop without a jump. */
+export const BURN_FRAMES = 10;
+
+/** Smooth random values on a grid (value noise): the same `seed` always gives the same pattern. */
+function noise(seed: number) {
+  const hash = (x: number, y: number) => {
+    let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 1442695041);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  };
+  const ease = (t: number) => t * t * (3 - 2 * t);
+  const at = (x: number, y: number) => {
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const fx = ease(x - x0);
+    const fy = ease(y - y0);
+    const top = hash(x0, y0) + (hash(x0 + 1, y0) - hash(x0, y0)) * fx;
+    const bottom = hash(x0, y0 + 1) + (hash(x0 + 1, y0 + 1) - hash(x0, y0 + 1)) * fx;
+    return top + (bottom - top) * fy;
+  };
+  // Three layers, each finer and fainter: soft billows with ragged detail.
+  return (x: number, y: number) => at(x, y) * 0.55 + at(x * 2.1, y * 2.1) * 0.3 + at(x * 4.3, y * 4.3) * 0.15;
+}
+
+const flameNoise = noise(7);
+const streakNoise = noise(31);
+
+/** Fire's colours by heat (0 to 1): nothing, then deep red, orange, yellow and white-hot at the core. */
+const FIRE: Array<[number, number, number, number, number]> = [
+  [0.12, 120, 10, 0, 0],
+  [0.25, 200, 30, 0, 0.55],
+  [0.42, 245, 90, 0, 0.88],
+  [0.6, 255, 160, 10, 0.97],
+  [0.8, 255, 225, 70, 1],
+  [1, 255, 252, 215, 1],
+];
+
+function fireColor(heat: number): [number, number, number, number] {
+  if (heat <= FIRE[0][0]) return [0, 0, 0, 0];
+  for (let i = 1; i < FIRE.length; i += 1) {
+    if (heat <= FIRE[i][0]) {
+      const [h0, r0, g0, b0, a0] = FIRE[i - 1];
+      const [h1, r1, g1, b1, a1] = FIRE[i];
+      const t = (heat - h0) / (h1 - h0);
+      return [r0 + (r1 - r0) * t, g0 + (g1 - g0) * t, b0 + (b1 - b0) * t, a0 + (a1 - a0) * t];
+    }
+  }
+  const last = FIRE[FIRE.length - 1];
+  return [last[1], last[2], last[3], last[4]];
+}
+
+/** The fire's two layers, worked out at half size: soft enough not to need more, and four times quicker. */
+type FireLayers = { behind: HTMLCanvasElement; over: HTMLCanvasElement };
+const fires = new Map<string, FireLayers>();
+
+/**
+ * Flames rising off a picture, frame `frame` of BURN_FRAMES: `behind` licks up
+ * from its top and sides, `over` is streaks of fire across the picture itself.
+ * The noise scrolls upward, and each frame blends two copies a loop apart, so
+ * the last frame runs straight into the first.
+ */
+function fireOf(symbol: SlotSymbol, art: HTMLCanvasElement, frame: number): FireLayers {
+  const key = `${symbol}:${art.width}:${frame}`;
+  const known = fires.get(key);
+  if (known) return known;
+  const size = Math.max(16, Math.round(art.width / 2));
+  const small = document.createElement("canvas");
+  small.width = size;
+  small.height = size;
+  const smallCtx = small.getContext("2d", { willReadFrequently: true })!;
+  smallCtx.drawImage(art, 0, 0, size, size);
+  const alpha = smallCtx.getImageData(0, 0, size, size).data;
+  const solid = (x: number, y: number) => alpha[(y * size + x) * 4 + 3] > 100;
+
+  // Where the flames start in each column: just inside the top of the picture, spread a little sideways so the
+  // sloping sides burn too.
+  const top = new Array<number>(size).fill(Infinity);
+  for (let x = 0; x < size; x += 1) {
+    for (let y = 0; y < size; y += 1) {
+      if (solid(x, y)) {
+        top[x] = y;
+        break;
+      }
+    }
+  }
+  const reach = Math.round(size * 0.07);
+  const source = top.map((_, x) => {
+    let best = Infinity;
+    for (let dx = -reach; dx <= reach; dx += 1) {
+      const y = top[x + dx];
+      if (y !== undefined && y !== Infinity) best = Math.min(best, y + Math.abs(dx) * 1.4);
+    }
+    return best + size * 0.06;
+  });
+
+  const loop = 3;
+  const t = (frame / BURN_FRAMES) * loop;
+  const blend = frame / BURN_FRAMES;
+  const sample = (field: (x: number, y: number) => number, x: number, y: number) =>
+    field(x, y + t) * (1 - blend) + field(x, y + t - loop) * blend;
+  const height = size * 0.56;
+
+  const behind = new ImageData(size, size);
+  const over = new ImageData(size, size);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const u = x / size;
+      const v = y / size;
+      // A sideways wobble, so the tongues sway and curl as they rise.
+      const sway = (sample(flameNoise, u * 2 + 9, v * 2) - 0.5) * 1.1;
+      const n = sample(flameNoise, u * 7 + sway, v * 3.2);
+      const i = (y * size + x) * 4;
+      const rise = source[x] - y;
+      if (rise >= 0 && source[x] !== Infinity) {
+        // Hottest at the base, cooling as it rises; the noise decides how far each tongue gets.
+        // Squaring the noise keeps most columns low and lets a few shoot up: separate tongues, not a wall.
+        const reachUp = height * (0.18 + n * n * 1.7);
+        const heat = Math.max(0, 1 - rise / reachUp) * (0.65 + n * 0.6);
+        const [r, g, b, a] = fireColor(Math.min(1, heat));
+        behind.data.set([r, g, b, a * 255], i);
+      } else if (solid(x, y)) {
+        // On the picture: thin bright streaks, strongest near the top.
+        const depth = Math.min(1, (y - source[x]) / (size * 0.55));
+        const streak = sample(streakNoise, u * 9 + sway, v * 3.5);
+        const heat = Math.max(0, (streak - 0.5) * 2.4) * (1 - depth * 0.85);
+        const [r, g, b, a] = fireColor(Math.min(1, 0.15 + heat));
+        over.data.set([r, g, b, a * 255 * 0.75], i);
+      }
+    }
+  }
+  const layer = (data: ImageData) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    canvas.getContext("2d", { willReadFrequently: true })!.putImageData(data, 0, 0);
+    return canvas;
+  };
+  const layers = { behind: layer(behind), over: layer(over) };
+  fires.set(key, layers);
+  return layers;
+}
+
+/** Works out a burning symbol's fire for one frame ahead of time (the slow part of drawBurning), without drawing it. */
+export function warmBurning(symbol: SlotSymbol, size: number, frame: number) {
+  const art = artOf(symbol, size);
+  if (art) fireOf(symbol, art, frame);
+}
+
+const burning = new Map<string, HTMLCanvasElement>();
+
+/**
+ * A winning symbol on fire, `size` pixels square: the picture glowing yellow
+ * to red with a white-hot edge, fire across it and flames rising off it, frame
+ * `frame` of BURN_FRAMES. `lit`: on a red cell (a line won across every reel).
+ */
+export function drawBurning(symbol: SlotSymbol, size: number, frame: number, lit: boolean): HTMLCanvasElement {
+  const key = `${symbol}:${size}:${frame}:${lit}`;
+  const cached = burning.get(key);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  if (lit) {
+    const red = ctx.createLinearGradient(0, 0, 0, size);
+    red.addColorStop(0, "#ff3b1c");
+    red.addColorStop(0.5, "#e8170b");
+    red.addColorStop(1, "#b80c05");
+    ctx.fillStyle = red;
+    ctx.fillRect(0, 0, size, size);
+  } else {
+    reelBackground(ctx, size);
+  }
+  const art = artOf(symbol, size);
+  if (art) {
+    if (LOOKS[symbol]?.plate) plate(ctx, size);
+    const fire = fireOf(symbol, art, frame);
+    // The heat round it: an orange glow, the flames behind, then a white-hot edge.
+    ctx.save();
+    ctx.shadowColor = "rgba(255,140,0,0.9)";
+    ctx.shadowBlur = size * 0.09;
+    ctx.drawImage(silhouette(art, "#ff7a00"), 0, 0);
+    ctx.restore();
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(fire.behind, 0, 0, size, size);
+    border(ctx, silhouette(art, "#fff4c8"), size * 0.022);
+    border(ctx, silhouette(art, "#1a0400"), size * 0.01);
+    // The picture, glowing: a hot yellow-to-red wash over it that still lets its own colour show.
+    const hot = document.createElement("canvas");
+    hot.width = size;
+    hot.height = size;
+    const hotCtx = hot.getContext("2d", { willReadFrequently: true })!;
+    hotCtx.drawImage(art, 0, 0);
+    hotCtx.globalCompositeOperation = "source-atop";
+    hotCtx.globalAlpha = 0.3;
+    const wash = hotCtx.createRadialGradient(size * 0.44, size * 0.42, size * 0.02, size * 0.5, size * 0.5, size * 0.5);
+    wash.addColorStop(0, "#fffbe0");
+    wash.addColorStop(0.3, "#ffd21a");
+    wash.addColorStop(0.65, "#ff8a00");
+    wash.addColorStop(1, "#d42a00");
+    hotCtx.fillStyle = wash;
+    hotCtx.fillRect(0, 0, size, size);
+    ctx.drawImage(hot, 0, 0);
+    // Fire across the picture, added as light, and the flames' roots over its top edge.
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.drawImage(fire.over, 0, 0, size, size);
+    ctx.globalAlpha = 0.35;
+    ctx.drawImage(fire.behind, 0, 0, size, size);
+    ctx.restore();
+  }
+  burning.set(key, canvas);
   return canvas;
 }
 

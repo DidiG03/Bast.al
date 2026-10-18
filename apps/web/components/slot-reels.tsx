@@ -36,8 +36,9 @@ export type SlotReelsHandle = {
 
 /**
  * One win to show. `cells`, `path` and `marks` are [reel, row]. `path` is the
- * whole line, drawn across all reels; `marks` get an outline (wins with no
- * line, like stars anywhere).
+ * whole line, drawn across all reels: the winning cells get a box in its
+ * colour, and the line joins the boxes and runs on to the numbers at the
+ * edges. `marks` get an outline (wins with no line, like stars anywhere).
  */
 export type ReelWin = {
   cells: Array<[number, number]>;
@@ -47,7 +48,50 @@ export type ReelWin = {
   ends?: [number, number];
   paths?: Array<{ path: Array<[number, number]>; color: string; ends?: [number, number] }>;
   marks?: Array<[number, number]>;
+  /** What the win pays, on a tag at the top of the first box. */
+  label?: string;
 };
+
+type Point = { x: number; y: number };
+type Box = { x: number; y: number; width: number; height: number };
+
+/** The pieces of the line from a to b that run outside every box, as [from, to] fractions along it. */
+function outsideBoxes(a: Point, b: Point, boxes: Box[]): Array<[number, number]> {
+  const covered: Array<[number, number]> = [];
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  for (const box of boxes) {
+    // Liang–Barsky: where the line enters and leaves the box.
+    let from = 0;
+    let to = 1;
+    const edges: Array<[number, number]> = [
+      [-dx, a.x - box.x],
+      [dx, box.x + box.width - a.x],
+      [-dy, a.y - box.y],
+      [dy, box.y + box.height - a.y],
+    ];
+    let misses = false;
+    for (const [p, q] of edges) {
+      if (p === 0) {
+        if (q < 0) misses = true;
+        continue;
+      }
+      const t = q / p;
+      if (p < 0) from = Math.max(from, t);
+      else to = Math.min(to, t);
+    }
+    if (!misses && from < to) covered.push([from, to]);
+  }
+  covered.sort((x, y) => x[0] - y[0]);
+  const pieces: Array<[number, number]> = [];
+  let at = 0;
+  for (const [from, to] of covered) {
+    if (from > at) pieces.push([at, from]);
+    at = Math.max(at, to);
+  }
+  if (at < 1) pieces.push([at, 1]);
+  return pieces;
+}
 
 type Props = {
   grid: string[][];
@@ -58,6 +102,12 @@ type Props = {
   weights: Partial<Record<string, number>>;
   /** Draws a symbol's picture, `size` pixels square. The fruit slot's by default. */
   draw?: (symbol: string, size: number) => HTMLCanvasElement;
+  /**
+   * Sets winning symbols on fire while the wins show (Sizzling Hot): `draw` gives a symbol burning, in frame
+   * `frame` of `frames`, `lit` (on red) while a line won across every reel is the win shown. Without it, winning
+   * symbols pulse.
+   */
+  burn?: { frames: number; draw(symbol: string, size: number, frame: number, lit: boolean): HTMLCanvasElement; warm(symbol: string, size: number, frame: number): void };
   /** Land straight away instead of spinning (reduced motion). */
   instant: boolean;
   onReady(): void;
@@ -108,16 +158,20 @@ function motionFor(app: Application): Motion {
   return motion;
 }
 
-export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({ grid, symbols, scatter, weights, draw: drawPicture = drawFruit, instant, onReady, onFailed }, ref) {
+export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({ grid, symbols, scatter, weights, draw: drawPicture = drawFruit, burn, instant, onReady, onFailed }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<{
     app: Application;
     reelSet: ReelSet;
     presenter: WinPresenter;
-    overlay: Graphics;
+    /** Takes the lines, boxes and tags off. */
+    wipe(): void;
     /** Symbols filling whole reels (Book of Ra), above the reels and under the lines. */
     expanded: Container;
     expand(reels: number[], symbol: string): Promise<void>;
+    /** Sets the cells of these wins burning, until putOut. */
+    lightFire(wins: ReelWin[]): void;
+    putOut(): void;
     anticipate(grid: string[][]): number[];
     /** What's moving on the reels; they're drawn only while something is. */
     motion: Motion;
@@ -125,6 +179,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
   /** The wins being shown, and who to tell which one is up. */
   const showing = useRef<{ wins: ReelWin[]; onShow?: (index: number) => void; onRound?: () => void; shown: number }>({ wins: [], shown: 0 });
   const instantRef = useRef(instant);
+  /** What's on the reels: the last result they landed on. */
+  const landed = useRef(grid);
   instantRef.current = instant;
   /** The Player asked to land this spin at once: no slowing down to tease. */
   const skipped = useRef(false);
@@ -133,7 +189,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
     let disposed = false;
     let teardown = () => undefined as void;
     (async () => {
-      const [{ Application, CanvasSource, Container, Graphics, Sprite, Texture }, { ReelSetBuilder, SpriteSymbol, SpeedPresets, SpinTextureCache, StaticSpinSymbol, WinPresenter, anticipationForScatters, prewarmSpinTextures }] = await Promise.all([
+      const [{ Application, CanvasSource, Container, Graphics, Sprite, Text, Texture }, { ReelSetBuilder, SpriteSymbol, SpeedPresets, SpinTextureCache, StaticSpinSymbol, WinPresenter, anticipationForScatters, prewarmSpinTextures }] = await Promise.all([
         import("pixi.js"),
         import("pixi-reels"),
       ]);
@@ -257,25 +313,127 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         });
 
       // Lines and outlines go on top of the symbols. The reels sit at the stage's origin, so their cell bounds work here as they are.
+      // Burning winning symbols, over the reels and under the lines. Each flickers through its frames, about 14 a second.
+      const fire = new Container();
+      app.stage.addChild(fire);
+      const fireTextures = new Map<string, InstanceType<typeof Texture>>();
+      const fireTexture = (symbol: string, frame: number, lit: boolean) => {
+        const key = `${symbol}:${frame}:${lit}`;
+        let texture = fireTextures.get(key);
+        if (!texture && burn) {
+          texture = new Texture({ source: new CanvasSource({ resource: burn.draw(symbol, CELL * SHARPNESS, frame, lit), resolution: SHARPNESS }) });
+          fireTextures.set(key, texture);
+        }
+        return texture!;
+      };
+      const burningCells: Array<{ sprite: InstanceType<typeof Sprite>; symbol: string; key: string }> = [];
+      let litCells = new Set<string>();
+      let fireFrame = 0;
+      let fireAt = 0;
+      const paintFire = () => {
+        for (const cell of burningCells) cell.sprite.texture = fireTexture(cell.symbol, fireFrame, litCells.has(cell.key));
+      };
+      const flicker = () => {
+        const now = performance.now();
+        if (!burn || now - fireAt < 70) return;
+        fireAt = now;
+        fireFrame = (fireFrame + 1) % burn.frames;
+        paintFire();
+      };
+      // The fire takes a while to work out, so each frame's is done ahead, one at a time after the reels are up,
+      // rather than all at once in the middle of a win.
+      let warming: ReturnType<typeof setTimeout> | null = null;
+      const toWarm = burn ? symbols.flatMap((symbol) => Array.from({ length: burn.frames }, (_, frame) => [symbol, frame] as const)) : [];
+      const warmNext = () => {
+        warming = null;
+        const next = toWarm.shift();
+        if (!next || disposed) return;
+        burn?.warm(next[0], CELL * SHARPNESS, next[1]);
+        warming = setTimeout(warmNext, 60);
+      };
+      if (burn) warming = setTimeout(warmNext, 1500);
+      const putOut = () => {
+        app.ticker.remove(flicker);
+        for (const child of fire.removeChildren()) child.destroy();
+        burningCells.length = 0;
+        litCells = new Set();
+      };
+      const lightFire = (wins: ReelWin[]) => {
+        putOut();
+        if (!burn) return;
+        const seen = new Set<string>();
+        for (const win of wins) {
+          for (const [reel, row] of win.cells) {
+            const key = `${reel}:${row}`;
+            const symbol = landed.current[reel]?.[row];
+            if (seen.has(key) || !symbol) continue;
+            seen.add(key);
+            const box = reelSet.getCellBounds(reel, row);
+            const sprite = new Sprite(fireTexture(symbol, 0, false));
+            sprite.position.set(box.x, box.y);
+            sprite.width = box.width;
+            sprite.height = box.height;
+            fire.addChild(sprite);
+            burningCells.push({ sprite, symbol, key });
+          }
+        }
+        fireFrame = 0;
+        if (burningCells.length > 0) slotSound.ignite();
+        if (!instantRef.current) app.ticker.add(flicker);
+      };
+
       const overlay = new Graphics();
       app.stage.addChild(overlay);
+      // The win's tag, over the lines.
+      const tags = new Container();
+      app.stage.addChild(tags);
+      const wipe = () => {
+        overlay.clear();
+        for (const child of tags.removeChildren()) child.destroy();
+      };
       const centre = ([reel, row]: [number, number]) => {
         const box = reelSet.getCellBounds(reel, row);
         return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
       };
       const draw = (win: ReelWin) => {
-        overlay.clear();
+        wipe();
+        // One line's win: a box round each winning cell. (All the wins at once are just their lines.)
+        const boxes: Box[] = win.path && !win.paths
+          ? win.cells.map(([reel, row]) => {
+              const cell = reelSet.getCellBounds(reel, row);
+              return { x: cell.x + 3, y: cell.y + 3, width: cell.width - 6, height: cell.height - 6 };
+            })
+          : [];
         for (const { path, color, ends } of win.paths ?? (win.path ? [{ path: win.path, color: win.color, ends: win.ends }] : [])) {
           const middle = path.map(centre);
           // Out to both edges, at the height of the line's numbers.
           const [left, right] = ends ?? [0, 0];
           const points = [{ x: 0, y: middle[0].y + left * CELL }, ...middle, { x: app.screen.width, y: middle[middle.length - 1].y + right * CELL }];
-          // A soft stroke under a thin bright one reads as a glow.
+          // A soft stroke under a thin bright one reads as a glow. Only between the boxes, not across them.
           for (const [width, alpha] of [[7, 0.3], [3, 1]] as const) {
-            overlay.moveTo(points[0].x, points[0].y);
-            for (const point of points.slice(1)) overlay.lineTo(point.x, point.y);
+            points.slice(1).forEach((b, index) => {
+              const a = points[index];
+              for (const [from, to] of outsideBoxes(a, b, boxes)) {
+                overlay.moveTo(a.x + (b.x - a.x) * from, a.y + (b.y - a.y) * from);
+                overlay.lineTo(a.x + (b.x - a.x) * to, a.y + (b.y - a.y) * to);
+              }
+            });
             overlay.stroke({ color, width, alpha, cap: "round", join: "round" });
           }
+        }
+        for (const box of boxes) {
+          overlay.rect(box.x, box.y, box.width, box.height).stroke({ color: win.color, width: 9, alpha: 0.3 });
+          overlay.rect(box.x, box.y, box.width, box.height).stroke({ color: win.color, width: 4 });
+        }
+        if (win.label && boxes.length > 0) {
+          const text = new Text({ text: win.label, style: { fontFamily: "Arial, Helvetica, sans-serif", fontSize: 19, fontWeight: "800", fill: win.color } });
+          const tag = new Graphics();
+          const [padX, padY] = [8, 4];
+          const first = boxes[0];
+          const at = { x: first.x + 6, y: Math.max(0, first.y - (text.height + padY * 2) / 2) };
+          tag.rect(at.x, at.y, text.width + padX * 2, text.height + padY * 2).fill({ color: 0x07082a, alpha: 0.92 }).stroke({ color: win.color, width: 3 });
+          text.position.set(at.x + padX, at.y + padY);
+          tags.addChild(tag, text);
         }
         for (const [reel, row] of win.marks ?? []) {
           const box = reelSet.getCellBounds(reel, row);
@@ -290,8 +448,11 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         stagger: instantRef.current ? 0 : 70,
         cycleGap: instantRef.current ? 1400 : 650,
         // Two pulses per cell. A pulse that's cut short never settles, so each one also times out, or the cycle would stall.
+        // Burning symbols don't pulse: each win just shows as long.
         symbolAnim: instantRef.current
           ? async () => undefined
+          : burn
+          ? () => new Promise<void>((resolve) => setTimeout(resolve, 900))
           : async (symbol) => {
               // Not once the reels are gone (the page was left mid-win): the symbol has nothing left to animate.
               for (let pulse = 0; pulse < 2 && !disposed; pulse += 1) await Promise.race([symbol.playWin(), new Promise((resolve) => setTimeout(resolve, 400))]);
@@ -300,7 +461,12 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       reelSet.events.on("win:group", (win) => {
         const index = win.id ?? 0;
         const shown = showing.current.wins[index];
-        if (shown) draw(shown);
+        if (shown) {
+          draw(shown);
+          // A line won across every reel burns on red.
+          litCells = new Set(shown.path && shown.cells.length === reels ? shown.cells.map(([reel, row]) => `${reel}:${row}`) : []);
+          paintFire();
+        }
         showing.current.onShow?.(index);
         // The first win again: the last one has been shown in full, so the round is done.
         showing.current.shown += 1;
@@ -310,7 +476,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
           done?.();
         }
       });
-      reelSet.events.on("win:end", () => overlay.clear());
+      reelSet.events.on("win:end", wipe);
       // A thunk as each reel lands, a chime for a star, and the ticking stops when they're all down.
       reelSet.events.on("spin:reelLanded", (reel, landed) => {
         slotSound.reelStop(reel);
@@ -330,9 +496,11 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         app,
         reelSet,
         presenter,
-        overlay,
+        wipe,
         expanded,
         expand,
+        lightFire,
+        putOut,
         anticipate: (next) => anticipationForScatters(next.map((column) => ({ visible: column })), { symbol: scatter, trigger: 2 }),
         motion,
       };
@@ -351,6 +519,9 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         presenter.destroy();
         reelSet.destroy();
         spinTextures.destroy();
+        putOut();
+        if (warming) clearTimeout(warming);
+        fireTextures.forEach((texture) => texture.destroy(true));
         app.destroy(true, { children: true, texture: true });
       };
       onReady();
@@ -375,8 +546,9 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         const current = engine.current;
         if (!current) return null;
         current.presenter.abort();
-        current.overlay.clear();
+        current.wipe();
         current.expanded.removeChildren();
+        current.putOut();
         skipped.current = false;
         current.motion.showing = false;
         current.motion.spinning = true;
@@ -388,6 +560,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       land(next) {
         const current = engine.current;
         if (!current) return;
+        landed.current = next;
         current.reelSet.setResult(next.map((column) => ({ visible: column })));
         if (instantRef.current) {
           current.reelSet.skipSpin();
@@ -417,6 +590,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         // Wins cycle until the next spin or clear(): the reels draw all that time.
         current.motion.showing = true;
         current.motion.wake();
+        current.lightFire(wins);
         // show() cycles until aborted; it settles then, and nothing waits on it.
         current.presenter.show(wins.map((win, id) => ({ id, cells: win.cells.map(([reelIndex, cellIndex]) => ({ reelIndex, cellIndex })) }))).catch(() => undefined);
       },
@@ -425,8 +599,9 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         const current = engine.current;
         if (!current) return;
         current.presenter.abort();
-        current.overlay.clear();
+        current.wipe();
         current.expanded.removeChildren();
+        current.putOut();
         current.motion.showing = false;
         // What was just taken off is drawn away before the reels go still.
         current.motion.wake();

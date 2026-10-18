@@ -267,7 +267,8 @@ export function BlackjackGame() {
   useGameKeys(rulesOpen);
 
   if (!state) return <PageLoading label="Loading the Casino" />;
-  const inPlay = round !== null && round.phase !== "DONE";
+  // A finished round stays in play until the dealer's cards are all turned up: no dealing the next one over it.
+  const inPlay = round !== null && (round.phase !== "DONE" || !settledShown);
   const betting = !inPlay;
   const can = (action: BlackjackAction) => !busy && (round?.allowed.includes(action) ?? false);
 

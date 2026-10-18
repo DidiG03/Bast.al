@@ -9,7 +9,7 @@ import { LoadingSpinner, PageLoading } from "./loading-spinner";
 import { useRealtime } from "./realtime-provider";
 import { SlotReels, type ReelWin, type SlotReelsHandle } from "./slot-reels";
 import { slotSound } from "./slot-sounds";
-import { symbolImage } from "./slot-symbols";
+import { BURN_FRAMES, drawBurning, symbolImage, warmBurning } from "./slot-symbols";
 import { useToast } from "./toaster";
 import { FullScreenIcon, RotatePhoneIcon, useFullScreen, usePrefersReducedMotion } from "./use-full-screen";
 import { useGameKeys } from "./use-game-keys";
@@ -31,6 +31,13 @@ import { useIdempotencyKey } from "../lib/use-idempotency-key";
 
 /** How often each symbol flashes past while the reels spin; looks only, the server decides where they stop. */
 const SPIN_WEIGHTS: Partial<Record<SlotSymbol, number>> = { LEMON: 10, CHERRY: 8, ORANGE: 6, MELON: 6, GRAPES: 6, PLUM: 4, SEVEN: 3, STAR: 2 };
+
+/** Winning symbols catch fire while the wins show. */
+const BURN = {
+  frames: BURN_FRAMES,
+  draw: (symbol: string, size: number, frame: number, lit: boolean) => drawBurning(symbol as SlotSymbol, size, frame, lit),
+  warm: (symbol: string, size: number, frame: number) => warmBurning(symbol as SlotSymbol, size, frame),
+};
 
 const SYMBOL_NAMES: Record<SlotSymbol, string> = {
   SEVEN: msg("Seven"),
@@ -107,7 +114,7 @@ function combosFor(result: CasinoSpinResult, game: CasinoState["game"]): Combo[]
       const color = LINE_COLORS[won.line % LINE_COLORS.length];
       const path = shapes[won.line].map((row, reel) => [reel, row] as [number, number]);
       const ends: [number, number] = [edges.left[won.line], edges.right[won.line]];
-      return { key: `line-${won.line}`, line: won.line + 1, symbol: won.symbol, count: won.count, amount: won.win, freeSpins: 0, reel: { cells: won.cells, color, path, ends } };
+      return { key: `line-${won.line}`, line: won.line + 1, symbol: won.symbol, count: won.count, amount: won.win, freeSpins: 0, reel: { cells: won.cells, color, path, ends, label: formatMoney(won.win) } };
     });
   if (result.scatter) {
     combos.push({
@@ -200,6 +207,11 @@ export function SlotGame() {
   /** Sound on or off; remembered on this device. Read after the page loads, since the server can't know it. */
   const [soundOn, setSoundOn] = useState(true);
   useEffect(() => setSoundOn(slotSound.on), []);
+  // Sizzling Hot's own sounds while it's open: the classic fruit machine's.
+  useEffect(() => {
+    slotSound.setVoice("classic");
+    return () => slotSound.setVoice("standard");
+  }, []);
 
   /** Full screen: the browser's own, or the cabinet expanded over the page on an iPhone. */
   const { ref: cabinet, mode: fullScreen, toggle: toggleFullScreen } = useFullScreen<HTMLElement>();
@@ -483,6 +495,7 @@ export function SlotGame() {
                     symbols={state.game.symbols}
                     scatter={state.game.scatter}
                     weights={SPIN_WEIGHTS}
+                    burn={BURN}
                     instant={instant}
                     onReady={() => setReelsReady(true)}
                     onFailed={() => setPlainGrid(true)}

@@ -8761,6 +8761,46 @@ button.is-blocked {
   display: none;
 }
 
+/* Holds the sports row and its fades: one at each end that has more sports to scroll to. */
+.sport-switch-wrap {
+  --sport-fade: var(--bg);
+  position: relative;
+  display: grid;
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sport-switch-wrap::before,
+.sport-switch-wrap::after {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  z-index: 1;
+  width: 2.75rem;
+  opacity: 0;
+  pointer-events: none;
+  content: "";
+  transition: opacity 150ms ease;
+}
+
+.sport-switch-wrap::before {
+  left: 1px;
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(90deg, var(--sport-fade) 15%, transparent);
+}
+
+.sport-switch-wrap::after {
+  right: 1px;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(270deg, var(--sport-fade) 15%, transparent);
+}
+
+.sport-switch-wrap.has-more-start::before,
+.sport-switch-wrap.has-more-end::after {
+  opacity: 1;
+}
+
 .sport-option {
   display: inline-flex;
   align-items: center;
@@ -13763,6 +13803,19 @@ button.is-blocked {
 }
 
 /* Sports: a quiet strip; the chosen one is lit. */
+.role-player .bet-page .sport-switch-wrap {
+  --sport-fade: var(--surface-1);
+  justify-self: stretch;
+}
+
+.role-player .bet-page .sport-switch-wrap::before {
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.role-player .bet-page .sport-switch-wrap::after {
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
 .role-player .bet-page .sport-switch {
   justify-self: stretch;
   padding: 0.2rem;

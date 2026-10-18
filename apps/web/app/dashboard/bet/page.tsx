@@ -402,6 +402,28 @@ function BetPage() {
     });
   }, [tab, listed, loadEvents, toast, t]);
 
+  // The sports row scrolls sideways on a narrow screen: a fade at either end shows there's more that way.
+  const [sportEdges, setSportEdges] = useState({ start: false, end: false });
+  const sportRowCleanup = useRef<(() => void) | null>(null);
+  const sportRow = useCallback((row: HTMLDivElement | null) => {
+    sportRowCleanup.current?.();
+    sportRowCleanup.current = null;
+    if (!row) return;
+    const update = () => {
+      const start = row.scrollLeft > 4;
+      const end = row.scrollLeft + row.clientWidth < row.scrollWidth - 4;
+      setSportEdges((current) => (current.start === start && current.end === end ? current : { start, end }));
+    };
+    update();
+    row.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(row);
+    sportRowCleanup.current = () => {
+      row.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, []);
+
   // Prices move and matches kick off: everything every minute. Live prices are
   // pushed as they're saved (odds.live); the live matches are also fetched every
   // 30 seconds in case a push was missed. Not while the page is out of sight.
@@ -650,34 +672,36 @@ function BetPage() {
       </div>
 
       {tab === "matches" ? (
-        <div className="sport-switch" role="group" aria-label={t("Sport")}>
-          {(
-            [
-              ["football", t("Football")],
-              ["greyhounds", t("Greyhounds")],
-              ["tennis", t("Tennis")],
-              ["basketball", t("Basketball")],
-              ["volleyball", t("Volleyball")],
-              ["handball", t("Handball")],
-              ["nfl", t("NFL")],
-              ["mma", t("MMA")],
-            ] as Array<[Sport, string]>
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              className={`sport-option${sport === key ? " is-active" : ""}`}
-              aria-pressed={sport === key}
-              onClick={(event) => {
-                setSport(key);
-                // On a narrow screen the row scrolls: bring the chosen sport fully into view.
-                event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-              }}
-            >
-              <SportIcon sport={key} />
-              {label}
-            </button>
-          ))}
+        <div className={`sport-switch-wrap${sportEdges.start ? " has-more-start" : ""}${sportEdges.end ? " has-more-end" : ""}`}>
+          <div ref={sportRow} className="sport-switch" role="group" aria-label={t("Sport")}>
+            {(
+              [
+                ["football", t("Football")],
+                ["greyhounds", t("Greyhounds")],
+                ["tennis", t("Tennis")],
+                ["basketball", t("Basketball")],
+                ["volleyball", t("Volleyball")],
+                ["handball", t("Handball")],
+                ["nfl", t("NFL")],
+                ["mma", t("MMA")],
+              ] as Array<[Sport, string]>
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`sport-option${sport === key ? " is-active" : ""}`}
+                aria-pressed={sport === key}
+                onClick={(event) => {
+                  setSport(key);
+                  // On a narrow screen the row scrolls: bring the chosen sport fully into view.
+                  event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+                }}
+              >
+                <SportIcon sport={key} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 

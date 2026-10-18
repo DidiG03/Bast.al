@@ -105,6 +105,16 @@ function savedLines(choices: number[], fallback: number): number {
   }
 }
 
+/** Whether the Player wants double or nothing offered after a win, kept on this device. On unless turned off. */
+const GAMBLE_KEY = "bastal-slot-gamble";
+function savedGamble(): boolean {
+  try {
+    return window.localStorage.getItem(GAMBLE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
 function combosFor(result: CasinoSpinResult, game: CasinoState["game"]): Combo[] {
   const shapes = shapesOf(game, result.linesPlayed ?? game.lines);
   const edges = lineEnds(shapes);
@@ -204,6 +214,10 @@ export function SlotGame() {
   const countedWin = useCountUp(lastWin?.amount ?? 0, instant);
   /** Auto: spins again by itself until the Player stops it, a spin fails, or the balance runs out. */
   const [auto, setAuto] = useState(false);
+  /** Double or nothing offered after a win; some Players never want it. Read in spin() through the ref. */
+  const [gambleOn, setGambleOn] = useState(true);
+  const gambleOnRef = useRef(gambleOn);
+  gambleOnRef.current = gambleOn;
   /** Sound on or off; remembered on this device. Read after the page loads, since the server can't know it. */
   const [soundOn, setSoundOn] = useState(true);
   useEffect(() => setSoundOn(slotSound.on), []);
@@ -224,7 +238,14 @@ export function SlotGame() {
     setBalance(next.balance);
     setFreeSpins(next.freeSpins);
     setRecent(next.recent);
-    setGamble(next.gamble);
+    // Double or nothing turned off: a win left waiting for it is simply kept (it's in the balance already).
+    if (next.gamble && !savedGamble()) {
+      setGamble(null);
+      void apiFetch("/casino/collect", token, { method: "POST", body: "{}" }).catch(() => undefined);
+    } else {
+      setGamble(next.gamble);
+    }
+    setGambleOn(savedGamble());
     // Before the first spin the reels show one of each symbol across the rows.
     setGrid((current) => current ?? next.grid ?? Array.from({ length: next.game.reels }, (_, reel) => Array.from({ length: next.game.rows }, (_, row) => next.game.symbols[(reel * 2 + row) % next.game.symbols.length])));
     const allowed = next.game.bets.filter((value) => next.maxStake === null || value <= next.maxStake);
@@ -270,6 +291,7 @@ export function SlotGame() {
       setBalance(result.balance);
       setFreeSpins(result.freeSpins);
       setGamble(result.gamble);
+      if (result.gamble && !gambleOnRef.current) void takeWin();
       setRecent((list) => [result.spin, ...list].slice(0, 10));
       const won = combosFor(result, state.game);
       setCombos(won);
@@ -335,6 +357,20 @@ export function SlotGame() {
     } catch {
       // Nothing to lose: the win is already in the balance, and the next spin ends double or nothing anyway.
     }
+  }
+
+  /** Turns double or nothing on or off, and remembers it. Off with a win waiting: the win is kept. */
+  function switchGamble() {
+    slotSound.unlock();
+    slotSound.click();
+    const next = !gambleOn;
+    setGambleOn(next);
+    try {
+      window.localStorage.setItem(GAMBLE_KEY, next ? "on" : "off");
+    } catch {
+      // Private browsing: it lasts until the page is left.
+    }
+    if (!next && gamble) void takeWin();
   }
 
   /** Auto: the next spin starts a moment after the last one lands; longer after a win, so it can be seen. */
@@ -557,6 +593,17 @@ export function SlotGame() {
               </div>
               <button type="button" className="slot-btn" onClick={maxBet} disabled={spinning || auto || playingFree}>
                 {t("Max bet")}
+              </button>
+              <button
+                type="button"
+                className={`slot-btn slot-auto slot-gamble-switch${gambleOn ? " is-on" : ""}`}
+                aria-pressed={gambleOn}
+                onClick={switchGamble}
+                disabled={guessing}
+                title={gambleOn ? t("Red or black after a win: on. Tap to turn it off.") : t("Red or black after a win: off. Tap to turn it on.")}
+              >
+                <small>{t("Red/black")}</small>
+                <span className="slot-switch" aria-hidden="true" />
               </button>
               <button type="button" className={`slot-btn slot-auto${auto ? " is-on" : ""}`} aria-pressed={auto} onClick={() => setAuto((on) => !on)} disabled={!auto && !canSpin}>
                 <small>{t("Auto")}</small>

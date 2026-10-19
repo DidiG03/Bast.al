@@ -11,6 +11,7 @@ import { UsersService } from "../users/users.service";
 import type { MatchCentre } from "../odds/api-football";
 import { RACE_CAP } from "../odds/greyhounds";
 import { smallPriceMove } from "../odds/live-guard";
+import type { LiveState } from "./late";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
 import { MIN_STAKE } from "./bets.dto";
@@ -206,6 +207,8 @@ export class BetsService {
         sp: sp ? { cap: new Prisma.Decimal(RACE_CAP[marketKey] ?? RACE_CAP.race_winner), margin: new Prisma.Decimal(margin.toFixed(2)) } : null,
         live,
         score,
+        /** A live pick: what the site showed when it was confirmed (set in confirmLive), kept on the bet for the late check. */
+        state: null as LiveState | null,
         selectionId: pick.selectionId,
         eventId: selection.market.event.id,
         label: `${selection.name} (${selection.market.event.name})`,
@@ -332,6 +335,7 @@ export class BetsService {
               spCap: bet.sp?.cap ?? null,
               spMargin: bet.sp?.margin ?? null,
               description: bet.description,
+              ...(bet.state ? { live: bet.state } : {}),
               ...snapshot,
             },
             select: betSelect,
@@ -350,7 +354,7 @@ export class BetsService {
               description: `Accumulator · ${pricedAcca.legs.length} picks`,
               ...snapshot,
               legs: {
-                create: pricedAcca.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price!, description: leg.description, sortOrder })),
+                create: pricedAcca.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price!, description: leg.description, sortOrder, ...(leg.state ? { live: leg.state } : {}) })),
               },
             },
             select: betSelect,
@@ -390,7 +394,7 @@ export class BetsService {
               description: `${info.name} · ${pricedSystem.legs.length} picks · ${info.lines} bets`,
               ...snapshot,
               legs: {
-                create: pricedSystem.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price!, description: leg.description, sortOrder })),
+                create: pricedSystem.legs.map((leg, sortOrder) => ({ selectionId: leg.selectionId, odds: leg.price!, description: leg.description, sortOrder, ...(leg.state ? { live: leg.state } : {}) })),
               },
             },
             select: betSelect,
@@ -536,7 +540,10 @@ export class BetsService {
    * LIVE_VERIFY=off skips the check with the feed. Returns whether a live
    * price was updated.
    */
-  private async confirmLive(picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal | null; label: string }>, playerId: string): Promise<boolean> {
+  private async confirmLive(
+    picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal | null; label: string; state: LiveState | null }>,
+    playerId: string,
+  ): Promise<boolean> {
     const live = picks.filter((pick) => pick.live);
     if (live.length === 0) return false;
     const delay = Number(process.env.LIVE_BET_DELAY_MS ?? 5_000);
@@ -556,6 +563,9 @@ export class BetsService {
       if (!now.bettable || now.live) throw new ConflictException(`Bets on ${pick.label} closed while your slip was being confirmed. Remove it and try again.`);
     }
     let adjusted = false;
+    // The minute and the cards shown so far, kept on each live pick with its score for the late check (bets/late.ts).
+    const events = await this.prisma.event.findMany({ where: { id: { in: [...new Set(live.map((pick) => pick.eventId))] } }, select: { id: true, elapsed: true, matchCentre: true } });
+    const shown = new Map(events.map((event) => [event.id, event]));
     for (const pick of live) {
       const now = await this.odds.priceForPlayer(playerId, pick.selectionId);
       if (!now.bettable) throw new ConflictException(`Live betting on ${pick.label} was paused while your bet was being confirmed. Try again in a moment.`);
@@ -569,6 +579,12 @@ export class BetsService {
           throw new ConflictException(`The odds changed: ${pick.label} is now ${now.odds.toFixed(2)}. Check your slip and place it again.`);
         }
       }
+      const [home, away] = now.score.split(":").map(Number);
+      const event = shown.get(pick.eventId);
+      const moments = (event?.matchCentre as { moments?: Array<{ kind: string }> } | null)?.moments;
+      pick.state = Number.isInteger(home) && Number.isInteger(away)
+        ? { home, away, minute: event?.elapsed ?? null, cards: moments ? moments.filter((moment) => moment.kind === "yellow" || moment.kind === "red").length : null }
+        : null;
     }
     return adjusted;
   }

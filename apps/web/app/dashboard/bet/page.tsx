@@ -1677,6 +1677,7 @@ function BetSlip({
                   : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
             </button>
             {info ? <SlipLimits info={info} staking={totalStake} /> : null}
+            {hasLive ? <p className="muted bet-slip-live-rule">{t("Live: a bet placed after a goal that hadn't shown here yet is void, and the stake comes back.")}</p> : null}
           </div>
         </>
       )}

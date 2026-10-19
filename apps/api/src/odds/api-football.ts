@@ -1,5 +1,6 @@
 import { EventStatus } from "@prisma/client";
 import type { Goal, GoalRecord, Participant, Side } from "../bets/goals";
+import type { LateTimeline } from "../bets/late";
 import { crestUrl } from "./crest";
 
 /**
@@ -18,7 +19,8 @@ export type ApiResponse<T> = {
 };
 
 export type RawFixture = {
-  fixture: { id: number; date: string; status: { short: string; elapsed: number | null } };
+  /** `periods`: when each half kicked off, in Unix seconds (null until it has). */
+  fixture: { id: number; date: string; status: { short: string; elapsed: number | null }; periods?: { first?: number | null; second?: number | null } };
   league: { id: number; name: string; country: string; season: number; logo?: string | null; flag?: string | null };
   teams: { home: { id?: number; name: string; logo?: string | null }; away: { id?: number; name: string; logo?: string | null } };
   goals: { home: number | null; away: number | null };
@@ -1008,6 +1010,7 @@ export function parseGoalRecord(raw: RawFixtureDetail, score: { home: number; aw
     if (minute === null || minute > 90) return;
     goals.push({
       minute,
+      extra: event.time.extra ?? null,
       side: sideOfTeam(event.team),
       playerId: event.player.id,
       player: event.player.name,
@@ -1075,6 +1078,26 @@ export function parseGoalRecord(raw: RawFixtureDetail, score: { home: number; aw
     }),
   );
   return { goals: counted, players };
+}
+
+/**
+ * A finished match's goals and cards with their minutes, and when each half
+ * kicked off, for the late live bet check (bets/late.ts). The goals are the
+ * ones parseGoalRecord counts (VAR's cancelled ones out, own goals on the
+ * right side); null when they don't add up to `score`. Cards are every
+ * yellow and red, a second yellow included, as the timeline lists them.
+ */
+export function parseLateTimeline(raw: RawFixtureDetail, score: { home: number; away: number }): LateTimeline | null {
+  const record = parseGoalRecord(raw, score);
+  if (!record) return null;
+  const homeId = raw.teams.home.id;
+  const sideOfTeam = (team: { id: number; name: string }): Side => (homeId !== undefined ? (team.id === homeId ? "home" : "away") : team.name === raw.teams.home.name ? "home" : "away");
+  const cards = (raw.events ?? [])
+    .filter((event) => event.type === "Card" && event.time.elapsed !== null)
+    .map((event) => ({ minute: event.time.elapsed!, extra: event.time.extra ?? null, side: sideOfTeam(event.team) }));
+  const goals = record.goals.map((goal) => ({ minute: goal.minute, extra: goal.extra ?? null, side: goal.side }));
+  const periods = raw.fixture.periods ?? {};
+  return { first: periods.first ?? null, second: periods.second ?? null, goals, cards };
 }
 
 export class ApiFootballClient {

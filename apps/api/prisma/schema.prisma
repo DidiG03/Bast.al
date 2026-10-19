@@ -348,6 +348,13 @@ model Event {
   /// The goals in the 90 minutes, in order, and who took part (see bets/goals.ts),
   /// for the first/last team to score, comeback and goalscorer markets.
   resultGoals        Json?       @map("result_goals")
+  /// A finished football match with live bets: each goal's and card's minute
+  /// and when each half kicked off (bets/late.ts LateTimeline), to find live
+  /// bets placed after a goal or card the site hadn't shown yet.
+  lateCheck          Json?       @map("late_check")
+  lateCheckedAt      DateTime?   @map("late_checked_at")
+  /// When the site first saw each goal, to measure how far behind the feed is.
+  goalsSeen          GoalSeen[]
   /// Last time the feed was asked for this match's goals.
   goalsCheckedAt     DateTime?   @map("goals_checked_at")
   /// Greyhounds: the race's details (number, grade, distance, region) and,
@@ -523,9 +530,13 @@ model Bet {
   selection   Selection?           @relation(fields: [selectionId], references: [id], onDelete: Restrict)
   placedAt    DateTime             @default(now()) @map("placed_at")
   settledAt   DateTime?            @map("settled_at")
-  /// Set when Super Admin voided the bet by hand. Such a bet stays void even
-  /// if the match result is corrected later.
+  /// Set when Super Admin voided the bet by hand, or when a live bet turned
+  /// out to be late (see bets/late.ts). Such a bet stays void even if the
+  /// match result is corrected later.
   voidReason  String?              @map("void_reason") @db.VarChar(200)
+  /// A live single: the score, minute and cards the site showed when it was
+  /// placed (bets/late.ts LiveState). Null for a bet placed before kick-off.
+  live        Json?
   /// SINGLE bets point at one selection. ACCUMULATOR and BUILDER bets have
   /// legs, and `odds` is the combined price locked when the bet was placed.
   kind        BetKind              @default(SINGLE)
@@ -590,6 +601,27 @@ enum BetKind {
 /// One pick in an accumulator or a bet builder. Every leg must win for the
 /// bet to win. In an accumulator a void leg drops out and the rest pay at
 /// their own prices; in a builder a void leg refunds the bet.
+/// The moment the site first saw a live match's score change to this one
+/// (a goal), from the live scores or the live prices. Compared with the
+/// goal's real minute once the match's timeline is in, it shows how many
+/// seconds the feed reports goals after they happen.
+model GoalSeen {
+  id        String   @id @default(cuid())
+  eventId   String   @map("event_id")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  homeScore Int      @map("home_score")
+  awayScore Int      @map("away_score")
+  /// The match minute the feed gave with it.
+  elapsed   Int?
+  /// "scores" (the live fixtures list) or "odds" (the live prices).
+  source    String   @db.VarChar(10)
+  seenAt    DateTime @default(now()) @map("seen_at")
+
+  @@unique([eventId, homeScore, awayScore])
+  @@index([seenAt])
+  @@map("goals_seen")
+}
+
 model BetLeg {
   id          String           @id @default(cuid())
   betId       String           @map("bet_id")
@@ -600,8 +632,11 @@ model BetLeg {
   odds        Decimal          @db.Decimal(8, 2)
   description String           @db.VarChar(200)
   result      SelectionResult?
-  /// Set when Super Admin voided this leg's match by hand; it stays void.
+  /// Set when Super Admin voided this leg's match by hand, or the leg was a
+  /// late live pick (see bets/late.ts); it stays void.
   voidReason  String?          @map("void_reason") @db.VarChar(200)
+  /// A live pick: what the site showed when it was placed, like Bet.live.
+  live        Json?
   sortOrder   Int              @default(0) @map("sort_order")
 
   @@index([betId])

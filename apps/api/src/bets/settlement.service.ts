@@ -14,6 +14,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { betSelect, betView } from "./bets.service";
 import { GoalRecord, isGoalMarket } from "./goals";
+import { LATE_CHECK_WAIT_MS, lateReason, liveStateOf, timelineOf } from "./late";
 import { builderOutcome } from "./builder";
 import { systemOutcome } from "./system";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
@@ -334,6 +335,20 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     const outcomeOf = new Map(event.markets.flatMap((market) => market.selections.map((s) => [s.id, { market: market.key, key: s.key }] as const)));
 
     const record = goalsOf(event.resultGoals);
+    // Live bets on a finished football match: placed after a goal (or, on a cards market, a card) the site hadn't
+    // shown yet, they're void (bets/late.ts). They wait for the match's timeline, LATE_CHECK_WAIT_MS at most.
+    const timeline = timelineOf(event.lateCheck);
+    const finishedAt = event.finishedAt ?? new Date(event.startsAt.getTime() + 2 * 3_600_000);
+    const stopWaiting = Date.now() - finishedAt.getTime() > LATE_CHECK_WAIT_MS;
+    const marketOf = new Map(event.markets.flatMap((market) => market.selections.map((s) => [s.id, market.key] as const)));
+    const lateFor = (live: Prisma.JsonValue | null, placedAt: Date, selectionId: string): "wait" | string | null => {
+      const state = liveStateOf(live);
+      if (!state || event.sport !== "football" || event.status !== EventStatus.COMPLETED) return null;
+      if (!timeline) return stopWaiting ? null : "wait";
+      return lateReason(state, placedAt, marketOf.get(selectionId) ?? "", timeline);
+    };
+    /** Late live bets, told to their Players as voided rather than settled. */
+    const late: Change[] = [];
     const grades = new Map<string, SelectionResult | null>();
     // Goal-event outcomes graded before a score correction that can't be graded now
     // (the goals saved for the old score were dropped): their bets go back to open,
@@ -372,10 +387,17 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         selectionId: { in: [...grades.keys()] },
         ...(regrade ? { voidReason: null } : { status: BetStatus.OPEN }),
       },
-      select: { ...movable, odds: true, spCap: true, spMargin: true, selectionId: true },
+      select: { ...movable, odds: true, spCap: true, spMargin: true, selectionId: true, live: true, placedAt: true },
     });
     const changes: Change[] = [];
     for (const bet of bets) {
+      const lateness = lateFor(bet.live, bet.placedAt, bet.selectionId!);
+      if (lateness === "wait") continue;
+      if (lateness) {
+        const change = await this.move(bet, BetStatus.VOID, bet.stake, lateness, actorId);
+        if (change) late.push({ ...change, eventName: event.name });
+        continue;
+      }
       // A race bet paid at the starting price: its price is known once the result (with the SP or dividend) is in.
       if (bet.spCap !== null) {
         const grade = grades.get(bet.selectionId!);
@@ -407,10 +429,17 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     // out the whole bet again from all its legs.
     const legs = await this.prisma.betLeg.findMany({
       where: { selectionId: { in: [...grades.keys()] }, voidReason: null, bet: { voidReason: null } },
-      select: { id: true, selectionId: true, result: true, betId: true },
+      select: { id: true, selectionId: true, result: true, betId: true, live: true, bet: { select: { placedAt: true } } },
     });
     const touched = new Set<string>();
     for (const leg of legs) {
+      const lateness = lateFor(leg.live, leg.bet.placedAt, leg.selectionId);
+      if (lateness === "wait") continue;
+      if (lateness) {
+        await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: lateness } });
+        touched.add(leg.betId);
+        continue;
+      }
       if (reopen.has(leg.selectionId) && leg.result !== null) {
         await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: null } });
         touched.add(leg.betId);
@@ -424,7 +453,11 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     changes.push(...(await this.resettleAccumulators([...touched], regrade, actorId)));
 
     await this.announce(changes, regrade ? "corrected" : "settled");
-    return changes;
+    if (late.length > 0) {
+      this.logger.warn(`${late.length} late live bet(s) on ${event.name} voided`);
+      await this.announce(late, "voided");
+    }
+    return [...changes, ...late];
   }
 
   /**

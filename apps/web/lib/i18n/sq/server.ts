@@ -232,6 +232,8 @@ export const server: Record<string, string> = {
   "No official result within {hours} hours of the race": "Pa rezultat zyrtar brenda {hours} orëve nga gara",
   "Moved more than {hours} hours after the original kick-off": "U shty më shumë se {hours} orë pas fillimit të caktuar",
   "Bet voided": "Basti u anulua",
+  "placed after a goal that hadn't shown yet": "u vendos pas një goli që ende nuk ishte shfaqur",
+  "placed after a card that hadn't shown yet": "u vendos pas një kartoni që ende nuk ishte shfaqur",
   "Bet refunded": "Basti u rimbursua",
   "You won": "Fitove",
   "An administrator updated your account details.": "Një administrator përditësoi të dhënat e llogarisë tënde.",

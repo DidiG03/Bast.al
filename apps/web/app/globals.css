@@ -3620,6 +3620,13 @@ button.odds-selection:hover,
   background: color-mix(in srgb, var(--bg-elevated) 92%, var(--bg));
 }
 
+/* The live rule under the Place button, when the slip has a live pick. */
+.bet-slip-live-rule {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .bet-slip-summary {
   display: grid;
   gap: 0.7rem;

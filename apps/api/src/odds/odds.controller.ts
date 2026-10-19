@@ -8,7 +8,7 @@ import { MfaGuard } from "../auth/mfa.guard";
 import type { Actor } from "../auth/permissions";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
-import { BaseMarginDto, EventsQueryDto, LeaguesDto, OverrideDto, SelectionsQueryDto, TeamMarginDto, TopEventsQueryDto, TeamQueryDto, UpdateEventDto } from "./odds.dto";
+import { BaseMarginDto, EventsQueryDto, FeedDelayQueryDto, LeaguesDto, OverrideDto, SelectionsQueryDto, TeamMarginDto, TopEventsQueryDto, TeamQueryDto, UpdateEventDto } from "./odds.dto";
 import { OddsService } from "./odds.service";
 
 @ApiTags("odds")
@@ -110,6 +110,12 @@ export class OddsController {
   @Roles(Role.SUPER_ADMIN)
   updateEvent(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() body: UpdateEventDto) {
     return this.odds.updateEvent(actor, id, body);
+  }
+
+  @Get("feed-delay")
+  @Roles(Role.SUPER_ADMIN)
+  feedDelay(@Query() query: FeedDelayQueryDto) {
+    return this.odds.feedDelay(query.days ?? 7);
   }
 
   @Get("leagues")

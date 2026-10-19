@@ -101,3 +101,13 @@ export class LeaguesDto {
   @MaxLength(60, { each: true })
   countries?: string[];
 }
+
+export class FeedDelayQueryDto {
+  /** How many days back to measure; a week by default. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  days?: number;
+}

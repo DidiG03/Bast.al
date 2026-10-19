@@ -296,6 +296,42 @@ export default function OddsPage() {
 
 type Run = (action: (token: string) => Promise<unknown>, success?: string) => Promise<boolean>;
 
+type FeedDelay = { days: number; goals: number; average: number | null; median: number | null; p90: number | null; slowest: number | null };
+
+/** Super Admin: how many seconds after a goal goes in the site first sees it, from the last week's finished matches. */
+function FeedDelayNote() {
+  const { getToken } = useAuth();
+  const { t, tn } = useI18n();
+  const [delay, setDelay] = useState<FeedDelay | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const token = await getToken();
+      if (!token) return;
+      const next = await apiFetch<FeedDelay>("/odds/feed-delay?days=7", token);
+      if (!cancelled) setDelay(next);
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken]);
+  if (!delay) return null;
+  return (
+    <div className="odds-setting">
+      <span className="muted">
+        {t("Goal delay")}
+        <HelpTip text="How many seconds after a goal goes in the site first sees it, from the feed. Someone at the ground knows sooner. Live bets placed after a goal the site hadn't shown yet are voided once the match is over, so the delay can't be used to win." />
+      </span>
+      <strong>{delay.average === null ? t("Not measured yet") : t("About {seconds} s", { seconds: delay.average })}</strong>
+      <span className="muted odds-setting-note">
+        {delay.goals === 0
+          ? t("Measured from finished matches' goals once there are some.")
+          : `${tn(delay.goals, "{count} goal in the last {days} days", "{count} goals in the last {days} days", { days: delay.days })} · ${t("9 in 10 within {seconds} s", { seconds: delay.p90 ?? 0 })} · ${t("slowest {seconds} s", { seconds: delay.slowest ?? 0 })}`}
+      </span>
+    </div>
+  );
+}
+
 function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings: OddsSettings; run: Run; syncing: boolean; onSync: () => void; ownerQuery: string }) {
   const [base, setBase] = useState(String(settings.baseMargin));
   const [teamMargin, setTeamMargin] = useState(String(settings.team?.margin ?? 0));
@@ -343,6 +379,7 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
           ) : null}
         </div>
       ) : null}
+      {feed?.mode === "api-football" && settings.canManageEvents ? <FeedDelayNote /> : null}
 
       <div className="odds-setting">
         <span className="muted">{t("Base margin")}<HelpTip text="The house's cut on every price, for every team. A bigger margin means slightly lower prices for Players and more profit for you. Example: with 5%, a 2.00 price is shown as 1.90." /></span>

@@ -22,6 +22,8 @@ export type Side = "home" | "away";
 export type Goal = {
   /** The minute, stoppage time not added: a goal at 90+3 is 90. */
   minute: number;
+  /** The added time: 3 for a goal at 90+3. Missing on goals saved before it was kept. */
+  extra?: number | null;
   /** The team the goal counts for: the other team's for an own goal. */
   side: Side;
   /** Who put it in, as the feed names them; the player's own team for an own goal. */

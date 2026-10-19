@@ -6,6 +6,8 @@ import { PrismaService } from "../prisma.service";
 import { type LiveDelta, RealtimeService, STAFF_TOPIC, teamTopic } from "../realtime/realtime.service";
 import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
+import { feedDelay } from "./feed-delay";
+import { timelineOf } from "../bets/late";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
@@ -576,6 +578,25 @@ export class OddsService {
    * The league picker: what's synced now, the defaults, and every competition
    * the feed has a season in progress for.
    */
+  /**
+   * Super Admin: how many seconds after a goal goes in the site first sees it,
+   * over the last `days` days (feed-delay.ts). Only matches whose timeline has
+   * come in after full time count.
+   */
+  async feedDelay(days = 7) {
+    const rows = await this.prisma.goalSeen.findMany({
+      where: { seenAt: { gte: new Date(Date.now() - days * 86_400_000) }, event: { lateCheck: { not: Prisma.DbNull } } },
+      select: { homeScore: true, awayScore: true, source: true, seenAt: true, event: { select: { name: true, lateCheck: true } } },
+      orderBy: { seenAt: "desc" },
+      take: 2_000,
+    });
+    const seen = rows.flatMap((row) => {
+      const timeline = timelineOf(row.event.lateCheck);
+      return timeline ? [{ eventName: row.event.name, homeScore: row.homeScore, awayScore: row.awayScore, source: row.source, seenAt: row.seenAt, timeline }] : [];
+    });
+    return { days, ...feedDelay(seen) };
+  }
+
   async leagues() {
     const saved = await this.sync.savedChoice();
     let available = null;

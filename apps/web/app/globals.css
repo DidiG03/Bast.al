@@ -4325,6 +4325,14 @@ button.odds-selection:hover,
   margin-bottom: 0.15rem;
 }
 
+/* Like the Bet page's sports row: the frame's corners follow the chosen chip's, its radius plus the gap around it. */
+.role-player .player-sport-switch {
+  padding: 0.25rem;
+  border-color: var(--hairline);
+  border-radius: calc(var(--radius-control) + 0.25rem);
+  background: var(--surface-1);
+}
+
 .sport-option-live {
   display: inline-grid;
   place-items: center;

@@ -596,6 +596,8 @@ export const server: Record<string, string> = {
   "You don't have a Manager or Owner yet": "Nuk ke ende Menaxher ose Pronar",
   "We couldn't confirm the live price with the bookmaker just now. Try again in a moment.": "Nuk arritëm ta konfirmonim koeficientin live me bastoren tani. Provo sërish pas pak.",
   "We couldn't confirm the cards shown so far with the feed just now. Try again in a moment.": "Nuk arritëm t'i konfirmonim kartonët e deritanishëm me burimin e të dhënave tani. Provo sërish pas pak.",
+  "That isn't a market": "Ky nuk është treg",
+  "You can star up to {max} markets. Take the star off some first.": "Mund të shënosh me yll deri në {max} tregje. Hiqja yllin disave më parë.",
   "The feed didn't send every match's events": "Burimi i të dhënave nuk dërgoi ngjarjet e çdo ndeshjeje",
   "Live bets on corners are limited to {max} ALL a match. You can stake {left} ALL more on {match}.": "Bastet live për kornerat kanë kufi {max} ALL për ndeshje. Mund të vësh edhe {left} ALL te {match}.",
   // Greyhound racing

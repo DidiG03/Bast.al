@@ -28,6 +28,16 @@ function isOverUnder(market: LinedMarket): boolean {
   return market.selections.length === 2 && market.selections.every((selection) => selection.key === "over" || selection.key === "under");
 }
 
+/**
+ * What a star on a market is saved as: its key, or "lines:<prefix>" for an
+ * over/under market, so starring Total goals at 2.5 stars it at every line,
+ * and on every match.
+ */
+export function marketKind(market: LinedMarket): string {
+  const prefix = linePrefix(market.key);
+  return prefix && isOverUnder(market) ? `lines:${prefix}` : market.key;
+}
+
 /** Over/under lines of one market (2.5, 1.5, 3.5…) become one block with a line to change. */
 export function bundleLines<T extends LinedMarket>(markets: T[]): Array<T | { kind: "lines"; lines: T[] }> {
   const used = new Set<string>();
@@ -63,8 +73,80 @@ export function visibleCountry(country: string | null, flag: string | null): str
   return country.trim().toLowerCase() === "world" ? null : country;
 }
 
-/** One over/under market: the line steps, the two prices follow it. */
-export function LineFamily<T extends LinedMarket>({ lines, children }: { lines: T[]; children: (market: T) => ReactNode }) {
+/**
+ * A market's heading in an opened match. It opens and closes the market; the
+ * line and price tools beside it only show while it's open. A closed market
+ * with a pick on the slip shows a dot, so the pick isn't hidden.
+ */
+export function MarketHead({
+  title,
+  suspended,
+  open,
+  onToggle,
+  picked,
+  starred,
+  onStar,
+  children,
+}: {
+  title: string;
+  suspended?: boolean;
+  open: boolean;
+  onToggle: () => void;
+  picked: boolean;
+  /** In this account's favourite markets; the star sits at the end of the heading, open or closed. */
+  starred: boolean;
+  onStar: () => void;
+  children?: ReactNode;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="odds-market-head">
+      <button type="button" className="text-button odds-market-toggle" aria-expanded={open} onClick={onToggle}>
+        <svg className="odds-market-chevron" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+        <span className="odds-market-name">
+          {title}
+          {suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
+        </span>
+        {picked && !open ? <span className="odds-market-picked" role="img" aria-label={t("On your slip")} title={t("On your slip")} /> : null}
+      </button>
+      {open ? children : null}
+      <button
+        type="button"
+        className={`match-star odds-market-star${starred ? " is-starred" : ""}`}
+        onClick={onStar}
+        aria-pressed={starred}
+        aria-label={starred ? t("Remove {market} from favourite markets", { market: title }) : t("Add {market} to favourite markets", { market: title })}
+        title={starred ? t("Remove from favourite markets") : t("Add to favourite markets")}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/** One over/under market: the line steps, the two prices follow it. Open or closed like any other market (MarketHead). */
+export function LineFamily<T extends LinedMarket>({
+  lines,
+  open,
+  onToggle,
+  picked,
+  starred,
+  onStar,
+  children,
+}: {
+  lines: T[];
+  open: boolean;
+  onToggle: () => void;
+  /** One of its lines has a pick on the slip. */
+  picked: boolean;
+  starred: boolean;
+  onStar: () => void;
+  children: (market: T) => ReactNode;
+}) {
   const { t, ts } = useI18n();
   const ordered = [...lines].sort((a, b) => (lineValue(a.key) ?? 0) - (lineValue(b.key) ?? 0));
   const preferred = ordered.findIndex((market) => lineValue(market.key) === 2.5);
@@ -74,12 +156,8 @@ export function LineFamily<T extends LinedMarket>({ lines, children }: { lines: 
   const line = lineValue(market.key);
   const title = ts(market.name).replace(/\s*\d+(?:\.\d+)?\s*$/, "").trim();
   return (
-    <div className="odds-market">
-      <div className="odds-market-head">
-        <span className="odds-market-name">
-          {title}
-          {market.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
-        </span>
+    <div className={`odds-market${open ? " is-open" : ""}`}>
+      <MarketHead title={title} suspended={market.suspended} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
         <span className="line-stepper">
           <button type="button" disabled={safe === 0} onClick={() => setIndex(safe - 1)} aria-label={t("Lower line")}>
             ‹
@@ -90,8 +168,8 @@ export function LineFamily<T extends LinedMarket>({ lines, children }: { lines: 
           </button>
         </span>
         <MarketPriceHistory selections={market.selections} compact />
-      </div>
-      {children(market)}
+      </MarketHead>
+      {open ? children(market) : null}
     </div>
   );
 }

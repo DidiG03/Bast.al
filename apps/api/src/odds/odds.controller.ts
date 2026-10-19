@@ -69,6 +69,25 @@ export class OddsController {
     return this.odds.setFavourite(actor, eventId, false);
   }
 
+  /** The kinds of market this account starred: they show first on every match that has them. */
+  @Get("favourite-markets")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  favouriteMarkets(@CurrentActor() actor: Actor) {
+    return this.odds.favouriteMarkets(actor);
+  }
+
+  @Put("favourite-markets/:marketKey")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  starMarket(@CurrentActor() actor: Actor, @Param("marketKey") marketKey: string) {
+    return this.odds.setFavouriteMarket(actor, marketKey, true);
+  }
+
+  @Delete("favourite-markets/:marketKey")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  unstarMarket(@CurrentActor() actor: Actor, @Param("marketKey") marketKey: string) {
+    return this.odds.setFavouriteMarket(actor, marketKey, false);
+  }
+
   /** A bet slip's picks: current price and whether each can still be bet on. */
   @Get("selections")
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)

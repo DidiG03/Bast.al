@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
-import { LineFamily, bundleLines, resultHeads, visibleCountry } from "../../../components/line-market";
+import { LineFamily, MarketHead, bundleLines, marketKind, resultHeads, visibleCountry } from "../../../components/line-market";
 import { MatchCentre, MatchStatsPanel } from "../../../components/match-centre";
 import { GreyhoundRaces } from "../../../components/greyhound-races";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
@@ -177,6 +177,10 @@ function BetPage() {
   const [favouritesOnly, setFavouritesOnly] = useState(false);
   const favouritesRef = useRef(favourites);
   favouritesRef.current = favourites;
+  /** The kinds of market this account starred (marketKind): first, under Favourites, on every match that has them. */
+  const [favouriteMarkets, setFavouriteMarkets] = useState<Set<string>>(new Set());
+  const favouriteMarketsRef = useRef(favouriteMarkets);
+  favouriteMarketsRef.current = favouriteMarkets;
   const [betsVersion, setBetsVersion] = useState(0);
   const [limit, setLimit] = useState(MATCHES_SHOWN);
   /** Matches opened to show every market, and those markets once loaded. */
@@ -300,7 +304,9 @@ function BetPage() {
     void (async () => {
       const token = await getToken();
       if (!token) return;
-      setFavourites(new Set(await apiFetch<string[]>("/odds/favourites", token)));
+      const [matches, markets] = await Promise.all([apiFetch<string[]>("/odds/favourites", token), apiFetch<string[]>("/odds/favourite-markets", token)]);
+      setFavourites(new Set(matches));
+      setFavouriteMarkets(new Set(markets));
     })().catch(() => undefined);
   }, [getToken]);
 
@@ -320,6 +326,30 @@ function BetPage() {
         const token = await getToken();
         if (!token) throw new Error(t("Couldn't save your favourites"));
         await apiFetch<string[]>(`/odds/favourites/${encodeURIComponent(id)}`, token, { method: starring ? "PUT" : "DELETE" });
+      } catch (err) {
+        flip(!starring);
+        toast.error(err instanceof Error ? err.message : t("Couldn't save your favourites"));
+      }
+    },
+    [getToken, toast, t],
+  );
+
+  // A market's star, the same way: at once, and back if saving fails.
+  const toggleFavouriteMarket = useCallback(
+    async (kind: string) => {
+      const starring = !favouriteMarketsRef.current.has(kind);
+      const flip = (on: boolean) =>
+        setFavouriteMarkets((current) => {
+          const next = new Set(current);
+          if (on) next.add(kind);
+          else next.delete(kind);
+          return next;
+        });
+      flip(starring);
+      try {
+        const token = await getToken();
+        if (!token) throw new Error(t("Couldn't save your favourites"));
+        await apiFetch<string[]>(`/odds/favourite-markets/${encodeURIComponent(kind)}`, token, { method: starring ? "PUT" : "DELETE" });
       } catch (err) {
         flip(!starring);
         toast.error(err instanceof Error ? err.message : t("Couldn't save your favourites"));
@@ -833,6 +863,8 @@ function BetPage() {
                             onPrefetch={prefetchDetail}
                             starred={favourites.has(event.id)}
                             onStar={toggleFavourite}
+                            favouriteMarkets={favouriteMarkets}
+                            onStarMarket={toggleFavouriteMarket}
                           />
                         ))}
                       </div>
@@ -919,6 +951,9 @@ function marketGroup(key: string): MarketGroup {
   return "teams";
 }
 
+/** The heading over an opened match's starred markets. */
+const FAVOURITES_GROUP = msg("Favourites");
+
 /** Players shown in a goalscorer market before "Show all players". */
 const SCORERS_SHOWN = 12;
 /** A match's stats button shows from this long before kick-off, for the line-ups (the API fetches them from then too). */
@@ -937,6 +972,8 @@ const MatchCard = memo(function MatchCard({
   onPrefetch,
   starred,
   onStar,
+  favouriteMarkets,
+  onStarMarket,
 }: {
   event: OddsEvent;
   selected: Set<string>;
@@ -952,12 +989,21 @@ const MatchCard = memo(function MatchCard({
   /** In this account's favourites. */
   starred: boolean;
   onStar: (eventId: string) => void;
+  /** The kinds of market this account starred: they open first, under Favourites. */
+  favouriteMarkets: Set<string>;
+  onStarMarket: (kind: string) => void;
 }) {
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;
   /** Goalscorer markets showing every player. */
   const [allPlayers, setAllPlayers] = useState<Set<string>>(new Set());
   const [statsOpen, setStatsOpen] = useState(false);
+  /**
+   * The markets the Player opened or closed in this match: a market's key, or
+   * a line family's first key. Markets start closed, favourite ones open, so
+   * this holds the ones that differ from that.
+   */
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const over = finishedNow(event);
   // Football has stats once it's under way, and the line-ups from shortly before.
   const hasStats = (event.sport ?? "football") === "football" && (event.live || over || new Date(event.startsAt).getTime() - Date.now() < STATS_BEFORE_MS);
@@ -967,7 +1013,35 @@ const MatchCard = memo(function MatchCard({
   const inRow = main && main.selections.length <= 3 ? main : undefined;
   const below = over || !expanded ? [] : event.markets.filter((market) => market.id !== inRow?.id);
   const more = over ? 0 : Math.max(0, event.marketCount - (inRow ? 1 : 0));
-  const grouped = MARKET_GROUPS.map(([id, label]) => [label, below.filter((market) => marketGroup(market.key) === id)] as const).filter(([, list]) => list.length > 0);
+  const bundled = MARKET_GROUPS.map(([id, label]) => [label as string, bundleLines(below.filter((market) => marketGroup(market.key) === id))] as const);
+  type Entry = (typeof bundled)[number][1][number];
+  const entryKey = (entry: Entry) => ("kind" in entry ? entry.lines[0].key : entry.key);
+  const isFavourite = (entry: Entry) => favouriteMarkets.has(marketKind("kind" in entry ? entry.lines[0] : entry));
+  // Starred kinds of market come out of their groups into Favourites, on top.
+  const favourite = bundled.flatMap(([, list]) => list.filter(isFavourite));
+  const grouped = [...(favourite.length > 0 ? [[FAVOURITES_GROUP, favourite] as const] : []), ...bundled.map(([label, list]) => [label, list.filter((entry) => !isFavourite(entry))] as const)].filter(
+    ([, list]) => list.length > 0,
+  );
+  const entries = grouped.flatMap(([, list]) => list);
+  const isOpen = (entry: Entry) => isFavourite(entry) !== flipped.has(entryKey(entry));
+  const allOpen = entries.length > 0 && entries.every(isOpen);
+  const flip = (key: string) =>
+    setFlipped((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  // Starring or unstarring moves a market between Favourites (open) and its group (closed): it starts afresh there.
+  const starMarket = (entry: Entry) => {
+    setFlipped((current) => {
+      const next = new Set(current);
+      next.delete(entryKey(entry));
+      return next;
+    });
+    onStarMarket(marketKind("kind" in entry ? entry.lines[0] : entry));
+  };
+  const hasPick = (markets: Array<{ selections: OddsSelection[] }>) => markets.some((market) => market.selections.some((selection) => selected.has(selection.id)));
   const toggleLabel = expanded ? t("Fewer markets") : tn(more, "{count} more market", "{count} more markets");
   const scored = (event.live || over) && event.homeScore !== null && event.awayScore !== null;
   const playing = event.live && !over;
@@ -1118,28 +1192,40 @@ const MatchCard = memo(function MatchCard({
       {expanded ? (
         <div className="bm-detail">
           {inRow ? <p className="bm-detail-main">{ts(inRow.name)}</p> : null}
+          {entries.length > 1 ? (
+            <div className="bm-detail-tools">
+              <button
+                type="button"
+                className="text-button bm-open-all"
+                // Open all: every market that isn't open on its own (not a favourite). Close all: every favourite.
+                onClick={() => setFlipped(new Set(entries.filter((entry) => isFavourite(entry) === allOpen).map(entryKey)))}
+                aria-pressed={allOpen}
+              >
+                {allOpen ? t("Close all") : t("Open all")}
+              </button>
+            </div>
+          ) : null}
           {grouped.map(([label, list]) => (
-            <div key={label} className="odds-market-group">
-              {grouped.length > 1 ? <h3 className="odds-market-group-title">{t(label)}</h3> : null}
-              {bundleLines(list).map((entry) => {
+            <div key={label} className={`odds-market-group${label === FAVOURITES_GROUP ? " is-favourites" : ""}`}>
+              {grouped.length > 1 || label === FAVOURITES_GROUP ? <h3 className="odds-market-group-title">{t(label)}</h3> : null}
+              {list.map((entry) => {
+                const key = entryKey(entry);
+                const open = isOpen(entry);
+                const starred = isFavourite(entry);
                 if ("kind" in entry) {
                   return (
-                    <LineFamily key={entry.lines[0].id} lines={entry.lines}>
+                    <LineFamily key={key} lines={entry.lines} open={open} onToggle={() => flip(key)} picked={hasPick(entry.lines)} starred={starred} onStar={() => starMarket(entry)}>
                       {(market) => marketOutcomes(market)}
                     </LineFamily>
                   );
                 }
                 const scorers = entry.key.startsWith("scorer_");
                 return (
-                  <div key={entry.id} className="odds-market">
-                    <div className="odds-market-head">
-                      <span className="odds-market-name">
-                        {ts(entry.name)}
-                        {entry.suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
-                      </span>
+                  <div key={key} className={`odds-market${open ? " is-open" : ""}`}>
+                    <MarketHead title={ts(entry.name)} suspended={entry.suspended} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
                       {scorers ? null : <MarketPriceHistory selections={entry.selections} compact />}
-                    </div>
-                    {marketOutcomes(entry)}
+                    </MarketHead>
+                    {open ? marketOutcomes(entry) : null}
                   </div>
                 );
               })}

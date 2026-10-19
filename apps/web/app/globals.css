@@ -14415,6 +14415,113 @@ button.is-blocked {
   font-weight: 700;
 }
 
+/* Each market opens and closes on its heading (MarketHead); closed ones are a list of rows with a hairline between. */
+.bm-detail .odds-market-group {
+  gap: 0;
+}
+
+.bm-detail .odds-market-group-title {
+  margin-bottom: 0.15rem;
+}
+
+.bm-detail .odds-market {
+  gap: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.bm-detail .odds-market:last-child {
+  border-bottom: 0;
+}
+
+.bm-detail .odds-market.is-open {
+  gap: 0.45rem;
+  padding-bottom: 0.75rem;
+}
+
+.bm-detail .odds-market-head {
+  flex-wrap: nowrap;
+}
+
+.bm-detail .odds-market-toggle {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  min-height: 2.6rem;
+  color: var(--text);
+  text-align: left;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* A full-width heading: the buttons' press shrink would slide it sideways under the pointer (and start a text selection in Safari). */
+.bm-detail .odds-market-toggle:active,
+.bm-detail .bm-open-all:active {
+  transform: none;
+}
+
+.bm-detail .odds-market-toggle:hover .odds-market-chevron,
+.bm-detail .odds-market-toggle:focus-visible .odds-market-chevron {
+  color: var(--text);
+}
+
+.odds-market-chevron {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--muted);
+  transition: transform 150ms ease;
+}
+
+.odds-market-toggle[aria-expanded="true"] .odds-market-chevron {
+  transform: rotate(90deg);
+}
+
+/* A closed market with a pick on the slip. */
+.odds-market-picked {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  border-radius: 50%;
+  background: var(--accent-fill, var(--accent));
+}
+
+/* A market's star, at the end of its heading whether it's open or closed. */
+.bm-detail .odds-market-star {
+  flex: none;
+}
+
+.bm-detail .odds-market-group.is-favourites .odds-market-group-title::before {
+  margin-right: 0.35rem;
+  color: var(--warning);
+  content: "★";
+}
+
+.bm-detail-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: -0.5rem;
+}
+
+.bm-detail .bm-open-all {
+  padding: 0.25rem 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .odds-market-chevron {
+    transition: none;
+  }
+}
+
 .role-player .bet-page .bm-detail button.bet-pick {
   min-height: 2.75rem;
   border: 1px solid var(--player-pick-border, var(--hairline));

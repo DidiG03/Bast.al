@@ -153,6 +153,7 @@ model User {
   penaltyRound           PenaltyRound?
   diceSeeds              DiceSeed[]
   favouriteEvents        FavouriteEvent[]
+  favouriteMarkets       FavouriteMarket[]
 
   @@index([parentId])
   @@index([role])
@@ -397,6 +398,20 @@ model FavouriteEvent {
   @@id([userId, eventId])
   @@index([eventId])
   @@map("favourite_events")
+}
+
+/// A kind of market someone starred (Double chance, Total goals…): on every
+/// match that has it, it shows first, under Favourites. `marketKey` is the
+/// market's key, or "lines:<prefix>" for an over/under market whatever its
+/// line (lines:goals is Total goals at 1.5, 2.5, 3.5…).
+model FavouriteMarket {
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketKey String   @map("market_key") @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([userId, marketKey])
+  @@map("favourite_markets")
 }
 
 /// One bet type on an event, e.g. "Match winner" or "Total goals 2.5".

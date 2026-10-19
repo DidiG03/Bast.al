@@ -30,6 +30,10 @@ const LIVE_SENT_KEPT_MS = 30 * 60_000;
 
 /** How many matches one account can star. */
 const MAX_FAVOURITES = 200;
+/** How many kinds of market one account can star. */
+const MAX_FAVOURITE_MARKETS = 60;
+/** A market's key, or "lines:<prefix>" for an over/under market at any line. */
+const MARKET_KIND = /^(lines:)?[a-z0-9_]{1,60}$/;
 
 /**
  * How long one read of a match list serves everyone who asks for it, in ms.
@@ -382,6 +386,25 @@ export class OddsService {
       await this.prisma.favouriteEvent.deleteMany({ where: { userId: actor.id, eventId } });
     }
     return this.favourites(actor);
+  }
+
+  /** The kinds of market this account starred, oldest first (the order they show in). */
+  async favouriteMarkets(actor: Actor): Promise<string[]> {
+    const rows = await this.prisma.favouriteMarket.findMany({ where: { userId: actor.id }, orderBy: { createdAt: "asc" }, select: { marketKey: true } });
+    return rows.map((row) => row.marketKey);
+  }
+
+  /** Stars a kind of market, or takes the star off. Returns the starred kinds. */
+  async setFavouriteMarket(actor: Actor, marketKey: string, starred: boolean): Promise<string[]> {
+    if (!MARKET_KIND.test(marketKey)) throw new BadRequestException("That isn't a market");
+    if (starred) {
+      const count = await this.prisma.favouriteMarket.count({ where: { userId: actor.id } });
+      if (count >= MAX_FAVOURITE_MARKETS) throw new BadRequestException(`You can star up to ${MAX_FAVOURITE_MARKETS} markets. Take the star off some first.`);
+      await this.prisma.favouriteMarket.upsert({ where: { userId_marketKey: { userId: actor.id, marketKey } }, create: { userId: actor.id, marketKey }, update: {} });
+    } else {
+      await this.prisma.favouriteMarket.deleteMany({ where: { userId: actor.id, marketKey } });
+    }
+    return this.favouriteMarkets(actor);
   }
 
   /**

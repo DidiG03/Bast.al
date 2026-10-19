@@ -76,7 +76,7 @@ function currentGrid(grid: Prisma.JsonValue | undefined): BookSymbol[][] | null 
 }
 
 /**
- * Book of Ra (see book.ts), played with the Player's Bast.al balance like
+ * Book of Ra (see book.ts), played with the Player's Shtatat.al balance like
  * the other slot: every spin is decided here and moves money in one
  * transaction (the balance, a settlement journal row for Commissions, the
  * day's "Book of Ra" ledger line). A round of free spins is kept between

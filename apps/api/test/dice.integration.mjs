@@ -1,4 +1,4 @@
-// Dice, end to end against a real Postgres: rolls moving Bast.al credit,
+// Dice, end to end against a real Postgres: rolls moving Shtatat.al credit,
 // the day's "Dice" ledger line, the settlement journal, the seed pair and
 // its nonce, revealing a server seed, the stake limits, the switches and a
 // repeated request. Like the other integration tests it empties tables, so

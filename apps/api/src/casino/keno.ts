@@ -1,7 +1,7 @@
 import { createHmac } from "crypto";
 
 /**
- * Bast.al's Keno, played like the Kino in betting shops: the Player picks 1
+ * Shtatat.al's Keno, played like the Kino in betting shops: the Player picks 1
  * to 10 numbers from 1 to 80, and 20 of the 80 are drawn. What a round pays
  * depends on how many numbers were picked and how many of them were drawn
  * (PAYS). This file is the game's whole definition, used as it is by the API

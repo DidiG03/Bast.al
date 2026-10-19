@@ -13,6 +13,7 @@ import { ApiError, type MeResponse } from "../../lib/api";
 import { getMe } from "../../lib/api-server";
 import { LanguageToggle } from "../../components/language-toggle";
 import { getT } from "../../lib/i18n/server";
+import { BrandMark } from "../../components/brand-mark";
 
 export default async function DashboardLayout({
   children,
@@ -42,7 +43,7 @@ export default async function DashboardLayout({
     return (
       <main className="stack">
         <div className="nav">
-          <span className="brand">Bast.al</span>
+          <span className="brand">Shtatat.al</span>
           <UserMenu />
         </div>
         <div className="card stack">
@@ -55,10 +56,10 @@ export default async function DashboardLayout({
           </h1>
           <p className="muted">
             {problem === "missing"
-              ? t("You're signed in, but there's no Bast.al account for you yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours.")
+              ? t("You're signed in, but there's no Shtatat.al account for you yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours.")
               : problem === "suspended"
                 ? t("Your account, or one above it, is suspended, so you can't sign in right now. Ask whoever runs your team to reactivate it.")
-                : t("Bast.al can't reach its server right now. Wait a moment and refresh the page.")}
+                : t("Shtatat.al can't reach its server right now. Wait a moment and refresh the page.")}
           </p>
         </div>
       </main>
@@ -80,8 +81,8 @@ export default async function DashboardLayout({
         <main className="dashboard-content">
           <header className="dashboard-topbar">
             <Link href="/dashboard" className="topbar-brand">
-              <span className="sidebar-logo" aria-hidden="true">B</span>
-              <span>Bast.al</span>
+              <BrandMark />
+              <span>Shtatat.al</span>
             </Link>
             {isPlayer ? null : <DashboardTrail role={me.role} />}
             {isPlayer ? (

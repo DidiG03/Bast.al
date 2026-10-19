@@ -39,7 +39,7 @@ function roundView(round: Prisma.CasinoSpinGetPayload<{ select: typeof roundSele
 }
 
 /**
- * European roulette (see roulette.ts), played with the Player's Bast.al
+ * European roulette (see roulette.ts), played with the Player's Shtatat.al
  * balance like the slot: the number is drawn here, never in the browser,
  * and a round moves money the same way as a spin, in one transaction (the
  * balance, a settlement journal row for Commissions, and the day's ledger

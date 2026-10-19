@@ -1,4 +1,4 @@
-// Keno, end to end against a real Postgres: draws moving Bast.al credit, the
+// Keno, end to end against a real Postgres: draws moving Shtatat.al credit, the
 // day's "Keno" ledger line, the settlement journal, the seed pair it shares
 // with Dice, the stake limits, the switches, the Casino page and a repeated
 // request. Like the other integration tests it empties tables, so it only

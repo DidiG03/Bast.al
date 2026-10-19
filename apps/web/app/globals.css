@@ -8083,7 +8083,7 @@ button.is-blocked {
   }
 }
 
-/* Playing cards: cream face, serif corners, a framed figure on the face cards; a navy lattice back with the Bast.al mark. */
+/* Playing cards: cream face, serif corners, a framed figure on the face cards; a navy lattice back with the Shtatat.al mark. */
 .playing-card {
   position: relative;
   display: grid;
@@ -8117,7 +8117,7 @@ button.is-blocked {
   color: #121c4d;
   font-size: calc(var(--card-w) * 0.2);
   font-weight: 900;
-  content: "B";
+  content: "7";
 }
 
 .playing-card-corner {
@@ -14595,6 +14595,17 @@ html[data-theme="light"] .role-player {
   border-radius: 7px;
   background: var(--accent-fill);
   font-size: 0.9rem;
+}
+
+/* The mark draws its own rounded square (components/brand-mark.tsx), like the favicon. */
+.sidebar-logo.brand-mark,
+.role-player .sidebar-logo.brand-mark {
+  background: none;
+  border-radius: 0;
+}
+
+.sidebar-logo.brand-mark svg {
+  display: block;
 }
 
 .role-player .sidebar-collapse {

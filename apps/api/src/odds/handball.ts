@@ -100,7 +100,7 @@ const asBet = (build: (bet: FeedBet, home: string, away: string) => Built[]): Bu
 const named = (key: string, name: Namer, values: Array<[string, string, Namer]>) => asBet(fixed(key, name, values));
 
 /**
- * The markets Bast.al offers for a handball game, matched on API-Sports'
+ * The markets Shtatat.al offers for a handball game, matched on API-Sports'
  * handball bet names (see the test fixture handball-odds.json), in the order
  * Players see them. Each key is the one football uses for the same bet, so
  * football's grading settles it.

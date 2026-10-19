@@ -1,7 +1,7 @@
 import { randomInt } from "crypto";
 
 /**
- * Bast.al's Plinko. A ball drops through a triangle of pegs: at every row it
+ * Shtatat.al's Plinko. A ball drops through a triangle of pegs: at every row it
  * goes left or right, each with an even chance, and lands in one of the
  * buckets along the bottom. The Player picks how many rows (8, 12 or 16)
  * and the risk; each choice has its own pay table, highest at the edges.

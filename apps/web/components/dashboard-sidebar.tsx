@@ -8,6 +8,7 @@ import { NamedIcon, type IconName } from "./icons";
 import { UserMenu } from "./user-menu";
 import { msg } from "../lib/i18n/core";
 import { useI18n } from "./i18n-provider";
+import { BrandMark } from "./brand-mark";
 
 type SidebarProps = {
   role: UserRole;
@@ -210,8 +211,8 @@ export function DashboardSidebar({ role, username, initialCollapsed, casinoOpen 
             className="sidebar-brand"
             onClick={() => setMobileOpen(false)}
           >
-            <span className="sidebar-logo">B</span>
-            <span className="sidebar-brand-text">Bast.al</span>
+            <BrandMark />
+            <span className="sidebar-brand-text">Shtatat.al</span>
           </Link>
           <button
             className="sidebar-collapse secondary"

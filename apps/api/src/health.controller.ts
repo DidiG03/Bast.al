@@ -16,7 +16,7 @@ export class RootController {
   @Get()
   info() {
     return {
-      name: "Bast.al API",
+      name: "Shtatat.al API",
       status: "ok",
       health: "/api/health",
       docs: process.env.NODE_ENV === "production" ? undefined : "/docs",

@@ -1,5 +1,5 @@
 /**
- * Bast.al's Penalty. The Player takes kicks, aiming left, center or right.
+ * Shtatat.al's Penalty. The Player takes kicks, aiming left, center or right.
  * The keeper dives one of those three ways. A different way is a goal and
  * raises the multiplier; the same way is a save and loses the stake. They
  * can cash out after any goal. This file is the game's whole definition,

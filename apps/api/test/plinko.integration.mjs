@@ -1,4 +1,4 @@
-// Plinko, end to end against a real Postgres: balls moving Bast.al credit,
+// Plinko, end to end against a real Postgres: balls moving Shtatat.al credit,
 // the day's "Plinko" ledger line, the settlement journal, the stake limits,
 // the switches and a repeated request. Like the other integration tests it
 // empties tables, so it only runs against a database whose name ends in "_test".

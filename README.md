@@ -1,4 +1,4 @@
-# Bast.al
+# Shtatat.al
 
 Modern hierarchical virtual-credit betting simulation workspace built with Next.js, NestJS, PostgreSQL, Redis, and BullMQ.
 

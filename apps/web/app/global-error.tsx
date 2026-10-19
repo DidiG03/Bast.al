@@ -18,7 +18,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
     <html lang={lang}>
       <body style={{ margin: 0, minHeight: "100vh", display: "grid", placeItems: "center", padding: 16, background: "#0b0b0c", color: "#ededef", fontFamily: "system-ui, sans-serif" }}>
         <main role="alert" style={{ maxWidth: 420, display: "grid", gap: 12 }}>
-          <h1 style={{ margin: 0, fontSize: 22 }}>{t("Bast.al couldn't load")}</h1>
+          <h1 style={{ margin: 0, fontSize: 22 }}>{t("Shtatat.al couldn't load")}</h1>
           <p style={{ margin: 0, color: "#a1a1aa", lineHeight: 1.5 }}>
             {t("Something went wrong on our side. Balances and bets are safe. Try again in a moment.")}
           </p>

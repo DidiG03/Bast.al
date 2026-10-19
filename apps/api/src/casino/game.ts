@@ -11,7 +11,7 @@ import {
 } from "pokie";
 
 /**
- * Bast.al's slot: a classic fruit game. 5 reels, 3 rows, 5 or 10 lines (the
+ * Shtatat.al's slot: a classic fruit game. 5 reels, 3 rows, 5 or 10 lines (the
  * Player picks), fruit and sevens, a star that pays anywhere, no wilds and
  * no free spins.
  * After a win the Player can try "double or nothing" (see casino.service.ts).

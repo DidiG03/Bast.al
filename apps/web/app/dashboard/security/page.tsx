@@ -158,7 +158,7 @@ export default function SecurityPage() {
         <div className="account-setting">
           <div>
             <strong>{t("Language")}<HelpTip text="Pick the language for this site. It only changes it on this device." /></strong>
-            <span className="muted">{t("Choose the language Bast.al is shown in on this device.")}</span>
+            <span className="muted">{t("Choose the language Shtatat.al is shown in on this device.")}</span>
           </div>
           <LanguagePicker />
         </div>

@@ -1,7 +1,7 @@
 import { randomInt } from "crypto";
 
 /**
- * Bast.al's blackjack. This file is the game's whole definition: the shoe,
+ * Shtatat.al's blackjack. This file is the game's whole definition: the shoe,
  * the hand values, every move and the pay-outs. It's pure (no database, no
  * money), used as it is by the API, the tests and the payout-rate script
  * (scripts/blackjack-rtp.mjs), so what's measured is what's played.

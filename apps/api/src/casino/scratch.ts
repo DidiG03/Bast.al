@@ -1,7 +1,7 @@
 import { createHmac } from "crypto";
 
 /**
- * Bast.al's Scratch Cards. A card has 9 boxes; three of the same symbol win
+ * Shtatat.al's Scratch Cards. A card has 9 boxes; three of the same symbol win
  * that symbol's prize (PRIZES), and a card never has two winning symbols.
  * Each prize's chance is set out of a million, so a card pays back exactly
  * 90% of its price on average (payoutRate). The card is decided and paid

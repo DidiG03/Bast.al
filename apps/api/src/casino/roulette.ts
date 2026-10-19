@@ -1,7 +1,7 @@
 import { randomInt } from "crypto";
 
 /**
- * Bast.al's roulette: European, with 37 pockets (0 to 36, one zero). This
+ * Shtatat.al's roulette: European, with 37 pockets (0 to 36, one zero). This
  * file is the game's whole definition, used as it is by the API and the
  * tests, so what's tested is what's played.
  *

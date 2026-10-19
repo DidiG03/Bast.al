@@ -41,7 +41,7 @@ type Tx = Prisma.TransactionClient;
 type Team = { ownerId: string | null; managerId: string | null; ownerRate: Prisma.Decimal; managerRate: Prisma.Decimal };
 
 /**
- * Blackjack (see blackjack.ts), played with the Player's Bast.al balance.
+ * Blackjack (see blackjack.ts), played with the Player's Shtatat.al balance.
  * Unlike a spin, a round takes several requests, so it's kept here between
  * them (BlackjackHand), with the shoe, until it ends. Money moves when it's
  * put down: the bet on the deal, and a double, a split or insurance when

@@ -40,7 +40,7 @@ function roundView(round: Prisma.CasinoSpinGetPayload<{ select: typeof roundSele
 }
 
 /**
- * Plinko (see plinko.ts), played with the Player's Bast.al balance like
+ * Plinko (see plinko.ts), played with the Player's Shtatat.al balance like
  * roulette: the ball's path is drawn here, never in the browser, and a ball
  * moves money in one transaction (the balance, a settlement journal row for
  * Commissions, and the day's ledger line). The Player's max stake, the

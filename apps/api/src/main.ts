@@ -72,7 +72,7 @@ async function bootstrap() {
 
   app.getHttpAdapter().get("/", (_req: unknown, res: { json: (body: unknown) => void }) => {
     res.json({
-      name: "Bast.al API",
+      name: "Shtatat.al API",
       status: "ok",
       health: "/api/health",
       docs: process.env.NODE_ENV === "production" ? undefined : "/docs",
@@ -89,7 +89,7 @@ async function bootstrap() {
 
   if (process.env.NODE_ENV !== "production") {
     const swagger = new DocumentBuilder()
-      .setTitle("Bast.al API")
+      .setTitle("Shtatat.al API")
       .setDescription("Hierarchical virtual-credit betting simulation API")
       .setVersion("1.0")
       .addBearerAuth()

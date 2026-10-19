@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes } from "crypto";
 
 /**
- * Bast.al's Dice. A roll is a number from 0.00 to 99.99, every one as
+ * Shtatat.al's Dice. A roll is a number from 0.00 to 99.99, every one as
  * likely. The Player picks a target and a side: "under 50.00" wins on 0.00
  * to 49.99, "over 50.00" on 50.01 to 99.99. The fewer numbers win, the more
  * a win pays: the multiplier is 97% divided by the chance of winning,

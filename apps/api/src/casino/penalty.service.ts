@@ -31,7 +31,7 @@ type Tx = Prisma.TransactionClient;
 type Team = { ownerId: string | null; managerId: string | null; ownerRate: Prisma.Decimal; managerRate: Prisma.Decimal };
 
 /**
- * Penalty (see penalty.ts), played with the Player's Bast.al balance. A
+ * Penalty (see penalty.ts), played with the Player's Shtatat.al balance. A
  * shootout takes several kicks, so it's kept here between them (PenaltyRound)
  * until it ends. The stake leaves the balance when it starts. Cashing out,
  * or a save, pays and records it like a spin (a CasinoSpin, a settlement

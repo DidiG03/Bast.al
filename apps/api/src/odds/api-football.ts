@@ -5,7 +5,7 @@ import { crestUrl } from "./crest";
 
 /**
  * API-Football (api-sports.io) v3: the fixtures, live scores and pre-match
- * odds Bast.al prices from. Parsing is kept separate from the HTTP call so the
+ * odds Shtatat.al prices from. Parsing is kept separate from the HTTP call so the
  * same code runs against the real API and the mock feed.
  */
 
@@ -415,7 +415,7 @@ export function playerKey(name: string): string {
 }
 
 /**
- * The markets Bast.al offers, matched on API-Football's pre-match bet names,
+ * The markets Shtatat.al offers, matched on API-Football's pre-match bet names,
  * in the order Players see them. Every one settles from the 90-minute score,
  * plus the half-time score for the half markets (see bets/grading.ts), so
  * nothing here needs data the feed doesn't already send with the result.

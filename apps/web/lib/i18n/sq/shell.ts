@@ -1,8 +1,8 @@
 /** Albanian for the app shell: navigation, notifications, security, errors and sign-in. */
 export const shell: Record<string, string> = {
   // Layout and navigation
-  "Bast.al can't reach its server right now. Wait a moment and refresh the page.": "Bast.al nuk po lidhet me serverin tani. Prit pak dhe rifresko faqen.",
-  "You're signed in, but there's no Bast.al account for you yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours.": "Je i identifikuar, por ende nuk ke llogari në Bast.al. Llogaritë krijohen brenda aplikacionit: Lojtarët nga Menaxheri ose Pronari, Menaxherët nga Pronari dhe Pronarët nga Super Admini. Kërkoji atij që drejton skuadrën tënde të ta krijojë.",
+  "Shtatat.al can't reach its server right now. Wait a moment and refresh the page.": "Shtatat.al nuk po lidhet me serverin tani. Prit pak dhe rifresko faqen.",
+  "You're signed in, but there's no Shtatat.al account for you yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours.": "Je i identifikuar, por ende nuk ke llogari në Shtatat.al. Llogaritë krijohen brenda aplikacionit: Lojtarët nga Menaxheri ose Pronari, Menaxherët nga Pronari dhe Pronarët nga Super Admini. Kërkoji atij që drejton skuadrën tënde të ta krijojë.",
   "Your balance, given to you by your Manager or Owner": "Balanca jote, e dhënë nga Menaxheri ose Pronari yt",
   "The server isn't responding": "Serveri nuk po përgjigjet",
   "Your account isn't set up yet": "Llogaria jote ende nuk është krijuar",
@@ -86,7 +86,7 @@ export const shell: Record<string, string> = {
   "Change your password or start a password reset.": "Ndrysho fjalëkalimin ose fillo rivendosjen e tij.",
   "Open password recovery": "Hap rikuperimin e fjalëkalimit",
   "Language": "Gjuha",
-  "Choose the language Bast.al is shown in on this device.": "Zgjidh gjuhën në të cilën shfaqet Bast.al në këtë pajisje.",
+  "Choose the language Shtatat.al is shown in on this device.": "Zgjidh gjuhën në të cilën shfaqet Shtatat.al në këtë pajisje.",
   "End your session on this device.": "Mbyll seancën në këtë pajisje.",
   "Delete all test data": "Fshi të gjitha të dhënat e provës",
   "Deletes every Owner, Manager and Player with their sign-ins, and everything they did: bets, balances, the ledger, commissions, notifications and the audit log. Your Super Admin account, prices, margins, leagues and matches stay. This can't be undone.": "Fshin çdo Pronar, Menaxher dhe Lojtar bashkë me hyrjet e tyre, dhe gjithçka që kanë bërë: bastet, balancat, regjistrin e lëvizjeve, komisionet, njoftimet dhe regjistrin e auditimit. Llogaria jote e Super Adminit, koeficientët, marzhet, ligat dhe ndeshjet mbeten. Kjo nuk kthehet mbrapsht.",
@@ -111,7 +111,7 @@ export const shell: Record<string, string> = {
 
   // Errors
   "Something went wrong": "Diçka shkoi keq",
-  "Bast.al couldn't load": "Bast.al nuk u ngarkua",
+  "Shtatat.al couldn't load": "Shtatat.al nuk u ngarkua",
   "Something went wrong on our side. Balances and bets are safe. Try again in a moment.": "Diçka shkoi keq nga ana jonë. Balancat dhe bastet janë të sigurta. Provo sërish pas pak.",
   "Reference: {code}": "Referenca: {code}",
   "Try again": "Provo sërish",

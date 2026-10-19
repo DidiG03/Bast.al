@@ -43,7 +43,7 @@ function roundView(round: Prisma.CasinoSpinGetPayload<{ select: typeof roundSele
 }
 
 /**
- * Coin Flip (see coin-flip.ts), played with the Player's Bast.al balance
+ * Coin Flip (see coin-flip.ts), played with the Player's Shtatat.al balance
  * like the other games: the flip comes from the Player's seed pair (shared
  * with Dice and Keno) here on the server, and moves money in one
  * transaction (the balance, a settlement journal row for Commissions, and

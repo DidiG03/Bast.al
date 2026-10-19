@@ -4,6 +4,7 @@ import { ThemeToggle } from "../../../components/theme-toggle";
 import { LanguageToggle } from "../../../components/language-toggle";
 import { msg } from "../../../lib/i18n/core";
 import { getT } from "../../../lib/i18n/server";
+import { BrandMark } from "../../../components/brand-mark";
 
 const POINTS: Array<{ icon: IconName; title: string; text: string }> = [
   { icon: "users", title: msg("Your team only"), text: msg("Everyone sees the accounts under them, nothing else.") },
@@ -18,8 +19,8 @@ export default function SignInPage() {
       <section className="auth-form-side">
         <header className="auth-top">
           <div className="auth-brand">
-            <span className="sidebar-logo" aria-hidden="true">B</span>
-            <span className="brand">Bast.al</span>
+            <BrandMark />
+            <span className="brand">Shtatat.al</span>
           </div>
           <span className="auth-top-actions">
             <LanguageToggle />

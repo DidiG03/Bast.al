@@ -1,4 +1,4 @@
-// Book of Ra, end to end against a real Postgres: paid spins moving Bast.al
+// Book of Ra, end to end against a real Postgres: paid spins moving Shtatat.al
 // credit, a round of free spins kept between requests and paid as it plays,
 // retriggers, the 5,000x cap, double or nothing on the round, limits, and
 // the round blocking a team move. Like the other integration tests it

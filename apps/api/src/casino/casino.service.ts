@@ -83,7 +83,7 @@ export const canGamble = (amount: Prisma.Decimal, steps: number) => amount.great
 
 /**
  * The Casino tab: one slot game (see game.ts), played with the Player's own
- * Bast.al balance. Each spin is decided here, never in the browser, and
+ * Shtatat.al balance. Each spin is decided here, never in the browser, and
  * moves money like a bet does:
  * - the stake and the win change the balance in one guarded update;
  * - the day's "Casino" line in the Player's ledger is updated with it;

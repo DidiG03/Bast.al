@@ -1,4 +1,4 @@
-# Bast.al, explained simply
+# Shtatat.al, explained simply
 
 ## The whole idea, in one story
 

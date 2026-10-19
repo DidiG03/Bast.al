@@ -45,7 +45,7 @@ function roundView(round: Prisma.CasinoSpinGetPayload<{ select: typeof roundSele
 }
 
 /**
- * Scratch Cards (see scratch.ts), played with the Player's Bast.al balance
+ * Scratch Cards (see scratch.ts), played with the Player's Shtatat.al balance
  * like the other games: the card comes from the Player's seed pair (shared
  * with Dice, Keno and Coin Flip) here on the server, and is paid when it's
  * bought, in one transaction (the balance, a settlement journal row for

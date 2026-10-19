@@ -10,7 +10,7 @@ import "@fontsource/ibm-plex-sans/700.css";
 import "./globals.css";
 import "./admin.css";
 
-export const metadata: Metadata = { title: "Bast.al" };
+export const metadata: Metadata = { title: "Shtatat.al" };
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,

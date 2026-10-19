@@ -1,4 +1,4 @@
-// Scratch Cards, end to end against a real Postgres: cards moving Bast.al
+// Scratch Cards, end to end against a real Postgres: cards moving Shtatat.al
 // credit when bought, the day's "Scratch Cards" ledger line, the settlement
 // journal, the seed pair it shares with Dice, the stake limits, the
 // switches, the Casino page, the audit log and a repeated request. Like the

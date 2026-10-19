@@ -1,13 +1,14 @@
 import { SignIn } from "@clerk/nextjs";
 import { getT } from "../../../lib/i18n/server";
+import { BrandMark } from "../../../components/brand-mark";
 
 export default function RecoveryPage() {
   const { t } = getT();
   return (
     <main className="role-admin auth-page">
       <div className="auth-brand">
-        <span className="sidebar-logo" aria-hidden="true">B</span>
-        <span className="brand">Bast.al</span>
+        <BrandMark />
+        <span className="brand">Shtatat.al</span>
       </div>
       <div className="card stack auth-card">
         <h1 style={{ margin: 0 }}>{t("Password recovery")}</h1>

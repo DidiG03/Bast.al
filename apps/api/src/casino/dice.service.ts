@@ -69,7 +69,7 @@ function roundView(round: Prisma.CasinoSpinGetPayload<{ select: typeof roundSele
 }
 
 /**
- * Dice (see dice.ts), played with the Player's Bast.al balance like the
+ * Dice (see dice.ts), played with the Player's Shtatat.al balance like the
  * other games: the roll comes from the Player's seed pair here on the
  * server, and moves money in one transaction (the balance, a settlement
  * journal row for Commissions, and the day's ledger line). The Player's max

@@ -1,4 +1,4 @@
-// The Casino, end to end against a real Postgres: spins moving Bast.al
+// The Casino, end to end against a real Postgres: spins moving Shtatat.al
 // credit, the day's ledger line, the settlement journal, double or nothing,
 // free spins left from the old game, limits and switches. Like the other integration tests it empties tables, so it
 // only runs against a database whose name ends in "_test".

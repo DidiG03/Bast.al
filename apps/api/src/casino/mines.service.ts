@@ -31,7 +31,7 @@ type Tx = Prisma.TransactionClient;
 type Team = { ownerId: string | null; managerId: string | null; ownerRate: Prisma.Decimal; managerRate: Prisma.Decimal };
 
 /**
- * Mines (see mines.ts), played with the Player's Bast.al balance. A round
+ * Mines (see mines.ts), played with the Player's Shtatat.al balance. A round
  * takes several requests, so it's kept here between them (MinesRound), with
  * the mine positions, until it ends. The stake leaves the balance when the
  * round starts. Cashing out, or hitting a mine, pays and records it like a

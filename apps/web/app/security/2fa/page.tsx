@@ -5,6 +5,7 @@ import { UserProfilePanel } from "../../../components/user-profile-panel";
 import { type MeResponse } from "../../../lib/api";
 import { serverApiFetch } from "../../../lib/api-server";
 import { getT } from "../../../lib/i18n/server";
+import { BrandMark } from "../../../components/brand-mark";
 
 export default async function TwoFactorPage() {
   const { t } = getT();
@@ -27,8 +28,8 @@ export default async function TwoFactorPage() {
   return (
     <main className="role-admin auth-page">
       <div className="auth-brand">
-        <span className="sidebar-logo" aria-hidden="true">B</span>
-        <span className="brand">Bast.al</span>
+        <BrandMark />
+        <span className="brand">Shtatat.al</span>
       </div>
       <div className="card stack auth-card auth-card-wide">
         <h1 style={{ margin: 0 }}>{t("Two-step verification required")}</h1>

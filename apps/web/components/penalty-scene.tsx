@@ -233,7 +233,7 @@ const Stadium = memo(function Stadium() {
       <rect y="156" width="1000" height="10" fill="#0e1830" />
       {Array.from({ length: 6 }, (_, i) => (
         <text key={i} x={80 + i * 170} y="164.5" fontSize="9" fontWeight="900" fontFamily="system-ui, sans-serif" fill={i % 2 ? "#7cf29a" : "#ffe14a"} letterSpacing="2">
-          BAST.AL
+          SHTATAT.AL
         </text>
       ))}
       {/* Steps in the lower tier. */}
@@ -253,7 +253,7 @@ const Stadium = memo(function Stadium() {
 
       {/* Ad boards along the goal line. */}
       <rect y="290" width="1000" height="34" fill="url(#pk-board)" />
-      {["BAST.AL", "LIVE BETTING", "BAST.AL", "CASINO", "BAST.AL", "PENALTY"].map((word, i) => (
+      {["SHTATAT.AL", "LIVE BETTING", "SHTATAT.AL", "CASINO", "SHTATAT.AL", "PENALTY"].map((word, i) => (
         <g key={i}>
           <rect x={4 + i * 166.5} y="293" width="160" height="27" rx="2" fill={i % 2 ? "#0f2a5c" : "#132a14"} />
           <text x={84 + i * 166.5} y="312.5" textAnchor="middle" fontSize="15" fontWeight="900" fontFamily="system-ui, sans-serif" fill={i % 2 ? "#9fd0ff" : "#c6ff6a"} letterSpacing="1.5">
@@ -585,7 +585,7 @@ function KeeperDrawing({ name }: { name: KeeperPoseName }) {
         <path d="M-8 -55 L0 -46 L8 -55" fill="none" stroke={KIT.shorts} strokeWidth="3" strokeLinejoin="round" />
         <path d="M-25 -30 H25 V-24 H-25 Z" fill={KIT.shorts} opacity="0.85" />
         <text x="0" y="-26.2" textAnchor="middle" fontSize="5.4" fontWeight="900" fontFamily="system-ui, sans-serif" fill={KIT.shirt} letterSpacing="0.6">
-          BAST.AL
+          SHTATAT.AL
         </text>
         <text x="11" y="-36" textAnchor="middle" fontSize="8" fontWeight="900" fontFamily="system-ui, sans-serif" fill={KIT.shorts}>
           1

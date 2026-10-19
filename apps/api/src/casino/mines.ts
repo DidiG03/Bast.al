@@ -1,5 +1,5 @@
 /**
- * Bast.al's Mines. A 5 by 5 field with mines hidden on it. The Player opens
+ * Shtatat.al's Mines. A 5 by 5 field with mines hidden on it. The Player opens
  * tiles; each safe one raises the multiplier, and they can cash out at any
  * time after the first. A mine loses the stake. This file is the game's
  * whole definition, used as it is by the API and the tests, so what's

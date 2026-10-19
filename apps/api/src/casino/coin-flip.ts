@@ -1,7 +1,7 @@
 import { createHmac } from "crypto";
 
 /**
- * Bast.al's Coin Flip: the Player calls heads or tails, and the coin is
+ * Shtatat.al's Coin Flip: the Player calls heads or tails, and the coin is
  * flipped. A right call pays 1.8 times the stake. Each side comes up half
  * the time, so a flip pays back 90% of the stake on average. This file is
  * the game's whole definition, used as it is by the API and the tests, so

@@ -1,4 +1,4 @@
-// Coin Flip, end to end against a real Postgres: flips moving Bast.al
+// Coin Flip, end to end against a real Postgres: flips moving Shtatat.al
 // credit, the day's "Coin Flip" ledger line, the settlement journal, the seed
 // pair it shares with Dice and Keno, the stake limits, the switches, the
 // Casino page and a repeated request. Like the other integration tests it

@@ -1,4 +1,4 @@
-// Roulette, end to end against a real Postgres: rounds moving Bast.al credit,
+// Roulette, end to end against a real Postgres: rounds moving Shtatat.al credit,
 // the day's "Roulette" ledger line, the settlement journal, the table limit,
 // the switches and a repeated request. Like the other integration tests it
 // empties tables, so it only runs against a database whose name ends in "_test".

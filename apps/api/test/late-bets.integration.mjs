@@ -2,7 +2,8 @@
 // on a finished match wait for its timeline, then the ones placed after a
 // goal (or, on a cards market, a card) the site hadn't shown are void, stake
 // back, in singles and in accumulator legs alike; the rest settle as usual.
-// And the feed's delay on goals, measured from when the site first saw them.
+// And the feed's delay on goals, measured from when the site first saw them,
+// and the cap on a Player's live corners bets on a match.
 // Like the other integration tests it empties tables, so it only runs against
 // a database whose name ends in "_test".
 import assert from "node:assert/strict";
@@ -10,6 +11,9 @@ import { test } from "node:test";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+// Read when bets/late.ts loads: live corners bets confirm at once here too, under a 100 ALL cap.
+process.env.LIVE_CORNERS_DELAY_MS = "0";
+process.env.LIVE_CORNERS_MAX_STAKE = "100";
 require("reflect-metadata");
 const { PrismaClient } = require("@prisma/client");
 const { SettlementService } = require("../dist/bets/settlement.service.js");
@@ -265,6 +269,52 @@ test("placing a live bet records the score, the minute and the cards the site sh
   const legOf = (selection) => combined.legs.find((leg) => leg.selectionId === selection.id);
   assert.deepEqual(legOf(home).live, { home: 1, away: 0, minute: 34, cards: 2 });
   assert.equal(legOf(preMatchPick).live, null);
+});
+
+test("a Player's open live corners bets on a match are capped, accumulators at their whole stake; pre-match corners aren't", async () => {
+  await prisma.user.update({ where: { id: player.id }, data: { balance: 1000 } });
+  const corners = (name, externalId, live) =>
+    prisma.event.create({
+      data: {
+        sport: "football",
+        provider: "api-football",
+        externalId,
+        name,
+        league: "League",
+        homeTeam: name.split(" v ")[0],
+        awayTeam: name.split(" v ")[1],
+        startsAt: new Date(Date.now() + (live ? -30 : 120) * 60_000),
+        status: live ? "LIVE" : "UPCOMING",
+        ...(live ? { period: "1H", elapsed: 30, homeScore: 0, awayScore: 0, liveOddsAt: new Date() } : {}),
+        markets: {
+          create: [
+            { key: "corners_9_5", name: "Total corners 9.5", selections: { create: [{ key: "over", name: "Over 9.5", feedOdds: 1.9, liveOdds: live ? 1.9 : null }, { key: "under", name: "Under 9.5", feedOdds: 1.9, liveOdds: live ? 1.9 : null }] } },
+            { key: "match_winner", name: "Match winner", selections: { create: [{ key: "home", name: "Home", feedOdds: 2, liveOdds: live ? 2 : null }] } },
+          ],
+        },
+      },
+      include: { markets: { include: { selections: true } } },
+    });
+  const live = await corners("Corner v Kings", "late-corners", true);
+  const upcoming = await corners("Later v Corners", "late-corners-later", false);
+  const actor = { id: player.id, role: "PLAYER", parentId: player.parentId };
+  const quote = async (selection) => (await odds.priceForPlayer(player.id, selection.id)).odds;
+  const over = pick(live, "corners_9_5", "over");
+  const under = pick(live, "corners_9_5", "under");
+  await bets.place(actor, { bets: [{ selectionId: over.id, stake: 60, odds: await quote(over) }] });
+  // 60 on already: 50 more goes over the 100 cap.
+  await assert.rejects(
+    bets.place(actor, { bets: [{ selectionId: under.id, stake: 50, odds: await quote(under) }] }),
+    (error) => error.message === "Live bets on corners are limited to 100 ALL a match. You can stake 40.00 ALL more on Corner v Kings.",
+  );
+  // An accumulator with a live corners leg counts at its whole stake.
+  const laterHome = pick(upcoming, "match_winner", "home");
+  await assert.rejects(bets.place(actor, { accumulator: { legs: [{ selectionId: under.id, odds: await quote(under) }, { selectionId: laterHome.id, odds: await quote(laterHome) }], stake: 45 } }), /limited to 100 ALL/);
+  await bets.place(actor, { bets: [{ selectionId: under.id, stake: 40, odds: await quote(under) }] });
+  // Other markets on the match, and corners before kick-off, aren't capped.
+  const home = pick(live, "match_winner", "home");
+  const laterOver = pick(upcoming, "corners_9_5", "over");
+  await bets.place(actor, { bets: [{ selectionId: home.id, stake: 200, odds: await quote(home) }, { selectionId: laterOver.id, stake: 200, odds: await quote(laterOver) }] });
 });
 
 test("teardown", async () => {

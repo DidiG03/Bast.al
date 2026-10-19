@@ -11,7 +11,7 @@ import { UsersService } from "../users/users.service";
 import type { MatchCentre } from "../odds/api-football";
 import { RACE_CAP } from "../odds/greyhounds";
 import { smallPriceMove } from "../odds/live-guard";
-import type { LiveState } from "./late";
+import { LIVE_CORNERS_DELAY_MS, LIVE_CORNERS_MAX_STAKE, isCardsMarket, isCornersMarket, type LiveState } from "./late";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
 import { MIN_STAKE } from "./bets.dto";
@@ -209,6 +209,8 @@ export class BetsService {
         score,
         /** A live pick: what the site showed when it was confirmed (set in confirmLive), kept on the bet for the late check. */
         state: null as LiveState | null,
+        marketKey,
+        eventName: selection.market.event.name,
         selectionId: pick.selectionId,
         eventId: selection.market.event.id,
         label: `${selection.name} (${selection.market.event.name})`,
@@ -268,6 +270,13 @@ export class BetsService {
     if (changed.length > 0 && !input.acceptOddsChanges) {
       throw new ConflictException(`The odds changed: ${changed.join(", ")}. Check your slip and place it again.`);
     }
+    // The corners cap is checked before the wait too, so a slip over it is refused straight away; and again when it's stored.
+    const cornerBets = () => [
+      ...pricedSingles.map((bet) => ({ stake: bet.stake, picks: [bet] })),
+      ...(pricedAcca ? [{ stake: pricedAcca.stake, picks: pricedAcca.legs }] : []),
+      ...(pricedSystem ? [{ stake: pricedSystem.stake, picks: pricedSystem.legs }] : []),
+    ];
+    await this.assertLiveCornersRoom(actor.id, cornerBets(), this.prisma);
     const liveAdjusted = await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id);
     if (liveAdjusted) {
       adjusted = true;
@@ -316,6 +325,7 @@ export class BetsService {
       // the daily loss limit or spend the same balance. The Owner's payout
       // cap is checked last (below).
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
+      await this.assertLiveCornersRoom(actor.id, cornerBets(), tx);
       let alsoStaking = 0;
       for (const stake of stakes) {
         await this.limits.assertCanPlace(actor.id, Number(stake), alsoStaking, tx);
@@ -537,25 +547,36 @@ export class BetsService {
    * feed can't be reached the slip is refused too. The other picks on the
    * slip are checked again after the wait as well, so a match that kicked
    * off (or was suspended) meanwhile isn't bet on at its pre-match price.
-   * LIVE_VERIFY=off skips the check with the feed. Returns whether a live
-   * price was updated.
+   * A live corners pick waits LIVE_CORNERS_DELAY_MS instead (bets/late.ts).
+   * A live cards pick has the match's cards fetched from the feed at the end
+   * of the wait, so the bet records how many had been shown for the late
+   * check; if they can't be, the slip is refused. LIVE_VERIFY=off skips the
+   * checks with the feed. Returns whether a live price was updated.
    */
   private async confirmLive(
-    picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal | null; label: string; state: LiveState | null }>,
+    picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal | null; label: string; marketKey: string; state: LiveState | null }>,
     playerId: string,
   ): Promise<boolean> {
     const live = picks.filter((pick) => pick.live);
     if (live.length === 0) return false;
-    const delay = Number(process.env.LIVE_BET_DELAY_MS ?? 5_000);
+    const base = Number(process.env.LIVE_BET_DELAY_MS ?? 5_000);
+    const delay = live.some((pick) => isCornersMarket(pick.marketKey)) ? Math.max(base, LIVE_CORNERS_DELAY_MS) : base;
     const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
     const lead = Math.min(1_000, Math.max(0, delay));
     if (delay > lead) await wait(delay - lead);
-    const verify =
-      process.env.LIVE_VERIFY === "off"
-        ? null
-        : this.sync.verifyLive(live.map((pick) => pick.eventId)).catch(() => {
+    const checking = process.env.LIVE_VERIFY !== "off";
+    const onCards = [...new Set(live.filter((pick) => isCardsMarket(pick.marketKey)).map((pick) => pick.eventId))];
+    const cardsUnknown = () => new ConflictException("We couldn't confirm the cards shown so far with the feed just now. Try again in a moment.");
+    const verify = checking
+      ? Promise.all([
+          this.sync.verifyLive(live.map((pick) => pick.eventId)).catch(() => {
             throw new ConflictException("We couldn't confirm the live price with the bookmaker just now. Try again in a moment.");
-          });
+          }),
+          this.sync.verifyCards(onCards).catch(() => {
+            throw cardsUnknown();
+          }),
+        ])
+      : null;
     if (lead > 0) await wait(lead);
     if (verify) await verify;
     for (const pick of picks.filter((p) => !p.live)) {
@@ -585,8 +606,43 @@ export class BetsService {
       pick.state = Number.isInteger(home) && Number.isInteger(away)
         ? { home, away, minute: event?.elapsed ?? null, cards: moments ? moments.filter((moment) => moment.kind === "yellow" || moment.kind === "red").length : null }
         : null;
+      // A cards bet without the cards shown so far couldn't be checked after the match, so it isn't taken.
+      if (checking && isCardsMarket(pick.marketKey) && pick.state?.cards == null) throw cardsUnknown();
     }
     return adjusted;
+  }
+
+  /**
+   * Refuses a slip that would take a Player's open live corners bets on a
+   * match over LIVE_CORNERS_MAX_STAKE (bets/late.ts). An accumulator or system
+   * with a live corners pick counts at its whole stake. The check that counts
+   * runs inside the slip's transaction, after the Player's row is locked, so
+   * two slips can't both squeeze under it.
+   */
+  private async assertLiveCornersRoom(playerId: string, bets: Array<{ stake: Prisma.Decimal; picks: Array<{ live: boolean; marketKey: string; eventId: string; eventName: string }> }>, tx: Prisma.TransactionClient) {
+    const adding = new Map<string, { stake: number; match: string }>();
+    for (const bet of bets) {
+      for (const pick of bet.picks) {
+        if (!pick.live || !isCornersMarket(pick.marketKey)) continue;
+        adding.set(pick.eventId, { stake: (adding.get(pick.eventId)?.stake ?? 0) + Number(bet.stake), match: pick.eventName });
+      }
+    }
+    for (const [eventId, { stake, match }] of adding) {
+      const onCorners = { market: { eventId, OR: ["corners", "home_corners", "away_corners"].map((prefix) => ({ key: { startsWith: prefix } })) } } satisfies Prisma.SelectionWhereInput;
+      const open = await tx.bet.aggregate({
+        where: {
+          playerId,
+          status: BetStatus.OPEN,
+          OR: [{ live: { not: Prisma.DbNull }, selection: onCorners }, { legs: { some: { live: { not: Prisma.DbNull }, selection: onCorners } } }],
+        },
+        _sum: { stake: true },
+      });
+      const already = Number(open._sum.stake ?? 0);
+      if (already + stake > LIVE_CORNERS_MAX_STAKE + 0.001) {
+        const left = Math.max(0, LIVE_CORNERS_MAX_STAKE - already);
+        throw new BadRequestException(`Live bets on corners are limited to ${LIVE_CORNERS_MAX_STAKE} ALL a match. You can stake ${left.toFixed(2)} ALL more on ${match}.`);
+      }
+    }
   }
 
   /** The Player's own bets: open ones, or settled ones newest first. */

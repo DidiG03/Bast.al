@@ -94,5 +94,15 @@ export function lateReason(state: LiveState, placedAt: Date, marketKey: string, 
   return home > state.home || away > state.away ? "placed after a goal that hadn't shown yet" : null;
 }
 
+/**
+ * Live corners can't be checked after the match: the feed gives the number
+ * of corners, never when each was taken. So a live bet on corners waits
+ * longer before it's accepted (a corner shows on the feed's prices in that
+ * time), and each Player can have only so much on a match's corners live.
+ */
+export const LIVE_CORNERS_DELAY_MS = Number(process.env.LIVE_CORNERS_DELAY_MS ?? 20_000);
+/** The most a Player can have staked on live corners bets on one match (ALL), across all their open bets. */
+export const LIVE_CORNERS_MAX_STAKE = Number(process.env.LIVE_CORNERS_MAX_STAKE ?? 1_000);
+
 /** How long settlement waits for a finished match's timeline before settling its live bets without the check. */
 export const LATE_CHECK_WAIT_MS = Number(process.env.LATE_CHECK_WAIT_MS ?? 3 * 3_600_000);

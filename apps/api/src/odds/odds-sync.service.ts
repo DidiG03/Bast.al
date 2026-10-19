@@ -152,6 +152,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   onFinished?: () => Promise<unknown>;
   /** Checks with the feed for one match, shared by bets placed at the same moment. */
   private readonly verifying = new Map<string, { at: number; done: Promise<void> }>();
+  /** The same for the cards of matches with a live cards bet being confirmed (verifyCards). */
+  private readonly verifyingCards = new Map<string, { at: number; done: Promise<void> }>();
   readonly mode: FeedMode;
   private readonly client?: ApiFootballClient;
   private readonly bookmakerId: number;
@@ -356,6 +358,41 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       }),
     );
     if (events.length > 0) await this.announceLive(events.map((event) => event.id));
+  }
+
+  /**
+   * Fetches the given live football matches' centres from the feed right now
+   * (one request for up to 20) and saves them, so a live cards bet records
+   * the cards shown up to that moment for the late check (bets/late.ts). A
+   * fetch already running for a match is shared. Throws if the feed can't be
+   * reached; the bet is refused then.
+   */
+  async verifyCards(eventIds: string[]): Promise<void> {
+    if (this.mode !== "api-football" || !this.client || eventIds.length === 0) return;
+    const events = await this.prisma.event.findMany({
+      where: { id: { in: [...new Set(eventIds)] }, status: EventStatus.LIVE, sport: "football", provider: this.provider(), externalId: { not: null } },
+      select: { id: true, externalId: true },
+    });
+    const waits = new Set<Promise<void>>();
+    const fresh: typeof events = [];
+    for (const event of events) {
+      const shared = this.verifyingCards.get(event.id);
+      if (shared && Date.now() - shared.at < VERIFY_SHARE_MS) waits.add(shared.done);
+      else fresh.push(event);
+    }
+    for (let i = 0; i < fresh.length; i += 20) {
+      const batch = fresh.slice(i, i + 20);
+      // A match the feed left out keeps its older centre, so it doesn't count as confirmed.
+      const done = this.saveMatchCentres(batch).then((saved) => {
+        if (saved < batch.length) throw new Error("The feed didn't send every match's events");
+      });
+      const entry = { at: Date.now(), done };
+      for (const event of batch) this.verifyingCards.set(event.id, entry);
+      const forget = () => batch.forEach((event) => this.verifyingCards.get(event.id) === entry && this.verifyingCards.delete(event.id));
+      done.then(() => setTimeout(forget, VERIFY_SHARE_MS).unref(), forget);
+      waits.add(done);
+    }
+    await Promise.all(waits);
   }
 
   /** Tells the pages about live prices just saved: each team gets its own (OddsService), or everyone is asked to fetch them. */

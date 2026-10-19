@@ -103,7 +103,7 @@ export const betting: Record<string, string> = {
   "Live bets take a few seconds to confirm. If the price or score changes meanwhile, you'll see the new price first.": "Bastet live konfirmohen për pak sekonda. Nëse ndërkohë ndryshon koeficienti ose rezultati, do të shohësh fillimisht koeficientin e ri.",
   "Some prices moved since you added them. The new price is what you get.": "Disa koeficientë kanë ndryshuar që kur i shtove. Merr koeficientin e ri.",
   "Confirming live bet…": "Duke konfirmuar bastin live…",
-  "Live: a bet placed after a goal that hadn't shown here yet is void, and the stake comes back.": "Live: një bast i vendosur pas një goli që këtu ende nuk ishte shfaqur anulohet, dhe shuma të kthehet.",
+  "Live: a bet placed after a goal (or, on cards, a card) that hadn't shown here yet is void, and the stake comes back. Live corners bets take about 20 seconds to confirm and are capped for each match.": "Live: një bast i vendosur pas një goli (ose, te kartonët, pas një kartoni) që këtu ende nuk ishte shfaqur anulohet, dhe shuma të kthehet. Bastet live për kornerat konfirmohen për rreth 20 sekonda dhe kanë një kufi për çdo ndeshje.",
   "Placing…": "Duke vendosur…",
   "Place accumulator · {amount}": "Vendos kombinimin · {amount}",
   "Your limits: {limits}.": "Limitet e tua: {limits}.",

@@ -445,6 +445,32 @@ test("a live bet's match is checked with the feed itself, and a goal found there
   assert.equal(updates.at(-1).liveStopped, true);
 });
 
+test("a live cards bet fetches the match's events right then; bets at the same moment share the request, and a match the feed left out fails", async () => {
+  const { OddsSyncService } = await import("../dist/odds/odds-sync.service.js");
+  const updates = [];
+  const prisma = { event: { findMany: async () => [{ id: "e1", externalId: "7" }], update: async ({ where, data }) => updates.push({ id: where.id, ...data }) } };
+  const service = new OddsSyncService(prisma);
+  service.mode = "api-football";
+  let calls = 0;
+  let send = true;
+  const card = (minute, detail) => ({ time: { elapsed: minute, extra: null }, team: { id: 10, name: "A" }, player: { id: 1, name: "P" }, assist: { id: null, name: null }, type: "Card", detail });
+  service.client = new ApiFootballClient(async (path, params) => {
+    calls++;
+    assert.equal(path, "/fixtures");
+    assert.equal(params.ids, "7");
+    return { response: send ? [{ fixture: { id: 7 }, teams: { home: { id: 10, name: "A" }, away: { id: 20, name: "B" } }, events: [card(12, "Yellow Card"), card(40, "Second Yellow card")] }] : [] };
+  });
+  await Promise.all([service.verifyCards(["e1"]), service.verifyCards(["e1"])]);
+  assert.equal(calls, 1);
+  assert.deepEqual(updates.at(-1).matchCentre.moments.map((moment) => moment.kind), ["red", "yellow"]);
+  service.verifyingCards.clear();
+  send = false;
+  await assert.rejects(service.verifyCards(["e1"]), /didn't send every match/);
+  // Nothing to fetch without live cards picks.
+  await service.verifyCards([]);
+  assert.equal(calls, 2);
+});
+
 test("after a goal, live betting reopens once a later reading's prices carry the new score", async () => {
   const { OddsSyncService } = await import("../dist/odds/odds-sync.service.js");
   const run = async (secondsSinceGoal, goals = { home: 1, away: 0 }) => {

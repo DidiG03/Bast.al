@@ -1,118 +1,40 @@
-import { useId, type ReactNode } from "react";
 import type { Sport } from "../lib/api";
 
-/** Line icons for the sports that aren't a ball. The balls are drawn in their real colors. */
+/**
+ * Sport marks for the bet bar, home tabs, and league rows.
+ * Ball and figure marks are Material Symbols (Apache-2.0).
+ * The greyhound is drawn to the same weight.
+ */
 export function SportIcon({ sport }: { sport: Sport }) {
-  const clip = `ball${useId().replace(/:/g, "")}`;
-  if (sport === "football") return <Football clip={clip} />;
-  if (sport === "basketball") return <Basketball clip={clip} />;
-  if (sport === "tennis") return <Tennis clip={clip} />;
-  if (sport === "volleyball") return <Volleyball clip={clip} />;
-  if (sport === "handball") return <Handball clip={clip} />;
-  if (sport === "nfl") return <NflBall />;
-  if (sport === "greyhounds")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M2.4 13.4c2.4-1.5 5-1.6 7.2-.4 1.2.6 2.1.1 3.2-.8 1.5-1.2 3.1-2.5 5-2.8 1.1-.2 2.1.3 2.6 1.2" />
-        <path d="M20.2 10.5c.7.3 1.3.9 1.6 1.6" />
-        <path d="M18.2 8.8c-.3-1.2-1.1-1.7-1.8-1.1" />
-        <path d="M16.8 11.4c.7 1.1.3 2.3-.8 2.9" />
-        <path d="M15.6 14.2c-2.5.5-4.8.1-6.6.5-1.5.3-2.6-.3-3.4-1.3" />
-        <path d="M7.6 14.6 5.8 18.6M10.2 14.8 9.2 18.8M14.4 14.2 16.6 18.4M16.6 12.8 19.4 16.6" />
-      </svg>
-    );
+  if (sport === "football") return <Mark d="M12 22q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22m5-12.5l1.35-.45l.4-1.35q-.8-1.2-1.925-2.062T14.35 4.35L13 5.3v1.4zm-10 0l4-2.8V5.3l-1.35-.95q-1.35.425-2.475 1.287T5.25 7.7l.4 1.35zm-1.05 7.7l1.15-.1l.75-1.35L6.4 11.4L5 10.9l-1 .75q0 1.625.45 2.962t1.5 2.588m7.325 2.7q.625-.1 1.225-.3l.7-1.5l-.65-1.1h-5.1l-.65 1.1l.7 1.5q.6.2 1.225.3T12 20t1.275-.1M9.75 15h4.5l1.4-4L12 8.45L8.4 11zm8.3 2.2q1.05-1.25 1.5-2.588T20 11.65l-1-.7l-1.4.45l-1.45 4.35l.75 1.35z" />;
+  if (sport === "greyhounds") return <Greyhound />;
+  if (sport === "basketball") return <Mark d="M2.05 10.975q.125-1.275.525-2.412t1.1-2.138q.875.9 1.463 2.088t.762 2.462zm16.05 0q.175-1.275.75-2.45t1.475-2.075q.7.975 1.1 2.125t.525 2.4zM3.675 17.55q-.7-.975-1.1-2.113t-.525-2.412H5.9q-.175 1.275-.763 2.45T3.676 17.55m16.65 0q-.9-.9-1.475-2.075t-.75-2.45h3.85q-.125 1.25-.525 2.4t-1.1 2.125m-12.4-6.575q-.2-1.8-.975-3.325T4.925 4.9q1.2-1.2 2.738-1.925t3.312-.925v8.925zm5.1 0V2.05q1.775.2 3.313.925T19.075 4.9Q17.8 6.1 17.038 7.638t-.963 3.337zm-2.05 10.975q-1.8-.2-3.325-.937t-2.725-1.938q1.275-1.2 2.038-2.725t.962-3.325h3.05zm2.05 0v-8.925h3.05q.2 1.8.963 3.338t2.037 2.737q-1.2 1.2-2.738 1.925t-3.312.925" />;
+  if (sport === "nfl") return <Mark d="M9.075 20.975q-1.175.125-2.837-.062T3.7 20.3q-.35-.8-.587-2.5T3 14.9zm2.375-.4l-8.05-8.05q.425-1.875 1.238-3.412t1.887-2.638Q7.6 5.4 9.138 4.613t3.312-1.188l8.1 8.1q-.4 1.85-1.175 3.4t-1.85 2.625q-1.125 1.1-2.687 1.888t-3.388 1.137M9.4 16L16 9.4L14.6 8L8 14.6zm11.55-6.85l-6.075-6.125q1.2-.15 2.95.05T20.3 3.7q.45 1 .625 2.588t.025 2.862" />;
+  if (sport === "tennis") return <Mark d="M3.425 20L2 18.6l4.1-4.1q.775-.775 1.063-1.937T7.45 9q0-1.45.65-2.85t1.85-2.6q2.275-2.275 5.025-2.575T19.5 2.5q1.8 1.8 1.5 4.55t-2.55 5q-1.2 1.2-2.6 1.85t-2.85.65q-2.425 0-3.55.275T7.525 15.9zm6.875-8.35q1.175 1.15 3.175.85t3.575-1.875q1.6-1.6 1.913-3.588T18.1 3.925q-1.2-1.2-3.137-.9t-3.563 1.9Q9.825 6.5 9.488 8.488t.812 3.162m4.875 10.175Q14 20.65 14 19t1.175-2.825T18 15t2.825 1.175T22 19t-1.175 2.825T18 23t-2.825-1.175" />;
+  if (sport === "volleyball") return <Mark d="M21.6 9.2L13 4.225V2.05q3.075.3 5.4 2.263T21.6 9.2M6.75 13.9V3.5q.975-.575 2.05-.95t2.225-.5v9.375zM2.9 16.125q-.45-.95-.675-1.987T2 12q0-1.925.7-3.687T4.75 5.15v9.875zM7.3 20.8q-1.05-.5-1.9-1.25t-1.5-1.7l8.125-4.7l4.275 2.475zm4.725 1.2q-.575 0-1.175-.062t-1.15-.213l8.6-4.95l1.85 1.025q-1.425 1.95-3.562 3.075T12.025 22m9.1-5.9L13 11.425V6.5l9 5.225q0 1.15-.2 2.25t-.675 2.125" />;
+  if (sport === "handball") return <Mark d="m9.2 23.9l-1.75-1l3-5.2l-1.7-1l-1.5 2.6l-1.75-1l5.15-8.9q-.95-.975-1.425-2.225T8.75 4.6q0-.9.225-1.787T9.7 1.1l1.7 1q-.35.575-.5 1.188t-.15 1.262q0 1.325.65 2.488T13.25 8.9l2.25 1.3q1.55.9 2.275 2.588t.725 3.162q0 .95-.25 1.85t-.7 1.7l-1.75-1q.35-.6.5-1.225T16.45 16q0-.8-.225-1.55t-.725-1.4zM16 9q-.825 0-1.412-.587T14 7t.588-1.412T16 5t1.413.588T18 7t-.587 1.413T16 9m-2.5-5q-.65 0-1.075-.45T12 2.5q0-.65.45-1.075T13.5 1q.65 0 1.075.45T15 2.5q0 .65-.45 1.075T13.5 4" />;
+  return <Mark d="M8 21q-.425 0-.712-.288T7 20v-3h10v3q0 .425-.288.713T16 21zM19 8v3q0 .075-.05.2L18.2 15q-.075.45-.413.725T17 16H7q-.45 0-.788-.275T5.8 15l-.75-3.8Q5 11.075 5 11V5q0-.825.588-1.412T7 3h8q.825 0 1.413.588T17 5v3q0-.425.288-.712T18 7t.713.288T19 8M8 10h6V7H8z" />;
+}
+
+function Mark({ d }: { d: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="13.2" cy="8.8" r="4.5" />
-      <path d="M8.9 10.2H6.6a1.6 1.6 0 0 0 0 3.2h2.1" />
-      <path d="M10.6 13v4.2h5.2V13.6" />
+    <svg viewBox="0 0 24 24" className="sport-icon" aria-hidden="true">
+      <path fill="currentColor" d={d} />
     </svg>
   );
 }
 
-function Ball({ clip, base, shade, children }: { clip: string; base: string; shade: string; children?: ReactNode }) {
+function Greyhound() {
   return (
-    <svg viewBox="0 0 24 24" className="sport-ball" aria-hidden="true">
-      <defs>
-        <clipPath id={clip}>
-          <circle cx="12" cy="12" r="10" />
-        </clipPath>
-      </defs>
-      <g clipPath={`url(#${clip})`}>
-        <circle cx="12" cy="12" r="10" fill={base} />
-        <circle cx="14.4" cy="15.4" r="8.6" fill={shade} />
-        <circle cx="8.4" cy="7.8" r="4.4" fill="#fff" opacity="0.38" />
-        {children}
-      </g>
-      <circle cx="12" cy="12" r="9.7" fill="none" stroke="rgb(0 0 0 / 40%)" strokeWidth="1" />
-    </svg>
-  );
-}
-
-function points(cx: number, cy: number, r: number, turn: number) {
-  return Array.from({ length: 5 }, (_, i) => {
-    const a = ((turn + i * 72) * Math.PI) / 180;
-    return `${cx + Math.cos(a) * r},${cy + Math.sin(a) * r}`;
-  }).join(" ");
-}
-
-function Football({ clip }: { clip: string }) {
-  return (
-    <Ball clip={clip} base="#f4f5f7" shade="#c8ccd3">
-      <polygon points={points(12, 12.15, 3.15, -90)} fill="#1a1a1a" />
-      {[-90, -18, 54, 126, 198].map((turn) => {
-        const a = (turn * Math.PI) / 180;
-        return <circle key={turn} cx={12 + Math.cos(a) * 10.5} cy={12.15 + Math.sin(a) * 10.5} r="3.35" fill="#1a1a1a" />;
-      })}
-    </Ball>
-  );
-}
-
-function Basketball({ clip }: { clip: string }) {
-  return (
-    <Ball clip={clip} base="#f97316" shade="#c2410c">
-      <path d="M12 2v20M2 12h20" stroke="#1c1917" strokeWidth="1.15" />
-      <path d="M4.8 4.9c2.1 1.9 3.3 4.3 3.3 7.1s-1.2 5.2-3.3 7.1M19.2 4.9c-2.1 1.9-3.3 4.3-3.3 7.1s1.2 5.2 3.3 7.1" stroke="#1c1917" strokeWidth="1.15" fill="none" />
-    </Ball>
-  );
-}
-
-function Tennis({ clip }: { clip: string }) {
-  return (
-    <Ball clip={clip} base="#d6ef4a" shade="#a8c72e">
-      <path d="M6.4 4.6c2.8 2.6 2.8 12.2 0 14.8M17.6 4.6c-2.8 2.6-2.8 12.2 0 14.8" stroke="#f8faf5" strokeWidth="1.35" fill="none" />
-    </Ball>
-  );
-}
-
-function Volleyball({ clip }: { clip: string }) {
-  return (
-    <Ball clip={clip} base="#f8fafc" shade="#d5dde8">
-      <path d="M12 2c5.2 3.2 7.4 7.2 6.2 12.2-2.6-1.6-5.4-1.6-8.2.2C7.2 8.6 8.2 4.2 12 2z" fill="#1d4ed8" />
-      <path d="M3.2 15.4c3.2-1.6 6.4-1.2 9.4 1.2 1.2 3.6.2 6.4-2.6 7.6-3.6-.2-6.2-2.2-7.2-5.2-.4-1.2-.2-2.4.4-3.6z" fill="#f5c518" />
-    </Ball>
-  );
-}
-
-function Handball({ clip }: { clip: string }) {
-  return (
-    <Ball clip={clip} base="#e11d2e" shade="#9f1239">
-      <path d="M7.2 5.4c2.2 2.1 3.3 4.2 3.3 6.6s-1.1 4.5-3.3 6.6M16.8 5.4c-2.2 2.1-3.3 4.2-3.3 6.6s1.1 4.5 3.3 6.6M3.6 12h16.8" stroke="#fff" strokeWidth="0.7" fill="none" opacity="0.9" />
-    </Ball>
-  );
-}
-
-function NflBall() {
-  return (
-    <svg viewBox="0 0 24 24" className="sport-ball" aria-hidden="true">
-      <g transform="rotate(-36 12 12)">
-        <ellipse cx="12" cy="12" rx="10.3" ry="6" fill="#8b5a32" />
-        <ellipse cx="13.4" cy="13.2" rx="7.4" ry="3.5" fill="#6b4122" />
-        <ellipse cx="9.2" cy="10.2" rx="3.4" ry="1.7" fill="#e2b48c" opacity="0.55" />
-        <path d="M6.4 10.5c.25 1.5.25 3 0 4.5M17.6 10.5c-.25 1.5-.25 3 0 4.5" stroke="#f6f1ea" strokeWidth="1.2" fill="none" />
-        <path d="M12 8.6v6.8" stroke="#f6f1ea" strokeWidth="0.6" fill="none" />
-        <path d="M10.5 10h3M10.5 12h3M10.5 14h3" stroke="#f6f1ea" strokeWidth="0.9" fill="none" />
-      </g>
+    <svg viewBox="0 0 48 48" className="sport-icon" aria-hidden="true">
+      <path d="M11 21.5c-4.2.2-7 2-7.2 4.4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <path fill="currentColor" d="M12.5 19.5c8.5-2.2 17-1.6 21 1.6 1.2 3.6-.2 6.6-4.2 7.6-6.2 1.2-14.2.6-18.2-1.4-2.4-1.2-2.6-5.2 1.4-7.8z" />
+      <path fill="currentColor" d="M31.5 20.2c2.4-3.2 6.2-4.6 9.6-3.6 2.6.8 5.2 2.6 6 4.6.4 1.1-.2 2-1.4 2.4-1.2 1.8-3.6 2.8-6 2.2-1.6-.4-2.8-1.6-3.2-3-.8-.8-2.6-1.6-5-2.6z" />
+      <path fill="currentColor" d="M34 16.8c.8-2.8 3-3.8 4.2-2 .6 1-.2 2.4-1.8 2.8-1 .2-2.4-.2-2.4-.8z" />
+      <path d="M16.5 27.5c-1.6 4-3.4 7.6-4.6 11" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M23 28.5c.2 4.2.8 8 2.2 11.2" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M31 27c1.8 4 3.6 7.4 5.4 10.6" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M35.5 25.5c2.4 3.4 4 6.8 4.2 10.4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
   );
 }

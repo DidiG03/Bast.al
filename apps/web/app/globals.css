@@ -14,8 +14,7 @@
   /* Tells the browser which palette this page actually uses, so it stops
      guessing from the OS setting for things it renders itself (native form
      controls, scrollbars, and some text/control color heuristics on iOS
-     Safari) — without this, a light-mode device can second-guess colors on
-     an always-dark page like a Player's. */
+     Safari). */
   color-scheme: dark;
 }
 
@@ -32,6 +31,31 @@
   --border: #d6e2da;
   --focus: #007d15;
   color-scheme: light;
+  --player-bg: #eef2e6;
+  --player-sheet: #f7f8f3;
+  --player-elevated: #ffffff;
+  --player-surface-1: #ffffff;
+  --player-surface-2: #f4f6ef;
+  --player-surface-3: #e7ecde;
+  --player-surface-4: #dce3d0;
+  --player-hairline: rgb(22 40 12 / 10%);
+  --player-hairline-strong: rgb(22 40 12 / 16%);
+  --player-text: #152117;
+  --player-text-2: #3e4d3c;
+  --player-muted: #5d6b5c;
+  --player-accent: #1b7a14;
+  --player-accent-strong: #c6ef3a;
+  --player-accent-fill: #c6ef3a;
+  --player-danger: #c9364a;
+  --player-border: #d5decc;
+  --player-focus: #1b7a14;
+  --player-glow: rgb(27 122 20 / 8%);
+  --player-scheme: light;
+  --player-detail: #f3f5ef;
+  --player-pick: #ffffff;
+  --player-pick-hover: #f4f7ef;
+  --player-pick-border: #d3dcc8;
+  --player-on-accent: #fff;
 }
 
 /* No saved choice: follow the device setting. */
@@ -49,6 +73,31 @@
     --border: #d6e2da;
     --focus: #007d15;
     color-scheme: light;
+    --player-bg: #eef2e6;
+    --player-sheet: #f7f8f3;
+    --player-elevated: #ffffff;
+    --player-surface-1: #ffffff;
+    --player-surface-2: #f4f6ef;
+    --player-surface-3: #e7ecde;
+    --player-surface-4: #dce3d0;
+    --player-hairline: rgb(22 40 12 / 10%);
+    --player-hairline-strong: rgb(22 40 12 / 16%);
+    --player-text: #152117;
+    --player-text-2: #3e4d3c;
+    --player-muted: #5d6b5c;
+    --player-accent: #1b7a14;
+    --player-accent-strong: #c6ef3a;
+    --player-accent-fill: #c6ef3a;
+    --player-danger: #c9364a;
+    --player-border: #d5decc;
+    --player-focus: #1b7a14;
+    --player-glow: rgb(27 122 20 / 8%);
+    --player-scheme: light;
+    --player-detail: #f3f5ef;
+    --player-pick: #ffffff;
+    --player-pick-hover: #f4f7ef;
+    --player-pick-border: #d3dcc8;
+    --player-on-accent: #fff;
   }
 }
 
@@ -3766,7 +3815,7 @@ button.odds-selection:hover,
 }
 
 .bet-mode-option.is-active {
-  background: var(--accent);
+  background: var(--accent-fill, var(--accent));
   color: #031208;
 }
 
@@ -4024,8 +4073,8 @@ button.odds-selection:hover,
   --danger: #ff5c72;
   --border: #262a18;
   --focus: #eaffa0;
-  /* Fixed dark theme regardless of the toggle or the device setting — see
-     the color-scheme note on :root. */
+  /* Dark unless the Player picks light, or their device is light and they
+     haven't picked. The switch sets data-theme on <html>. */
   color-scheme: dark;
   background: var(--bg);
   /* body's colour was worked out from the light theme's --text; use the dark one here. */
@@ -4139,7 +4188,7 @@ button.odds-selection:hover,
   width: 1.3rem;
   height: 1.3rem;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--accent-fill, var(--accent));
   color: #08110a;
   font-size: 0.75rem;
   font-weight: 900;
@@ -4246,7 +4295,7 @@ button.odds-selection:hover,
 .player-top-pick.is-selected,
 .player-top-pick.is-selected .odds-selection-name {
   border-color: transparent;
-  background: var(--accent);
+  background: var(--accent-fill, var(--accent));
   color: #0b1300;
 }
 
@@ -5096,7 +5145,7 @@ button.is-blocked {
 }
 
 .role-player .bet-tabs .tab-button.is-active {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #0b1300;
 }
 
@@ -8826,6 +8875,13 @@ button.is-blocked {
   stroke-linejoin: round;
 }
 
+/* Filled sport marks keep their own shapes. The "All" squares stay a stroke icon. */
+.sport-option svg.sport-icon,
+.player-top-event-league svg.sport-icon {
+  fill: currentColor;
+  stroke: none;
+}
+
 .sport-option svg.sport-ball,
 .player-top-event-league svg.sport-ball {
   stroke: none;
@@ -8835,6 +8891,10 @@ button.is-blocked {
 .sport-option.is-active {
   background: var(--accent);
   color: #031208;
+}
+
+.role-player .sport-option.is-active {
+  color: var(--player-on-accent, #031208);
 }
 
 .race-intro {
@@ -9707,6 +9767,7 @@ button.is-blocked {
    Casino: Mines
    ============================================================ */
 .casino-tile.is-mines .casino-tile-art {
+  overflow: hidden;
   background:
     radial-gradient(circle at 50% 40%, #243044, #121820 70%);
 }
@@ -9714,8 +9775,8 @@ button.is-blocked {
 .mines-tile-preview {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 0.28rem;
-  width: min(100%, 11rem);
+  gap: 0.22rem;
+  width: min(100%, 7.2rem);
 }
 
 .mines-tile-cell {
@@ -13908,7 +13969,7 @@ button.is-blocked {
 
 .role-player button.bet-chip.is-active {
   border-color: transparent;
-  background: var(--accent);
+  background: var(--accent-fill, var(--accent));
   color: #0b1300;
 }
 
@@ -14225,7 +14286,7 @@ button.is-blocked {
 
 .role-player .bet-page button.bm-pick.is-selected {
   border-color: transparent;
-  background: var(--accent);
+  background: var(--accent-fill, var(--accent));
   box-shadow: 0 4px 14px rgb(214 255 63 / 22%);
 }
 
@@ -14301,7 +14362,7 @@ button.is-blocked {
   gap: 0.9rem;
   padding: 0.85rem 1rem 1rem;
   border-top: 1px solid var(--hairline);
-  background: rgb(0 0 0 / 22%);
+  background: var(--player-detail, rgb(0 0 0 / 22%));
 }
 
 .bm-detail-main {
@@ -14335,19 +14396,19 @@ button.is-blocked {
 
 .role-player .bet-page .bm-detail button.bet-pick {
   min-height: 2.75rem;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--player-pick-border, var(--hairline));
   border-radius: 8px;
-  background: var(--surface-3);
+  background: var(--player-pick, var(--surface-3));
 }
 
 .role-player .bet-page .bm-detail button.bet-pick:not(:disabled):not(.is-selected):hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: var(--surface-4);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--player-pick-border, transparent));
+  background: var(--player-pick-hover, var(--surface-4));
 }
 
 .role-player .bet-page .bm-detail button.bet-pick.is-selected {
   border-color: transparent;
-  background: var(--accent);
+  background: var(--accent-fill, var(--accent));
 }
 
 /* "Show more matches" */
@@ -14442,23 +14503,57 @@ button.is-blocked {
 
 html:has(.role-player),
 html:has(.role-player) body {
-  background: #070806;
+  background: var(--player-bg, #070806);
 }
 
 .role-player {
-  --bg: #070806;
-  --bg-elevated: #14180f;
-  --surface-1: #14180f;
-  --surface-2: #181d12;
-  --surface-3: #212818;
-  --surface-4: #2a331e;
-  --hairline: rgb(255 255 255 / 7%);
-  --hairline-strong: rgb(255 255 255 / 12%);
+  --bg: var(--player-bg, #070806);
+  --bg-elevated: var(--player-elevated, #14180f);
+  --surface-1: var(--player-surface-1, #14180f);
+  --surface-2: var(--player-surface-2, #181d12);
+  --surface-3: var(--player-surface-3, #212818);
+  --surface-4: var(--player-surface-4, #2a331e);
+  --hairline: var(--player-hairline, rgb(255 255 255 / 7%));
+  --hairline-strong: var(--player-hairline-strong, rgb(255 255 255 / 12%));
+  --text: var(--player-text, #f6f8ee);
+  --text-2: var(--player-text-2, #c7ceb4);
+  --muted: var(--player-muted, #9aa189);
+  --accent: var(--player-accent, #d6ff3f);
+  --accent-strong: var(--player-accent-strong, #c3f01a);
+  --accent-fill: var(--player-accent-fill, #d6ff3f);
+  --danger: var(--player-danger, #ff5c72);
+  --border: var(--player-border, #262a18);
+  --focus: var(--player-focus, #eaffa0);
+  --sheet: var(--player-sheet, #0c0f09);
   --sidebar-width: 15.25rem;
   --sidebar-collapsed: 4.5rem;
   background:
-    radial-gradient(900px 420px at 0% -10%, rgb(214 255 63 / 5%), transparent 60%),
+    radial-gradient(900px 420px at 0% -10%, var(--player-glow, rgb(214 255 63 / 5%)), transparent 60%),
     var(--bg);
+}
+
+html[data-theme="light"] .role-player {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) .role-player {
+    color-scheme: light;
+  }
+}
+
+/* The game tables stay dark artwork when the Player page around them is light. */
+.slot-cabinet,
+.roulette-cabinet,
+.blackjack-cabinet,
+.mines-cabinet,
+.penalty-cabinet,
+.plinko-cabinet,
+.dice-cabinet,
+.keno-cabinet,
+.coin-cabinet,
+.scratch-cabinet {
+  color-scheme: dark;
 }
 
 .role-player .dashboard-sidebar {
@@ -14491,6 +14586,7 @@ html:has(.role-player) body {
   width: 1.85rem;
   height: 1.85rem;
   border-radius: 7px;
+  background: var(--accent-fill);
   font-size: 0.9rem;
 }
 
@@ -14617,7 +14713,7 @@ html:has(.role-player) body {
   padding: 0 1.35rem 2.75rem;
   border: 1px solid var(--hairline-strong);
   border-radius: 16px;
-  background: #0c0f09;
+  background: var(--sheet);
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset;
 }
 
@@ -14644,7 +14740,7 @@ html:has(.role-player) body {
   padding: 0 1.15rem;
   border-bottom: 1px solid var(--hairline);
   border-radius: 16px 16px 0 0;
-  background: #0c0f09;
+  background: var(--sheet);
 }
 
 .role-player .player-balance-chip {
@@ -14659,6 +14755,7 @@ html:has(.role-player) body {
 }
 
 .role-player .topbar-actions .language-toggle,
+.role-player .topbar-actions .theme-toggle,
 .role-player .dashboard-topbar .notification-trigger {
   display: grid;
   width: 2.15rem;
@@ -14674,9 +14771,14 @@ html:has(.role-player) body {
 }
 
 .role-player .topbar-actions .language-toggle:hover,
+.role-player .topbar-actions .theme-toggle:hover,
 .role-player .dashboard-topbar .notification-trigger:hover {
   background: var(--surface-3);
   color: var(--text);
+}
+
+.role-player .topbar-actions .theme-toggle .control-label {
+  display: none;
 }
 
 /* Home, money and the slip share the same panel, not a pill-shaped card. */
@@ -15028,7 +15130,7 @@ html:has(.role-player) body {
   .role-player .dashboard-sidebar {
     width: min(18rem, 85vw);
     padding-top: calc(1rem + env(safe-area-inset-top));
-    background: #0c0f09;
+    background: var(--sheet);
     border-right: 1px solid var(--hairline-strong);
   }
 
@@ -15062,7 +15164,7 @@ html:has(.role-player) body {
     margin: 0;
     padding: env(safe-area-inset-top) max(0.75rem, env(safe-area-inset-right)) 0 max(0.75rem, env(safe-area-inset-left));
     border-radius: 0;
-    background: color-mix(in srgb, #070806 90%, transparent);
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
   }
 
   .role-player .bet-page .bet-day-chips {
@@ -15077,7 +15179,7 @@ html:has(.role-player) body {
 
   .role-player .mobile-bottom-nav {
     border-top-color: var(--hairline-strong);
-    background: color-mix(in srgb, #0c0f09 94%, transparent);
+    background: color-mix(in srgb, var(--sheet) 94%, transparent);
   }
 }
 
@@ -15272,4 +15374,114 @@ html:has(.role-player) body {
 
 .notification-bet-amount.is-void {
   color: var(--muted);
+}
+
+/* My account: the password, language and sign-out controls sit on the right, as buttons. */
+.role-player .account-settings {
+  display: grid;
+  padding-block: 0.2rem;
+}
+
+.role-player .account-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  padding: 0.95rem 0.15rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.role-player .account-setting:last-child {
+  border-bottom: 0;
+}
+
+.role-player .account-setting > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.role-player .account-setting .button-link,
+.role-player .account-setting .language-picker,
+.role-player .account-setting .sign-out-button {
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0;
+}
+
+.role-player .account-setting .button-link,
+.role-player .account-setting .sign-out-button,
+.role-player .account-setting .language-picker button {
+  min-height: 2.45rem;
+  padding: 0.45rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.role-player .account-setting .button-link {
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-3);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.role-player .account-setting .button-link:hover {
+  background: var(--surface-4);
+}
+
+.role-player .account-setting .language-picker {
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+}
+
+.role-player .account-setting .sign-out-button {
+  width: auto;
+}
+
+@media (max-width: 640px) {
+  .role-player .account-setting {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Light Player pages: status greens that were tuned for a dark sheet. */
+html[data-theme="light"] .role-player .bet-status-won,
+html[data-theme="light"] .role-player .bet-result.is-won,
+html[data-theme="light"] .role-player .price-arrow.is-up,
+html[data-theme="light"] .role-player .notification-bet-amount.is-won {
+  color: #157a3a;
+}
+
+html[data-theme="light"] .role-player .bet-status-won {
+  background: #e5f6ea;
+  border-color: #b7e0c4;
+}
+
+html[data-theme="light"] .role-player .bet-status-lost {
+  background: #fdecee;
+  border-color: #f3c5cb;
+  color: #a61e32;
+}
+
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) .role-player .bet-status-won,
+  html:not([data-theme]) .role-player .bet-result.is-won,
+  html:not([data-theme]) .role-player .price-arrow.is-up,
+  html:not([data-theme]) .role-player .notification-bet-amount.is-won {
+    color: #157a3a;
+  }
+
+  html:not([data-theme]) .role-player .bet-status-won {
+    background: #e5f6ea;
+    border-color: #b7e0c4;
+  }
+
+  html:not([data-theme]) .role-player .bet-status-lost {
+    background: #fdecee;
+    border-color: #f3c5cb;
+    color: #a61e32;
+  }
 }

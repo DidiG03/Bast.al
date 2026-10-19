@@ -89,7 +89,7 @@ export default async function DashboardLayout({
             ) : null}
             <div className="topbar-actions">
               <LanguageToggle />
-              {isPlayer ? null : <ThemeToggle />}
+              <ThemeToggle />
               <NotificationCenter />
             </div>
           </header>

@@ -594,7 +594,7 @@ export const server: Record<string, string> = {
   "You don't have a Manager or Owner yet": "Nuk ke ende Menaxher ose Pronar",
   "We couldn't confirm the live price with the bookmaker just now. Try again in a moment.": "Nuk arritëm ta konfirmonim koeficientin live me bastoren tani. Provo sërish pas pak.",
   // Greyhound racing
-  "Greyhound picks can only be single bets. Take them out of the accumulator.": "Zgjedhjet në garat me zagarë mund të jenë vetëm baste të thjeshta. Hiqi nga kombinimi.",
+  "Greyhound picks can only be single bets. Take them out of the accumulator.": "Zgjedhjet në garat me qen mund të jenë vetëm baste të thjeshta. Hiqi nga kombinimi.",
   "The feed changed the result of {event}, so 1 bet was settled again.": "Burimi e ndryshoi rezultatin e {event}, prandaj 1 bast u mbyll sërish.",
   "The feed changed the result of {event}, so {count} bets were settled again.": "Burimi e ndryshoi rezultatin e {event}, prandaj {count} baste u mbyllën sërish.",
   "A race has no score. Settle its picks one by one, or void the race.": "Një garë nuk ka rezultat me gola. Mbylli zgjedhjet një nga një, ose anuloje garën.",
@@ -643,7 +643,7 @@ export const server: Record<string, string> = {
   "Lucky 63": "Lucky 63",
   "Super Heinz": "Super Heinz",
   "Goliath": "Goliath",
-  "Greyhound picks can only be single bets. Take them out of the system.": "Zgjedhjet e garave me zagarë mund të jenë vetëm baste të thjeshta. Hiqi nga sistemi.",
+  "Greyhound picks can only be single bets. Take them out of the system.": "Zgjedhjet e garave me qen mund të jenë vetëm baste të thjeshta. Hiqi nga sistemi.",
   "A system bet can only have one pick from each match": "Një bast i sistemit mund të ketë vetëm një zgjedhje nga çdo ndeshje",
   "Choose a system: doubles, trebles or more from your picks": "Zgjidh një sistem: dyshe, treshe ose më shumë nga zgjedhjet e tua",
   "A system's biggest line can't have odds of more than {max}. Remove a pick.": "Basti më i madh i një sistemi nuk mund të ketë koeficient mbi {max}. Hiq një zgjedhje.",

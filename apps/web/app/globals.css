@@ -4168,10 +4168,8 @@ button.odds-selection:hover,
    carries zero specificity, so anything else matching h1/h2/h3/strong at that
    same low specificity can end up deciding the color instead — including on a
    page that isn't even admin-themed. This simply always wins here. */
-.role-player h1,
-.role-player h2,
-.role-player h3,
-.role-player strong,
+/* Not on a game table: it's dark in both themes, and its text stays light (below). */
+.role-player :is(h1, h2, h3, strong):not(:where(.slot-cabinet, .roulette-cabinet, .blackjack-cabinet, .mines-cabinet, .penalty-cabinet, .plinko-cabinet, .dice-cabinet, .keno-cabinet, .coin-cabinet, .scratch-cabinet) *),
 .role-player .odds-team {
   color: var(--text);
 }
@@ -14682,6 +14680,15 @@ html[data-theme="light"] .role-player {
 .coin-cabinet,
 .scratch-cabinet {
   color-scheme: dark;
+}
+
+/* Their text too: light on the dark table, in both themes, rather than the light page's dark text. :where() keeps it below any colour a game sets itself. */
+:where(.slot-cabinet, .roulette-cabinet, .blackjack-cabinet, .mines-cabinet, .penalty-cabinet, .plinko-cabinet, .dice-cabinet, .keno-cabinet, .coin-cabinet, .scratch-cabinet) {
+  color: #f6f8ee;
+}
+
+:where(.slot-cabinet, .roulette-cabinet, .blackjack-cabinet, .mines-cabinet, .penalty-cabinet, .plinko-cabinet, .dice-cabinet, .keno-cabinet, .coin-cabinet, .scratch-cabinet) .muted {
+  color: #9aa189;
 }
 
 .role-player .dashboard-sidebar {

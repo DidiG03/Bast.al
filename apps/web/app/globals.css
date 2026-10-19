@@ -19,85 +19,91 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #f4f7f5;
+  --bg: #f3f4f0;
   --bg-elevated: #ffffff;
-  --text: #14241b;
-  --muted: #617269;
-  --accent: #00a91a;
-  --accent-strong: #008c16;
+  --text: #141a13;
+  --muted: #5f685d;
+  --accent: #5c9a00;
+  --accent-strong: #4c8200;
   --danger: #c9364a;
   --warning: #b86e00;
   --info: #1f6fb2;
-  --border: #d6e2da;
-  --focus: #007d15;
+  --border: #dadfd5;
+  --focus: #3f7400;
   color-scheme: light;
-  --player-bg: #eef2e6;
-  --player-sheet: #f7f8f3;
+  --player-bg: #f1f3ee;
+  --player-sheet: #f8f9f6;
   --player-elevated: #ffffff;
   --player-surface-1: #ffffff;
-  --player-surface-2: #f4f6ef;
-  --player-surface-3: #e7ecde;
-  --player-surface-4: #dce3d0;
-  --player-hairline: rgb(22 40 12 / 10%);
-  --player-hairline-strong: rgb(22 40 12 / 16%);
-  --player-text: #152117;
-  --player-text-2: #3e4d3c;
-  --player-muted: #5d6b5c;
-  --player-accent: #1b7a14;
+  --player-surface-2: #f5f6f2;
+  --player-surface-3: #eaede6;
+  --player-surface-4: #dfe3d9;
+  --player-hairline: rgb(20 28 16 / 9%);
+  --player-hairline-strong: rgb(20 28 16 / 15%);
+  --player-text: #121a11;
+  --player-text-2: #3c463a;
+  --player-muted: #616b5f;
+  --player-accent: #3f7400;
   --player-accent-strong: #c6ef3a;
-  --player-accent-fill: #c6ef3a;
+  --player-accent-fill: #d2f83c;
   --player-danger: #c9364a;
-  --player-border: #d5decc;
-  --player-focus: #1b7a14;
-  --player-glow: rgb(27 122 20 / 8%);
+  --player-border: #d9ddd3;
+  --player-focus: #3f7400;
+  --player-glow: rgb(160 210 0 / 12%);
   --player-scheme: light;
-  --player-detail: #f3f5ef;
+  --player-detail: #f5f6f2;
   --player-pick: #ffffff;
-  --player-pick-hover: #f4f7ef;
-  --player-pick-border: #d3dcc8;
-  --player-on-accent: #fff;
+  --player-pick-hover: #f3f6ec;
+  --player-pick-border: #d8ddd1;
+  --player-on-accent: #0b1300;
+  --player-card-shadow: 0 1px 2px rgb(20 28 16 / 4%), 0 6px 18px rgb(20 28 16 / 5%);
+  --player-nav-active: rgb(210 248 60 / 45%);
+  --player-hero-bg: linear-gradient(135deg, rgb(210 248 60 / 30%), #ffffff 60%);
 }
 
 /* No saved choice: follow the device setting. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
-    --bg: #f4f7f5;
+    --bg: #f3f4f0;
     --bg-elevated: #ffffff;
-    --text: #14241b;
-    --muted: #617269;
-    --accent: #00a91a;
-    --accent-strong: #008c16;
+    --text: #141a13;
+    --muted: #5f685d;
+    --accent: #5c9a00;
+    --accent-strong: #4c8200;
     --danger: #c9364a;
     --warning: #b86e00;
     --info: #1f6fb2;
-    --border: #d6e2da;
-    --focus: #007d15;
+    --border: #dadfd5;
+    --focus: #3f7400;
     color-scheme: light;
-    --player-bg: #eef2e6;
-    --player-sheet: #f7f8f3;
+    --player-bg: #f1f3ee;
+    --player-sheet: #f8f9f6;
     --player-elevated: #ffffff;
     --player-surface-1: #ffffff;
-    --player-surface-2: #f4f6ef;
-    --player-surface-3: #e7ecde;
-    --player-surface-4: #dce3d0;
-    --player-hairline: rgb(22 40 12 / 10%);
-    --player-hairline-strong: rgb(22 40 12 / 16%);
-    --player-text: #152117;
-    --player-text-2: #3e4d3c;
-    --player-muted: #5d6b5c;
-    --player-accent: #1b7a14;
+    --player-surface-2: #f5f6f2;
+    --player-surface-3: #eaede6;
+    --player-surface-4: #dfe3d9;
+    --player-hairline: rgb(20 28 16 / 9%);
+    --player-hairline-strong: rgb(20 28 16 / 15%);
+    --player-text: #121a11;
+    --player-text-2: #3c463a;
+    --player-muted: #616b5f;
+    --player-accent: #3f7400;
     --player-accent-strong: #c6ef3a;
-    --player-accent-fill: #c6ef3a;
+    --player-accent-fill: #d2f83c;
     --player-danger: #c9364a;
-    --player-border: #d5decc;
-    --player-focus: #1b7a14;
-    --player-glow: rgb(27 122 20 / 8%);
+    --player-border: #d9ddd3;
+    --player-focus: #3f7400;
+    --player-glow: rgb(160 210 0 / 12%);
     --player-scheme: light;
-    --player-detail: #f3f5ef;
+    --player-detail: #f5f6f2;
     --player-pick: #ffffff;
-    --player-pick-hover: #f4f7ef;
-    --player-pick-border: #d3dcc8;
-    --player-on-accent: #fff;
+    --player-pick-hover: #f3f6ec;
+    --player-pick-border: #d8ddd1;
+    --player-on-accent: #0b1300;
+    --player-card-shadow: 0 1px 2px rgb(20 28 16 / 4%), 0 6px 18px rgb(20 28 16 / 5%);
+    --player-nav-active: rgb(210 248 60 / 45%);
+    --player-hero-bg: linear-gradient(135deg, rgb(210 248 60 / 30%), #ffffff 60%);
   }
 }
 
@@ -4187,6 +4193,7 @@ button.odds-selection:hover,
   color: var(--text);
   font-weight: 800;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .player-balance-chip-icon {
@@ -6566,10 +6573,15 @@ button.is-blocked {
 /* The back: a lattice in a frame, on red or black. */
 .gamble-card.is-back {
   background-color: #b3161c;
+  /* The Shtatat.al mark in the middle, like the blackjack cards' backs. */
   background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='28' fill='%23D6FF3F'/%3E%3Cpolygon points='30,28 90,28 90,42 62,94 43,94 70,44 30,44' fill='%23031208'/%3E%3C/svg%3E"),
     repeating-linear-gradient(45deg, transparent 0 7px, rgba(255, 255, 255, 0.16) 7px 9px),
     repeating-linear-gradient(-45deg, transparent 0 7px, rgba(255, 255, 255, 0.16) 7px 9px),
     radial-gradient(circle at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.45) 100%);
+  background-position: center, 0 0, 0 0, 0 0;
+  background-size: 34% auto, auto, auto, auto;
+  background-repeat: no-repeat, repeat, repeat, repeat;
   outline: 2px solid rgba(255, 255, 255, 0.55);
   outline-offset: -9px;
 }
@@ -8083,7 +8095,7 @@ button.is-blocked {
   }
 }
 
-/* Playing cards: cream face, serif corners, a framed figure on the face cards; a navy lattice back with the Shtatat.al mark. */
+/* Playing cards: cream face, serif corners, a framed figure on the face cards; a navy lattice back with the Shtatat.al mark (the favicon, app/icon.svg). */
 .playing-card {
   position: relative;
   display: grid;
@@ -8106,18 +8118,11 @@ button.is-blocked {
 
 .playing-card.is-back {
   background:
-    radial-gradient(circle at 50% 50%, #e9c46a 0 16%, transparent 17%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='28' fill='%23D6FF3F'/%3E%3Cpolygon points='30,28 90,28 90,42 62,94 43,94 70,44 30,44' fill='%23031208'/%3E%3C/svg%3E") center / 40% no-repeat,
     repeating-linear-gradient(45deg, transparent 0 5px, rgba(255, 255, 255, 0.14) 5px 6px),
     repeating-linear-gradient(-45deg, transparent 0 5px, rgba(255, 255, 255, 0.14) 5px 6px),
     linear-gradient(160deg, #24357f, #121c4d);
   box-shadow: inset 0 0 0 calc(var(--card-w) * 0.05) #fff, inset 0 0 0 calc(var(--card-w) * 0.07) #e9c46a, 0 0 0 1px rgba(0, 0, 0, 0.25), 0 4px 10px rgba(0, 0, 0, 0.45);
-}
-
-.playing-card.is-back::after {
-  color: #121c4d;
-  font-size: calc(var(--card-w) * 0.2);
-  font-weight: 900;
-  content: "7";
 }
 
 .playing-card-corner {
@@ -8901,6 +8906,7 @@ button.is-blocked {
 }
 
 .role-player .sport-option.is-active {
+  background: var(--accent-fill, var(--accent));
   color: var(--player-on-accent, #031208);
 }
 
@@ -14676,6 +14682,11 @@ html[data-theme="light"] .role-player {
   color: var(--text);
 }
 
+/* The light theme tints the chosen tab with the brand's lime; the dark one keeps its faint accent. */
+.role-player .mobile-bottom-nav-link.is-active {
+  background: var(--player-nav-active, color-mix(in srgb, var(--accent) 13%, transparent));
+}
+
 .role-player .sidebar-link:active,
 .role-player .mobile-bottom-nav-link:active {
   transform: none;
@@ -14808,7 +14819,8 @@ html[data-theme="light"] .role-player {
 .role-player .player-next-race,
 .role-player .bet-card {
   border-radius: 14px;
-  box-shadow: none;
+  /* A soft lift on the light theme; flat on the dark one. */
+  box-shadow: var(--player-card-shadow, none);
 }
 
 .role-player .player-top-event,
@@ -14819,6 +14831,11 @@ html[data-theme="light"] .role-player {
 .role-player .bet-card:not(.is-won):not(.is-lost) {
   border-color: var(--hairline);
   background: var(--surface-1);
+}
+
+/* The balance on My money: a lime wash on the light theme. */
+.role-player .player-hero {
+  background: var(--player-hero-bg, var(--surface-1));
 }
 
 .role-player .player-home h2,

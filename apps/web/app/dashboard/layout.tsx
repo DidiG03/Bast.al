@@ -87,6 +87,9 @@ export default async function DashboardLayout({
             {isPlayer ? null : <DashboardTrail role={me.role} />}
             {isPlayer ? (
               <BalanceChip balance={Number(me.balance)} title={t("Your balance, given to you by your Manager or Owner")} />
+            ) : me.role === "OWNER" || me.role === "MANAGER" ? (
+              // Owners and Managers hold credit too, given from above and passed on to their team; Super Admin issues it.
+              <BalanceChip balance={Number(me.balance)} title={t("Your balance: credit given to you, to pass on to your team")} href="/dashboard/finance" />
             ) : null}
             <div className="topbar-actions">
               <LanguageToggle />

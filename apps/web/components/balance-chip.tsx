@@ -7,11 +7,11 @@ import { NamedIcon } from "./icons";
 import { useRealtime } from "./realtime-provider";
 
 /**
- * The Player's balance in the top bar. It follows the live balance itself, so
+ * The account's balance in the top bar (Players, Owners and Managers). It follows the live balance itself, so
  * a casino spin or a settled bet shows here at once without re-rendering the
  * whole dashboard on the server.
  */
-export function BalanceChip({ balance, title }: { balance: number; title: string }) {
+export function BalanceChip({ balance, title, href = "/dashboard/money" }: { balance: number; title: string; href?: string }) {
   const [shown, setShown] = useState(balance);
   // A fresh server render brings the balance too.
   useEffect(() => setShown(balance), [balance]);
@@ -19,7 +19,7 @@ export function BalanceChip({ balance, title }: { balance: number; title: string
     if (event.type === "balance.changed") setShown(event.balance);
   });
   return (
-    <Link href="/dashboard/money" className="player-balance-chip" title={title}>
+    <Link href={href} className="player-balance-chip" title={title}>
       <span className="player-balance-chip-icon" aria-hidden="true">
         <NamedIcon name="wallet" />
       </span>

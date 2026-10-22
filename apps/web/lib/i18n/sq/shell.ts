@@ -4,6 +4,7 @@ export const shell: Record<string, string> = {
   "Shtatat.al can't reach its server right now. Wait a moment and refresh the page.": "Shtatat.al nuk po lidhet me serverin tani. Prit pak dhe rifresko faqen.",
   "You're signed in, but there's no Shtatat.al account for you yet. Accounts are created from inside the app: Players by their Manager or Owner, Managers by their Owner, and Owners by Super Admin. Ask whoever runs your team to create yours.": "Je i identifikuar, por ende nuk ke llogari në Shtatat.al. Llogaritë krijohen brenda aplikacionit: Lojtarët nga Menaxheri ose Pronari, Menaxherët nga Pronari dhe Pronarët nga Super Admini. Kërkoji atij që drejton skuadrën tënde të ta krijojë.",
   "Your balance, given to you by your Manager or Owner": "Balanca jote, e dhënë nga Menaxheri ose Pronari yt",
+  "Your balance: credit given to you, to pass on to your team": "Balanca jote: krediti i dhënë ty, për ta kaluar te skuadra jote",
   "The server isn't responding": "Serveri nuk po përgjigjet",
   "Your account isn't set up yet": "Llogaria jote ende nuk është krijuar",
   "Your account is suspended": "Llogaria jote është e pezulluar",

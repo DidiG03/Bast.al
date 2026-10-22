@@ -4121,12 +4121,12 @@ button.odds-selection:hover,
 .role-player .odds-selection,
 .role-player .bet-chip,
 .role-player button:not(.secondary):not(.text-button) {
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-control, 10px);
 }
 
 .role-player input,
 .role-player select {
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-control, 10px);
   padding-left: 0.9rem;
 }
 
@@ -4327,7 +4327,7 @@ button.odds-selection:hover,
 .role-player .player-sport-switch {
   padding: 0.25rem;
   border-color: var(--hairline);
-  border-radius: calc(var(--radius-control) + 0.25rem);
+  border-radius: calc(var(--radius-control, 10px) + 0.25rem);
   background: var(--surface-1);
 }
 
@@ -13842,8 +13842,10 @@ button.is-blocked {
   --hairline-strong: rgb(255 255 255 / 11%);
   --accent-soft: rgb(214 255 63 / 10%);
   --text-2: #c7ceb4;
+  /* Panels (cards, a league's matches, casino tiles); controls; anything framed inside a control (the chosen tab, the live minute). */
   --radius-panel: 14px;
   --radius-control: 10px;
+  --radius-inner: 8px;
 }
 
 .bet-page {
@@ -13868,13 +13870,13 @@ button.is-blocked {
   width: min(100%, 27rem);
   padding: 0.2rem;
   border-color: var(--hairline-strong);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-control, 10px);
   background: var(--surface-1);
 }
 
 .role-player .bet-page-head .bet-tabs .tab-button {
   min-height: 2.25rem;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   font-size: 0.875rem;
 }
 
@@ -13889,25 +13891,25 @@ button.is-blocked {
 }
 
 .role-player .bet-page .sport-switch-wrap::before {
-  border-radius: var(--radius-control) 0 0 var(--radius-control);
+  border-radius: var(--radius-control, 10px) 0 0 var(--radius-control, 10px);
 }
 
 .role-player .bet-page .sport-switch-wrap::after {
-  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  border-radius: 0 var(--radius-control, 10px) var(--radius-control, 10px) 0;
 }
 
 .role-player .bet-page .sport-switch {
   justify-self: stretch;
   padding: 0.2rem;
   border-color: var(--hairline);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-control, 10px);
   background: var(--surface-1);
 }
 
 .role-player .bet-page button.sport-option {
   min-height: 2.25rem;
   padding: 0 0.9rem;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   font-size: 0.875rem;
 }
 
@@ -13937,7 +13939,7 @@ button.is-blocked {
   height: 2.6rem;
   padding: 0 0.9rem;
   border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-control, 10px);
   background-color: var(--surface-1);
   color: var(--text);
   font-size: 0.875rem;
@@ -13974,7 +13976,7 @@ button.is-blocked {
   min-height: 2rem;
   padding: 0.25rem 0.75rem;
   border: 1px solid var(--hairline-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-control, 10px);
   background: var(--surface-1);
   color: var(--text-2);
   font-size: 0.8125rem;
@@ -14015,7 +14017,7 @@ button.is-blocked {
 .bm-league {
   overflow: hidden;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-panel, 14px);
   background: var(--surface-1);
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
 }
@@ -14210,7 +14212,7 @@ button.is-blocked {
   height: 2rem;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -14264,9 +14266,9 @@ button.is-blocked {
   min-width: 0;
   height: 2.75rem;
   padding: 0 0.55rem;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: var(--surface-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-control, 10px);
+  background: var(--player-pick, var(--surface-3));
   color: var(--text);
   cursor: pointer;
   transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
@@ -14290,7 +14292,7 @@ button.is-blocked {
 
 .role-player .bet-page button.bm-pick:not(:disabled):not(.is-selected):hover {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: var(--surface-4);
+  background: var(--player-pick-hover, var(--surface-4));
 }
 
 .role-player .bet-page button.bm-pick:not(:disabled):active {
@@ -14328,7 +14330,7 @@ button.is-blocked {
   padding: 0 0.4rem;
   white-space: nowrap;
   border: 1px solid var(--hairline-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-control, 10px);
   background: transparent;
   color: var(--text-2);
   font-size: 0.78rem;
@@ -14367,7 +14369,7 @@ button.is-blocked {
 .bet-page .bet-paused.bm-note {
   margin: -0.15rem 1rem 0.65rem;
   padding: 0.4rem 0.7rem;
-  border-radius: 8px;
+  border-radius: var(--radius-control, 10px);
   font-size: 0.8rem;
 }
 
@@ -14395,6 +14397,7 @@ button.is-blocked {
 
 .bm-detail .odds-market-group-title {
   margin: 0;
+  border-top-color: var(--hairline);
   color: var(--text-2);
   font-size: 0.72rem;
   font-weight: 800;
@@ -14522,8 +14525,8 @@ button.is-blocked {
 
 .role-player .bet-page .bm-detail button.bet-pick {
   min-height: 2.75rem;
-  border: 1px solid var(--player-pick-border, var(--hairline));
-  border-radius: 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-control, 10px);
   background: var(--player-pick, var(--surface-3));
 }
 
@@ -14540,14 +14543,14 @@ button.is-blocked {
 /* "Show more matches" */
 .role-player .bet-page button.bet-show-more {
   border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-control, 10px);
   background: var(--surface-1);
 }
 
 /* The bet slip: the same panel language. */
 .role-player .bet-slip-desktop .bet-slip {
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-panel, 14px);
   background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
 }
@@ -14742,7 +14745,7 @@ html[data-theme="light"] .role-player {
   height: 1.9rem;
   margin: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   background: transparent;
   color: var(--muted);
 }
@@ -14781,7 +14784,7 @@ html[data-theme="light"] .role-player {
   gap: 0.65rem;
   min-height: 2.2rem;
   padding: 0.4rem 0.65rem;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   color: var(--text-2);
   font-size: 0.875rem;
   font-weight: 600;
@@ -14819,8 +14822,8 @@ html[data-theme="light"] .role-player {
   align-items: center;
   gap: 0.35rem;
   padding: 0.45rem;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-panel, 14px);
   background: var(--surface-1);
 }
 
@@ -14838,7 +14841,7 @@ html[data-theme="light"] .role-player {
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   background: transparent;
   color: var(--muted);
 }
@@ -14916,7 +14919,7 @@ html[data-theme="light"] .role-player {
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   background: transparent;
   color: var(--muted);
 }
@@ -14939,10 +14942,23 @@ html[data-theme="light"] .role-player {
 .role-player .player-quick-link,
 .role-player .player-continue,
 .role-player .player-next-race,
-.role-player .bet-card {
-  border-radius: 14px;
+.role-player .bet-card,
+.role-player .casino-tile {
+  border-radius: var(--radius-panel, 14px);
   /* A soft lift on the light theme; flat on the dark one. */
   box-shadow: var(--player-card-shadow, none);
+}
+
+/* Every panel's edge is the same hairline; controls inside it get the stronger one. */
+.role-player .card,
+.role-player .casino-tile {
+  border-color: var(--hairline);
+}
+
+/* Buttons and button links that sit on a panel: the controls' radius and line, like the rest. */
+.role-player :is(.card, .player-hero) :is(button.secondary:not(.modal-close), .button-link) {
+  border-color: var(--hairline-strong);
+  border-radius: var(--radius-control, 10px);
 }
 
 .role-player .player-top-event,
@@ -14997,7 +15013,7 @@ html[data-theme="light"] .role-player {
   gap: 0.55rem;
   padding: 0.55rem;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-panel, 14px);
   background: var(--surface-1);
 }
 
@@ -15082,7 +15098,7 @@ html[data-theme="light"] .role-player {
   max-width: 3.25rem;
   min-height: 1.45rem;
   padding: 0 0.15rem;
-  border-radius: 6px;
+  border-radius: var(--radius-inner, 8px);
   background: var(--accent-soft);
 }
 
@@ -15156,7 +15172,7 @@ html[data-theme="light"] .role-player {
   height: 1.7rem;
   padding: 0;
   border: 1px solid var(--hairline-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   background: transparent;
   color: var(--text);
   font-size: 1.05rem;
@@ -15359,7 +15375,7 @@ html[data-theme="light"] .role-player {
   gap: 0;
   overflow: hidden;
   border: 1px solid var(--hairline);
-  border-radius: 12px;
+  border-radius: var(--radius-control, 10px);
   background: var(--surface-2);
 }
 
@@ -15382,7 +15398,7 @@ html[data-theme="light"] .role-player {
 .role-player .money-icon {
   width: 2rem;
   height: 2rem;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   font-size: 0.95rem;
 }
 
@@ -15486,7 +15502,7 @@ html[data-theme="light"] .role-player {
   place-items: center;
   width: 2rem;
   height: 2rem;
-  border-radius: 8px;
+  border-radius: var(--radius-inner, 8px);
   font-size: 0.95rem;
   font-weight: 800;
 }
@@ -15571,7 +15587,7 @@ html[data-theme="light"] .role-player {
 .role-player .account-setting .language-picker button {
   min-height: 2.45rem;
   padding: 0.45rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-control, 10px);
   font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.2;

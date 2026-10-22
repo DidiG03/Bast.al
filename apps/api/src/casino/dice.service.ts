@@ -95,7 +95,7 @@ export class DiceService {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, tableMax, recent, seed, previous] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "dice"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "DICE" }, orderBy: { createdAt: "desc" }, take: RECENT, select: roundSelect }),
@@ -128,7 +128,7 @@ export class DiceService {
   /** One roll: the stake, the roll from the Player's seed pair, and the pay-out. */
   async roll(actor: Actor, betInput: number, targetInput: number, directionInput: string, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "dice");
     if (closed) throw new ForbiddenException(closed);
     if (!(BETS as readonly number[]).includes(Number(betInput))) throw new BadRequestException(`A roll costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);
     const stakeCents = Math.round(Number(betInput) * 100);

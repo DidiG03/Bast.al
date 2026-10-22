@@ -84,7 +84,7 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, tableMax, open, recent] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "blackjack"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.blackjackHand.findUnique({ where: { playerId: actor.id } }),
@@ -104,7 +104,7 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
   /** Deals a new round for `bet` dollars. */
   async deal(actor: Actor, bet: number) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "blackjack");
     if (closed) throw new ForbiddenException(closed);
     const cents = Math.round(bet * 100);
     if (!Number.isFinite(bet) || Math.abs(cents - bet * 100) > 1e-6 || cents <= 0 || cents % Math.round(CHIPS[0] * 100) !== 0) {

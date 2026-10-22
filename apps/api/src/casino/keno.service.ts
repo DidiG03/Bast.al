@@ -73,7 +73,7 @@ export class KenoService {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, tableMax, recent, seed, previous] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "keno"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "KENO" }, orderBy: { createdAt: "desc" }, take: RECENT, select: roundSelect }),
@@ -107,7 +107,7 @@ export class KenoService {
   /** One round: the stake, the draw from the Player's seed pair, and the pay-out. */
   async play(actor: Actor, betInput: number, picksInput: number[], ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "keno");
     if (closed) throw new ForbiddenException(closed);
     const bet = Number(betInput);
     if (!(BETS as readonly number[]).includes(bet)) throw new BadRequestException(`A round costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);

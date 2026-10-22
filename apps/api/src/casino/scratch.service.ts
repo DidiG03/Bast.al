@@ -74,7 +74,7 @@ export class ScratchService {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, tableMax, recent, seed, previous] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "scratch"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "SCRATCH" }, orderBy: { createdAt: "desc" }, take: RECENT, select: roundSelect }),
@@ -107,7 +107,7 @@ export class ScratchService {
   /** Buys one card: the price, the card from the Player's seed pair, and its prize, paid at once. */
   async buy(actor: Actor, betInput: number, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "scratch");
     if (closed) throw new ForbiddenException(closed);
     const bet = Number(betInput);
     if (!(BETS as readonly number[]).includes(bet)) throw new BadRequestException(`A card costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);

@@ -218,6 +218,44 @@ test("the same roll sent twice plays once", async () => {
   assert.equal(await ledgerTotal(dan), await balanceOf(dan));
 });
 
+test("single games switch off: Super Admin's for the whole site (hidden from Owners), an Owner's for their team; the lobby and the tab follow", async () => {
+  const actor = { id: dan.id, role: "PLAYER", parentId: dan.parentId };
+  const ownerActor = { id: owner.id, role: "OWNER", parentId: owner.parentId };
+  const saActor = { id: sa.id, role: "SUPER_ADMIN", parentId: null };
+  assert.ok((await casino.state(actor)).games.includes("dice"));
+
+  // Super Admin turns Dice off for the site: the Player can't roll, the lobby drops it, and the Owner doesn't see it to switch back on.
+  await casino.setGame(saActor, "dice", false);
+  await assert.rejects(dice.roll(dan, 100, 50, "UNDER"), /This game isn't available right now/);
+  assert.equal((await dice.state(dan)).closed, "This game isn't available right now.");
+  const lobby = await casino.state(actor);
+  assert.equal(lobby.games.includes("dice"), false);
+  assert.equal(lobby.casinoClosed, null, "the rest of the Casino stays open");
+  const ownerView = await casino.admin(ownerActor);
+  assert.equal(ownerView.gameList.includes("dice"), false);
+  assert.deepEqual(ownerView.siteGamesOff, [], "Owners aren't told what Super Admin switched off");
+  await assert.rejects(casino.setGame(ownerActor, "dice", true), /That game isn't available/);
+  assert.deepEqual((await casino.admin(saActor)).siteGamesOff, ["dice"]);
+
+  // The Owner turns the slot off for their team; another Owner can't touch this team.
+  await casino.setGame(ownerActor, "slot", false);
+  assert.equal((await casino.state(actor)).closed, "This game isn't open for your team.");
+  await assert.rejects(casino.spin(actor, 100), /This game isn't open for your team/);
+  assert.deepEqual((await casino.admin(ownerActor)).teams[0].gamesOff, ["slot"]);
+  await assert.rejects(casino.setGame({ id: dan.id, role: "PLAYER", parentId: dan.parentId }, "keno", false), /Only Super Admin and Owners/);
+
+  // Every game off: the Casino tab goes away.
+  for (const game of ["book", "roulette", "blackjack", "penalty", "mines", "plinko", "keno", "coinflip", "scratch"]) await casino.setGame(ownerActor, game, false);
+  assert.deepEqual((await casino.state(actor)).games, []);
+  assert.equal((await users.me(actor, false)).casinoOpen, false);
+
+  // Back on.
+  for (const game of ["slot", "book", "roulette", "blackjack", "penalty", "mines", "plinko", "keno", "coinflip", "scratch"]) await casino.setGame(ownerActor, game, true);
+  await casino.setGame(saActor, "dice", true);
+  assert.equal((await casino.state(actor)).games.length, 11);
+  assert.equal((await dice.state(dan)).closed, null);
+});
+
 test("teardown", async () => {
   await prisma.$disconnect();
 });

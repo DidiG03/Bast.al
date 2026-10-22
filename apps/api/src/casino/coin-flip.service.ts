@@ -70,7 +70,7 @@ export class CoinFlipService {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, tableMax, recent, seed, previous] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "coinflip"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "COIN_FLIP" }, orderBy: { createdAt: "desc" }, take: RECENT, select: roundSelect }),
@@ -93,7 +93,7 @@ export class CoinFlipService {
   /** One flip: the stake, the flip from the Player's seed pair, and the pay-out. */
   async flip(actor: Actor, betInput: number, callInput: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "coinflip");
     if (closed) throw new ForbiddenException(closed);
     const bet = Number(betInput);
     if (!(BETS as readonly number[]).includes(bet)) throw new BadRequestException(`A flip costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);

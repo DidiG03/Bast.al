@@ -123,6 +123,8 @@ model User {
   /// OWNER only: the Casino tab is open to this team (and the site's own
   /// switch, PlatformSettings.casinoEnabled, is on too).
   casinoEnabled        Boolean    @default(false) @map("casino_enabled")
+  /// Owner only: games this Owner turned off for their team, out of those Super Admin left on.
+  casinoGamesOff       String[]   @default([]) @map("casino_games_off")
   createdAt            DateTime   @default(now()) @map("created_at")
   updatedAt            DateTime   @updatedAt @map("updated_at")
 
@@ -514,6 +516,8 @@ model PlatformSettings {
   oddsCompetitions Json?     @map("odds_competitions")
   /// Super Admin's switch for the Casino tab on the whole site. Each Owner has their own too.
   casinoEnabled    Boolean   @default(false) @map("casino_enabled")
+  /// Games Super Admin turned off for the whole site (keys of CASINO_GAMES in casino/access.ts). Owners don't see them at all.
+  casinoGamesOff   String[]  @default([]) @map("casino_games_off")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   @@map("platform_settings")

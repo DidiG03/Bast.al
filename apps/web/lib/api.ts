@@ -733,8 +733,16 @@ export type CasinoGamble = { amount: number; steps: number; stepsLeft: number };
 export type CasinoFreeSpins = { remaining: number; bet: number };
 
 /** The Player's Casino: whether they can play (`closed` says why not), the rules, and where they stand. */
+/** Every Casino game, by the key its switches use (the API's CASINO_GAMES). */
+export type CasinoGame = "slot" | "book" | "roulette" | "blackjack" | "penalty" | "mines" | "plinko" | "dice" | "keno" | "coinflip" | "scratch";
+
 export type CasinoState = {
+  /** Why the slot can't be played (the Casino's reason, or the slot being off), or null. */
   closed: string | null;
+  /** Why the Casino as a whole can't be played, or null: what the lobby shows. */
+  casinoClosed: string | null;
+  /** The games this Player can play, for the lobby's tiles. */
+  games: CasinoGame[];
   balance: number;
   maxStake: number | null;
   freeSpins: CasinoFreeSpins | null;
@@ -804,9 +812,15 @@ export type CasinoAdmin = {
   to: string;
   siteOpen: boolean;
   canSwitchSite: boolean;
-  teams: Array<{ ownerId: string; username: string; open: boolean }>;
+  teams: Array<{ ownerId: string; username: string; open: boolean; gamesOff: CasinoGame[] }>;
   /** A Manager's team: whether their Owner has the Casino open. Null for others. */
   teamOpen: boolean | null;
+  /** The games this viewer can switch or see: all for Super Admin; for Owners and Managers only those Super Admin left on. */
+  gameList: CasinoGame[];
+  /** Super Admin only: the games turned off for the whole site. */
+  siteGamesOff: CasinoGame[];
+  /** A Manager's team: the games their Owner turned off. Null for others. */
+  teamGamesOff: CasinoGame[] | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
   /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), Plinko (`spins` are its balls), Dice (`spins` are its rolls), Keno (`spins` are its rounds), Coin Flip (`spins` are its flips) and Scratch Cards (`spins` are its cards). */
   games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch", { spins: number; staked: number; won: number; payoutRate: number | null }> & {

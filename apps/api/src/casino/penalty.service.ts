@@ -71,7 +71,7 @@ export class PenaltyService implements OnModuleInit, OnModuleDestroy {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, tableMax, open, recent] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "penalty"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.penaltyRound.findUnique({ where: { playerId: actor.id } }),
@@ -90,7 +90,7 @@ export class PenaltyService implements OnModuleInit, OnModuleDestroy {
   /** Starts a shootout at `bet` dollars. */
   async start(actor: Actor, bet: number) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "penalty");
     if (closed) throw new ForbiddenException(closed);
     const cents = Math.round(bet * 100);
     if (!Number.isFinite(bet) || Math.abs(cents - bet * 100) > 1e-6 || !(BETS as readonly number[]).includes(bet)) {

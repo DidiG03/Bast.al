@@ -70,7 +70,7 @@ export class PlinkoService {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, tableMax, recent] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "plinko"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "PLINKO" }, orderBy: { createdAt: "desc" }, take: RECENT, select: roundSelect }),
@@ -98,7 +98,7 @@ export class PlinkoService {
   /** One ball: the stake, the path down the pegs, and the pay-out. */
   async drop(actor: Actor, betInput: number, rowsInput: number, riskInput: string, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "plinko");
     if (closed) throw new ForbiddenException(closed);
     const bet = Number(betInput);
     if (!(BETS as readonly number[]).includes(bet)) throw new BadRequestException("Pick one of the stakes shown for a ball.");

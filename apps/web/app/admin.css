@@ -2656,6 +2656,17 @@ html:has(.role-admin) body {
   border-bottom: 0;
 }
 
+/* The per-game switches: two columns where there's room, one row per game, a hairline between rows. */
+.role-admin .casino-game-switches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  column-gap: 2rem;
+}
+
+.role-admin .casino-game-switches .casino-switch:last-of-type {
+  border-bottom: 1px solid var(--a-border);
+}
+
 .role-admin .casino-switch > span {
   order: 1;
   display: grid;

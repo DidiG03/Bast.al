@@ -292,7 +292,7 @@ test("casino profit counts in commissions, and the Casino page shows it per Play
   const page = await casino.admin(owner, from, to);
   assert.deepEqual(page.players.map((row) => [row.username, row.spins, row.net]), [[cara.username, spinCount, net]]);
   assert.equal(page.totals.spins, spinCount, "guesses count in the money, not as spins");
-  assert.deepEqual(page.teams, [{ ownerId: owner.id, username: owner.username, open: true }]);
+  assert.deepEqual(page.teams, [{ ownerId: owner.id, username: owner.username, open: true, gamesOff: [] }]);
   assert.equal((await casino.admin(manager, from, to)).teamOpen, true);
   const all = await casino.admin(sa, from, to);
   assert.equal(all.siteOpen, true);

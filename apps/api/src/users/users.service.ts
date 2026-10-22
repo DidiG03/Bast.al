@@ -11,7 +11,7 @@ import { ClerkService } from "../auth/clerk.service";
 import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/permissions";
 import { FieldEncryptionService } from "../crypto/field-encryption.service";
 import { PrismaService } from "../prisma.service";
-import { casinoClosedReason } from "../casino/access";
+import { playableGames } from "../casino/access";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { AdjustBalanceDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -144,8 +144,8 @@ export class UsersService {
       mfaRequired,
       mfaEnabled,
       mfaSatisfied: !mfaRequired || mfaEnabled,
-      /** Player only: the Casino tab is open to them. */
-      casinoOpen: actor.role === Role.PLAYER ? (await casinoClosedReason(this.prisma, actor)) === null : false,
+      /** Player only: the Casino tab is open to them, with at least one game on. */
+      casinoOpen: actor.role === Role.PLAYER ? (await playableGames(this.prisma, actor)).length > 0 : false,
     };
   }
 

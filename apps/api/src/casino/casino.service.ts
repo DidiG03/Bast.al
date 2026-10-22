@@ -11,7 +11,7 @@ import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
-import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
+import { CASINO_GAMES, addToDailyLine, casinoClosedReason, isCasinoGame, maxStakeOf, playableGames, type CasinoGame } from "./access";
 import { GAME_NAME as BOOK_NAME } from "./book";
 import {
   BETS,
@@ -136,9 +136,9 @@ export class CasinoService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Why this Player can't play right now, or null if they can. */
-  closedReason(player: Pick<Actor, "id" | "parentId">): Promise<string | null> {
-    return casinoClosedReason(this.prisma, player);
+  /** Why this Player can't play right now, or null if they can; with a game, that game too. */
+  closedReason(player: Pick<Actor, "id" | "parentId">, game?: CasinoGame): Promise<string | null> {
+    return casinoClosedReason(this.prisma, player, game);
   }
 
   /**
@@ -166,14 +166,18 @@ export class CasinoService {
     if (gamble) return open(gamble.game === "book" ? "book" : "slot", "gamble", gamble.amount, gamble.updatedAt);
     if (!last) return null;
     const game = GAME_OF_KIND[last.kind];
+    // A game since turned off isn't offered to continue.
+    if (!(await playableGames(this.prisma, actor)).includes(game)) return null;
     return { game, name: nameOf(game), waiting: null, amount: Number(last.bet), at: last.createdAt };
   }
 
   /** The Player's Casino: whether they can play, the game's rules, their free spins and recent spins. */
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const [closed, player, freeSpins, recent, maxStake, gamble] = await Promise.all([
+    const [closed, casinoClosed, games, player, freeSpins, recent, maxStake, gamble] = await Promise.all([
+      this.closedReason(actor, "slot"),
       this.closedReason(actor),
+      playableGames(this.prisma, actor),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.prisma.casinoFreeSpins.findUnique({ where: { playerId: actor.id } }),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: { in: ["SPIN", "GAMBLE"] } }, orderBy: { createdAt: "desc" }, take: RECENT * 2, select: { ...spinSelect, grid: true } }),
@@ -184,7 +188,12 @@ export class CasinoService {
     const mine = recent.filter((spin) => spin.kind === "SPIN" || (spin.gamble as { game?: string } | null)?.game !== "book").slice(0, RECENT);
     const lastSpin = mine.find((spin) => spin.kind === "SPIN");
     return {
+      /** Why the slot can't be played (the Casino's reason, or the slot being off), or null. */
       closed,
+      /** Why the Casino as a whole can't be played, or null: what the lobby shows. */
+      casinoClosed,
+      /** The games this Player can play, for the lobby's tiles. */
+      games,
       balance: Number(player.balance),
       maxStake,
       freeSpins: freeSpins && freeSpins.remaining > 0 ? { remaining: freeSpins.remaining, bet: Number(freeSpins.bet) } : null,
@@ -225,8 +234,8 @@ export class CasinoService {
    */
   async spin(actor: Actor, bet: number, lines: LineCount = LINES, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await this.closedReason(actor);
-    // Free spins already won are still played if the Casino has closed since.
+    const closed = await this.closedReason(actor, "slot");
+    // Free spins already won are still played if the Casino (or the slot) has closed since.
     if (closed && !(await this.prisma.casinoFreeSpins.findFirst({ where: { playerId: actor.id, remaining: { gt: 0 } }, select: { playerId: true } }))) throw new ForbiddenException(closed);
     if (!BETS.some((allowed) => allowed === bet)) throw new BadRequestException(`Choose a bet of ${BETS.map((b) => money(b)).join(", ")}`);
     if (!LINE_CHOICES.includes(lines)) throw new BadRequestException("Choose 5 or 10 lines");
@@ -509,25 +518,35 @@ export class CasinoService {
       scratch: { spins: scratchTotals.spins, staked: round(scratchTotals.staked), won: round(scratchTotals.won), payoutRate: rate(scratchTotals.staked, scratchTotals.won) },
     };
 
-    const platform = await this.prisma.platformSettings.findUnique({ where: { id: "default" }, select: { casinoEnabled: true } });
+    const platform = await this.prisma.platformSettings.findUnique({ where: { id: "default" }, select: { casinoEnabled: true, casinoGamesOff: true } });
     const owners =
       actor.role === Role.SUPER_ADMIN || actor.role === Role.OWNER
         ? await this.prisma.user.findMany({
             where: actor.role === Role.OWNER ? { id: actor.id } : { role: Role.OWNER },
             orderBy: { username: "asc" },
-            select: { id: true, username: true, casinoEnabled: true },
+            select: { id: true, username: true, casinoEnabled: true, casinoGamesOff: true },
           })
         : [];
-    const myOwner = actor.role === Role.MANAGER && actor.parentId ? await this.prisma.user.findUnique({ where: { id: actor.parentId }, select: { casinoEnabled: true } }) : null;
+    const myOwner = actor.role === Role.MANAGER && actor.parentId ? await this.prisma.user.findUnique({ where: { id: actor.parentId }, select: { casinoEnabled: true, casinoGamesOff: true } }) : null;
+    const siteOff = (platform?.casinoGamesOff ?? []).filter(isCasinoGame);
     return {
       from: period.from.toISOString(),
       to: period.to.toISOString(),
       siteOpen: Boolean(platform?.casinoEnabled),
       /** Which switches this viewer can change: Super Admin both, an Owner their team's, a Manager none. */
       canSwitchSite: actor.role === Role.SUPER_ADMIN,
-      teams: owners.map((owner) => ({ ownerId: owner.id, username: owner.username, open: owner.casinoEnabled })),
+      teams: owners.map((owner) => ({ ownerId: owner.id, username: owner.username, open: owner.casinoEnabled, gamesOff: owner.casinoGamesOff.filter(isCasinoGame) })),
       /** A Manager's team: whether their Owner has it open. */
       teamOpen: actor.role === Role.MANAGER ? Boolean(myOwner?.casinoEnabled) : null,
+      /**
+       * The games this viewer can switch or see: every game for Super Admin,
+       * and for Owners and Managers only those Super Admin left on.
+       */
+      gameList: actor.role === Role.SUPER_ADMIN ? [...CASINO_GAMES] : CASINO_GAMES.filter((game) => !siteOff.includes(game)),
+      /** Super Admin only: the games turned off for the whole site. */
+      siteGamesOff: actor.role === Role.SUPER_ADMIN ? siteOff : [],
+      /** A Manager's team: the games their Owner turned off. */
+      teamGamesOff: actor.role === Role.MANAGER ? (myOwner?.casinoGamesOff ?? []).filter(isCasinoGame) : null,
       totals: {
         ...totals,
         staked: Math.round(totals.staked * 100) / 100,
@@ -539,6 +558,34 @@ export class CasinoService {
       games,
       players,
     };
+  }
+
+  /**
+   * Turns one game on or off: for the whole site (Super Admin, no ownerId),
+   * or for one Owner's team (that Owner, or Super Admin). A game Super Admin
+   * turned off is hidden from Owners, so they can't switch it.
+   */
+  async setGame(actor: Actor, game: CasinoGame, open: boolean, ownerId?: string, ipAddress?: string) {
+    const toggle = (list: string[]) => (open ? list.filter((g) => g !== game) : [...new Set([...list, game])]);
+    if (actor.role === Role.SUPER_ADMIN && !ownerId) {
+      const platform = await this.prisma.platformSettings.findUnique({ where: { id: "default" }, select: { casinoGamesOff: true } });
+      const off = toggle(platform?.casinoGamesOff ?? []);
+      await this.prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default", casinoGamesOff: off }, update: { casinoGamesOff: off } });
+      await this.audit.log({ actorId: actor.id, action: open ? "casino.game_on_site" : "casino.game_off_site", ipAddress, metadata: { game } });
+      return { game, open };
+    }
+    const target = ownerId ?? actor.id;
+    if (actor.role === Role.OWNER && target !== actor.id) throw new ForbiddenException("Owners can only switch games for their own team");
+    if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.OWNER) throw new ForbiddenException("Only Super Admin and Owners can switch games");
+    const owner = await this.prisma.user.findUnique({ where: { id: target }, select: { role: true, casinoGamesOff: true } });
+    if (owner?.role !== Role.OWNER) throw new NotFoundException("Owner not found");
+    if (actor.role === Role.OWNER) {
+      const platform = await this.prisma.platformSettings.findUnique({ where: { id: "default" }, select: { casinoGamesOff: true } });
+      if (platform?.casinoGamesOff.includes(game)) throw new NotFoundException("That game isn't available");
+    }
+    await this.prisma.user.update({ where: { id: target }, data: { casinoGamesOff: toggle(owner.casinoGamesOff) } });
+    await this.audit.log({ actorId: actor.id, action: open ? "casino.game_on_team" : "casino.game_off_team", targetId: target, ipAddress, metadata: { game } });
+    return { game, open, ownerId: target };
   }
 
   /** Opens or closes the Casino: for the site (Super Admin, no ownerId) or for one Owner's team. */

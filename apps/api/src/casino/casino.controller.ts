@@ -14,6 +14,7 @@ import { Idempotent } from "../idempotency/idempotency.interceptor";
 import { clientIp } from "../security/client-ip";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { CasinoService } from "./casino.service";
+import { CASINO_GAMES, type CasinoGame } from "./access";
 import { BETS, LINE_CHOICES, type LineCount } from "./game";
 import { MAX_SPOTS } from "./roulette";
 import { RouletteService } from "./roulette.service";
@@ -200,6 +201,22 @@ class BlackjackActionDto {
   @ApiProperty({ enum: ["hit", "stand", "double", "split", "insure", "noInsurance"] })
   @IsIn(["hit", "stand", "double", "split", "insure", "noInsurance"])
   action!: "hit" | "stand" | "double" | "split" | "insure" | "noInsurance";
+}
+
+class CasinoGameDto {
+  @ApiProperty({ enum: CASINO_GAMES })
+  @IsIn(CASINO_GAMES)
+  game!: CasinoGame;
+
+  @ApiProperty()
+  @IsBoolean()
+  open!: boolean;
+
+  @ApiProperty({ required: false, description: "An Owner's team; leave out for the whole site (Super Admin)" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  ownerId?: string;
 }
 
 class CasinoOpenDto {
@@ -532,5 +549,13 @@ export class CasinoController {
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   setOpen(@CurrentActor() actor: Actor, @Body() body: CasinoOpenDto, @Req() req: AuthenticatedRequest) {
     return this.casino.setOpen(actor, body.open, body.ownerId, clientIp(req));
+  }
+
+  /** Turns one game on or off for the site (Super Admin) or one team (Super Admin, or that team's Owner). */
+  @Post("admin/game")
+  @UseGuards(RequestIntegrityGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  setGame(@CurrentActor() actor: Actor, @Body() body: CasinoGameDto, @Req() req: AuthenticatedRequest) {
+    return this.casino.setGame(actor, body.game, body.open, body.ownerId, clientIp(req));
   }
 }

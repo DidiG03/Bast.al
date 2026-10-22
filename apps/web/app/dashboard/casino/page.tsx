@@ -10,7 +10,7 @@ import { PageLoading } from "../../../components/loading-spinner";
 import { PenaltyScene } from "../../../components/penalty-scene";
 import { Stat } from "../../../components/commission-views";
 import { useToast } from "../../../components/toaster";
-import { apiFetch, type CasinoAdmin, type CasinoState, type MeResponse } from "../../../lib/api";
+import { apiFetch, type CasinoAdmin, type CasinoGame, type CasinoState, type MeResponse } from "../../../lib/api";
 import { RED, WHEEL } from "../../../lib/roulette";
 import { formatMoney, formatSignedMoney } from "../../../lib/format";
 import { msg } from "../../../lib/i18n/core";
@@ -36,6 +36,21 @@ export default function CasinoPage() {
   return me.role === "PLAYER" ? <CasinoLobby /> : <CasinoOverview me={me} />;
 }
 
+/** The games' names on the staff switches; the slots keep their own names. */
+const GAME_LABELS: Record<CasinoGame, string> = {
+  slot: "Sizzling Hot",
+  book: "Book of Ra",
+  roulette: msg("Roulette"),
+  blackjack: msg("Blackjack"),
+  penalty: msg("Penalty"),
+  mines: msg("Mines"),
+  plinko: "Plinko",
+  dice: msg("Dice"),
+  keno: msg("Keno"),
+  coinflip: msg("Coin Flip"),
+  scratch: msg("Scratch Cards"),
+};
+
 /** The Player's lobby: one tile per game. */
 function CasinoLobby() {
   const { getToken } = useAuth();
@@ -53,123 +68,147 @@ function CasinoLobby() {
   }, []);
 
   if (!state) return <PageLoading label="Loading the Casino" />;
+  // Super Admin and the Player's Owner can turn single games off; those tiles don't show.
+  const has = (game: CasinoGame) => state.games.includes(game);
   return (
     <div className="stack">
       <div>
         <h1 style={{ margin: 0 }}>{t("Casino")}</h1>
         <p className="muted report-subtitle">{t("Pick a game. Every game plays with your balance, {amount} right now.", { amount: formatMoney(state.balance) })}</p>
       </div>
-      {state.closed ? (
+      {state.casinoClosed || state.games.length === 0 ? (
         <div className="card">
-          <p style={{ margin: 0 }}>{ts(state.closed)}</p>
+          <p style={{ margin: 0 }}>{state.casinoClosed ? ts(state.casinoClosed) : t("No games are open right now.")}</p>
         </div>
       ) : (
         <div className="casino-lobby">
-          <Link className="casino-tile is-slot" href="/dashboard/casino/slot">
-            <span className="casino-tile-art" aria-hidden="true">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a small static picture, already sized for the tile */}
-              <img className="casino-tile-cover" src="/casino/sizzling-hot.webp" alt="" />
-            </span>
-            <span className="casino-tile-body">
-              <strong>{state.game.name}</strong>
-              <span>{t("Hot fruits and blazing sevens! The classic fruit slot with 5 reels and 5 lines, where the star pays anywhere on the screen.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-book" href="/dashboard/casino/book">
-            <span className="casino-tile-art" aria-hidden="true">
-              <BookTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>Book of Ra</strong>
-              <span>{t("Explore the pyramids for the book. 3 books open 10 free spins, where one special symbol fills whole reels and pays on all 10 lines.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-roulette" href="/dashboard/casino/roulette">
-            <span className="casino-tile-art" aria-hidden="true">
-              <RouletteTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>{t("Roulette")}</strong>
-              <span>{t("The classic European roulette with a single zero. Place your chips, spin the wheel and watch where the ball lands.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-blackjack" href="/dashboard/casino/blackjack">
-            <span className="casino-tile-art" aria-hidden="true">
-              <span className="casino-tile-card">
-                A<br />♠
+          {has("slot") ? (
+            <Link className="casino-tile is-slot" href="/dashboard/casino/slot">
+              <span className="casino-tile-art" aria-hidden="true">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a small static picture, already sized for the tile */}
+                <img className="casino-tile-cover" src="/casino/sizzling-hot.webp" alt="" />
               </span>
-              <span className="casino-tile-card is-red">
-                K<br />♥
+              <span className="casino-tile-body">
+                <strong>{state.game.name}</strong>
+                <span>{t("Hot fruits and blazing sevens! The classic fruit slot with 5 reels and 5 lines, where the star pays anywhere on the screen.")}</span>
               </span>
-            </span>
-            <span className="casino-tile-body">
-              <strong>{t("Blackjack")}</strong>
-              <span>{t("Get as close to 21 as you can without going over, and beat the dealer's hand. Blackjack pays 3 to 2.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-penalty" href="/dashboard/casino/penalty">
-            <span className="casino-tile-art" aria-hidden="true">
-              <PenaltyTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>{t("Penalty")}</strong>
-              <span>{t("Aim left, center or right. The keeper dives. Every goal raises the payout. Cash out before a save.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-mines" href="/dashboard/casino/mines">
-            <span className="casino-tile-art" aria-hidden="true">
-              <MinesTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>{t("Mines")}</strong>
-              <span>{t("A field of 25 tiles hides the mines you choose. Every gem raises the payout. Cash out before one blows.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-plinko" href="/dashboard/casino/plinko">
-            <span className="casino-tile-art" aria-hidden="true">
-              <PlinkoTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>Plinko</strong>
-              <span>{t("Drop the ball through the pegs. The middle pays a little, the edges pay up to 900 times the stake.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-dice" href="/dashboard/casino/dice">
-            <span className="casino-tile-art" aria-hidden="true">
-              <DiceTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>{t("Dice")}</strong>
-              <span>{t("Set your own odds: roll over or under a target, for up to 85 times the stake. Every roll can be checked.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-keno" href="/dashboard/casino/keno">
-            <span className="casino-tile-art" aria-hidden="true">
-              <KenoTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>{t("Keno")}</strong>
-              <span>{t("Pick up to 10 numbers, 20 of 80 are drawn. Catch them all for up to 2,000 times the stake. Every draw can be checked.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-coin" href="/dashboard/casino/coin-flip">
-            <span className="casino-tile-art" aria-hidden="true">
-              <CoinTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>{t("Coin Flip")}</strong>
-              <span>{t("Call heads or tails. A right call pays 1.7 times the stake. Every flip can be checked.")}</span>
-            </span>
-          </Link>
-          <Link className="casino-tile is-scratch" href="/dashboard/casino/scratch">
-            <span className="casino-tile-art" aria-hidden="true">
-              <ScratchTileArt />
-            </span>
-            <span className="casino-tile-body">
-              <strong>{t("Scratch Cards")}</strong>
-              <span>{t("Scratch 9 boxes and find three of a kind, for up to 1,000 times the price. Every card can be checked.")}</span>
-            </span>
-          </Link>
+            </Link>
+          ) : null}
+          {has("book") ? (
+            <Link className="casino-tile is-book" href="/dashboard/casino/book">
+              <span className="casino-tile-art" aria-hidden="true">
+                <BookTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>Book of Ra</strong>
+                <span>{t("Explore the pyramids for the book. 3 books open 10 free spins, where one special symbol fills whole reels and pays on all 10 lines.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("roulette") ? (
+            <Link className="casino-tile is-roulette" href="/dashboard/casino/roulette">
+              <span className="casino-tile-art" aria-hidden="true">
+                <RouletteTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>{t("Roulette")}</strong>
+                <span>{t("The classic European roulette with a single zero. Place your chips, spin the wheel and watch where the ball lands.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("blackjack") ? (
+            <Link className="casino-tile is-blackjack" href="/dashboard/casino/blackjack">
+              <span className="casino-tile-art" aria-hidden="true">
+                <span className="casino-tile-card">
+                  A<br />♠
+                </span>
+                <span className="casino-tile-card is-red">
+                  K<br />♥
+                </span>
+              </span>
+              <span className="casino-tile-body">
+                <strong>{t("Blackjack")}</strong>
+                <span>{t("Get as close to 21 as you can without going over, and beat the dealer's hand. Blackjack pays 3 to 2.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("penalty") ? (
+            <Link className="casino-tile is-penalty" href="/dashboard/casino/penalty">
+              <span className="casino-tile-art" aria-hidden="true">
+                <PenaltyTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>{t("Penalty")}</strong>
+                <span>{t("Aim left, center or right. The keeper dives. Every goal raises the payout. Cash out before a save.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("mines") ? (
+            <Link className="casino-tile is-mines" href="/dashboard/casino/mines">
+              <span className="casino-tile-art" aria-hidden="true">
+                <MinesTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>{t("Mines")}</strong>
+                <span>{t("A field of 25 tiles hides the mines you choose. Every gem raises the payout. Cash out before one blows.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("plinko") ? (
+            <Link className="casino-tile is-plinko" href="/dashboard/casino/plinko">
+              <span className="casino-tile-art" aria-hidden="true">
+                <PlinkoTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>Plinko</strong>
+                <span>{t("Drop the ball through the pegs. The middle pays a little, the edges pay up to 900 times the stake.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("dice") ? (
+            <Link className="casino-tile is-dice" href="/dashboard/casino/dice">
+              <span className="casino-tile-art" aria-hidden="true">
+                <DiceTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>{t("Dice")}</strong>
+                <span>{t("Set your own odds: roll over or under a target, for up to 85 times the stake. Every roll can be checked.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("keno") ? (
+            <Link className="casino-tile is-keno" href="/dashboard/casino/keno">
+              <span className="casino-tile-art" aria-hidden="true">
+                <KenoTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>{t("Keno")}</strong>
+                <span>{t("Pick up to 10 numbers, 20 of 80 are drawn. Catch them all for up to 2,000 times the stake. Every draw can be checked.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("coinflip") ? (
+            <Link className="casino-tile is-coin" href="/dashboard/casino/coin-flip">
+              <span className="casino-tile-art" aria-hidden="true">
+                <CoinTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>{t("Coin Flip")}</strong>
+                <span>{t("Call heads or tails. A right call pays 1.7 times the stake. Every flip can be checked.")}</span>
+              </span>
+            </Link>
+          ) : null}
+          {has("scratch") ? (
+            <Link className="casino-tile is-scratch" href="/dashboard/casino/scratch">
+              <span className="casino-tile-art" aria-hidden="true">
+                <ScratchTileArt />
+              </span>
+              <span className="casino-tile-body">
+                <strong>{t("Scratch Cards")}</strong>
+                <span>{t("Scratch 9 boxes and find three of a kind, for up to 1,000 times the price. Every card can be checked.")}</span>
+              </span>
+            </Link>
+          ) : null}
         </div>
       )}
     </div>
@@ -637,6 +676,25 @@ function CasinoOverview({ me }: { me: MeResponse }) {
     }
   }
 
+  async function setGame(game: CasinoGame, open: boolean) {
+    setSwitching(game);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error(t("You're not signed in"));
+      // Super Admin switches a game for the whole site; an Owner for their own team.
+      await apiFetch("/casino/admin/game", token, { method: "POST", body: JSON.stringify({ game, open }) });
+      toast.success(open ? t("{game} is on.", { game: gameName(game) }) : t("{game} is off.", { game: gameName(game) }));
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("Couldn't change it"));
+    } finally {
+      setSwitching(null);
+    }
+  }
+
+  /** What each game is called on the switches. */
+  const gameName = (game: CasinoGame) => (game === "slot" ? "Sizzling Hot" : game === "book" ? "Book of Ra" : game === "plinko" ? "Plinko" : t(GAME_LABELS[game]));
+
   const players = useMemo(() => data?.players ?? [], [data]);
   if (!data) return <PageLoading label="Loading the Casino" />;
   const isAdmin = me.role === "SUPER_ADMIN";
@@ -679,6 +737,42 @@ function CasinoOverview({ me }: { me: MeResponse }) {
         {me.role === "MANAGER" ? (
           <p style={{ margin: 0 }}>{data.siteOpen && data.teamOpen ? t("Open: your Players can play.") : t("Closed. Your Owner decides whether it's open for your team.")}</p>
         ) : null}
+      </section>
+
+      <section className="card stack">
+        <h2 style={{ margin: 0 }}>
+          {t("Games")}
+          <HelpTip
+            text={
+              isAdmin
+                ? "Turn single games on or off for the whole site. A game you turn off is hidden from every team: Owners don't see it and can't turn it back on."
+                : "Choose which games your Players see. Rounds already started can still be finished."
+            }
+          />
+        </h2>
+        {isAdmin || me.role === "OWNER" ? (
+          <div className="casino-game-switches">
+            {data.gameList.map((game) => {
+              const off = isAdmin ? data.siteGamesOff.includes(game) : (data.teams[0]?.gamesOff ?? []).includes(game);
+              return (
+                <label className="casino-switch" key={game}>
+                  <input type="checkbox" checked={!off} disabled={switching !== null} onChange={(event) => setGame(game, event.target.checked)} />
+                  <span>
+                    <strong>{gameName(game)}</strong>
+                    <span className="muted">{isAdmin ? (off ? t("Off: hidden from every team.") : t("On for the whole site.")) : off ? t("Hidden from your Players.") : t("Your Players see it.")}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={{ margin: 0 }}>
+            {(() => {
+              const open = data.gameList.filter((game) => !(data.teamGamesOff ?? []).includes(game));
+              return open.length > 0 ? t("Open for your team: {games}.", { games: open.map(gameName).join(", ") }) : t("Your Owner hasn't opened any games for your team.");
+            })()}
+          </p>
+        )}
       </section>
 
       {/* Just the period switch: a card around it only added empty space. */}

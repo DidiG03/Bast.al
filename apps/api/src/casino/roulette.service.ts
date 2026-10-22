@@ -69,7 +69,7 @@ export class RouletteService {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, tableMax, recent] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "roulette"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
       this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "ROULETTE" }, orderBy: { createdAt: "desc" }, take: HISTORY, select: roundSelect }),
@@ -96,7 +96,7 @@ export class RouletteService {
   /** One round: the chips on the table, the wheel, and the pay-out. */
   async spin(actor: Actor, input: PlacedBet[], ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "roulette");
     if (closed) throw new ForbiddenException(closed);
     const bets = input.map((bet) => ({ spot: String(bet.spot), amount: Number(bet.amount) }));
     const invalid = invalidBets(bets);

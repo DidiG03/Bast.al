@@ -101,7 +101,7 @@ export class BookService {
   async state(actor: Actor) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const [closed, player, maxStake, feature, recent, gamble] = await Promise.all([
-      casinoClosedReason(this.prisma, actor),
+      casinoClosedReason(this.prisma, actor, "book"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       maxStakeOf(this.prisma, actor.id),
       this.prisma.casinoBookFeature.findUnique({ where: { playerId: actor.id } }),
@@ -149,7 +149,7 @@ export class BookService {
    */
   async spin(actor: Actor, bet: number, ipAddress?: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const closed = await casinoClosedReason(this.prisma, actor);
+    const closed = await casinoClosedReason(this.prisma, actor, "book");
     // Free spins already won are still played if the Casino has closed since, like a blackjack hand or a Mines round in play.
     if (closed && !(await this.prisma.casinoBookFeature.findUnique({ where: { playerId: actor.id }, select: { playerId: true } }))) throw new ForbiddenException(closed);
     const team = await assertOnTeam(this.prisma, actor);

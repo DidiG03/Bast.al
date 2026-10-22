@@ -7,7 +7,7 @@ type ClerkLocalization = NonNullable<ComponentProps<typeof ClerkProvider>["local
 /** Clerk's sign-in box in English: only the wording we changed from Clerk's own. */
 const en: ClerkLocalization = {
   signIn: {
-    start: { title: "Sign in", subtitle: "Use the account your team set up for you." },
+    start: { title: "Sign in", subtitle: "Welcome back! Sign in to your account." },
     password: { title: "Enter your password", subtitle: "" },
   },
 };
@@ -35,7 +35,7 @@ const sq: ClerkLocalization = {
   signIn: {
     start: {
       title: "Hyr",
-      subtitle: "Përdor llogarinë që të krijoi ekipi yt.",
+      subtitle: "Mirë se erdhe! Hyr në llogarinë tuaj.",
       actionText: "Nuk ke llogari?",
       actionLink: "Regjistrohu",
       actionLink__use_username: "Hyr me emrin e përdoruesit",

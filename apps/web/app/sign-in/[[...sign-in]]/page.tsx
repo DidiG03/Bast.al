@@ -30,26 +30,8 @@ export default function SignInPage() {
         <div className="auth-form-body">
           <SignInForm />
         </div>
-        <p className="auth-footnote">{t("There is no public sign-up. Your Manager, Owner or Super Admin creates your account.")}</p>
       </section>
-      <aside className="auth-aside" aria-hidden="true">
-        <div className="auth-aside-inner">
-          <p className="auth-aside-lead">{t("The back office for your betting team.")}</p>
-          <ul className="auth-points">
-            {POINTS.map((point) => (
-              <li key={point.title}>
-                <span className="auth-point-icon">
-                  <NamedIcon name={point.icon} />
-                </span>
-                <div>
-                  <strong>{t(point.title)}</strong>
-                  <span>{t(point.text)}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </aside>
+      <aside className="auth-aside" aria-hidden="true" />
     </main>
   );
 }

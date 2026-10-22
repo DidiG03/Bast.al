@@ -127,8 +127,6 @@ export const shell: Record<string, string> = {
   "Continue to the dashboard": "Vazhdo te paneli",
   "Password recovery": "Rikuperimi i fjalëkalimit",
   "Reset your password through the secure recovery steps below.": "Rivendos fjalëkalimin me hapat e sigurt të rikuperimit më poshtë.",
-  "There is no public sign-up. Your Manager, Owner or Super Admin creates your account.": "Nuk ka regjistrim publik. Llogarinë ta krijon Menaxheri, Pronari ose Super Admini.",
-  "The back office for your betting team.": "Zyra administrative për skuadrën tënde të basteve.",
   "Your team only": "Vetëm skuadra jote",
   "Everyone sees the accounts under them, nothing else.": "Secili sheh llogaritë nën të, asgjë tjetër.",
   "Settled every week": "Shlyer çdo javë",

@@ -26,7 +26,7 @@ export const LINES = 10;
 /** What a spin can cost, in dollars. A line bet is a tenth of it. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 /** What spins pay back on average, in percent of what they cost, as measured by scripts/book-rtp.mjs. */
-export const PAYOUT_RATE = 90.1;
+export const PAYOUT_RATE = 84.9;
 export const FREE_SPINS = 10;
 /** The most a spin, or a round of free spins with the spin that started it, pays: this many times the bet. */
 export const MAX_WIN = 5000;
@@ -77,7 +77,8 @@ export const minToPay = (symbol: Paying) => LINE_PAYS[symbol].findIndex((pay) =>
  * update PAYOUT_RATE.
  */
 const OUTER = { EXPLORER: 1, PHARAOH: 2, STATUE: 3, SCARAB: 3, ACE: 5, KING: 5, QUEEN: 6, JACK: 5, TEN: 5, BOOK: 1 };
-const INNER = { ...OUTER, JACK: 6 };
+/** The middle reels carry more low cards, so books (and free spins) and the big lines come up a little less often. */
+const INNER = { ...OUTER, JACK: 7, QUEEN: 8, TEN: 8 };
 /** The last two reels carry fewer of the higher symbols and more tens, so lines started on the first reels are finished less often. */
 const LAST = { ...OUTER, PHARAOH: 1, STATUE: 2, SCARAB: 2, KING: 4, TEN: 11 };
 const REEL_MAKEUP: Array<Record<BookSymbol, number>> = [OUTER, INNER, INNER, LAST, LAST];

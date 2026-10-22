@@ -657,9 +657,10 @@ export function DiceGame() {
         <Sheet title={t("Pays and rules")} onClose={() => setSheet(null)}>
           <p>{t("A roll is a number from 0.00 to 99.99, each as likely as any other. Pick a target and a side: under wins when the roll is below the target, over when it's above it. Drag the slider, or type the target, the multiplier or the win chance; the other two follow.")}</p>
           <p>
-            {t("The win chance can be {min}% to {max}%. A win pays the stake times the multiplier, rounded down to 4 decimals: 50% pays 1.9400×, 1% pays {top}×. Cents are rounded down.", {
+            {t("The win chance can be {min}% to {max}%. A win pays the stake times the multiplier, rounded down to 4 decimals: 50% pays {half}×, 1% pays {top}×. Cents are rounded down.", {
               min: state.game.minChance,
               max: state.game.maxChance,
+              half: multiplierOf(5000).toFixed(4),
               top: state.game.maxMultiplier,
             })}
           </p>

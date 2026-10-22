@@ -58,9 +58,9 @@ async function nextRoll(account) {
   return rollFor(seed.serverSeed, seed.clientSeed, seed.nonce);
 }
 /** A legal target and side that `roll` beats (both in hundredths). */
-const winningBet = (roll) => (roll < 9500 ? { target: Math.max(roll + 1, 100), direction: "UNDER" } : { target: Math.min(roll - 1, 9899), direction: "OVER" });
+const winningBet = (roll) => (roll < 8400 ? { target: Math.max(roll + 1, 100), direction: "UNDER" } : { target: Math.min(roll - 1, 9899), direction: "OVER" });
 /** A legal target and side that `roll` loses to. */
-const losingBet = (roll) => (roll < 100 ? { target: 499, direction: "OVER" } : { target: Math.min(roll, 9500), direction: "UNDER" });
+const losingBet = (roll) => (roll < 100 ? { target: 499, direction: "OVER" } : { target: Math.min(roll, 8400), direction: "UNDER" });
 
 let sa, owner, manager, dan;
 
@@ -84,7 +84,7 @@ test("closed with the Casino's switches; the state gives a seed pair, its server
   const state = await dice.state(dan);
   assert.equal(state.closed, null);
   assert.equal(state.tableMax, 2500);
-  assert.equal(state.game.maxMultiplier, 97);
+  assert.equal(state.game.maxMultiplier, 85);
   assert.equal(state.seed.nonce, 0);
   assert.equal(state.seed.serverSeed, null);
   assert.equal(state.previousSeed, null);
@@ -148,8 +148,9 @@ test("bad stakes and targets, the max stake, the daily loss limit and a low bala
   await assert.rejects(dice.roll(dan, 30, 50, "UNDER"), /A roll costs 50\.00, 100\.00/);
   await assert.rejects(dice.roll(dan, 100.5, 50, "UNDER"), /A roll costs/);
   await assert.rejects(dice.roll(dan, 5000, 50, "UNDER"), /A roll costs/);
-  await assert.rejects(dice.roll(dan, 100, 0.5, "UNDER"), /1% to 95%/);
-  await assert.rejects(dice.roll(dan, 100, 99.5, "OVER"), /1% to 95%/);
+  await assert.rejects(dice.roll(dan, 100, 0.5, "UNDER"), /1% to 84%/);
+  await assert.rejects(dice.roll(dan, 100, 99.5, "OVER"), /1% to 84%/);
+  await assert.rejects(dice.roll(dan, 100, 90, "UNDER"), /1% to 84%/);
   await assert.rejects(dice.roll(dan, 100, 50.123, "OVER"), /0\.00 to 99\.99/);
   await assert.rejects(dice.roll(dan, 100, 50, "SIDEWAYS"), /over or under/);
 
@@ -185,14 +186,14 @@ test("dice profit counts in commissions, and the Casino page shows it as its own
 });
 
 test("a big win goes in the audit log", async () => {
-  // Under (roll + 1) with the roll low enough for 1%: 97 times.
+  // Under (roll + 1) with the roll low enough for 1%: 85 times.
   let roll = await nextRoll(dan);
   while (roll >= 100) {
     await dice.changeSeed(dan);
     roll = await nextRoll(dan);
   }
   const result = await dice.roll(dan, 50, 1, "UNDER");
-  assert.deepEqual([result.round.won, result.round.multiplier, result.round.win], [true, 97, 4850]);
+  assert.deepEqual([result.round.won, result.round.multiplier, result.round.win], [true, 85, 4250]);
   const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "casino.big_win" } });
   assert.equal(log.metadata.game, "dice");
 });

@@ -131,7 +131,7 @@ function CasinoLobby() {
             </span>
             <span className="casino-tile-body">
               <strong>Plinko</strong>
-              <span>{t("Drop the ball through the pegs. The middle pays a little, the edges pay up to 1000 times the stake.")}</span>
+              <span>{t("Drop the ball through the pegs. The middle pays a little, the edges pay up to 900 times the stake.")}</span>
             </span>
           </Link>
           <Link className="casino-tile is-dice" href="/dashboard/casino/dice">
@@ -140,7 +140,7 @@ function CasinoLobby() {
             </span>
             <span className="casino-tile-body">
               <strong>{t("Dice")}</strong>
-              <span>{t("Set your own odds: roll over or under a target, from a sure thing to 97 times the stake. Every roll can be checked.")}</span>
+              <span>{t("Set your own odds: roll over or under a target, for up to 85 times the stake. Every roll can be checked.")}</span>
             </span>
           </Link>
           <Link className="casino-tile is-keno" href="/dashboard/casino/keno">
@@ -158,7 +158,7 @@ function CasinoLobby() {
             </span>
             <span className="casino-tile-body">
               <strong>{t("Coin Flip")}</strong>
-              <span>{t("Call heads or tails. A right call pays 1.8 times the stake. Every flip can be checked.")}</span>
+              <span>{t("Call heads or tails. A right call pays 1.7 times the stake. Every flip can be checked.")}</span>
             </span>
           </Link>
           <Link className="casino-tile is-scratch" href="/dashboard/casino/scratch">

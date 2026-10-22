@@ -1,6 +1,6 @@
 // Run with `npm test --workspace apps/api` (builds first). Mines' rules:
 // where the mines go, what each safe tile pays, and that a cash-out at any
-// point returns 97% before the cents are floored.
+// point returns 85% before the cents are floored.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createRequire } from "node:module";
@@ -35,12 +35,12 @@ test("mines are a shuffle of distinct tiles", () => {
   assert.deepEqual(placeMines(3, draws(0, 0, 0)), placeMines(3, draws(0, 0, 0)));
 });
 
-test("the first safe tile with 3 mines pays 1.10, and 24 mines pays 24.25", () => {
-  assert.equal(multiplierHundredths(3, 1), 110);
-  assert.equal(payoutCents(100, 3, 1), 110);
-  assert.equal(multiplierHundredths(24, 1), 2425);
-  assert.equal(payoutCents(100, 24, 1), 2425);
-  assert.equal(payoutCents(50, 3, 1), 55);
+test("the first safe tile with 3 mines pays 0.96, and 24 mines pays 21.25", () => {
+  assert.equal(multiplierHundredths(3, 1), 96);
+  assert.equal(payoutCents(100, 3, 1), 96);
+  assert.equal(multiplierHundredths(24, 1), 2125);
+  assert.equal(payoutCents(100, 24, 1), 2125);
+  assert.equal(payoutCents(50, 3, 1), 48);
 });
 
 test("the multiplier only rises, and it stops at 5,000 times the bet", () => {
@@ -54,13 +54,13 @@ test("the multiplier only rises, and it stops at 5,000 times the bet", () => {
   assert.equal(payoutCents(1000, 20, 5), 1000 * MAX_WIN);
 });
 
-test("cashing out after any number of tiles pays back 97% before the cents are floored", () => {
+test("cashing out after any number of tiles pays back 85% before the cents are floored", () => {
   for (const mines of [1, 3, 10]) {
     const safe = TILES - mines;
     for (let opened = 1; opened <= Math.min(safe, 4); opened++) {
       const paid = payoutCents(10_000, mines, opened);
       const back = ways(TILES, opened, safe) * paid;
-      const target = 0.97 * 10_000;
+      const target = 0.85 * 10_000;
       assert.ok(back <= target + 1, `${mines} mines, ${opened} tiles pays ${back} against ${target}`);
       assert.ok(target - back < 100, `${mines} mines, ${opened} tiles floors by less than a dollar on a $100 stake`);
     }

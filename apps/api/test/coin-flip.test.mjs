@@ -1,5 +1,5 @@
 // Run with `npm test --workspace apps/api` (builds first). Coin Flip's rules:
-// a right call pays 1.8x, so a flip pays back 90%, and the flip is fair and
+// a right call pays 1.7x, so a flip pays back 85%, and the flip is fair and
 // comes from the seeds.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -12,13 +12,13 @@ const { BETS, MULTIPLIER, PAYOUT_RATE, SIDES, flipFor, winCents } = require("../
 test("the sides, the bets and the pay are what the rules say", () => {
   assert.deepEqual([...SIDES], ["HEADS", "TAILS"]);
   assert.deepEqual([...BETS], [50, 100, 250, 500, 1000, 2500]);
-  assert.equal(MULTIPLIER, 1.8);
-  assert.equal(PAYOUT_RATE, 90);
+  assert.equal(MULTIPLIER, 1.7);
+  assert.equal(PAYOUT_RATE, 85);
 });
 
-test("a right call pays the stake times 1.8, rounded down to the cent", () => {
-  assert.equal(winCents(5000), 9000);
-  assert.equal(winCents(250_000), 450_000, "2,500 ALL pays 4,500 ALL");
+test("a right call pays the stake times 1.7, rounded down to the cent", () => {
+  assert.equal(winCents(5000), 8500);
+  assert.equal(winCents(250_000), 425_000, "2,500 ALL pays 4,250 ALL");
   assert.equal(winCents(1), 1);
 });
 

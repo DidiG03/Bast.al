@@ -2,8 +2,8 @@ import { createHmac } from "crypto";
 
 /**
  * Shtatat.al's Coin Flip: the Player calls heads or tails, and the coin is
- * flipped. A right call pays 1.8 times the stake. Each side comes up half
- * the time, so a flip pays back 90% of the stake on average. This file is
+ * flipped. A right call pays 1.7 times the stake. Each side comes up half
+ * the time, so a flip pays back 85% of the stake on average. This file is
  * the game's whole definition, used as it is by the API and the tests, so
  * what's tested is what's played.
  *
@@ -21,9 +21,9 @@ export type Side = (typeof SIDES)[number];
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 
 /** What a right call pays, in times the stake. */
-export const MULTIPLIER = 1.8;
+export const MULTIPLIER = 1.7;
 /** What a flip pays back on average, in percent of the stake: half the flips pay MULTIPLIER. */
-export const PAYOUT_RATE = (MULTIPLIER / 2) * 100;
+export const PAYOUT_RATE = Math.round((MULTIPLIER / 2) * 1000) / 10;
 
 /** What a right call pays, in cents, for a stake in cents, rounded down to the cent. */
 export function winCents(stakeCents: number): number {

@@ -4,7 +4,7 @@ import { createHmac } from "crypto";
  * Shtatat.al's Scratch Cards. A card has 9 boxes; three of the same symbol win
  * that symbol's prize (PRIZES), and a card never has two winning symbols.
  * Each prize's chance is set out of a million, so a card pays back exactly
- * 90% of its price on average (payoutRate). The card is decided and paid
+ * 85% of its price on average (payoutRate). The card is decided and paid
  * when it's bought; scratching only shows it. This file is the game's whole
  * definition, used as it is by the API and the tests, so what's tested is
  * what's played.
@@ -35,7 +35,7 @@ export const ODDS_OUT_OF = 1_000_000;
 /** Each prize: the symbol that shows three times, what it pays in times the price, and how many cards in a million win it. */
 export const PRIZES: ReadonlyArray<{ symbol: ScratchSymbol; multiplier: number; odds: number }> = [
   { symbol: "CHERRY", multiplier: 1, odds: 200_000 },
-  { symbol: "LEMON", multiplier: 2, odds: 100_000 },
+  { symbol: "LEMON", multiplier: 2, odds: 75_000 },
   { symbol: "BELL", multiplier: 5, odds: 40_000 },
   { symbol: "CLOVER", multiplier: 10, odds: 12_500 },
   { symbol: "WATERMELON", multiplier: 25, odds: 3_000 },

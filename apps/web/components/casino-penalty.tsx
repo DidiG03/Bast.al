@@ -314,8 +314,7 @@ export function PenaltyGame() {
               {t("You aim left, center or right, and the keeper dives one of those ways. A different way is a goal and raises what the round pays. The same way is a save and loses the stake. Cash out after the first goal, or keep taking them. The round ends on its own if it reaches {times} times the stake.", { times: state.game.maxWin.toLocaleString() })}
             </p>
             <p>
-              {t("The first {full} goals pay the fair chance of having scored that many, less {edge}%. Every goal after that multiplies what the round pays by {step} instead of the fair 1.5. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't scored.", {
-                edge: Math.round((100 - state.game.payoutRate) * 10) / 10,
+              {t("The first {full} goals pay a little less than the fair chance of having scored that many. Every goal after that multiplies what the round pays by {step} instead of the fair 1.5. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't scored.", {
                 full: state.game.fullPriceGoals,
                 step: state.game.laterStep,
                 min: formatMoney(state.game.bets[0]),

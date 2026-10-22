@@ -37,7 +37,7 @@ export type LineCount = (typeof LINE_CHOICES)[number];
 /** The most lines, and what a spin plays unless it says otherwise. */
 export const LINES: LineCount = 10;
 /** What spins pay back on average, in percent of what they cost, as measured (see REEL_MAKEUP); the same for 5 and 10 lines. */
-export const PAYOUT_RATE = 90.7;
+export const PAYOUT_RATE = 84.9;
 /** What a spin can cost, in ALL, whatever the lines. A line bet is that split between the lines played. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 
@@ -92,8 +92,8 @@ export const shapesFor = (lines: LineCount) => LINE_SHAPES.slice(0, lines);
  * update PAYOUT_RATE.
  */
 const FIRST_REELS: Record<SlotSymbol, number> = { SEVEN: 3, MELON: 6, GRAPES: 6, PLUM: 4, ORANGE: 6, LEMON: 10, CHERRY: 8, STAR: 2 };
-/** Reels 3 to 5 carry fewer plums and more lemons than the first two, so lines started there are finished less often. */
-const LAST_REELS: Record<SlotSymbol, number> = { ...FIRST_REELS, LEMON: 9, PLUM: 5 };
+/** Reels 3 to 5 carry fewer lemons, melons and grapes and more plums and oranges than the first two, so the big lines started there are finished less often. */
+const LAST_REELS: Record<SlotSymbol, number> = { ...FIRST_REELS, LEMON: 9, PLUM: 5, MELON: 4, GRAPES: 5, ORANGE: 9 };
 const REEL_MAKEUP: Array<Record<SlotSymbol, number>> = [FIRST_REELS, FIRST_REELS, LAST_REELS, LAST_REELS, LAST_REELS];
 
 /**

@@ -88,7 +88,7 @@ test("closed with the Casino's switches; the state gives the pay table and a see
   assert.equal(state.tableMax, 2500);
   assert.deepEqual([state.game.numbers, state.game.drawn, state.game.maxPicks, state.game.maxMultiplier], [80, 20, 10, 2000]);
   assert.deepEqual(state.game.pays, PAYS);
-  assert.ok(Object.values(state.game.payoutRates).every((rate) => rate >= 89 && rate <= 91));
+  assert.ok(Object.values(state.game.payoutRates).every((rate) => rate >= 84 && rate <= 86));
   const secret = await activeSeed(kim);
   assert.equal(state.seed.serverSeedHash, hashSeed(secret.serverSeed));
   assert.equal(JSON.stringify(state).includes(secret.serverSeed), false, "the secret never leaves the server");
@@ -110,16 +110,16 @@ test("a draw pays what the pay table says for the hits; it shows in the ledger a
   assert.deepEqual([loss.round.hits, loss.round.win, loss.round.nonce], [[], 0, 1]);
   assert.equal(await balanceOf(kim), 9950);
 
-  // 1 pick that's drawn: 3.6x.
+  // 1 pick that's drawn: 3.4x.
   const one = await keno.play(kim, 100, [(await nextDraw(kim))[0]]);
-  assert.deepEqual([one.round.multiplier, one.round.win], [3.6, 360]);
-  assert.equal(await balanceOf(kim), 10210);
+  assert.deepEqual([one.round.multiplier, one.round.win], [3.4, 340]);
+  assert.equal(await balanceOf(kim), 10190);
 
   const line = await todaysLine(kim);
-  assert.deepEqual([line.type, line.reason, Number(line.amount)], ["CASINO", "Keno: 3 rounds", 210]);
+  assert.deepEqual([line.type, line.reason, Number(line.amount)], ["CASINO", "Keno: 3 rounds", 190]);
   const journal = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpinId: win.round.id } });
   assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 250, 250, owner.id, manager.id]);
-  assert.equal(await ledgerTotal(kim), 10210, "the ledger adds up to the balance");
+  assert.equal(await ledgerTotal(kim), 10190, "the ledger adds up to the balance");
 });
 
 test("Keno and Dice share the seed pair: changing it reveals the server seed, and every draw checks out", async () => {
@@ -198,10 +198,10 @@ test("staff see the Player's casino play: each game over 30 days, rounds still i
 });
 
 test("a big win goes in the audit log", async () => {
-  // 3 picks, all drawn: 45 times isn't big; 5 of 5 (400x) is.
+  // 3 picks, all drawn: 41 times isn't big; 5 of 5 (350x) is.
   const drawn = await nextDraw(kim);
   const result = await keno.play(kim, 50, drawn.slice(0, 5));
-  assert.deepEqual([result.round.hits.length, result.round.multiplier, result.round.win], [5, 400, 20000]);
+  assert.deepEqual([result.round.hits.length, result.round.multiplier, result.round.win], [5, 350, 17500]);
   const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "casino.big_win" } });
   assert.deepEqual([log.metadata.game, log.metadata.hits], ["keno", 5]);
 });

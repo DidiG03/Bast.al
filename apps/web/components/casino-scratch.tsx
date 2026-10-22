@@ -804,7 +804,7 @@ export function ScratchGame() {
             ))}
           </div>
           <p>
-            {t("About {chance}% of cards win something; three cherries give the price back. On average a card pays back {rate}% of its price.", { chance: state.game.winChance, rate: state.game.payoutRate })}
+            {t("About {chance}% of cards win something; three cherries give the price back.", { chance: state.game.winChance })}
           </p>
           <p>
             {t("A card costs {min} to {max}, never more than your max stake. The card is decided and paid when you buy it; scratching only shows it. Autoplay buys and reveals cards for you and stops after the number of cards you set, when it reaches your stop on profit or stop on loss, or when you stop it.", {

@@ -15,7 +15,7 @@ test("under wins below the target, over above it, and the counts match", () => {
   assert.ok(wins(4999, 5000, "UNDER") && !wins(5000, 5000, "UNDER"));
   assert.ok(wins(5001, 5000, "OVER") && !wins(5000, 5000, "OVER"));
   for (const direction of ["UNDER", "OVER"]) {
-    for (const target of [100, 2500, 4999, 5000, 9500]) {
+    for (const target of [100, 2500, 4999, 5000, 8400]) {
       let count = 0;
       for (let roll = 0; roll < OUTCOMES; roll += 1) if (wins(roll, target, direction)) count += 1;
       assert.equal(count, winningNumbers(target, direction), `${direction} ${target}`);
@@ -28,29 +28,31 @@ test(`every target pays back at most ${PAYOUT_RATE}%, and within a hair of it`, 
     const rate = (winning / OUTCOMES) * multiplierOf(winning) * 100;
     assert.ok(rate <= PAYOUT_RATE + 1e-9 && rate > PAYOUT_RATE - 0.01, `${winning}: ${rate}`);
   }
-  assert.equal(multiplierOf(5000), 1.94);
-  assert.equal(multiplierOf(100), 97);
-  assert.equal(multiplierOf(9500), 1.021);
-  assert.equal(multiplierUnits(3333), 29102);
+  assert.equal(multiplierOf(5000), 1.7);
+  assert.equal(multiplierOf(100), 85);
+  assert.equal(multiplierOf(8400), 1.0119);
+  assert.equal(multiplierUnits(3333), 25502);
 });
 
 test("wins are paid in whole cents, rounded down", () => {
-  assert.equal(winCents(100, 5000), 194);
-  assert.equal(winCents(5000, 100), 485_000);
-  assert.equal(winCents(10, 3333), 29);
-  assert.equal(winCents(137, 3333), 398);
+  assert.equal(winCents(100, 5000), 170);
+  assert.equal(winCents(5000, 100), 425_000);
+  assert.equal(winCents(10, 3333), 25);
+  assert.equal(winCents(137, 3333), 349);
 });
 
-test("targets are whole hundredths, and win 1% to 95% of the time", () => {
+test("targets are whole hundredths, and win 1% to 84% of the time", () => {
   assert.equal(targetUnits(50.5), 5050);
   assert.equal(targetUnits(49.99), 4999);
   assert.equal(targetUnits(50.555), null);
   assert.equal(invalidTarget(5000, "OVER"), null);
   assert.equal(invalidTarget(100, "UNDER"), null);
-  assert.match(invalidTarget(99, "UNDER"), /1% to 95%/);
-  assert.match(invalidTarget(9501, "UNDER"), /1% to 95%/);
+  assert.match(invalidTarget(99, "UNDER"), /1% to 84%/);
+  assert.match(invalidTarget(8401, "UNDER"), /1% to 84%/);
   assert.equal(invalidTarget(9899, "OVER"), null);
-  assert.match(invalidTarget(9900, "OVER"), /1% to 95%/);
+  assert.match(invalidTarget(9900, "OVER"), /1% to 84%/);
+  assert.match(invalidTarget(1598, "OVER"), /1% to 84%/);
+  assert.equal(invalidTarget(1599, "OVER"), null);
   assert.match(invalidTarget(10000, "OVER"), /0\.00 to 99\.99/);
 });
 

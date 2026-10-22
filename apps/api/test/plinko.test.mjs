@@ -22,8 +22,8 @@ test("every board has a bucket more than its rows, mirrored, highest at the edge
     assert.ok(payTable(rows, "LOW")[0] < payTable(rows, "MEDIUM")[0] && payTable(rows, "MEDIUM")[0] < payTable(rows, "HIGH")[0]);
     assert.ok(payTable(rows, "LOW")[rows / 2] > payTable(rows, "HIGH")[rows / 2]);
   }
-  assert.equal(MAX_MULTIPLIER, 1000);
-  assert.equal(payTable(16, "HIGH")[0], 1000);
+  assert.equal(MAX_MULTIPLIER, 900);
+  assert.equal(payTable(16, "HIGH")[0], 900);
 });
 
 test("the buckets' chances add up to 1 and follow the binomial", () => {
@@ -42,7 +42,7 @@ test(`every board pays back ${PAYOUT_RATE}% on average, within 0.2%`, () => {
       assert.ok(rate >= PAYOUT_RATE - 0.2 && rate <= PAYOUT_RATE + 0.2, `${rows} rows ${risk}: ${rate}%`);
     }
   }
-  assert.equal(payoutRate(16, "LOW"), 97);
+  assert.equal(payoutRate(16, "LOW"), 85.04);
 });
 
 test("the ball's bucket is how many times it went right", () => {
@@ -50,7 +50,7 @@ test("the ball's bucket is how many times it went right", () => {
   let i = 0;
   const ball = dropBall(8, "HIGH", () => rights[i++]);
   assert.deepEqual(ball, { path: rights, bucket: 5, multiplier: 0.3 });
-  assert.deepEqual(dropBall(16, "HIGH", () => 0), { path: Array(16).fill(0), bucket: 0, multiplier: 1000 });
+  assert.deepEqual(dropBall(16, "HIGH", () => 0), { path: Array(16).fill(0), bucket: 0, multiplier: 900 });
   assert.deepEqual(dropBall(12, "LOW", () => 1).bucket, 12);
   assert.throws(() => dropBall(8, "LOW", () => 2), /off the board/);
 });

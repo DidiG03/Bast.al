@@ -6,9 +6,9 @@
  * tested is what's played.
  *
  * The multiplier after k safe tiles is the fair price of surviving them
- * (the tiles left, over the safe tiles left, at each step) times 97%,
+ * (the tiles left, over the safe tiles left, at each step) times 85%,
  * floored to the cent. Cashing out after any number of tiles therefore
- * pays back 97% on average, before that flooring, whatever the Player
+ * pays back 85% on average, before that flooring, whatever the Player
  * does. A round pays at most 5,000 times the bet, the same ceiling as
  * Book of Ra, and stops there.
  */
@@ -21,10 +21,10 @@ export const TILES = 25;
 export const MINE_COUNTS = [1, 3, 5, 10, 15, 20, 24] as const;
 /** What a round can cost, in dollars. The same chips as the fruit slot. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
-/** The house's edge on every cash-out: 3%, so a round pays back 97% on average. */
-export const HOUSE_EDGE = 0.03;
+/** The house's edge on every cash-out: 15%, so a round pays back 85% on average. */
+export const HOUSE_EDGE = 0.15;
 /** What a round pays back on average, in percent of the stake, before cents are floored. */
-export const PAYOUT_RATE = 97;
+export const PAYOUT_RATE = 85;
 /** The most a round pays, in times the bet. */
 export const MAX_WIN = 5000;
 
@@ -70,7 +70,7 @@ const money = (cents: number) => Math.round(cents) / 100;
 export function multiplierHundredths(mines: number, opened: number): number {
   if (opened <= 0) return 100;
   const safe = TILES - mines;
-  let num = 97n;
+  let num = BigInt(PAYOUT_RATE);
   let den = 1n;
   for (let step = 0; step < opened; step++) {
     num *= BigInt(TILES - step);

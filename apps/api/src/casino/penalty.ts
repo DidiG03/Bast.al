@@ -6,7 +6,7 @@
  * used as it is by the API and the tests, so what's tested is what's played.
  *
  * The first two goals each multiply by the fair 1.5 (each kick scores 2
- * times in 3), times 92%: cashing out after 1 or 2 goals pays back 92% on
+ * times in 3), times 85%: cashing out after 1 or 2 goals pays back 85% on
  * average. Every goal after that multiplies by 1.45 instead, so the house
  * keeps a little more the longer a round runs (89% back after 3 goals, 83%
  * after 5, 70% after 10). Floored to the cent. A round pays at most 5,000
@@ -21,10 +21,10 @@ export type Direction = (typeof DIRECTIONS)[number];
 
 /** What a round can cost, in dollars. The same chips as the fruit slot. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
-/** The house's edge on every cash-out: 8%, so a round pays back 92% on average. */
-export const HOUSE_EDGE = 0.08;
+/** The house's edge on every cash-out: 15%, so a round pays back 85% on average. */
+export const HOUSE_EDGE = 0.15;
 /** What a round cashed out after 1 or 2 goals pays back on average, in percent of the stake, before cents are floored. */
-export const PAYOUT_RATE = 92;
+export const PAYOUT_RATE = 85;
 /** Goals that multiply by the fair 1.5. */
 export const FULL_PRICE_GOALS = 2;
 /** What each goal after those multiplies by, below the fair 1.5. */

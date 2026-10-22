@@ -151,7 +151,7 @@ export function CoinFlipGame() {
     if (event.type === "balance.changed" && !busy && !auto) setBalance(event.balance);
   });
 
-  const multiplier = state?.game.multiplier ?? 1.8;
+  const multiplier = state?.game.multiplier ?? 1.7;
   const profitOnWin = Math.round((Math.floor(stake * multiplier * 100) / 100 - stake) * 100) / 100;
   const stakeProblem = (() => {
     if (!state) return null;
@@ -618,7 +618,7 @@ export function CoinFlipGame() {
       {sheet === "rules" ? (
         <Sheet title={t("Pays and rules")} onClose={() => setSheet(null)}>
           <p>{t("Call heads or tails, then flip the coin. Each side comes up half the time.")}</p>
-          <p>{t("A right call pays {multiplier}× the stake: 100 ALL pays 180 ALL. On average a flip pays back {rate}% of the stake.", { multiplier: state.game.multiplier, rate: state.game.payoutRate })}</p>
+          <p>{t("A right call pays {multiplier}× the stake: 100 ALL pays {example} ALL.", { multiplier: state.game.multiplier, example: Math.round(100 * state.game.multiplier) })}</p>
           <p>
             {t("A flip costs {min} to {max}, never more than your max stake. Autoplay flips for you with the same call and stops after the number of flips you set, when it reaches your stop on profit or stop on loss, or when you stop it.", {
               min: formatStake(state.game.bets[0]),

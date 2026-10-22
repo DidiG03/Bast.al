@@ -88,7 +88,7 @@ test("closed with the Casino's switches; the state gives the prizes and a seed p
   const state = await scratch.state(sami);
   assert.equal(state.closed, null);
   assert.equal(state.tableMax, 2500);
-  assert.deepEqual([state.game.cells, state.game.maxMultiplier, state.game.payoutRate, state.game.winChance], [9, 1000, 90, 35.6]);
+  assert.deepEqual([state.game.cells, state.game.maxMultiplier, state.game.payoutRate, state.game.winChance], [9, 1000, 85, 33.1]);
   assert.deepEqual(state.game.prizes[0], { symbol: "CHERRY", multiplier: 1, chance: 20 });
   const secret = await activeSeed(sami);
   assert.equal(state.seed.serverSeedHash, hashSeed(secret.serverSeed));

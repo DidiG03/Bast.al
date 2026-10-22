@@ -79,43 +79,43 @@ test("closed with the Casino's switches, like the other games", async () => {
   assert.equal(state.tableMax, 2500);
   assert.deepEqual(state.game.rows, [8, 12, 16]);
   assert.equal(state.game.pays[16].HIGH.length, 17);
-  assert.equal(state.game.payoutRates[16].LOW, 97);
+  assert.equal(state.game.payoutRates[16].LOW, 85.04);
   assert.equal(await balanceOf(pia), 10000);
 });
 
 test("a ball takes the stake, pays its bucket, and shows in the ledger and the journal", async () => {
-  // All left on 8 rows, medium risk: the edge, 13.4 times.
+  // All left on 8 rows, medium risk: the edge, 11.5 times.
   follow([0]);
   const edge = await plinko.drop(pia, 50, 8, "MEDIUM");
-  assert.deepEqual([edge.round.rows, edge.round.risk, edge.round.bucket, edge.round.multiplier, edge.round.bet, edge.round.win], [8, "MEDIUM", 0, 13.4, 50, 670]);
+  assert.deepEqual([edge.round.rows, edge.round.risk, edge.round.bucket, edge.round.multiplier, edge.round.bet, edge.round.win], [8, "MEDIUM", 0, 11.5, 50, 575]);
   assert.deepEqual(edge.round.path, [0, 0, 0, 0, 0, 0, 0, 0]);
-  assert.equal(edge.balance, 10620);
-  assert.equal(await balanceOf(pia), 10620);
+  assert.equal(edge.balance, 10525);
+  assert.equal(await balanceOf(pia), 10525);
 
   // Four each way on 8 rows, high risk: the middle, 0.2 times.
   follow([0, 1]);
   const middle = await plinko.drop(pia, 250, 8, "HIGH");
   assert.deepEqual([middle.round.bucket, middle.round.multiplier, middle.round.win], [4, 0.2, 50]);
-  assert.equal(await balanceOf(pia), 10420);
+  assert.equal(await balanceOf(pia), 10325);
 
   const line = await todaysLine(pia);
-  assert.deepEqual([line.type, Number(line.amount), line.reason], ["CASINO", 420, "Plinko: 2 balls"]);
+  assert.deepEqual([line.type, Number(line.amount), line.reason], ["CASINO", 325, "Plinko: 2 balls"]);
   const journal = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpinId: edge.round.id } });
-  assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 50, 670, owner.id, manager.id]);
-  assert.equal(await ledgerTotal(pia), 10420, "the ledger adds up to the balance");
+  assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 50, 575, owner.id, manager.id]);
+  assert.equal(await ledgerTotal(pia), 10325, "the ledger adds up to the balance");
 
   const state = await plinko.state(pia);
-  assert.deepEqual(state.recent.map((row) => row.multiplier), [0.2, 13.4]);
+  assert.deepEqual(state.recent.map((row) => row.multiplier), [0.2, 11.5]);
   assert.equal((await casino.state(pia)).recent.length, 0, "Plinko balls aren't in the slot's list");
 });
 
 test("a big win goes in the audit log", async () => {
   follow([1]);
   const ball = await plinko.drop(pia, 50, 16, "HIGH");
-  assert.deepEqual([ball.round.bucket, ball.round.multiplier, ball.round.win], [16, 1000, 50000]);
+  assert.deepEqual([ball.round.bucket, ball.round.multiplier, ball.round.win], [16, 900, 45000]);
   const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "casino.big_win" } });
   assert.equal(log.metadata.game, "plinko");
-  assert.equal(log.metadata.multiplier, 1000);
+  assert.equal(log.metadata.multiplier, 900);
 });
 
 test("bad stakes and boards, the max stake, the daily loss limit and a low balance stop a ball, and nothing moves", async () => {
@@ -173,8 +173,8 @@ test("the same ball sent twice drops once", async () => {
   const first = await send();
   const again = await send();
   assert.equal(again.round.id, first.round.id);
-  assert.equal(first.round.multiplier, 1.8);
-  assert.equal(await balanceOf(pia), Math.round((before + 80) * 100) / 100, "paid once");
+  assert.equal(first.round.multiplier, 1.4);
+  assert.equal(await balanceOf(pia), Math.round((before + 40) * 100) / 100, "paid once");
   assert.equal(await ledgerTotal(pia), await balanceOf(pia));
 });
 

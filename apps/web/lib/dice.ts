@@ -11,10 +11,10 @@
 export type DiceDirection = "UNDER" | "OVER";
 
 export const OUTCOMES = 10_000;
-export const PAYOUT_RATE = 97;
-/** 1% to 95% of the numbers can win. */
+export const PAYOUT_RATE = 85;
+/** 1% to 84% of the numbers can win (past 84% a win would pay back less than the stake). */
 export const MIN_WINNING = 100;
-export const MAX_WINNING = 9_500;
+export const MAX_WINNING = 8_400;
 
 /** How many of the 10,000 numbers win with this target and side. */
 export const winningNumbers = (target: number, direction: DiceDirection) => (direction === "UNDER" ? target : OUTCOMES - 1 - target);
@@ -27,7 +27,7 @@ export const targetRange = (direction: DiceDirection) => (direction === "UNDER" 
 
 export const clampWinning = (winning: number) => Math.min(MAX_WINNING, Math.max(MIN_WINNING, Math.round(winning)));
 
-/** The multiplier: 97% over the chance, rounded down to 4 decimals. */
+/** The multiplier: 85% over the chance, rounded down to 4 decimals. */
 export const multiplierOf = (winning: number) => Math.floor((PAYOUT_RATE * OUTCOMES * 100) / winning) / 10_000;
 
 /** The number of winning numbers closest to a multiplier the Player typed. */

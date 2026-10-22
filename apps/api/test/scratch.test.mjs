@@ -1,5 +1,5 @@
 // Run with `npm test --workspace apps/api` (builds first). Scratch Cards'
-// rules: the prizes pay back exactly 90%, a card wins only when a symbol
+// rules: the prizes pay back exactly 85%, a card wins only when a symbol
 // shows three times, and the card is fair and comes from the seeds.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -17,8 +17,8 @@ test("the prizes, the bets and the odds are what the rules say", () => {
   assert.equal(new Set(PRIZES.map((prize) => prize.symbol)).size, PRIZES.length, "one prize per symbol");
   assert.ok(PRIZES.every((prize) => SYMBOLS.includes(prize.symbol)));
   assert.equal(MAX_MULTIPLIER, 1000);
-  assert.equal(payoutRate(), 90, "exactly 90% back on average");
-  assert.ok(Math.abs(winChance() - 35.608) < 1e-9);
+  assert.equal(payoutRate(), 85, "exactly 85% back on average");
+  assert.ok(Math.abs(winChance() - 33.108) < 1e-9);
   assert.ok(PRIZES.reduce((sum, prize) => sum + prize.odds, 0) < ODDS_OUT_OF);
   assert.equal(winCents(10_000, 5), 50_000);
   assert.equal(winCents(250_000, 1000), 250_000_000, "2,500 ALL on the crown pays 2,500,000 ALL");

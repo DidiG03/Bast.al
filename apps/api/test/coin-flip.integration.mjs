@@ -85,28 +85,28 @@ test("closed with the Casino's switches; the state gives the rules and a seed pa
   const state = await coin.state(cleo);
   assert.equal(state.closed, null);
   assert.equal(state.tableMax, 2500);
-  assert.deepEqual([state.game.multiplier, state.game.payoutRate, [...state.game.bets]], [1.8, 90, [50, 100, 250, 500, 1000, 2500]]);
+  assert.deepEqual([state.game.multiplier, state.game.payoutRate, [...state.game.bets]], [1.7, 85, [50, 100, 250, 500, 1000, 2500]]);
   const secret = await activeSeed(cleo);
   assert.equal(state.seed.serverSeedHash, hashSeed(secret.serverSeed));
   assert.equal(JSON.stringify(state).includes(secret.serverSeed), false, "the secret never leaves the server");
 });
 
-test("a right call pays 1.8x and a wrong one loses the stake; both show in the ledger and the journal", async () => {
+test("a right call pays 1.7x and a wrong one loses the stake; both show in the ledger and the journal", async () => {
   const side = await nextSide(cleo);
   const win = await coin.flip(cleo, 250, side);
-  assert.deepEqual([win.round.call, win.round.side, win.round.won, win.round.multiplier, win.round.win, win.round.nonce, win.seed.nonce], [side, side, true, 1.8, 450, 0, 1]);
-  assert.equal(win.balance, 10200);
+  assert.deepEqual([win.round.call, win.round.side, win.round.won, win.round.multiplier, win.round.win, win.round.nonce, win.seed.nonce], [side, side, true, 1.7, 425, 0, 1]);
+  assert.equal(win.balance, 10175);
 
   const next = await nextSide(cleo);
   const loss = await coin.flip(cleo, 1000, other(next));
   assert.deepEqual([loss.round.side, loss.round.won, loss.round.win, loss.round.nonce], [next, false, 0, 1]);
-  assert.equal(await balanceOf(cleo), 9200);
+  assert.equal(await balanceOf(cleo), 9175);
 
   const line = await todaysLine(cleo);
-  assert.deepEqual([line.type, line.reason, Number(line.amount)], ["CASINO", "Coin Flip: 2 flips", -800]);
+  assert.deepEqual([line.type, line.reason, Number(line.amount)], ["CASINO", "Coin Flip: 2 flips", -825]);
   const journal = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpinId: win.round.id } });
-  assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 250, 450, owner.id, manager.id]);
-  assert.equal(await ledgerTotal(cleo), 9200, "the ledger adds up to the balance");
+  assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 250, 425, owner.id, manager.id]);
+  assert.equal(await ledgerTotal(cleo), 9175, "the ledger adds up to the balance");
 });
 
 test("Coin Flip and Dice share the seed pair: changing it reveals the server seed, and every flip checks out", async () => {

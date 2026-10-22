@@ -13,7 +13,7 @@ const ODDS_OUT_OF = 1_000_000;
 /** Each prize's symbol and how many cards in a million win it, in the API's order. */
 const ODDS: Array<[ScratchSymbol, number]> = [
   ["CHERRY", 200_000],
-  ["LEMON", 100_000],
+  ["LEMON", 75_000],
   ["BELL", 40_000],
   ["CLOVER", 12_500],
   ["WATERMELON", 3_000],

@@ -1,6 +1,6 @@
 // Run with `npm test --workspace apps/api` (builds first). Penalty's rules:
 // where the keeper dives, what each goal pays, and that a cash-out returns
-// 92% after 1 or 2 goals and less the longer the round runs.
+// 85% after 1 or 2 goals and less the longer the round runs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createRequire } from "node:module";
@@ -14,11 +14,11 @@ test("the directions and the bets are what the rules say", () => {
   assert.equal(MAX_WIN, 5000);
 });
 
-test("the first goal pays 1.38, and the multiplier only rises until the cap", () => {
+test("the first goal pays 1.27, and the multiplier only rises until the cap", () => {
   assert.equal(multiplierHundredths(0), 100);
-  assert.equal(multiplierHundredths(1), 138);
-  assert.equal(payoutCents(100, 1), 138);
-  assert.equal(payoutCents(50, 1), 69);
+  assert.equal(multiplierHundredths(1), 127);
+  assert.equal(payoutCents(100, 1), 127);
+  assert.equal(payoutCents(50, 1), 63);
   let previous = 100;
   for (let goals = 1; goals <= 30; goals++) {
     const next = multiplierHundredths(goals);
@@ -29,19 +29,19 @@ test("the first goal pays 1.38, and the multiplier only rises until the cap", ()
   assert.equal(multiplierHundredths(40), MAX_WIN * 100);
 });
 
-test("cashing out after 1 or 2 goals pays back 92%, and later goals pay back less each time", () => {
-  assert.deepEqual([1, 2, 3, 4, 5, 10].map(multiplierHundredths), [138, 207, 300, 435, 631, 4044]);
+test("cashing out after 1 or 2 goals pays back 85%, and later goals pay back less each time", () => {
+  assert.deepEqual([1, 2, 3, 4, 5, 10].map(multiplierHundredths), [127, 191, 277, 402, 583, 3737]);
   let previous = Infinity;
   for (let goals = 1; goals <= 10; goals++) {
     const back = (2 / 3) ** goals * payoutCents(10_000, goals);
-    const target = 0.92 * 10_000;
+    const target = 0.85 * 10_000;
     assert.ok(back <= target + 1, `${goals} goals pays ${back} against ${target}`);
     if (goals <= 2) assert.ok(target - back < 100, `${goals} goals floors by less than a dollar on a $100 stake`);
     else assert.ok(back < previous, `${goals} goals pays back less than ${goals - 1}`);
     previous = back;
   }
-  // 70% back after 10 goals.
-  assert.ok(Math.abs((2 / 3) ** 10 * payoutCents(10_000, 10) - 7_000) < 50);
+  // About 65% back after 10 goals.
+  assert.ok(Math.abs((2 / 3) ** 10 * payoutCents(10_000, 10) - 6_480) < 50);
 });
 
 test("the keeper matching the aim is a save, and a different way is a goal", () => {
@@ -53,7 +53,7 @@ test("the keeper matching the aim is a save, and a different way is a goal", () 
   assert.equal(goal.phase, "PLAY");
   assert.equal(goal.goals.length, 1);
   assert.deepEqual(publicView(goal).kicks, [{ aim: "LEFT", dive: "CENTER", goal: true }]);
-  assert.equal(publicView(goal).multiplier, 1.38);
+  assert.equal(publicView(goal).multiplier, 1.27);
 
   const saved = kick(goal, "RIGHT", () => 2);
   assert.equal(saved.phase, "LOST");
@@ -67,7 +67,7 @@ test("cashing out needs a goal, and a finished shootout stays finished", () => {
   const scored = kick(round, "CENTER", () => 0);
   const taken = cashOut(scored);
   assert.equal(taken.phase, "WON");
-  assert.equal(taken.payout, 138);
+  assert.equal(taken.payout, 127);
   assert.throws(() => kick(taken, "LEFT", () => 0), /This round is already over/);
   assert.throws(() => kick(round, "UP", () => 0), /Aim left, center or right/);
 });

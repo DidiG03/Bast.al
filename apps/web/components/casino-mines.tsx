@@ -347,7 +347,7 @@ export function MinesGame() {
               {t("A 5 by 5 field hides the number of mines you pick. Tap a tile: a gem raises what the round pays, a mine loses the stake. Cash out after the first gem, or keep going. The round ends on its own if you clear every gem, or if it reaches {times} times the stake.", { times: state.game.maxWin.toLocaleString() })}
             </p>
             <p>
-              {t("Each gem pays the fair chance of having reached it, less 3%. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.", {
+              {t("Each gem pays a little less than the fair chance of having reached it. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.", {
                 min: formatMoney(state.game.bets[0]),
                 max: formatMoney(state.game.bets[state.game.bets.length - 1]),
               })}

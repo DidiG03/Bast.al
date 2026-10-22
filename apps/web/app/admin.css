@@ -1817,9 +1817,8 @@ html:has(.role-admin) body {
   padding: 3rem;
   border: 1px solid var(--a-border);
   border-radius: 14px;
-  background:
-    radial-gradient(var(--a-border-strong) 1px, transparent 1.5px) 0 0 / 1.25rem 1.25rem,
-    var(--a-frame);
+  /* Cover artwork; the dark green fallback matches its edges while it loads. */
+  background: #0b1411 url("/auth/sign-in-cover.webp") center / cover no-repeat;
 }
 
 .auth-aside-inner {

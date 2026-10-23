@@ -66,7 +66,7 @@ export class NotificationsService {
   }
 
   async updatePreferences(actor: Actor, input: Partial<Record<"inAppEnabled" | "emailEnabled" | "financeEnabled" | "accountEnabled" | "securityEnabled" | "systemEnabled", boolean>>) {
-    return this.prisma.notificationPreference.upsert({ where: { userId: actor.id }, create: { userId: actor.id, ...input }, update: input });
+    return this.prisma.notificationPreference.upsert({ where: { userId: actor.id }, create: { ...input, userId: actor.id }, update: input });
   }
 
   /**

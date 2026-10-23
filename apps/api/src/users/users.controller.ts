@@ -117,23 +117,8 @@ export class UsersController {
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard)
   revokeOthers(@CurrentActor() actor: Actor, @Req() req: AuthenticatedRequest) {
-    return this.users.revokeOtherSessions(actor, req.headers["x-clerk-session-id"] as string | undefined);
-  }
-
-  @Get("security-settings")
-  @ApiBearerAuth()
-  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN)
-  securitySettings(@CurrentActor() actor: Actor) {
-    return this.users.securitySettings(actor);
-  }
-
-  @Post("security-settings")
-  @ApiBearerAuth()
-  @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN)
-  updateSecuritySettings(@CurrentActor() actor: Actor, @Body() body: { failLimit: number; windowMs: number; banMs: number }) {
-    return this.users.updateSecuritySettings(actor, body);
+    // The session this request came from, as its verified token says: "other" devices are every session but this one.
+    return this.users.revokeOtherSessions(actor, req.clerkSessionId);
   }
 
   /** What deleting all data would remove right now (see DataResetService). */

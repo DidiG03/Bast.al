@@ -18,6 +18,8 @@ import { Actor, isActive } from "./permissions";
 export type AuthenticatedRequest = Request & {
   actor?: Actor;
   clerkUserId?: string;
+  /** The Clerk session the request's token was issued for (its `sid`), when it has one. */
+  clerkSessionId?: string;
 };
 
 /** A refused account's attempts are recorded at most this often, not on every request its open tabs make. */
@@ -84,6 +86,7 @@ export class AuthGuard implements CanActivate {
     await this.threats.clearFailures(ip);
     if (sessionId) await this.recordVisit(request, sessionId, user.id, ip);
     request.clerkUserId = clerkUserId;
+    request.clerkSessionId = sessionId;
     request.actor = user;
     return true;
   }

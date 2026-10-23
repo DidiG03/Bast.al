@@ -181,7 +181,8 @@ test("reports come from the team and rates when the bet was placed", async () =>
   const mine = await commissions.mine({ ...managerA, commissionRate: D(50) }, iso(W3), iso(W4));
   assert.equal(mine.totals.commission, 200);
 
-  const daily = await commissions.daily(owner, 31);
+  // Enough days back from today to reach week 3, however long ago that now is.
+  const daily = await commissions.daily(owner, Math.ceil((Date.now() - W3.getTime()) / 86_400_000) + 1);
   assert.equal(daily.days.reduce((s, d) => s + d.net, 0), 1300);
 
   const ardiActivity = await activity.activity(sa, ardi.id);

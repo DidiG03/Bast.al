@@ -190,6 +190,21 @@ test("double or nothing stops at its limits, a new spin or collecting", async ()
   await casino.collect(cara);
 });
 
+test("double or nothing isn't taken once the slot is switched off, for the site or the team; the win stays", async () => {
+  casino.rng = stopsAt(smallWin);
+  casino.drawSuit = () => RED;
+  await casino.spin(cara, 100);
+  const before = await balanceOf(cara);
+  await casino.setGame(sa, "slot", false);
+  await assert.rejects(casino.gamble(cara, "RED"), /This game isn't available right now/);
+  await casino.setGame(sa, "slot", true);
+  await casino.setGame(owner, "slot", false);
+  await assert.rejects(casino.gamble(cara, "RED"), /This game isn't open for your team/);
+  assert.equal(await balanceOf(cara), before, "the win is already in the balance and stays there");
+  await casino.setGame(owner, "slot", true);
+  await casino.collect(cara);
+});
+
 test("free spins left from the old game play at the bet that won them and cost nothing", async () => {
   await prisma.casinoFreeSpins.create({ data: { playerId: cara.id, remaining: 3, bet: 50 } });
   const before = await balanceOf(cara);

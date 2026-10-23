@@ -54,15 +54,16 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     async function connect() {
       window.clearTimeout(retryTimer);
       controller?.abort();
-      controller = new AbortController();
+      const mine = new AbortController();
+      controller = mine;
       try {
         const token = await getToken();
-        if (stopped) return;
+        if (stopped || controller !== mine) return;
         if (!token) throw new Error("no session");
         const response = await fetch("/api/backend/realtime/stream", {
           headers: { Accept: "text/event-stream", Authorization: `Bearer ${token}` },
           cache: "no-store",
-          signal: controller.signal,
+          signal: mine.signal,
         });
         if (!response.ok || !response.body)
           throw new Error(`stream unavailable (${response.status})`);
@@ -93,9 +94,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch {
+        // Aborted because a newer connect took over: that one carries on, so this one schedules nothing.
+        // Retrying here too would abort the new stream, whose retry would abort the next, for ever.
+        if (mine.signal.aborted) return;
         failures += 1;
       }
-      if (stopped) return;
+      if (stopped || controller !== mine) return;
       // The server closes each stream after a few minutes on purpose, so a
       // clean end reconnects at once; errors back off.
       const delay =

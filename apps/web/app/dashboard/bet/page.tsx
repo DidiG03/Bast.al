@@ -1433,9 +1433,13 @@ function BetSlip({
       else toast.warning(blocker);
       return;
     }
-    const token = await getToken();
-    if (!token) return;
+    // Before the first wait, so a second tap meanwhile finds the slip already going and does nothing.
     setPlacing(true);
+    const token = await getToken();
+    if (!token) {
+      setPlacing(false);
+      return;
+    }
     if (hasLive) toast.info(t("Live bets take a few seconds to confirm. If the price or score changes meanwhile, you'll see the new price first."));
     const body = JSON.stringify({
       ...(system

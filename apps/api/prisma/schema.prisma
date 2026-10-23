@@ -263,6 +263,10 @@ model BalanceTransaction {
   @@index([fromUserId])
   @@index([status])
   @@index([betId])
+  /// Who made each move: the financial report and the Money page's "By me".
+  @@index([actorId, createdAt])
+  /// The Money page's lists by kind (transfers by default), newest first.
+  @@index([type, createdAt])
   @@map("balance_transactions")
 }
 
@@ -721,6 +725,8 @@ model SettlementEntry {
   @@index([managerId, createdAt])
   @@index([playerId, createdAt])
   @@index([betId])
+  /// Super Admin's views of every team for a period: Commissions and the overview chart.
+  @@index([createdAt])
   @@map("settlement_entries")
 }
 
@@ -818,6 +824,8 @@ model CasinoSpin {
   @@index([playerId, createdAt])
   @@index([ownerId, createdAt])
   @@index([managerId, createdAt])
+  /// Super Admin's Casino page: every team's rounds for a period.
+  @@index([createdAt])
   @@map("casino_spins")
 }
 

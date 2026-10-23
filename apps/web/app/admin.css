@@ -463,13 +463,13 @@ html:has(.role-admin) body {
   gap: 0.35rem;
 }
 
-.role-admin .topbar-actions .theme-toggle,
-.role-admin .topbar-actions .language-toggle,
 /* An Owner's or Manager's balance sits on the right, beside the buttons, as it does for Players. */
 .role-admin .dashboard-topbar .player-balance-chip {
   margin-left: auto;
 }
 
+.role-admin .topbar-actions .theme-toggle,
+.role-admin .topbar-actions .language-toggle,
 .role-admin .dashboard-topbar .notification-trigger {
   display: grid;
   width: 2.1rem;

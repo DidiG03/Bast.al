@@ -343,6 +343,9 @@ export class CasinoService {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
       const open = await tx.casinoGamble.findUnique({ where: { playerId: actor.id } });
       if (!open) throw new BadRequestException("There's no win to double. Spin first.");
+      // A guess is a new bet on that game's win, so it isn't taken once the game has been switched off.
+      const gameClosed = await casinoClosedReason(tx, actor, open.game === "book" ? "book" : "slot");
+      if (gameClosed) throw new ForbiddenException(gameClosed);
       const stake = open.amount;
       await this.limits.assertCanPlace(actor.id, Number(stake), 0, tx);
 

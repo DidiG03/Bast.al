@@ -114,6 +114,14 @@ test("a Player in the middle of a blackjack hand waits to be moved too", async (
   await prisma.blackjackHand.delete({ where: { playerId: cara.id } });
 });
 
+test("another team's Owner or a Manager can't preview a move outside their part of the tree", async () => {
+  const outsider = await user("OWNER", sa.id);
+  await assert.rejects(users.reassignmentPreview(outsider, cara.id, managerA.id), /outside your hierarchy subtree/);
+  // Cara is Manager B's now: Manager A sees neither her nor Manager B.
+  await assert.rejects(users.reassignmentPreview(managerA, cara.id, managerB.id), /outside your hierarchy subtree/);
+  await assert.rejects(users.reassignmentPreview(owner, cara.id, ""), /Choose where to move them/);
+});
+
 test("a transfer waiting for approval only goes through if the giver could still make it", async () => {
   // Asked for by Manager A while Cara was theirs; she's Manager B's now.
   const stale = await prisma.balanceTransaction.create({

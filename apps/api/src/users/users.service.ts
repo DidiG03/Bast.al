@@ -72,7 +72,13 @@ const MONEY_KIND_TYPES: Record<Exclude<MoneyKind, "all">, BalanceTransactionType
 };
 
 function dateRange(from?: string, to?: string) {
-  return from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {};
+  const parse = (value: string) => {
+    const date = new Date(value);
+    // Some routes take the dates straight from the query string: a bad one is the caller's mistake, not a server error.
+    if (Number.isNaN(date.getTime())) throw new BadRequestException("Invalid date");
+    return date;
+  };
+  return from || to ? { createdAt: { ...(from ? { gte: parse(from) } : {}), ...(to ? { lte: parse(to) } : {}) } } : {};
 }
 
 /**
@@ -195,23 +201,13 @@ export class UsersService {
   }
 
   async revokeOtherSessions(actor: Actor, currentSessionId?: string) {
+    // Without this device's session every session counts as "other", this one included.
+    if (!currentSessionId) throw new BadRequestException("We couldn't tell which device this is, so nothing was signed out. Refresh the page and try again.");
     const sessions = await this.clerk.api.sessions.getSessionList({ userId: actor.clerkId });
     const otherSessions = sessions.data.filter((session) => session.id !== currentSessionId);
     await Promise.all(otherSessions.map((session) => this.clerk.api.sessions.revokeSession(session.id)));
     await this.audit.log({ actorId: actor.id, action: "auth.sessions_revoke_other", metadata: { count: otherSessions.length } });
     return { revoked: otherSessions.length };
-  }
-
-  async securitySettings(actor: Actor) {
-    if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Security settings are restricted");
-    return this.prisma.securitySetting.upsert({ where: { id: "default" }, create: {}, update: {} });
-  }
-
-  async updateSecuritySettings(actor: Actor, input: { failLimit: number; windowMs: number; banMs: number }) {
-    if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Security settings are restricted");
-    const settings = await this.prisma.securitySetting.upsert({ where: { id: "default" }, create: input, update: input });
-    await this.audit.log({ actorId: actor.id, action: "security.settings_update", metadata: input });
-    return settings;
   }
 
   async listVisible(actor: Actor) {
@@ -471,8 +467,10 @@ export class UsersService {
       throw new BadRequestException(clerkRefusal(error, "create"));
     }
 
-    try {
-      const user = await this.prisma.user.create({
+    // Only a failed insert rolls the Clerk account back: once the row exists, the
+    // sign-in it points at has to stay, whatever happens to the logging after.
+    const user = await this.prisma.user
+      .create({
         data: {
           clerkId: clerkUser.id,
           username,
@@ -483,49 +481,48 @@ export class UsersService {
           status: UserStatus.ACTIVE,
         },
         select: publicUserSelect,
+      })
+      .catch(async () => {
+        await this.clerk.deleteUser(clerkUser.id);
+        await this.audit.log({
+          actorId: actor.id,
+          action: "user.create.failure",
+          ipAddress,
+          metadata: { reason: "db_create_failed", clerkId: clerkUser.id },
+        });
+        throw new ConflictException("Failed to persist user; Clerk account rolled back");
       });
 
-      await this.audit.log({
-        actorId: actor.id,
-        action: "user.create",
-        targetId: user.id,
-        ipAddress,
-        metadata: { role: user.role, username: user.username },
-      });
-      if (user.role === Role.PLAYER && parentId !== actor.id) {
-        const manager = await this.prisma.user.findUnique({ where: { id: parentId }, select: { username: true } });
-        if (manager) {
-          await this.notifications.create({
-            userId: parentId,
-            type: NotificationType.ACCOUNT_REASSIGNED,
-            title: "New player assigned",
-            message: `${user.username} was assigned to your team.`,
-            deepLink: `/dashboard/users?userId=${user.id}`,
-            metadata: { userId: user.id },
-          });
-        }
+    await this.audit.log({
+      actorId: actor.id,
+      action: "user.create",
+      targetId: user.id,
+      ipAddress,
+      metadata: { role: user.role, username: user.username },
+    });
+    if (user.role === Role.PLAYER && parentId !== actor.id) {
+      const manager = await this.prisma.user.findUnique({ where: { id: parentId }, select: { username: true } });
+      if (manager) {
         await this.notifications.create({
-          userId: user.id,
+          userId: parentId,
           type: NotificationType.ACCOUNT_REASSIGNED,
-          title: "Account assigned",
-          message: `Your account was assigned to manager ${manager?.username ?? "your manager"}.`,
-          deepLink: `/dashboard/users?userId=${parentId}`,
-          metadata: { managerId: parentId },
+          title: "New player assigned",
+          message: `${user.username} was assigned to your team.`,
+          deepLink: `/dashboard/users?userId=${user.id}`,
+          metadata: { userId: user.id },
         });
       }
-
-      return user;
-    } catch (error) {
-      await this.clerk.deleteUser(clerkUser.id);
-      await this.audit.log({
-        actorId: actor.id,
-        action: "user.create.failure",
-        ipAddress,
-        metadata: { reason: "db_create_failed", clerkId: clerkUser.id },
+      await this.notifications.create({
+        userId: user.id,
+        type: NotificationType.ACCOUNT_REASSIGNED,
+        title: "Account assigned",
+        message: `Your account was assigned to manager ${manager?.username ?? "your manager"}.`,
+        deepLink: `/dashboard/users?userId=${parentId}`,
+        metadata: { managerId: parentId },
       });
-      if (error instanceof ConflictException) throw error;
-      throw new ConflictException("Failed to persist user; Clerk account rolled back");
     }
+
+    return user;
   }
 
   async getById(actor: Actor, id: string, ipAddress?: string) {
@@ -1495,14 +1492,18 @@ export class UsersService {
   }
 
   async reassignmentPreview(actor: Actor, id: string, managerId: string) {
+    if (!managerId) throw new BadRequestException("Choose where to move them");
+    // Like the move itself: nothing about accounts outside the caller's part of the tree, not even their names.
+    if (!(await this.hierarchy.canActOn(actor, id)) || !(await this.hierarchy.canActOn(actor, managerId))) {
+      throw new ForbiddenException("Player or Manager is outside your hierarchy subtree");
+    }
     const player = await this.prisma.user.findUnique({ where: { id }, select: { id: true, username: true, role: true, parentId: true, balance: true, parent: { select: { username: true } } } });
     const manager = await this.prisma.user.findUnique({ where: { id: managerId }, select: { id: true, username: true, role: true, status: true, managerCapacity: true } });
     if (!player || !manager) throw new NotFoundException("Player or Manager not found");
     const directChildren = await this.prisma.user.findMany({ where: { parentId: managerId, role: Role.PLAYER }, select: { id: true, username: true } });
     const playerDescendants = await this.hierarchy.getDescendantIds(id);
-    const authorized = await this.hierarchy.canActOn(actor, id) && await this.hierarchy.canActOn(actor, managerId);
     const blocked = moveBlocker(player.username, player.balance, await this.prisma.bet.count({ where: { playerId: id, status: BetStatus.OPEN } }), await inPlay(this.prisma, id));
-    const reason = !authorized ? "Outside your hierarchy" : player.role !== Role.PLAYER ? "Only Players can be reassigned" : !holdsDirectReports(manager.role) ? "Destination is not a Manager or Owner" : manager.status !== UserStatus.ACTIVE ? "Destination is suspended" : player.parentId === managerId ? "Player is already assigned here" : playerDescendants.includes(managerId) ? "Circular hierarchy detected" : directChildren.length >= manager.managerCapacity ? "Destination capacity reached" : blocked;
+    const reason = player.role !== Role.PLAYER ? "Only Players can be reassigned" : !holdsDirectReports(manager.role) ? "Destination is not a Manager or Owner" : manager.status !== UserStatus.ACTIVE ? "Destination is suspended" : player.parentId === managerId ? "Player is already assigned here" : playerDescendants.includes(managerId) ? "Circular hierarchy detected" : directChildren.length >= manager.managerCapacity ? "Destination capacity reached" : blocked;
     return {
       valid: reason === null,
       reason,
@@ -1512,7 +1513,7 @@ export class UsersService {
         movedAccounts: 1,
         currentManagerId: player.parentId,
         /** What goes back to the Manager or Owner they leave, and who that is. */
-        returnedBalance: authorized && player.balance.isPositive() && player.parent ? Number(player.balance) : 0,
+        returnedBalance: player.balance.isPositive() && player.parent ? Number(player.balance) : 0,
         returnedTo: player.parent?.username ?? null,
       },
     };

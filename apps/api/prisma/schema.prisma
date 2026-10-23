@@ -180,6 +180,12 @@ model LoginHistory {
   @@map("login_history")
 }
 
+/// Unused: lockouts are set by SECURITY_FAIL_LIMIT, SECURITY_FAIL_WINDOW_MS and
+/// SECURITY_BAN_MS (see ThreatIntelService), and nothing reads or writes this.
+/// It stays in the schema because dropping a table that has a row makes Prisma
+/// refuse the whole start-up `db push` (see schema-sync.ts), which would hold
+/// back every later schema change too. To drop it: remove this model and run
+/// `npm run db:push` by hand, accepting the loss.
 model SecuritySetting {
   id        String   @id @default("default")
   failLimit Int      @default(8) @map("fail_limit")

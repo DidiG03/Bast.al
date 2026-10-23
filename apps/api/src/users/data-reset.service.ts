@@ -17,8 +17,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Owner, Manager and Player with their Clerk sign-ins, and everything that
  * happened: bets and casino spins, balances and the ledger, commissions,
  * notifications and the audit log. Kept: Super Admin's account and sign-in history, the
- * prices, margins and leagues, the security settings, and the matches from
- * the feed.
+ * prices, margins and leagues, and the matches from the feed.
  *
  * The sign-ins go first. If Clerk fails part way, nothing in the database
  * has changed yet, and running it again finishes the job (a sign-in that's

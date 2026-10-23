@@ -1,10 +1,44 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiProperty, ApiTags } from "@nestjs/swagger";
+import { IsBoolean, IsOptional } from "class-validator";
 import { AuthGuard } from "../auth/auth.guard";
 import { CurrentActor } from "../auth/current-actor.decorator";
 import type { Actor } from "../auth/permissions";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { NotificationsService } from "./notifications.service";
+
+/** The switches a user may change on their own notifications; anything else in the body is refused. */
+class NotificationPreferencesDto {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  inAppEnabled?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  emailEnabled?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  financeEnabled?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  accountEnabled?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  securityEnabled?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  systemEnabled?: boolean;
+}
 
 @ApiTags("notifications")
 @ApiBearerAuth()
@@ -49,7 +83,7 @@ export class NotificationsController {
 
   @Patch("preferences")
   @UseGuards(RequestIntegrityGuard, AuthGuard)
-  updatePreferences(@CurrentActor() actor: Actor, @Body() body: Record<string, boolean>) {
+  updatePreferences(@CurrentActor() actor: Actor, @Body() body: NotificationPreferencesDto) {
     return this.notifications.updatePreferences(actor, body);
   }
 }

@@ -77,7 +77,11 @@ type LiveEventState = {
 export function livePause(event: LiveEventState, now: Date = new Date()): LivePause | null {
   if (event.status !== "LIVE") return null;
   if (event.liveStopped) return "feed";
-  if (event.liveCooldownUntil && event.liveCooldownUntil > now) return (["goal", "swing", "reopen"].includes(event.liveCooldownReason ?? "") ? event.liveCooldownReason : "feed") as LivePause;
+  if (event.liveCooldownUntil && event.liveCooldownUntil > now) {
+    // A red card, a VAR check or a penalty shows as a jump in the prices.
+    if (event.liveCooldownReason === "red" || event.liveCooldownReason === "var") return "swing";
+    return (["goal", "swing", "reopen"].includes(event.liveCooldownReason ?? "") ? event.liveCooldownReason : "feed") as LivePause;
+  }
   if (LIVE_CUTOFF_MINUTE > 0 && (event.elapsed ?? 0) >= LIVE_CUTOFF_MINUTE) return "late";
   if (event.liveOddsAt === null || now.getTime() - event.liveOddsAt.getTime() > LIVE_ODDS_STALE_MS) return "feed";
   return null;

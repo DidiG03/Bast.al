@@ -4,10 +4,12 @@ import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { GOAL_MARKET_KEYS } from "../bets/goals";
-import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseMarkets, parseMatchCentre } from "./api-football";
+import type { FeedMark, LateTimeline } from "../bets/late";
+import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, feedMarkOf, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseLiveTimeline, parseMarkets, parseMatchCentre } from "./api-football";
+import { feedDelay, goalTime } from "./feed-delay";
 import { savedCrests, savedMarks } from "./crest";
 import { PREMATCH_REFRESH_MS, RICH_PLAN, isDailyLimitError, msUntilReset, pacedInterval, quotaReserve } from "./feed-budget";
-import { SWING_COOLDOWN_MS, bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "./live-guard";
+import { GOAL_COOLDOWN_MS, type CooldownReason, bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
 /**
@@ -150,12 +152,20 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   onLiveSaved?: (eventIds: string[]) => Promise<void>;
   /** Called when matches just finished, once their stats and goals are in: SettlementService pays their bets now, not at its next round. */
   onFinished?: () => Promise<unknown>;
+  /**
+   * Called as soon as the site sees a new goal on a live match, with the
+   * feed's timeline so far if it could be fetched: SettlementService voids
+   * the open live bets placed after it on a score without it (bets/late.ts).
+   */
+  onGoalSeen?: (eventId: string, timeline: LateTimeline | null) => Promise<unknown>;
+  /** Called with finished matches whose timeline just came in: SettlementService looks again at their live bets that already settled. */
+  onTimeline?: (eventIds: string[]) => Promise<unknown>;
   /** Checks with the feed for one match, shared by bets placed at the same moment. */
   private readonly verifying = new Map<string, { at: number; done: Promise<void> }>();
   /** Each live match's latest price reading: when it came, the bookmaker's own update time and the match clock (for a live bet's record). */
   private readonly readings = new Map<string, { at: Date; bookmakerUpdate: string | null; clock: string | null }>();
-  /** The same for the cards of matches with a live cards bet being confirmed (verifyCards). */
-  private readonly verifyingCards = new Map<string, { at: number; done: Promise<void> }>();
+  /** The same for reading live matches' timelines straight from the feed (readMarks). */
+  private readonly verifyingCards = new Map<string, { at: number; done: Promise<Map<string, FeedMark>> }>();
   readonly mode: FeedMode;
   private readonly client?: ApiFootballClient;
   private readonly bookmakerId: number;
@@ -363,19 +373,24 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Fetches the given live football matches' centres from the feed right now
-   * (one request for up to 20) and saves them, so a live cards bet records
-   * the cards shown up to that moment for the late check (bets/late.ts). A
-   * fetch already running for a match is shared. Throws if the feed can't be
-   * reached; the bet is refused then.
+   * Reads the given live football matches straight from the feed (their
+   * fixtures by id, one request for up to 20), saves their centres, and
+   * returns the feed's record of each (FeedMark): its score and how many
+   * goals, cards, VAR checks and penalties its timeline has. A live bet reads
+   * this when it comes in and again at the end of its wait, so anything that
+   * happened in between refuses it, whatever our saved copy says; and its
+   * cards are recorded for the late check (bets/late.ts). A read already
+   * running for a match is shared. Throws if the feed can't be reached or
+   * leaves a match out.
    */
-  async verifyCards(eventIds: string[]): Promise<void> {
-    if (this.mode !== "api-football" || !this.client || eventIds.length === 0) return;
+  async readMarks(eventIds: string[]): Promise<Map<string, FeedMark>> {
+    const marks = new Map<string, FeedMark>();
+    if (this.mode !== "api-football" || !this.client || eventIds.length === 0) return marks;
     const events = await this.prisma.event.findMany({
       where: { id: { in: [...new Set(eventIds)] }, status: EventStatus.LIVE, sport: "football", provider: this.provider(), externalId: { not: null } },
       select: { id: true, externalId: true },
     });
-    const waits = new Set<Promise<void>>();
+    const waits = new Set<Promise<Map<string, FeedMark>>>();
     const fresh: typeof events = [];
     for (const event of events) {
       const shared = this.verifyingCards.get(event.id);
@@ -384,9 +399,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     }
     for (let i = 0; i < fresh.length; i += 20) {
       const batch = fresh.slice(i, i + 20);
-      // A match the feed left out keeps its older centre, so it doesn't count as confirmed.
-      const done = this.saveMatchCentres(batch).then((saved) => {
+      // A match the feed left out keeps its older centre, so it doesn't count as read.
+      const done = this.saveMatchCentres(batch).then(({ saved, marks: read }) => {
         if (saved < batch.length) throw new Error("The feed didn't send every match's events");
+        return read;
       });
       const entry = { at: Date.now(), done };
       for (const event of batch) this.verifyingCards.set(event.id, entry);
@@ -394,7 +410,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       done.then(() => setTimeout(forget, VERIFY_SHARE_MS).unref(), forget);
       waits.add(done);
     }
-    await Promise.all(waits);
+    for (const read of await Promise.all(waits)) for (const [id, mark] of read) if (events.some((event) => event.id === id)) marks.set(id, mark);
+    return marks;
   }
 
   /** Tells the pages about live prices just saved: each team gets its own (OddsService), or everyone is asked to fetch them. */
@@ -646,7 +663,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
             false,
           );
       const pause = laterCooldown({ until: saved.liveCooldownUntil, reason: saved.liveCooldownReason }, cooldown);
-      if (!oddsHaveScore && fixture.status === EventStatus.LIVE) await this.noteGoal(saved.id, saved, fixture, fixture.elapsed, "scores");
+      if (!oddsHaveScore && fixture.status === EventStatus.LIVE) await this.noteGoal(saved.id, saved, fixture, fixture.elapsed, "scores", await this.pricesBeforeGoal(saved.id, saved, fixture));
       const period = saved.period === "FT" && fixture.status === EventStatus.LIVE ? "FT" : fixture.period;
       const scoreMoved = !oddsHaveScore && (saved.homeScore !== fixture.homeScore || saved.awayScore !== fixture.awayScore);
       if (saved.status !== fixture.status || saved.elapsed !== fixture.elapsed || saved.period !== period || scoreMoved) changed.push(saved.id);
@@ -715,41 +732,56 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       take: MATCH_CENTRE_MAX,
     });
     let saved = 0;
-    for (let i = 0; i < due.length; i += 20) saved += await this.saveMatchCentres(due.slice(i, i + 20));
+    for (let i = 0; i < due.length; i += 20) saved += (await this.saveMatchCentres(due.slice(i, i + 20))).saved;
     return saved;
   }
 
-  /** Fetches up to 20 matches' centres in one request and saves them. */
-  private async saveMatchCentres(batch: Array<{ id: string; externalId: string | null }>): Promise<number> {
+  /**
+   * Fetches up to 20 matches' centres in one request and saves them, with the
+   * feed's record of each (FeedMark). Something new in a live match's
+   * timeline pauses the whole match at once, like a goal in its prices: a red
+   * card, a VAR check or a penalty, and a goal its score doesn't have yet
+   * (which counts as the site seeing that goal, GoalSeen).
+   */
+  private async saveMatchCentres(batch: Array<{ id: string; externalId: string | null }>): Promise<{ saved: number; marks: Map<string, FeedMark> }> {
     const byExternal = new Map(batch.map((event) => [event.externalId!, event.id]));
     const savedBefore = await this.prisma.event.findMany({
       where: { id: { in: batch.map((event) => event.id) } },
-      select: { id: true, status: true, matchCentre: true, liveCooldownUntil: true, liveCooldownReason: true },
+      select: { id: true, name: true, status: true, elapsed: true, homeScore: true, awayScore: true, matchCentre: true, liveCooldownUntil: true, liveCooldownReason: true },
     });
     const before = new Map(savedBefore.map((event) => [event.id, event]));
     let saved = 0;
+    const marks = new Map<string, FeedMark>();
     const paused: string[] = [];
     for (const raw of await this.client!.fixtureDetails(batch.map((event) => event.externalId!))) {
       const eventId = byExternal.get(String(raw.fixture.id));
       if (!eventId) continue;
       const centre = parseMatchCentre(raw);
+      const mark = feedMarkOf(raw);
+      marks.set(eventId, mark);
       const was = before.get(eventId);
-      // A red card the site hadn't shown yet pauses the whole live match, like a big jump in its prices.
-      const reds = (value: unknown) => ((value as { moments?: Array<{ kind: string }> } | null)?.moments ?? []).filter((moment) => moment.kind === "red").length;
-      const newRed = was?.status === EventStatus.LIVE && was.matchCentre !== null && reds(centre) > reds(was.matchCentre) && SWING_COOLDOWN_MS > 0;
-      const pause = newRed ? laterCooldown({ until: was.liveCooldownUntil, reason: was.liveCooldownReason }, { until: new Date(Date.now() + SWING_COOLDOWN_MS), reason: "swing" }) : null;
+      const kinds = (value: unknown, ...wanted: string[]) => ((value as { moments?: Array<{ kind: string }> } | null)?.moments ?? []).filter((moment) => wanted.includes(moment.kind)).length;
+      // Only a live match with a centre saved before can have something new.
+      const live = was?.status === EventStatus.LIVE && was.matchCentre !== null;
+      const goalAhead = was?.status === EventStatus.LIVE && was.homeScore !== null && was.awayScore !== null && mark.home !== null && mark.away !== null && mark.home + mark.away > was.homeScore + was.awayScore;
+      let reason: CooldownReason | null = null;
+      if (goalAhead) reason = "goal";
+      else if (live && kinds(centre, "red") > kinds(was.matchCentre, "red")) reason = "red";
+      else if (live && kinds(centre, "var", "missed_penalty", "penalty") > kinds(was.matchCentre, "var", "missed_penalty", "penalty")) reason = "var";
+      const pause = reason && GOAL_COOLDOWN_MS > 0 ? laterCooldown({ until: was!.liveCooldownUntil, reason: was!.liveCooldownReason }, { until: new Date(Date.now() + GOAL_COOLDOWN_MS), reason }) : null;
+      if (goalAhead) await this.noteGoal(eventId, was!, { homeScore: mark.home, awayScore: mark.away }, was!.elapsed, "centre", await this.pricesBeforeGoal(eventId, was!, { homeScore: mark.home, awayScore: mark.away }));
       await this.prisma.event.update({
         where: { id: eventId },
         data: { matchCentre: centre as unknown as Prisma.InputJsonValue, matchCentreAt: new Date(), ...(pause ? { liveCooldownUntil: pause.until, liveCooldownReason: pause.reason } : {}) },
       });
-      if (newRed) {
-        this.logger.log(`Live betting paused on event ${eventId} (red card) until ${pause!.until?.toISOString()}`);
+      if (reason) {
+        this.logger.log(`Live betting paused on ${was!.name} (${reason} in the feed's timeline${goalAhead ? `: ${mark.home}–${mark.away} before its prices had it` : ""}) until ${pause?.until?.toISOString() ?? "now"}`);
         paused.push(eventId);
       }
       saved++;
     }
     if (paused.length > 0) await this.announceLive(paused);
-    return saved;
+    return { saved, marks };
   }
 
   /** Room on today's quota for match centres: above the reserve kept for scores and results, and the feed not paused. */
@@ -789,7 +821,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     let running = this.centreFetches.get(event.id);
     if (!running) {
       running = this.saveMatchCentres([event])
-        .then((saved) => saved > 0)
+        .then(({ saved }) => saved > 0)
         .catch((error) => {
           this.logger.warn(`Match centre for event ${event.id} not updated: ${error instanceof Error ? error.message : String(error)}`);
           return false;
@@ -854,17 +886,70 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    */
   /**
    * Notes when the site first saw a goal: the score went up from `before` to
-   * `after`. A goal taken back isn't one. Kept to measure how far behind the
-   * feed reports goals (feedDelay); never holds up the live sync.
+   * `after`. A goal taken back isn't one. `beforeGoal` is who scored and the
+   * match-result prices just before, for live bets on prices that haven't
+   * caught up with it. When the goal is new, the open live bets on the match
+   * are checked straight away (onGoalSeen, without holding up the sync), and
+   * how far behind the feed was is logged; the goals noted also measure the
+   * feed's delay over time (feedDelay). Never holds up the live sync.
    */
-  private async noteGoal(eventId: string, before: { homeScore: number | null; awayScore: number | null }, after: { homeScore: number | null; awayScore: number | null }, elapsed: number | null, source: "scores" | "odds") {
+  private async noteGoal(
+    eventId: string,
+    before: { homeScore: number | null; awayScore: number | null },
+    after: { homeScore: number | null; awayScore: number | null },
+    elapsed: number | null,
+    source: "scores" | "odds" | "centre",
+    beforeGoal: Record<string, unknown> | null = null,
+  ) {
     if (before.homeScore === null || before.awayScore === null || after.homeScore === null || after.awayScore === null) return;
     if (after.homeScore + after.awayScore <= before.homeScore + before.awayScore) return;
+    const seenAt = new Date();
     try {
-      await this.prisma.goalSeen.createMany({ data: [{ eventId, homeScore: after.homeScore, awayScore: after.awayScore, elapsed, source }], skipDuplicates: true });
+      const { count } = await this.prisma.goalSeen.createMany({
+        data: [{ eventId, homeScore: after.homeScore, awayScore: after.awayScore, elapsed, source, seenAt, ...(beforeGoal ? { beforeGoal: beforeGoal as Prisma.InputJsonValue } : {}) }],
+        skipDuplicates: true,
+      });
+      if (count === 0) return;
+      this.logger.log(`Goal seen on event ${eventId}: ${after.homeScore}–${after.awayScore} at ${elapsed ?? "?"}' from the ${source} feed`);
+      void this.goalArrived(eventId, { home: after.homeScore, away: after.awayScore }, source, seenAt).catch((error) =>
+        this.logger.warn(`Late check on event ${eventId}'s new goal failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
     } catch (error) {
       this.logger.warn(`Goal on event ${eventId} not noted: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /** Who scored, and the match-result prices we had just before the goal (still the pre-goal ones), or null when it isn't a goal. */
+  private async pricesBeforeGoal(eventId: string, before: { homeScore: number | null; awayScore: number | null }, after: { homeScore: number | null; awayScore: number | null }) {
+    if (before.homeScore === null || before.awayScore === null || after.homeScore === null || after.awayScore === null) return null;
+    if (after.homeScore + after.awayScore <= before.homeScore + before.awayScore) return null;
+    const rows = await this.prisma.selection.findMany({ where: { market: { eventId, key: "match_winner" } }, select: { key: true, liveOdds: true } });
+    const price = (key: string) => {
+      const value = rows.find((row) => row.key === key)?.liveOdds;
+      return value === null || value === undefined ? null : Number(value);
+    };
+    return { side: after.homeScore > before.homeScore ? "home" : "away", home: price("home"), draw: price("draw"), away: price("away") };
+  }
+
+  /**
+   * A new goal reached the site: fetches the match's timeline so far (one
+   * request) to tell when it really went in, logs how far behind the feed
+   * was, and has the open live bets placed after it voided (onGoalSeen).
+   */
+  private async goalArrived(eventId: string, score: { home: number; away: number }, source: string, seenAt: Date) {
+    let timeline: LateTimeline | null = null;
+    if (this.mode === "api-football" && this.client && this.centreQuotaOk(Date.now())) {
+      const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { name: true, externalId: true, sport: true } });
+      if (event?.externalId && event.sport === "football") {
+        const [raw] = await this.client.fixtureDetails([event.externalId]).catch(() => []);
+        timeline = raw ? parseLiveTimeline(raw) : null;
+        const ordered = timeline ? [...timeline.goals].sort((a, b) => a.minute - b.minute || (a.extra ?? 0) - (b.extra ?? 0)) : [];
+        const goal = ordered[score.home + score.away - 1];
+        const at = goal && timeline ? goalTime(goal, timeline) : null;
+        if (at !== null) this.logger.log(`Feed lag on ${event.name}: ${score.home}–${score.away} (${goal.minute}${goal.extra ? `+${goal.extra}` : ""}') reached the site about ${Math.round(seenAt.getTime() / 1000 - at)} s after it went in (${source} feed; live estimate, ±30 s)`);
+      }
+    }
+    await this.onGoalSeen?.(eventId, timeline);
   }
 
   /**
@@ -874,14 +959,16 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * goals the site noted, to measure the feed's delay. 20 matches a request,
    * at most 40 a run; one the feed can't give is tried again 10 minutes later.
    */
-  private async syncLateChecks(): Promise<number> {
+  private async syncLateChecks(only?: string[], notify = true): Promise<number> {
     const provider = this.provider();
     const now = Date.now();
     // A month of goals is plenty to measure the delay on.
     await this.prisma.goalSeen.deleteMany({ where: { seenAt: { lt: new Date(now - 30 * 86_400_000) } } });
     const liveBet = { not: Prisma.DbNull };
     const due = await this.prisma.event.findMany({
-      where: {
+      where: only
+        ? { id: { in: only }, provider, sport: "football", externalId: { not: null }, status: EventStatus.COMPLETED, resultHome: { not: null }, resultAway: { not: null }, lateCheck: { equals: Prisma.DbNull } }
+        : {
         provider,
         sport: "football",
         externalId: { not: null },
@@ -908,11 +995,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           },
         ],
       },
-      select: { id: true, externalId: true, resultHome: true, resultAway: true },
+      select: { id: true, name: true, externalId: true, resultHome: true, resultAway: true },
       orderBy: { startsAt: "desc" },
       take: 40,
     });
-    let found = 0;
+    const found: string[] = [];
     for (let i = 0; i < due.length; i += 20) {
       const batch = due.slice(i, i + 20);
       const details = await this.client!.fixtureDetails(batch.map((e) => e.externalId!)).catch(() => []);
@@ -923,10 +1010,37 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           where: { id: event.id },
           data: timeline ? { lateCheck: timeline as unknown as Prisma.InputJsonValue, lateCheckedAt: new Date() } : { lateCheckedAt: new Date() },
         });
-        if (timeline) found++;
+        if (!timeline) {
+          this.logger.warn(`No timeline for the late check on ${event.name} yet: ${raw ? "its goals don't add up to the result" : "the feed didn't send it"}`);
+          continue;
+        }
+        found.push(event.id);
+        await this.logFeedLag(event.id, event.name, timeline);
       }
     }
-    return found;
+    if (found.length > 0 && notify) await this.onTimeline?.(found).catch((error) => this.logger.warn(`Settled live bets not checked again: ${error instanceof Error ? error.message : String(error)}`));
+    return found.length;
+  }
+
+  /**
+   * Fetches the timelines of these finished matches now, whatever the usual
+   * schedule, for Super Admin's late re-check (SettlementService.recheckLate),
+   * which then decides on the bets itself (so a dry run changes nothing).
+   * Matches that already have one are left as they are.
+   */
+  async refreshLateChecks(eventIds: string[]): Promise<number> {
+    if (this.mode !== "api-football" || !this.client || eventIds.length === 0) return 0;
+    return this.syncLateChecks(eventIds, false);
+  }
+
+  /** Logs how far behind the ground the feed was on each goal of a finished match, from when the site saw it (feed-delay.ts). */
+  private async logFeedLag(eventId: string, name: string, timeline: LateTimeline) {
+    const rows = await this.prisma.goalSeen.findMany({ where: { eventId }, select: { homeScore: true, awayScore: true, source: true, seenAt: true } });
+    if (rows.length === 0) return;
+    const delay = feedDelay(rows.map((row) => ({ eventName: name, ...row, timeline })));
+    if (delay.goals === 0) return;
+    const each = [...delay.recent].reverse().map((goal) => `${goal.score} (${goal.minute}') ${goal.seconds} s via ${goal.source}`).join("; ");
+    this.logger.log(`Feed lag on ${name}: ${delay.goals} goal(s), average ${delay.average} s, slowest ${delay.slowest} s: ${each}`);
   }
 
   private async syncGoals(): Promise<number> {
@@ -1057,18 +1171,22 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       where: { id: eventId },
       select: { homeScore: true, awayScore: true, liveStopped: true, liveCooldownUntil: true, liveCooldownReason: true },
     });
-    const swing = await this.upsertLiveMarkets(eventId, odds.markets);
     const scored = odds.homeScore !== null && odds.awayScore !== null;
     const after = { homeScore: scored ? odds.homeScore : before.homeScore, awayScore: scored ? odds.awayScore : before.awayScore, stopped: odds.stopped };
+    // Read before the new prices are saved: still the ones from before the goal.
+    const beforeGoal = scored ? await this.pricesBeforeGoal(eventId, before, after) : null;
+    const swing = await this.upsertLiveMarkets(eventId, odds.markets);
     const cooldown = cooldownFor({ homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped }, after, swing);
-    if (scored) await this.noteGoal(eventId, before, after, odds.elapsed, "odds");
+    if (scored) await this.noteGoal(eventId, before, after, odds.elapsed, "odds", beforeGoal);
     let pause = laterCooldown({ until: before.liveCooldownUntil, reason: before.liveCooldownReason }, cooldown);
     if (cooldown && pause.until === cooldown.until) this.logger.log(`Live betting paused on event ${eventId} (${cooldown.reason}) until ${cooldown.until.toISOString()}`);
     // After a goal: reopen once the bookmaker is taking bets again and the minimum has passed.
     // A price jump, or the bookmaker switching back on, is those prices arriving — not another pause.
     const now = new Date();
-    if (goalPauseOver(pause, { hasScore: scored, stopped: odds.stopped, pausesItself: scoreChanged({ homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped }, after) }, now)) {
-      this.logger.log(`Live betting reopened on event ${eventId}: the prices have caught up with the goal`);
+    const bookmakerUpdate = odds.bookmakerUpdate ? new Date(odds.bookmakerUpdate) : null;
+    const pausesItself = scoreChanged({ homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped }, after);
+    if (goalPauseOver(pause, { hasScore: scored, stopped: odds.stopped, pausesItself, bookmakerUpdate: bookmakerUpdate && !Number.isNaN(bookmakerUpdate.getTime()) ? bookmakerUpdate : null }, now)) {
+      this.logger.log(`Live betting reopened on event ${eventId}: the prices were made again after the ${pause.reason === "goal" ? "goal" : pause.reason === "red" ? "red card" : "VAR check"}`);
       pause = { until: now, reason: null };
     }
     await this.prisma.event.update({

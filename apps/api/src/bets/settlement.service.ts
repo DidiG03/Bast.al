@@ -14,7 +14,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { betSelect, betView } from "./bets.service";
 import { GoalRecord, isGoalMarket } from "./goals";
-import { LATE_CHECK_WAIT_MS, lateReason, liveStateOf, timelineOf } from "./late";
+import { LATE_CHECK_WAIT_MS, type LateDecision, type LateRecord, type LateTimeline, type SeenScore, lateDecision, liveStateOf, timelineOf } from "./late";
 import { builderOutcome } from "./builder";
 import { systemOutcome } from "./system";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
@@ -62,6 +62,9 @@ function counted(status: BetStatus, stake: Prisma.Decimal, payout: Prisma.Decima
 
 /** The id of the row that records where a bet settled before the journal existed. Fixed, so it's only ever written once. */
 const baseEntryId = (betId: string) => `bf_${betId}`;
+
+/** Settled live bets placed this long ago or less are looked at again when their match's timeline comes in late. */
+const LATE_RECHECK_MS = 4 * 86_400_000;
 
 /** A score the feed changed is used once it has stayed the same this long, so a feed that flips back and forth doesn't move money each time. */
 const FEED_CORRECTION_DELAY_MS = 10 * 60_000;
@@ -114,8 +117,14 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     private readonly audit: AuditService,
     @Optional() private readonly sync?: OddsSyncService,
   ) {
-    // A match the live sync just saw finish is paid out now, not at the next round.
-    if (sync) sync.onFinished = () => this.settleDue();
+    if (sync) {
+      // A match the live sync just saw finish is paid out now, not at the next round.
+      sync.onFinished = () => this.settleDue();
+      // A goal the site just saw voids the open live bets placed after it now, not at full time.
+      sync.onGoalSeen = (eventId, timeline) => this.voidLateOnArrival(eventId, timeline);
+      // A timeline that came in after a match's bets settled: the late ones among them are voided.
+      sync.onTimeline = (eventIds) => this.recheckLate({ eventIds, since: new Date(Date.now() - LATE_RECHECK_MS) });
+    }
   }
 
   async onModuleInit() {
@@ -336,16 +345,18 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
 
     const record = goalsOf(event.resultGoals);
     // Live bets on a finished football match: placed after a goal (or, on a cards market, a card) the site hadn't
-    // shown yet, they're void (bets/late.ts). They wait for the match's timeline, LATE_CHECK_WAIT_MS at most.
+    // shown yet, they're void (bets/late.ts). They wait for the match's timeline, LATE_CHECK_WAIT_MS at most;
+    // after that they're checked on when the site saw each score alone.
     const timeline = timelineOf(event.lateCheck);
+    const seen = await this.seenScores(event.id);
     const finishedAt = event.finishedAt ?? new Date(event.startsAt.getTime() + 2 * 3_600_000);
     const stopWaiting = Date.now() - finishedAt.getTime() > LATE_CHECK_WAIT_MS;
     const marketOf = new Map(event.markets.flatMap((market) => market.selections.map((s) => [s.id, market.key] as const)));
-    const lateFor = (live: Prisma.JsonValue | null, placedAt: Date, selectionId: string): "wait" | string | null => {
+    const lateFor = (live: Prisma.JsonValue | null, placedAt: Date, selectionId: string): "wait" | LateDecision | null => {
       const state = liveStateOf(live);
       if (!state || event.sport !== "football" || event.status !== EventStatus.COMPLETED) return null;
-      if (!timeline) return stopWaiting ? null : "wait";
-      return lateReason(state, placedAt, marketOf.get(selectionId) ?? "", timeline);
+      if (!timeline && !stopWaiting) return "wait";
+      return lateDecision({ state, placedAt, marketKey: marketOf.get(selectionId) ?? "", timeline, seen });
     };
     /** Late live bets, told to their Players as voided rather than settled. */
     const late: Change[] = [];
@@ -393,8 +404,9 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     for (const bet of bets) {
       const lateness = lateFor(bet.live, bet.placedAt, bet.selectionId!);
       if (lateness === "wait") continue;
-      if (lateness) {
-        const change = await this.move(bet, BetStatus.VOID, bet.stake, lateness, actorId);
+      if (lateness) await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId: event.id, eventName: event.name }, lateness, "settlement", actorId);
+      if (lateness?.late) {
+        const change = await this.move(bet, BetStatus.VOID, bet.stake, lateness.reason, actorId);
         if (change) late.push({ ...change, eventName: event.name });
         continue;
       }
@@ -429,14 +441,15 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     // out the whole bet again from all its legs.
     const legs = await this.prisma.betLeg.findMany({
       where: { selectionId: { in: [...grades.keys()] }, voidReason: null, bet: { voidReason: null } },
-      select: { id: true, selectionId: true, result: true, betId: true, live: true, bet: { select: { placedAt: true } } },
+      select: { id: true, selectionId: true, result: true, betId: true, live: true, bet: { select: { placedAt: true, playerId: true } } },
     });
     const touched = new Set<string>();
     for (const leg of legs) {
       const lateness = lateFor(leg.live, leg.bet.placedAt, leg.selectionId);
       if (lateness === "wait") continue;
-      if (lateness) {
-        await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: lateness } });
+      if (lateness) await this.noteLate({ kind: "leg", id: leg.id, betId: leg.betId, playerId: leg.bet.playerId, live: leg.live, eventId: event.id, eventName: event.name }, lateness, "settlement", actorId);
+      if (lateness?.late) {
+        await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: lateness.reason } });
         touched.add(leg.betId);
         continue;
       }
@@ -458,6 +471,198 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       await this.announce(late, "voided");
     }
     return [...changes, ...late];
+  }
+
+  /** When the site first saw each score of a match (GoalSeen), for the late check. */
+  private async seenScores(eventId: string): Promise<SeenScore[]> {
+    const rows = await this.prisma.goalSeen.findMany({ where: { eventId }, select: { homeScore: true, awayScore: true, seenAt: true } });
+    return rows.map((row) => ({ home: row.homeScore, away: row.awayScore, seenAt: row.seenAt }));
+  }
+
+  /**
+   * Keeps the late check's decision on a live bet (or accumulator pick) with
+   * it, and logs it: every void with its reason, and each bet that stands
+   * with what it was checked against. A void goes in the audit log too.
+   */
+  private async noteLate(
+    target: { kind: "bet" | "leg"; id: string; betId: string; playerId: string; live: Prisma.JsonValue | null; eventId: string; eventName: string },
+    decision: LateDecision,
+    when: LateRecord["when"],
+    actorId: string | null,
+    dryRun = false,
+  ) {
+    const what = `${target.kind === "leg" ? `accumulator pick ${target.id} of bet` : "bet"} ${target.betId} on ${target.eventName}`;
+    if (decision.late) this.logger.warn(`Late check (${when}${dryRun ? ", dry run" : ""}): ${what} is void, ${decision.reason}: ${decision.detail}`);
+    else this.logger.log(`Late check (${when}${dryRun ? ", dry run" : ""}): ${what} stands: ${decision.detail}`);
+    if (dryRun) return;
+    const late: LateRecord = { ...decision, checkedAt: new Date().toISOString(), when };
+    const live = { ...((target.live as Record<string, unknown> | null) ?? {}), late } as Prisma.InputJsonValue;
+    if (target.kind === "bet") await this.prisma.bet.update({ where: { id: target.id }, data: { live } });
+    else await this.prisma.betLeg.update({ where: { id: target.id }, data: { live } });
+    if (decision.late) {
+      await this.audit.log({
+        actorId,
+        action: "bet.void_late",
+        targetId: target.playerId,
+        metadata: { betId: target.betId, ...(target.kind === "leg" ? { legId: target.id } : {}), eventId: target.eventId, event: target.eventName, reason: decision.reason, detail: decision.detail, when },
+      });
+    }
+  }
+
+  /**
+   * The late check on a match that's still live, as soon as the site sees a
+   * goal (OddsSyncService.onGoalSeen): open live bets on it placed on a score
+   * without that goal, in the goal's window (bets/late.ts), are void now
+   * rather than at full time. `timeline` is the feed's timeline so far, if it
+   * could be fetched and has the goal; without it, only when the site saw the
+   * goal counts. Settlement checks again at full time.
+   */
+  async voidLateOnArrival(eventId: string, timeline: LateTimeline | null): Promise<Change[]> {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, name: true, sport: true, status: true } });
+    if (!event || event.sport !== "football" || event.status !== EventStatus.LIVE) return [];
+    const seen = await this.seenScores(eventId);
+    // A timeline that doesn't have every goal the site saw yet would miss the new one.
+    const latest = seen.reduce((top, row) => (row.home + row.away > top ? row.home + row.away : top), 0);
+    const usable = timeline && timeline.goals.length >= latest ? timeline : null;
+    const onMatch = { market: { eventId } } satisfies Prisma.SelectionWhereInput;
+    const bets = await this.prisma.bet.findMany({
+      where: { status: BetStatus.OPEN, voidReason: null, live: { not: Prisma.DbNull }, selection: onMatch },
+      select: { ...movable, live: true, placedAt: true, selection: { select: { market: { select: { key: true } } } } },
+    });
+    const legs = await this.prisma.betLeg.findMany({
+      where: { result: null, voidReason: null, live: { not: Prisma.DbNull }, selection: onMatch, bet: { status: BetStatus.OPEN, voidReason: null } },
+      select: { id: true, betId: true, live: true, selection: { select: { market: { select: { key: true } } } }, bet: { select: { placedAt: true, playerId: true } } },
+    });
+    const changes: Change[] = [];
+    for (const bet of bets) {
+      const state = liveStateOf(bet.live);
+      if (!state) continue;
+      const decision = lateDecision({ state, placedAt: bet.placedAt, marketKey: bet.selection!.market.key, timeline: usable, seen });
+      // Only voids are noted here: a bet that stands now is checked again at full time with the whole timeline.
+      if (!decision.late) continue;
+      await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName: event.name }, decision, "arrival", null);
+      const change = await this.move(bet, BetStatus.VOID, bet.stake, decision.reason, null);
+      if (change) changes.push({ ...change, eventName: event.name });
+    }
+    await this.announce(changes, "voided");
+    const touched: string[] = [];
+    for (const leg of legs) {
+      const state = liveStateOf(leg.live);
+      if (!state) continue;
+      const decision = lateDecision({ state, placedAt: leg.bet.placedAt, marketKey: leg.selection.market.key, timeline: usable, seen });
+      if (!decision.late) continue;
+      await this.noteLate({ kind: "leg", id: leg.id, betId: leg.betId, playerId: leg.bet.playerId, live: leg.live, eventId, eventName: event.name }, decision, "arrival", null);
+      await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: decision.reason } });
+      touched.push(leg.betId);
+    }
+    const accas = await this.resettleAccumulators([...new Set(touched)], true);
+    await this.announce(accas, "corrected");
+    return [...changes, ...accas];
+  }
+
+  /**
+   * Super Admin's late re-check (recheckLate) for a Player by username, bets
+   * placed since a time, or one match. The matches' timelines are fetched
+   * first if they never came in.
+   */
+  async recheckLateFor(actor: Actor, input: { player?: string; since?: Date; eventId?: string; dryRun: boolean }) {
+    if (!input.player && !input.since && !input.eventId) throw new BadRequestException("Give a Player, a start time or a match to check");
+    const player = input.player ? await this.prisma.user.findFirst({ where: { username: input.player, role: Role.PLAYER }, select: { id: true } }) : null;
+    if (input.player && !player) throw new NotFoundException(`No Player called ${input.player}`);
+    const missing = await this.prisma.event.findMany({
+      where: {
+        sport: "football",
+        status: EventStatus.COMPLETED,
+        lateCheck: { equals: Prisma.DbNull },
+        ...(input.eventId ? { id: input.eventId } : {}),
+        markets: { some: { selections: { some: { bets: { some: { live: { not: Prisma.DbNull }, ...(player ? { playerId: player.id } : {}), ...(input.since ? { placedAt: { gte: input.since } } : {}) } } } } } },
+      },
+      select: { id: true },
+      take: 40,
+    });
+    if (missing.length > 0) await this.sync?.refreshLateChecks(missing.map((event) => event.id)).catch((error) => this.logger.warn(`Timelines for the late re-check not fetched: ${error instanceof Error ? error.message : String(error)}`));
+    return this.recheckLate({ playerId: player?.id, since: input.since, eventIds: input.eventId ? [input.eventId] : undefined, dryRun: input.dryRun, actorId: actor.id });
+  }
+
+  /**
+   * Looks again at live bets that already settled as won or lost, and voids
+   * the late ones (bets/late.ts), taking back what a won one paid over its
+   * stake. Run when a match's timeline comes in after its bets settled
+   * (OddsSyncService.onTimeline), and by Super Admin for bets settled before
+   * the check could see them. Filters: matches, a Player, bets placed since a
+   * date. `dryRun` only says what it would do. Every decision is logged.
+   */
+  async recheckLate(filter: { eventIds?: string[]; playerId?: string; since?: Date; dryRun?: boolean; actorId?: string | null }) {
+    const dryRun = filter.dryRun === true;
+    const actorId = filter.actorId ?? null;
+    const onEvent = {
+      market: { event: { sport: "football", status: EventStatus.COMPLETED, ...(filter.eventIds ? { id: { in: filter.eventIds } } : {}) } },
+    } satisfies Prisma.SelectionWhereInput;
+    const placed = filter.since ? { placedAt: { gte: filter.since } } : {};
+    const player = filter.playerId ? { playerId: filter.playerId } : {};
+    const bets = await this.prisma.bet.findMany({
+      where: { status: { in: [BetStatus.WON, BetStatus.LOST] }, voidReason: null, live: { not: Prisma.DbNull }, selection: onEvent, ...placed, ...player },
+      select: { ...movable, live: true, placedAt: true, selection: { select: { market: { select: { key: true, eventId: true } } } } },
+      take: 500,
+    });
+    const legs = await this.prisma.betLeg.findMany({
+      where: { result: { in: [SelectionResult.WON, SelectionResult.LOST] }, voidReason: null, live: { not: Prisma.DbNull }, selection: onEvent, bet: { voidReason: null, ...placed, ...player } },
+      select: { id: true, betId: true, result: true, live: true, selection: { select: { market: { select: { key: true, eventId: true } } } }, bet: { select: { placedAt: true, playerId: true } } },
+      take: 500,
+    });
+    const eventIds = [...new Set([...bets.map((bet) => bet.selection!.market.eventId), ...legs.map((leg) => leg.selection.market.eventId)])];
+    const events = new Map(
+      (await this.prisma.event.findMany({ where: { id: { in: eventIds } }, select: { id: true, name: true, lateCheck: true } })).map((event) => [event.id, event]),
+    );
+    const seenBy = new Map<string, SeenScore[]>();
+    for (const id of eventIds) seenBy.set(id, await this.seenScores(id));
+    const decide = (live: Prisma.JsonValue | null, placedAt: Date, marketKey: string, eventId: string) => {
+      const state = liveStateOf(live);
+      return state ? lateDecision({ state, placedAt, marketKey, timeline: timelineOf(events.get(eventId)?.lateCheck), seen: seenBy.get(eventId) ?? [] }) : null;
+    };
+    const results: Array<{ betId: string; legId?: string; playerId: string; event: string; status: BetStatus | SelectionResult; void: boolean; reason: string | null; detail: string; balanceChange: number }> = [];
+    const voided: Change[] = [];
+    for (const bet of bets) {
+      const eventId = bet.selection!.market.eventId;
+      const eventName = events.get(eventId)?.name ?? "A match";
+      const decision = decide(bet.live, bet.placedAt, bet.selection!.market.key, eventId);
+      if (!decision) continue;
+      await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName }, decision, "recheck", actorId, dryRun);
+      let balanceChange = 0;
+      if (decision.late) {
+        balanceChange = Number(bet.stake.sub(bet.payout));
+        if (!dryRun) {
+          const change = await this.move(bet, BetStatus.VOID, bet.stake, decision.reason, actorId);
+          if (change) voided.push({ ...change, eventName });
+        }
+      }
+      results.push({ betId: bet.id, playerId: bet.playerId, event: eventName, status: bet.status, void: decision.late, reason: decision.reason, detail: decision.detail, balanceChange });
+    }
+    if (!dryRun) await this.announce(voided, "voided");
+    const touched = new Set<string>();
+    for (const leg of legs) {
+      const eventId = leg.selection.market.eventId;
+      const eventName = events.get(eventId)?.name ?? "A match";
+      const decision = decide(leg.live, leg.bet.placedAt, leg.selection.market.key, eventId);
+      if (!decision) continue;
+      await this.noteLate({ kind: "leg", id: leg.id, betId: leg.betId, playerId: leg.bet.playerId, live: leg.live, eventId, eventName }, decision, "recheck", actorId, dryRun);
+      if (decision.late && !dryRun) {
+        await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: decision.reason } });
+        touched.add(leg.betId);
+      }
+      results.push({ betId: leg.betId, legId: leg.id, playerId: leg.bet.playerId, event: eventName, status: leg.result!, void: decision.late, reason: decision.reason, detail: decision.detail, balanceChange: 0 });
+    }
+    const accas = dryRun ? [] : await this.resettleAccumulators([...touched], true, actorId);
+    if (!dryRun) await this.announce(accas, "corrected");
+    for (const change of accas) {
+      for (const row of results) if (row.legId && row.betId === change.betId) row.balanceChange = Number(change.delta);
+    }
+    const voids = results.filter((row) => row.void);
+    if (voids.length > 0 || actorId) {
+      this.logger.warn(`Late re-check${dryRun ? " (dry run)" : ""}: ${results.length} settled live bet(s) checked, ${voids.length} void`);
+    }
+    if (actorId) await this.audit.log({ actorId, action: "bet.recheck_late", metadata: { dryRun, playerId: filter.playerId ?? null, since: filter.since?.toISOString() ?? null, checked: results.length, voided: voids.length } });
+    return { dryRun, checked: results.length, voided: voids.length, bets: results };
   }
 
   /**

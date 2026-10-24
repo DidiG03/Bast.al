@@ -363,10 +363,10 @@ const REVALIDATED_KEPT = 40;
 export async function apiFetch<T>(
   path: string,
   token: string,
-  init?: RequestInit & { idempotencyKey?: string; revalidate?: boolean },
+  init?: RequestInit & { idempotencyKey?: string; revalidate?: boolean; retried?: boolean },
 ): Promise<T> {
   const normalized = path.startsWith("/") ? path.slice(1) : path;
-  const { idempotencyKey, revalidate, ...rest } = init ?? {};
+  const { idempotencyKey, revalidate, retried, ...rest } = init ?? {};
   const url = `${apiBase()}/${normalized}`;
   const cached = revalidate && typeof window !== "undefined" && (rest.method ?? "GET") === "GET" ? revalidated.get(url) : undefined;
   const res = await fetch(url, {
@@ -382,6 +382,14 @@ export async function apiFetch<T>(
   });
 
   if (res.status === 304 && cached) return cached.body as T;
+
+  // A sign-in token that ran out on the way (the page was open a while, or a live bet waited): once more with a fresh one.
+  // An action carries its Idempotency-Key, so it still runs only once.
+  if (res.status === 401 && typeof window !== "undefined" && !retried) {
+    const clerk = (window as unknown as { Clerk?: { session?: { getToken: (options: { skipCache: boolean }) => Promise<string | null> } | null } }).Clerk;
+    const fresh = await clerk?.session?.getToken({ skipCache: true }).catch(() => null);
+    if (fresh && fresh !== token) return apiFetch<T>(path, fresh, { ...init, retried: true });
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -635,6 +643,8 @@ export type SlipInfo = {
   /** Today's losses plus today's stakes still open: how much of the daily loss limit is used. */
   dailyLossUsed: number;
   blocked: string | null;
+  /** How long a live bet takes to confirm, in seconds: the usual wait, on a busy match, with a corners pick, and the checks with the feed after it. */
+  liveWait?: { usual: number; busy: number; corners: number; check: number };
 };
 
 export type PlaceBetsResponse = { bets: Bet[]; total: number; adjusted?: boolean };

@@ -1,6 +1,6 @@
 import { EventStatus } from "@prisma/client";
 import type { Goal, GoalRecord, Participant, Side } from "../bets/goals";
-import type { LateTimeline } from "../bets/late";
+import type { FeedMark, LateTimeline } from "../bets/late";
 import { crestUrl } from "./crest";
 
 /**
@@ -1105,6 +1105,42 @@ export function parseLateTimeline(raw: RawFixtureDetail, score: { home: number; 
   const goals = record.goals.map((goal) => ({ minute: goal.minute, extra: goal.extra ?? null, side: goal.side }));
   const periods = raw.fixture.periods ?? {};
   return { first: periods.first ?? null, second: periods.second ?? null, goals, cards };
+}
+
+/**
+ * The feed's record of a match right now, from a fixture fetched by id
+ * (bets/late.ts FeedMark): its score and how many goals, cards, VAR checks
+ * and missed penalties its timeline has.
+ */
+export function feedMarkOf(raw: RawFixtureDetail, at: Date = new Date()): FeedMark {
+  const events = (raw.events ?? []).filter((event) => ["goal", "card", "var"].includes(event.type.toLowerCase()));
+  const missed = (event: { type: string; detail: string }) => event.type.toLowerCase() === "goal" && /missed penalty/i.test(event.detail ?? "");
+  const count = (test: (event: (typeof events)[number]) => boolean) => events.filter(test).length;
+  const homeId = raw.teams.home.id;
+  const latest = events.reduce<(typeof events)[number] | null>((top, event) => {
+    if (!top) return event;
+    const key = (e: typeof event) => (e.time.elapsed ?? 0) * 100 + (e.time.extra ?? 0);
+    return key(event) >= key(top) ? event : top;
+  }, null);
+  const side = (team: { id: number; name: string }) => (homeId !== undefined ? team.id === homeId : team.name === raw.teams.home.name) ? "home" : "away";
+  return {
+    home: raw.goals?.home ?? null,
+    away: raw.goals?.away ?? null,
+    goals: count((event) => event.type.toLowerCase() === "goal" && !missed(event)),
+    cards: count((event) => event.type.toLowerCase() === "card"),
+    reds: count((event) => event.type.toLowerCase() === "card" && /red|second yellow/i.test(event.detail ?? "")),
+    vars: count((event) => event.type.toLowerCase() === "var"),
+    missedPenalties: count(missed),
+    events: events.length,
+    last: latest ? `${latest.type.toLowerCase()} ${side(latest.team)} ${latest.time.elapsed ?? "?"}${latest.time.extra ? `+${latest.time.extra}` : ""}'` : null,
+    at: at.toISOString(),
+  };
+}
+
+/** A live match's timeline so far, to tell when its goals went in while it's still on (bets/late.ts); null if its goals don't add up to its score yet. */
+export function parseLiveTimeline(raw: RawFixtureDetail): LateTimeline | null {
+  if (raw.goals?.home === null || raw.goals?.home === undefined || raw.goals?.away === null || raw.goals?.away === undefined) return null;
+  return parseLateTimeline(raw, { home: raw.goals.home, away: raw.goals.away });
 }
 
 export class ApiFootballClient {

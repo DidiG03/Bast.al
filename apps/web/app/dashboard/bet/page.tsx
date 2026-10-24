@@ -1280,13 +1280,13 @@ function byLeague(events: OddsEvent[]): Array<{ key: string; league: string; cou
 }
 
 /**
- * The Place button while a live bet is confirmed: a spinner and the seconds left at most. The wait is 8
- * seconds, 12 on a busy match, 20 with a corners pick (bets.service confirmLive); this counts down from the
- * most it can be, then says it's nearly done.
+ * The Place button while a live bet is confirmed: a spinner and the seconds left at most. The API says how
+ * long the wait is (usual, busy match, corners pick) and how long its checks with the feed may take after it
+ * (bets.service liveWait); this counts down from the most it can be, then says it's nearly done.
  */
-function LiveCountdown({ corners }: { corners: boolean }) {
+function LiveCountdown({ corners, wait }: { corners: boolean; wait: SlipInfo["liveWait"] }) {
   const { t } = useI18n();
-  const most = corners ? 20 : 12;
+  const most = (corners ? wait?.corners ?? 20 : wait?.busy ?? 12) + (wait?.check ?? 6);
   const [left, setLeft] = useState(most);
   useEffect(() => {
     const timer = window.setInterval(() => setLeft((value) => Math.max(0, value - 1)), 1_000);
@@ -1524,7 +1524,7 @@ function BetSlip({
         if (builder) setRequote((n) => n + 1);
       } else {
         toast.error(message);
-        if (/closed|no longer exists|paused|score changed/i.test(original)) {
+        if (/closed|no longer exists|paused|score changed|while your bet|caught up/i.test(original)) {
           onOddsChanged();
           if (builder) setRequote((n) => n + 1);
         }
@@ -1797,7 +1797,7 @@ function BetSlip({
             <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing} aria-disabled={Boolean(blocker)}>
               {placing
                 ? hasLive
-                  ? <LiveCountdown corners={items.some((item) => item.live && /corner/i.test(item.market))} />
+                  ? <LiveCountdown corners={items.some((item) => item.live && /corner/i.test(item.market))} wait={info?.liveWait} />
                   : <LoadingSpinner label="Placing" size="small" />
                 : priceMoved
                   ? t("Place at the new price · {amount}", { amount: formatMoney(totalStake) })
@@ -1810,7 +1810,15 @@ function BetSlip({
                   : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
             </button>
             {info ? <SlipLimits info={info} staking={totalStake} /> : null}
-            {hasLive ? <p className="muted bet-slip-live-rule">{t("Live: a bet placed after a goal or a red card (or, on cards, any card) that hadn't shown here yet is void, and the stake comes back. Live bets take 8 to 12 seconds to confirm; corners about 20, and they're capped for each match.")}</p> : null}
+            {hasLive ? (
+              <p className="muted bet-slip-live-rule">
+                {t("Live: a bet placed after a goal or a red card (or, on cards, any card) that hadn't shown here yet is void, and the stake comes back, even after it has settled. Live bets take {least} to {most} seconds to confirm; corners up to {corners}, and they're capped for each match.", {
+                  least: info?.liveWait?.usual ?? 8,
+                  most: (info?.liveWait?.busy ?? 12) + (info?.liveWait?.check ?? 6),
+                  corners: (info?.liveWait?.corners ?? 20) + (info?.liveWait?.check ?? 6),
+                })}
+              </p>
+            ) : null}
           </div>
         </>
       )}

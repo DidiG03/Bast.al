@@ -420,8 +420,12 @@ test("a live bet's match is checked with the feed itself, and a goal found there
       findUniqueOrThrow: async () => saved,
       update: async ({ data }) => updates.push(data),
     },
+    // The match-result prices just before the goal are kept with it.
+    selection: { findMany: async () => [{ key: "home", liveOdds: 2.1 }, { key: "draw", liveOdds: 3.2 }, { key: "away", liveOdds: 3.6 }] },
+    goalSeen: { createMany: async ({ data }) => (goals.push(...data), { count: data.length }) },
     $transaction: async (fn) => fn(tx),
   };
+  const goals = [];
   const service = new OddsSyncService(prisma);
   let calls = 0;
   let answer = { ...liveRaw(), fixture: { id: 7, status: { elapsed: 63 } }, teams: { home: { goals: 1 }, away: { goals: 0 } } };
@@ -440,6 +444,10 @@ test("a live bet's match is checked with the feed itself, and a goal found there
   assert.equal(last.elapsed, 63);
   assert.equal(last.liveCooldownReason, "goal", "the goal the feed knows about pauses the match");
   assert.ok(last.liveCooldownUntil > new Date());
+  // The site saw it then, with who scored and the prices from before it.
+  assert.equal(goals.length, 1);
+  assert.deepEqual(goals[0].beforeGoal, { side: "home", home: 2.1, draw: 3.2, away: 3.6 });
+  assert.equal(goals[0].source, "odds");
 
   // Once the feed stops pricing the match, it's marked stopped.
   service.verifying.clear();
@@ -463,26 +471,37 @@ test("a live cards bet fetches the match's events right then; bets at the same m
     assert.equal(params.ids, "7");
     return { response: send ? [{ fixture: { id: 7 }, teams: { home: { id: 10, name: "A" }, away: { id: 20, name: "B" } }, events: [card(12, "Yellow Card"), card(40, "Second Yellow card")] }] : [] };
   });
-  await Promise.all([service.verifyCards(["e1"]), service.verifyCards(["e1"])]);
+  const [marks] = await Promise.all([service.readMarks(["e1"]), service.readMarks(["e1"])]);
   assert.equal(calls, 1);
   assert.deepEqual(updates.at(-1).matchCentre.moments.map((moment) => moment.kind), ["red", "yellow"]);
+  // The feed's record of the match: two cards, one of them red, the latest the 40th minute's.
+  const mark = marks.get("e1");
+  assert.equal(mark.cards, 2);
+  assert.equal(mark.reds, 1);
+  assert.equal(mark.goals, 0);
+  assert.equal(mark.last, "card home 40'");
   service.verifyingCards.clear();
   send = false;
-  await assert.rejects(service.verifyCards(["e1"]), /didn't send every match/);
-  // Nothing to fetch without live cards picks.
-  await service.verifyCards([]);
+  await assert.rejects(service.readMarks(["e1"]), /didn't send every match/);
+  // Nothing to fetch without live picks.
+  await service.readMarks([]);
   assert.equal(calls, 2);
 });
 
 test("after a goal, live betting reopens once a later reading's prices carry the new score", async () => {
   const { OddsSyncService } = await import("../dist/odds/odds-sync.service.js");
-  const run = async (secondsSinceGoal, goals = { home: 1, away: 0 }) => {
+  const run = async (secondsSinceGoal, goals = { home: 1, away: 0 }, update = null) => {
     const saved = { id: "e1", externalId: "7", homeTeam: "A", awayTeam: "B", name: "A v B", homeScore: 1, awayScore: 0, liveStopped: false, liveCooldownUntil: new Date(Date.now() + 90_000 - secondsSinceGoal * 1000), liveCooldownReason: "goal" };
     const updates = [];
     const tx = { selection: { createMany: async () => ({ count: 0 }) }, market: { findMany: async () => [], create: async () => ({ id: "m1" }), updateMany: async () => ({}) }, $executeRaw: async () => 0 };
-    const prisma = { event: { findMany: async () => [saved], findUniqueOrThrow: async () => saved, update: async ({ data }) => updates.push(data) }, $transaction: async (fn) => fn(tx) };
+    const prisma = {
+      event: { findMany: async () => [saved], findUniqueOrThrow: async () => saved, update: async ({ data }) => updates.push(data) },
+      selection: { findMany: async () => [] },
+      goalSeen: { createMany: async ({ data }) => ({ count: data.length }) },
+      $transaction: async (fn) => fn(tx),
+    };
     const service = new OddsSyncService(prisma);
-    service.client = new ApiFootballClient(async () => ({ response: [{ ...liveRaw(), fixture: { id: 7, status: { elapsed: 34 } }, teams: { home: { goals: goals.home }, away: { goals: goals.away } } }] }));
+    service.client = new ApiFootballClient(async () => ({ response: [{ ...liveRaw(), ...(update ? { update } : {}), fixture: { id: 7, status: { elapsed: 34 } }, teams: { home: { goals: goals.home }, away: { goals: goals.away } } }] }));
     await service.verifyLive(["e1"]);
     return updates.at(-1);
   };
@@ -495,6 +514,11 @@ test("after a goal, live betting reopens once a later reading's prices carry the
   const another = await run(40, { home: 2, away: 0 });
   assert.equal(another.liveCooldownReason, "goal", "another goal starts a new pause");
   assert.ok(another.liveCooldownUntil.getTime() > Date.now() + 80_000);
+  // Prices the bookmaker made before the goal aren't recalculated for it, whatever score they carry: it stays paused.
+  const stale = await run(40, { home: 1, away: 0 }, new Date(Date.now() - 60_000).toISOString());
+  assert.equal(stale.liveCooldownReason, "goal");
+  const remade = await run(40, { home: 1, away: 0 }, new Date(Date.now() - 5_000).toISOString());
+  assert.equal(remade.liveCooldownReason, null, "made after the goal: it reopens");
 });
 
 test("an Owner's own price can't go more than 10% above the feed price", () => {

@@ -7,7 +7,8 @@ import { test } from "node:test";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { betMoment, lateReason, liveStateOf, timelineOf, isCardsMarket, isCornersMarket } = require("../dist/bets/late.js");
+const { betMoment, eventTime, lateDecision, lateReason, liveStateOf, minuteStart, newInFeed, timelineOf, isCardsMarket, isCornersMarket } = require("../dist/bets/late.js");
+const { wrongWayAfterGoal } = require("../dist/odds/live-guard.js");
 const { feedDelay, goalTime } = require("../dist/odds/feed-delay.js");
 const { parseLateTimeline } = require("../dist/odds/api-football.js");
 
@@ -42,9 +43,105 @@ test("a goal the site hadn't shown, in an earlier minute, makes the bet late", (
   assert.equal(lateReason(state(0, 0), firstHalf(23, 20), "match_winner", timeline([goal(30, "home")])), null);
 });
 
-test("a goal in the same minute as the bet counts as before it: it may have been", () => {
+test("a goal in the same minute as the bet counts as before it, and so does one up to 15 seconds after the bet: it may have been", () => {
   assert.equal(lateReason(state(0, 0), firstHalf(22, 50), "goals_2_5", timeline([goal(23, "away")])), "placed after a goal that hadn't shown yet");
-  assert.equal(lateReason(state(0, 0), firstHalf(21, 50), "goals_2_5", timeline([goal(23, "away")])), null);
+  // The 23rd minute began 22:00 in: a bet at 21:50 is inside the 15-second buffer, one at 21:40 isn't.
+  assert.equal(lateReason(state(0, 0), firstHalf(21, 50), "goals_2_5", timeline([goal(23, "away")])), "placed after a goal that hadn't shown yet");
+  assert.equal(lateReason(state(0, 0), firstHalf(21, 40), "goals_2_5", timeline([goal(23, "away")])), null);
+});
+
+const at = (date) => date.getTime();
+const seen = (home, away, date) => ({ home, away, seenAt: date });
+
+test("a goal's time: the start of its minute, or 30 s before the site saw it if that's earlier, never more than 2 minutes before", () => {
+  const line = timeline();
+  assert.equal(minuteStart(goal(23, "home"), line), at(firstHalf(22)));
+  assert.equal(minuteStart(goal(45, "home", 2), line), at(firstHalf(46)));
+  assert.equal(minuteStart(goal(57, "home"), line), at(secondHalf(11)));
+  assert.equal(minuteStart(goal(23, "home"), { first: null, second: null, goals: [], cards: [] }), null);
+  // Seen 40 s into the minute: the minute's start is earlier than 30 s before.
+  assert.equal(eventTime(at(firstHalf(22)), at(firstHalf(22, 40))), at(firstHalf(22)));
+  // Seen 2:10 after the minute began (a slow feed): 30 s before it was seen is still inside 2 minutes.
+  assert.equal(eventTime(at(firstHalf(22)), at(firstHalf(24, 10))), at(firstHalf(22, 10)));
+  // Kick-off times that put the goal after the site saw it are wrong: only when it was seen counts, 2 minutes back.
+  assert.equal(eventTime(at(firstHalf(25)), at(firstHalf(24))), at(firstHalf(22)));
+  assert.equal(eventTime(null, at(firstHalf(24))), at(firstHalf(22)));
+  assert.equal(eventTime(at(firstHalf(22)), null), at(firstHalf(22)));
+});
+
+test("no kick-off times and the site's own minute behind the goal's: when the site saw the goal decides (the Arsenal W / Norwich case)", () => {
+  // The feed's timeline has the goal in the 67th minute but no kick-off times. The site showed 66' and 0–0 when the
+  // bet was placed, 4 s after the goal went in; the feed brought the goal 40 s later.
+  const goalAt = secondHalf(21, 20);
+  const noKickOffs = { first: null, second: null, goals: [goal(67, "home")], cards: [] };
+  const bet = new Date(at(goalAt) + 4_000);
+  // The old rule only had minutes: 67 after 66, so the bet stood.
+  assert.equal(lateDecision({ state: state(0, 0, 66), placedAt: bet, marketKey: "match_winner", timeline: noKickOffs, seen: [] }).late, true, "even on minutes alone, a goal in the minute after the site's counts now");
+  const decision = lateDecision({ state: state(0, 0, 66), placedAt: bet, marketKey: "match_winner", timeline: noKickOffs, seen: [seen(1, 0, new Date(at(goalAt) + 44_000))] });
+  assert.equal(decision.late, true);
+  assert.match(decision.detail, /goal 1–0 at 67'/);
+  // A bet three minutes before the feed brought the goal stands.
+  assert.equal(lateDecision({ state: state(0, 0, 63), placedAt: new Date(at(goalAt) - 136_000), marketKey: "match_winner", timeline: noKickOffs, seen: [seen(1, 0, new Date(at(goalAt) + 44_000))] }).late, false);
+});
+
+test("kick-off times a minute late in the feed don't save a bet the site saw the goal after", () => {
+  // The feed says the second half began a minute later than it did, so by its clock the goal is a minute later too.
+  const lateClock = { first: FIRST, second: SECOND + 60, goals: [goal(56, "away")], cards: [] };
+  const goalAt = secondHalf(10, 5);
+  const bet = new Date(at(goalAt) + 15_000);
+  // The minute alone: by the feed's clock the 56th minute began at 11:00 into the half, after the bet.
+  assert.equal(lateDecision({ state: state(0, 0), placedAt: bet, marketKey: "match_winner", timeline: lateClock, seen: [] }).late, false);
+  // With when the site saw it (25 s after the goal), the goal went in at least 30 s before that: before the bet.
+  assert.equal(lateDecision({ state: state(0, 0), placedAt: bet, marketKey: "match_winner", timeline: lateClock, seen: [seen(0, 1, new Date(at(goalAt) + 25_000))] }).late, true);
+});
+
+test("two bets on one goal 25 s apart, both before the feed brought it: both are void", () => {
+  const line = timeline([goal(31, "away")]);
+  const goalAt = firstHalf(30, 30);
+  const scoreSeen = [seen(0, 1, new Date(at(goalAt) + 50_000))];
+  for (const after of [14_000, 39_000]) {
+    assert.equal(lateDecision({ state: state(0, 0, 30), placedAt: new Date(at(goalAt) + after), marketKey: "match_winner", timeline: line, seen: scoreSeen }).reason, "placed after a goal that hadn't shown yet");
+  }
+});
+
+test("without a timeline, when the site saw each score decides: up to 2 minutes (and the buffer) before it", () => {
+  const scoreSeen = [seen(1, 0, firstHalf(40))];
+  assert.equal(lateDecision({ state: state(0, 0, 38), placedAt: firstHalf(39), marketKey: "match_winner", timeline: null, seen: scoreSeen }).late, true);
+  assert.equal(lateDecision({ state: state(0, 0, 37), placedAt: firstHalf(37, 50), marketKey: "match_winner", timeline: null, seen: scoreSeen }).late, true);
+  assert.equal(lateDecision({ state: state(0, 0, 37), placedAt: firstHalf(37, 40), marketKey: "match_winner", timeline: null, seen: scoreSeen }).late, false);
+  // The site was already showing it: fine.
+  assert.equal(lateDecision({ state: state(1, 0, 41), placedAt: firstHalf(41), marketKey: "match_winner", timeline: null, seen: scoreSeen }).late, false);
+  // Corners aren't checked, whatever happened.
+  assert.equal(lateDecision({ state: state(0, 0, 38), placedAt: firstHalf(39), marketKey: "corners_9_5", timeline: null, seen: scoreSeen }).late, false);
+});
+
+test("with a timeline, a score the site saw that the timeline doesn't have (a goal VAR took back) doesn't void anything", () => {
+  const scoreSeen = [seen(1, 0, firstHalf(40))];
+  assert.equal(lateDecision({ state: state(0, 0, 38), placedAt: firstHalf(39), marketKey: "match_winner", timeline: timeline([]), seen: scoreSeen }).late, false);
+});
+
+test("between two readings of the feed: a goal, a red card, a VAR check or a penalty stops a live bet; a yellow only stops a cards bet", () => {
+  const mark = (extra = {}) => ({ home: 0, away: 0, goals: 0, cards: 1, reds: 0, vars: 0, missedPenalties: 0, events: 1, last: null, at: "x", ...extra });
+  assert.equal(newInFeed(mark(), mark(), false), null);
+  assert.equal(newInFeed(mark(), mark({ goals: 1 }), false), "a goal");
+  assert.equal(newInFeed(mark(), mark({ home: 1 }), false), "a goal", "the fixture's score counts even before its timeline has the goal");
+  assert.equal(newInFeed(mark(), mark({ reds: 1, cards: 2 }), false), "a red card");
+  assert.equal(newInFeed(mark(), mark({ vars: 1 }), false), "a VAR check");
+  assert.equal(newInFeed(mark(), mark({ missedPenalties: 1 }), false), "a penalty");
+  assert.equal(newInFeed(mark(), mark({ cards: 2 }), false), null);
+  assert.equal(newInFeed(mark(), mark({ cards: 2 }), true), "a card");
+});
+
+test("a match-result price no shorter for the side that just scored than before its goal is the wrong way round", () => {
+  const before = { home: 4.0, draw: 3.4, away: 1.9 };
+  // Köln: 4.00 before the home goal, 4.33 after it.
+  assert.equal(wrongWayAfterGoal({ marketKey: "match_winner", selectionKey: "home", price: 4.33, side: "home", before }), true);
+  assert.equal(wrongWayAfterGoal({ marketKey: "match_winner", selectionKey: "home", price: 4.0, side: "home", before }), true);
+  assert.equal(wrongWayAfterGoal({ marketKey: "match_winner", selectionKey: "home", price: 2.2, side: "home", before }), false);
+  // Only the side that scored, and only the match result.
+  assert.equal(wrongWayAfterGoal({ marketKey: "match_winner", selectionKey: "away", price: 3.0, side: "home", before }), false);
+  assert.equal(wrongWayAfterGoal({ marketKey: "goals_2_5", selectionKey: "over", price: 2.0, side: "home", before }), false);
+  assert.equal(wrongWayAfterGoal({ marketKey: "match_winner", selectionKey: "home", price: 4.5, side: "home", before: {} }), false);
 });
 
 test("second-half goals and added time line up with the second half's kick-off", () => {

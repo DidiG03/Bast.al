@@ -30,6 +30,14 @@ export const LIVE_CUTOFF_MINUTE = ms("LIVE_CUTOFF_MINUTE", 89);
 
 /** Why a live match isn't taking bets right now, for the Player. */
 export type LivePause = "goal" | "swing" | "reopen" | "late" | "feed";
+/**
+ * Pauses kept on a match (Event.liveCooldownReason): the ones the Player
+ * sees, plus a red card, a VAR check or a penalty in the feed's timeline,
+ * which pause the whole match like a goal and show as a jump in the prices.
+ */
+export type CooldownReason = LivePause | "red" | "var";
+/** Pauses for something that happened in the match: they last until the prices are made again after it (eventPauseOver). */
+export const EVENT_PAUSES: ReadonlySet<string> = new Set(["goal", "red", "var"]);
 
 export type LiveReading = { homeScore: number | null; awayScore: number | null; stopped: boolean };
 
@@ -50,30 +58,46 @@ export function cooldownFor(before: LiveReading, after: LiveReading, swing: bool
 }
 
 /** Keeps the later of two pauses, so a short one never cuts a longer one short. */
-export function laterCooldown(current: { until: Date | null; reason: string | null }, next: { until: Date; reason: LivePause } | null): { until: Date | null; reason: string | null } {
+export function laterCooldown(current: { until: Date | null; reason: string | null }, next: { until: Date; reason: CooldownReason } | null): { until: Date | null; reason: string | null } {
   if (!next) return current;
   if (current.until && current.until >= next.until) return current;
   return next;
 }
 
 /**
- * Whether a goal's pause can end before GOAL_COOLDOWN_MS is up, on a new
- * reading of the match: the bookmaker isn't blocking it, the reading's prices
- * already carry the score (so they were made after the goal), this reading
- * isn't another goal, and at least GOAL_MIN_PAUSE_MS has gone by. A jump in
- * the prices, or the bookmaker switching bets back on, is the market catching
- * up — that must not keep the pause going, or the new prices stay hidden for
- * the whole cooldown.
+ * Whether a pause for a goal, a red card or a VAR check (EVENT_PAUSES) can end
+ * before GOAL_COOLDOWN_MS is up, on a new reading of the match: the bookmaker
+ * isn't blocking it, the reading's prices already carry the score, this
+ * reading isn't another goal, at least GOAL_MIN_PAUSE_MS has gone by, and the
+ * bookmaker made its prices after the pause began (when the feed says when it
+ * did): prices from before the event aren't recalculated for it, however
+ * they look. A jump in the prices, or the bookmaker switching bets back on,
+ * is the market catching up — that must not keep the pause going, or the new
+ * prices stay hidden for the whole cooldown.
  */
 export function goalPauseOver(
   pause: { until: Date | null; reason: string | null },
-  reading: { hasScore: boolean; stopped: boolean; pausesItself: boolean },
+  reading: { hasScore: boolean; stopped: boolean; pausesItself: boolean; bookmakerUpdate?: Date | null },
   now: Date = new Date(),
 ): boolean {
-  if (pause.reason !== "goal" || !pause.until || pause.until <= now) return false;
+  if (!EVENT_PAUSES.has(pause.reason ?? "") || !pause.until || pause.until <= now) return false;
   if (reading.stopped || !reading.hasScore || reading.pausesItself) return false;
-  const goalAt = pause.until.getTime() - GOAL_COOLDOWN_MS;
-  return now.getTime() - goalAt >= GOAL_MIN_PAUSE_MS;
+  const pausedAt = pause.until.getTime() - GOAL_COOLDOWN_MS;
+  if (reading.bookmakerUpdate && reading.bookmakerUpdate.getTime() <= pausedAt) return false;
+  return now.getTime() - pausedAt >= GOAL_MIN_PAUSE_MS;
+}
+
+/**
+ * Whether a live match-result price is the wrong way round for a goal just
+ * scored: the side that scored is no shorter than it was before the goal.
+ * That price wasn't made for the goal, so no bet is taken at it. `before` is
+ * the match-result prices just before the goal. Other markets' prices can't
+ * be compared with those, so they aren't checked here.
+ */
+export function wrongWayAfterGoal(input: { marketKey: string; selectionKey: string; price: number; side: "home" | "away"; before: { home?: number | null; draw?: number | null; away?: number | null } }): boolean {
+  if (input.marketKey !== "match_winner" || input.selectionKey !== input.side) return false;
+  const was = input.before[input.side];
+  return typeof was === "number" && was > 1 && input.price >= was;
 }
 
 /** Whether any outcome's chance moved by at least SWING_POINTS between two readings. Outcomes new or gone don't count. */

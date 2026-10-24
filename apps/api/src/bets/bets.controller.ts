@@ -10,7 +10,7 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { Idempotent } from "../idempotency/idempotency.interceptor";
 import { clientIp } from "../security/client-ip";
-import { AdminBetsQueryDto, BuilderQuoteDto, MyBetsQueryDto, PlaceBetsDto, ResultDto, SelectionResultDto, VoidDto } from "./bets.dto";
+import { AdminBetsQueryDto, BuilderQuoteDto, LateRecheckDto, MyBetsQueryDto, PlaceBetsDto, ResultDto, SelectionResultDto, VoidDto } from "./bets.dto";
 import { BetsService } from "./bets.service";
 import { SettlementService } from "./settlement.service";
 
@@ -104,6 +104,17 @@ export class BetsController {
   @Idempotent()
   voidEvent(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() body: VoidDto) {
     return this.settlement.voidEvent(actor, id, body.reason);
+  }
+
+  /**
+   * Looks again at settled live bets and voids the ones placed after a goal or
+   * red card the site hadn't shown (bets/late.ts), taking back winnings paid on
+   * them. Only says what it would do unless `dryRun` is false.
+   */
+  @Post("admin/late-recheck")
+  @Roles(Role.SUPER_ADMIN)
+  lateRecheck(@CurrentActor() actor: Actor, @Body() body: LateRecheckDto) {
+    return this.settlement.recheckLateFor(actor, { player: body.player, since: body.since ? new Date(body.since) : undefined, eventId: body.eventId, dryRun: body.dryRun !== false });
   }
 
   @Post("admin/:id/void")

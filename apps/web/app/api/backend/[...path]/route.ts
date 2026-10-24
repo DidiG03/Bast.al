@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { signedClientHeaders } from "../../../../lib/client-signature";
 
 const UPSTREAM = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+/** The longest the API gets to answer. A live bet takes under 40 seconds at most; past this something is stuck. */
+const UPSTREAM_TIMEOUT_MS = 60_000;
 
 /**
  * Server-side BFF proxy: attaches anti-replay HMAC so the browser never sees
@@ -101,11 +103,17 @@ async function proxy(request: NextRequest, parts: string[]) {
     return proxyStream(url, headers);
   }
 
-  const send = () => fetch(url, { method, headers, body: bodyText, cache: "no-store" });
+  const send = () => fetch(url, { method, headers, body: bodyText, cache: "no-store", signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
   let upstream: Response;
   try {
     upstream = await send();
   } catch (error) {
+    // Waited too long: say so rather than hang. A bet may still have gone in, so the Player looks before trying again
+    // (the same slip sent again is answered with the first result, never placed twice).
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      console.warn("API too slow", targetPath);
+      return NextResponse.json({ message: "The server took too long to answer. Check your open bets before trying again." }, { status: 504, headers: { "cache-control": "no-store" } });
+    }
     // A connection to an API copy that just went away (a deploy swaps them over)
     // fails before anything is answered: a read is asked once more. A change
     // isn't, since its signature can only be used once.

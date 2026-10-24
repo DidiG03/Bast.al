@@ -171,6 +171,30 @@ export class AdminBetsQueryDto {
   eventId?: string;
 }
 
+/** Super Admin's late re-check of settled live bets (SettlementService.recheckLate). */
+export class LateRecheckDto {
+  /** A Player's exact username, e.g. player_001. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  player?: string;
+
+  /** Only bets placed at or after this time. */
+  @IsOptional()
+  @IsISO8601()
+  since?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  eventId?: string;
+
+  /** Only say what it would do. On unless set to false. */
+  @IsOptional()
+  @IsBoolean()
+  dryRun?: boolean;
+}
+
 export class VoidDto {
   @IsString()
   @MinLength(3)

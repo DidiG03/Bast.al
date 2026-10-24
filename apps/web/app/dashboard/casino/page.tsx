@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { bookArt, bookSymbolImage, loadBookArt } from "../../../components/book-symbols";
+import { BOOK_COVER, bookSymbolImage } from "../../../components/book-symbols";
 import { HelpTip } from "../../../components/help-tip";
 import { useI18n } from "../../../components/i18n-provider";
 import { PageLoading } from "../../../components/loading-spinner";
@@ -69,16 +69,19 @@ function CasinoLobby() {
 
   if (!state) return <PageLoading label="Loading the Casino" />;
   // Super Admin and the Player's Owner can turn single games off; those tiles don't show.
-  const has = (game: CasinoGame) => state.games.includes(game);
+  // An API older than the website (the minute between their deploys) sends no list: every game shows, as before.
+  const games = state.games ?? null;
+  const has = (game: CasinoGame) => games === null || games.includes(game);
+  const casinoClosed = state.casinoClosed === undefined ? state.closed : state.casinoClosed;
   return (
     <div className="stack">
       <div>
         <h1 style={{ margin: 0 }}>{t("Casino")}</h1>
         <p className="muted report-subtitle">{t("Pick a game. Every game plays with your balance, {amount} right now.", { amount: formatMoney(state.balance) })}</p>
       </div>
-      {state.casinoClosed || state.games.length === 0 ? (
+      {casinoClosed || games?.length === 0 ? (
         <div className="card">
-          <p style={{ margin: 0 }}>{state.casinoClosed ? ts(state.casinoClosed) : t("No games are open right now.")}</p>
+          <p style={{ margin: 0 }}>{casinoClosed ? ts(casinoClosed) : t("No games are open right now.")}</p>
         </div>
       ) : (
         <div className="casino-lobby">
@@ -215,17 +218,11 @@ function CasinoLobby() {
   );
 }
 
-/** Book of Ra's tile: the cover picture from its art folder, or the book drawn in code. */
+/** Book of Ra's tile: the cover picture from its art folder at once (not after the whole folder loads), or the book drawn in code if it's missing. */
 function BookTileArt() {
-  const [cover, setCover] = useState<{ src: string; photo: boolean } | null>(null);
-  useEffect(() => {
-    loadBookArt().then(() => {
-      const photo = bookArt("cover");
-      setCover(photo ? { src: photo.src, photo: true } : { src: bookSymbolImage("BOOK", 220), photo: false });
-    });
-  }, []);
+  const [drawn, setDrawn] = useState<string | null>(null);
   // eslint-disable-next-line @next/next/no-img-element -- a picture made in the browser, or one from the art folder
-  return cover ? <img className={`casino-tile-cover is-book${cover.photo ? " is-photo" : ""}`} src={cover.src} alt="" /> : null;
+  return drawn ? <img className="casino-tile-cover is-book" src={drawn} alt="" /> : <img className="casino-tile-cover is-book is-photo" src={BOOK_COVER} alt="" onError={() => setDrawn(bookSymbolImage("BOOK", 220))} />;
 }
 
 /** The Penalty tile: the game's own scene, waiting for the kick. */

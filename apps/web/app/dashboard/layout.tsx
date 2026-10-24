@@ -6,6 +6,7 @@ import { BalanceChip } from "../../components/balance-chip";
 import { DashboardSidebar } from "../../components/dashboard-sidebar";
 import { DashboardTrail } from "../../components/dashboard-trail";
 import { NotificationCenter } from "../../components/notification-center";
+import { PageTitle } from "../../components/page-title";
 import { RealtimeProvider, RealtimeRefresh } from "../../components/realtime-provider";
 import { ThemeToggle } from "../../components/theme-toggle";
 import { UserMenu } from "../../components/user-menu";
@@ -97,6 +98,7 @@ export default async function DashboardLayout({
               <NotificationCenter />
             </div>
           </header>
+          <PageTitle />
           {children}
         </main>
       </div>

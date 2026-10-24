@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { HelpTip } from "./help-tip";
 import { useI18n, type I18n } from "./i18n-provider";
 import { LoadingSpinner, PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { SlotReels, type ReelWin, type SlotReelsHandle } from "./slot-reels";
 import { slotSound } from "./slot-sounds";
@@ -262,6 +263,8 @@ export function SlotGame() {
     if (state?.closed && freeSpins && freeSpins.remaining > 0) setFinishingFree(true);
   }, [state?.closed, freeSpins]);
 
+  // The top bar waits for the animation too.
+  useChipBalance(state ? balance : null);
   useRealtime((event) => {
     if (event.type === "balance.changed" && !spinning) setBalance(event.balance);
   });
@@ -479,7 +482,8 @@ export function SlotGame() {
           <p className="muted report-subtitle">{t("5 reels, 5 or 10 lines, played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to spin, and again to stop the reels.")}</p>
         </div>
-        <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
+        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
+          <span className="game-rules-icon" aria-hidden="true">?</span>
           {t("Pays and rules")}
         </button>
       </div>
@@ -610,7 +614,8 @@ export function SlotGame() {
                 <span className="slot-switch" aria-hidden="true" />
               </button>
               <button type="button" className="slot-btn slot-start" data-key="Space" onClick={() => (auto ? setAuto(false) : spinning ? reels.current?.skip() : spin())} disabled={!auto && !spinning && !canSpin}>
-                <span aria-hidden="true">⟳</span> {auto ? t("Stop") : t("Start")}
+                {/* While the reels turn, the button says Stop: it stops them early (the result is already decided). */}
+                <span aria-hidden="true">{auto || spinning ? "■" : "⟳"}</span> {auto || spinning ? t("Stop") : t("Start")}
               </button>
             </footer>
             {rulesOpen && fullScreen !== "off" ? <Rules game={state.game} bet={playingFree ? freeSpins.bet : bet} lines={lines} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}

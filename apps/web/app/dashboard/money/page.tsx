@@ -15,7 +15,7 @@ import { formatMoney } from "../../../lib/format";
 const PAGE = 30;
 type Filter = "all" | "topups" | "bets" | "casino";
 
-const DAY: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long" };
+const DAY: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
 /** A Player's money, move by move: top-ups from their Manager or Owner, bets placed, and what came back. */
@@ -97,14 +97,14 @@ export default function MoneyPage() {
           <HelpTip text="The money you can bet with. Your Manager or Owner adds it. When you win, your winnings come back here." />
         </span>
         <strong className="player-hero-balance">{formatMoney(Number(me.balance))}</strong>
-        {me.parent ? <TopUpRequestButton className="secondary money-topup" /> : null}
+        {me.parent ? <TopUpRequestButton className="money-topup" /> : null}
       </section>
 
       <section className="card stack">
         <div className="tree-header">
           <span>
             {t("History")}
-            <HelpTip text="Green is money that came in: top-ups from your Manager or Owner, and wins. Red is money that went out: your bets, and money your Manager or Owner took back. The newest is at the top." />
+            <HelpTip text="Green is money that came in: top-ups from your Manager or Owner, and wins. Stakes on your bets are in plain text. Red is money lost or taken back: a day's casino loss, or money your Manager or Owner took back. The newest is at the top." />
           </span>
         </div>
         <div className="bet-chips" role="group" aria-label={t("Show")}>
@@ -135,20 +135,21 @@ export default function MoneyPage() {
                   const { icon, title } = describe(entry, t);
                   const pending = entry.status === "PENDING";
                   const rejected = entry.status === "REJECTED";
+                  const tone = entry.amount >= 0 ? " is-in" : entry.type === "BET_STAKE" ? " is-stake" : " is-out";
                   return (
                     <li key={entry.id} className={`money-row${pending || rejected ? " is-waiting" : ""}`}>
-                      <span className={`money-icon${entry.amount >= 0 ? " is-in" : " is-out"}`} aria-hidden="true">
+                      <time className="money-time" dateTime={entry.createdAt}>
+                        {date(entry.createdAt, TIME)}
+                      </time>
+                      <span className={`money-icon${tone}`} aria-hidden="true">
                         {icon}
                       </span>
                       <span className="money-row-text">
                         <strong>{title}</strong>
                         <span className="muted">{ts(entry.reason)}</span>
-                        <span className="muted">
-                          {date(entry.createdAt, TIME)}
-                          {pending ? ` · ${t("Waiting for approval")}` : rejected ? ` · ${t("Rejected, no money moved")}` : ""}
-                        </span>
+                        {pending || rejected ? <span className="muted">{pending ? t("Waiting for approval") : t("Rejected, no money moved")}</span> : null}
                       </span>
-                      <strong className={`money-amount${entry.amount >= 0 ? " is-in" : " is-out"}`}>
+                      <strong className={`money-amount${tone}`}>
                         {entry.amount >= 0 ? "+" : "−"}
                         {formatMoney(Math.abs(entry.amount))}
                       </strong>

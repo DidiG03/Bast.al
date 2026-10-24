@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { RelativeTime } from "./relative-time";
 import { useRealtime } from "./realtime-provider";
 import { apiFetch, type NotificationItem, type NotificationPreferences, type NotificationResponse } from "../lib/api";
 import { formatMoney } from "../lib/format";
@@ -104,10 +105,10 @@ function BellIcon() {
 }
 
 export function NotificationCenter() {
-  const { getToken, userId } = useAuth();
+  const { getToken, userId, isLoaded } = useAuth();
   const router = useRouter();
   const i18n = useI18n();
-  const { t, tn, ts, date } = i18n;
+  const { t, tn, ts } = i18n;
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -158,13 +159,15 @@ export function NotificationCenter() {
     else toaster.info(parts.join(" · "), { title: t("While you were away"), onClick: open, loss: lost.length > 0, duration: 9_000 });
   }
 
+  // Once Clerk is ready: right after a reload (a language switch, say) there's no token yet, and loading then left the bell without its count.
   useEffect(() => {
+    if (!isLoaded || !userId) return;
     load()
       .then((result) => (result ? summarizeAway(result.items) : undefined))
       .catch(() => toaster.error(t("Notifications aren't available right now")));
-    // getToken is stable for the Clerk session and this intentionally runs once.
+    // getToken is stable for the Clerk session and this intentionally runs once per signed-in account.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isLoaded, userId]);
 
   useRealtime((event) => {
     if (event.type === "notification.created") {
@@ -283,7 +286,7 @@ export function NotificationCenter() {
             {items.length === 0 ? <p className="muted notification-empty">{t("You're all caught up.")}</p> : items.map((item) => {
               const details = betDetails(item);
               const notice = details ? betNotice(details, i18n) : null;
-              const when = <time dateTime={item.createdAt}>{date(item.createdAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time>;
+              const when = <RelativeTime value={item.createdAt} />;
               return (
               <div key={item.id} className={`notification-item${item.readAt ? "" : " is-unread"} notification-severity-${item.severity.toLowerCase()}${notice ? ` is-bet is-${notice.tone}` : ""}`}>
                 <span className="notification-item-dot" />

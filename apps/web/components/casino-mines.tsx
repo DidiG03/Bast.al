@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { HelpTip } from "./help-tip";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -81,9 +82,10 @@ export function MinesGame() {
     setState(next);
     setBalance(next.balance);
     setRecent(next.recent);
-    setRound(next.round ?? next.recent[0] ?? null);
+    // A round still in play comes back; a finished one stays in the history, and the board starts fresh.
+    setRound(next.round ?? null);
     setMines((current) => (next.game.mineCounts.includes(current) ? current : next.game.mineCounts[1] ?? next.game.mineCounts[0]));
-    setBet((current) => current || Math.min(next.game.bets[1] ?? next.game.bets[0], next.tableMax));
+    setBet((current) => current || Math.min(next.game.bets[0], next.tableMax));
   }, [getToken, t]);
 
   useEffect(() => {
@@ -91,6 +93,8 @@ export function MinesGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The top bar waits for the animation too.
+  useChipBalance(state ? balance : null);
   useRealtime((event) => {
     if (event.type === "balance.changed" && !busy) setBalance(event.balance);
   });
@@ -202,7 +206,8 @@ export function MinesGame() {
           <p className="muted report-subtitle">{t("Open the gems, cash out before a mine. Played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to start a round or cash out.")}</p>
         </div>
-        <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
+        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
+          <span className="game-rules-icon" aria-hidden="true">?</span>
           {t("Pays and rules")}
         </button>
       </div>

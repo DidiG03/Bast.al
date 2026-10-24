@@ -2,6 +2,7 @@ import { NamedIcon, type IconName } from "../../../components/icons";
 import { SignInForm } from "../../../components/sign-in-form";
 import { ThemeToggle } from "../../../components/theme-toggle";
 import { LanguageToggle } from "../../../components/language-toggle";
+import { PageTitle } from "../../../components/page-title";
 import { msg } from "../../../lib/i18n/core";
 import { getT } from "../../../lib/i18n/server";
 import { BrandMark } from "../../../components/brand-mark";
@@ -23,6 +24,7 @@ export default function SignInPage() {
             <span className="brand">Shtatat.al</span>
           </div>
           <span className="auth-top-actions">
+            <PageTitle />
             <LanguageToggle />
             <ThemeToggle />
           </span>

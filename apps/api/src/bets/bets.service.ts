@@ -10,7 +10,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import type { MatchCentre } from "../odds/api-football";
 import { RACE_CAP } from "../odds/greyhounds";
-import { smallPriceMove } from "../odds/live-guard";
+import { takenWithoutAsking } from "../odds/live-guard";
 import { LIVE_CORNERS_DELAY_MS, LIVE_CORNERS_MAX_STAKE, isCardsMarket, isCornersMarket, type LiveState } from "./late";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
@@ -197,7 +197,7 @@ export class BetsService {
       }
       // A tick is taken at the price just found. A real move is refused unless the Player already chose the new price.
       if (!sp && Math.abs(odds - pick.odds) > 0.001) {
-        if (input.acceptOddsChanges || smallPriceMove(pick.odds, odds)) adjusted = true;
+        if (input.acceptOddsChanges || takenWithoutAsking(pick.odds, odds)) adjusted = true;
         else changed.push(`${selection.name} is now ${odds.toFixed(2)}`);
       }
       return {
@@ -262,7 +262,7 @@ export class BetsService {
     if (input.builder) {
       const quote = await this.priceBuilderFor(actor.id, input.builder.legs.map((leg) => leg.selectionId));
       if (Math.abs(Number(quote.odds) - input.builder.odds) > 0.001) {
-        if (input.acceptOddsChanges || smallPriceMove(input.builder.odds, Number(quote.odds))) adjusted = true;
+        if (input.acceptOddsChanges || takenWithoutAsking(input.builder.odds, Number(quote.odds))) adjusted = true;
         else changed.push(`the bet builder is now ${Number(quote.odds).toFixed(2)}`);
       }
       pricedBuilder = { ...quote, stake: new Prisma.Decimal(input.builder.stake.toFixed(2)) };
@@ -592,8 +592,9 @@ export class BetsService {
       if (!now.bettable) throw new ConflictException(`Live betting on ${pick.label} was paused while your bet was being confirmed. Try again in a moment.`);
       if (now.score !== pick.score) throw new ConflictException(`The score changed while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
       if (pick.price !== null && Math.abs(now.odds - Number(pick.price)) > 0.001) {
-        // Only a small move is taken. Choosing the new price on the slip does not accept a goal-sized move during the wait.
-        if (smallPriceMove(Number(pick.price), now.odds)) {
+        // Only a small move up is taken. A move down during the wait, even a small one, shows the Player the new price first
+        // (choosing a new price on the slip accepted the price they saw then, not a later one).
+        if (takenWithoutAsking(Number(pick.price), now.odds)) {
           pick.price = new Prisma.Decimal(now.odds.toFixed(2));
           adjusted = true;
         } else {

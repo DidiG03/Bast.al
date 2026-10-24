@@ -8,7 +8,7 @@ import { BetLegs } from "../../../components/bet-legs";
 import { LineFamily, MarketHead, bundleLines, marketKind, resultHeads, visibleCountry } from "../../../components/line-market";
 import { MatchCentre, MatchStatsPanel } from "../../../components/match-centre";
 import { GreyhoundRaces } from "../../../components/greyhound-races";
-import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
+import { ListSkeleton, LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
@@ -40,7 +40,7 @@ const DETAIL_FRESH_MS = 10_000;
 
 type PriceMove = { up: boolean; until: number };
 /** One tap fills the stake on the ticket, in ALL. */
-const QUICK_STAKES = [250, 500, 1000, 2500, 5000];
+const QUICK_STAKES = [10, 50, 100, 500, 1000];
 /** Matches the API's cap on an accumulator's combined odds. */
 const MAX_ACCUMULATOR_ODDS = 5000;
 /** Matches drawn at first; "Show more matches" adds this many again, so a week of football doesn't slow a phone down. */
@@ -675,8 +675,16 @@ function BetPage() {
       ? stakeValue(accaStake)
       : slip.reduce((sum, item) => sum + stakeValue(item.stake), 0);
 
-  // The first time, only the spinner shows until the account and the matches have loaded.
-  if (!info || (tab === "matches" && listed && events === null && sport === "football")) return failed ? null : <PageLoading label="Loading matches" />;
+  // The first time, rows shaped like the matches show until the account and the matches have loaded.
+  if (!info || (tab === "matches" && listed && events === null && sport === "football"))
+    return failed ? null : (
+      <div className="stack bet-page">
+        <div className="bet-page-head">
+          <h1>{t("Bet")}</h1>
+        </div>
+        <ListSkeleton label="Loading matches" />
+      </div>
+    );
 
   return (
     <div className="stack bet-page">
@@ -898,7 +906,10 @@ function BetPage() {
       {sheetOpen ? (
         <div className={`bet-sheet-layer${sheetClosing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-label={t("Bet slip")}>
           <button type="button" className="bet-sheet-backdrop" aria-label={t("Close bet slip")} onClick={closeSheet} />
-          <div className="bet-sheet">{slipPanel}</div>
+          {/* A tap beside the slip (wide screens) closes it, like the backdrop. */}
+          <div className="bet-sheet" onClick={(event) => event.target === event.currentTarget && closeSheet()}>
+            {slipPanel}
+          </div>
         </div>
       ) : null}
     </div>
@@ -1328,6 +1339,12 @@ function BetSlip({
   const [takeNewPrice, setTakeNewPrice] = useState(false);
   const toast = useToast();
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
+  // Removing the last pick closes the sheet instead of leaving an empty slip over the page. Placing keeps it open, for the receipt.
+  const hadItems = useRef(items.length > 0);
+  useEffect(() => {
+    if (hadItems.current && items.length === 0 && !receipt) onClose();
+    hadItems.current = items.length > 0;
+  }, [items.length, receipt, onClose]);
 
   // Combined picks all from one match are a bet builder, priced by the server; from different matches, an accumulator.
   const oneMatch = items.length >= 2 && new Set(items.map((item) => item.eventId)).size === 1;

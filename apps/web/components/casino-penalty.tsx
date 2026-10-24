@@ -7,6 +7,7 @@ import { HelpTip } from "./help-tip";
 import { PenaltyScene } from "./penalty-scene";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -54,8 +55,9 @@ export function PenaltyGame() {
     setState(next);
     setBalance(next.balance);
     setRecent(next.recent);
-    setRound(next.round ?? next.recent[0] ?? null);
-    setBet((current) => current || Math.min(next.game.bets[1] ?? next.game.bets[0], next.tableMax));
+    // A round still in play comes back; a finished one stays in the history, and the pitch starts fresh.
+    setRound(next.round ?? null);
+    setBet((current) => current || Math.min(next.game.bets[0], next.tableMax));
   }, [getToken, t]);
 
   useEffect(() => {
@@ -63,6 +65,8 @@ export function PenaltyGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The top bar waits for the animation too.
+  useChipBalance(state ? balance : null);
   useRealtime((event) => {
     if (event.type === "balance.changed" && !busy) setBalance(event.balance);
   });
@@ -185,7 +189,8 @@ export function PenaltyGame() {
           <p className="muted report-subtitle">{t("Take the penalties, cash out before the keeper saves one. Played with your balance.")}</p>
           <p className="game-keys-hint">{t("Keys: Space starts a round or cashes out, and ← ↑ → shoot left, centre and right.")}</p>
         </div>
-        <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
+        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
+          <span className="game-rules-icon" aria-hidden="true">?</span>
           {t("Pays and rules")}
         </button>
       </div>

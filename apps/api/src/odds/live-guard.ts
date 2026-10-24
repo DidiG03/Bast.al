@@ -96,3 +96,8 @@ export function smallPriceMove(before: number, after: number): boolean {
   if (!(before > 1) || !(after > 1)) return false;
   return Math.abs(1 / after - 1 / before) < SMALL_MOVE_POINTS;
 }
+
+/** A move a bet takes without asking: a small one up. Any move down shows the Player the new price first. */
+export function takenWithoutAsking(before: number, after: number): boolean {
+  return after > before && smallPriceMove(before, after);
+}

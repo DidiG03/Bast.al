@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Poin
 import { HelpTip } from "./help-tip";
 import { useI18n, type I18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { RouletteWheel, type RouletteWheelHandle } from "./roulette-wheel";
 import { slotSound } from "./slot-sounds";
@@ -122,6 +123,8 @@ export function RouletteGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The top bar waits for the animation too.
+  useChipBalance(state ? balance : null);
   useRealtime((event) => {
     if (event.type === "balance.changed" && !spinning) setBalance(event.balance);
   });
@@ -279,7 +282,8 @@ export function RouletteGame() {
           <p className="muted report-subtitle">{t("European roulette with a single 0, played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to spin.")}</p>
         </div>
-        <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
+        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
+          <span className="game-rules-icon" aria-hidden="true">?</span>
           {t("Pays and rules")}
         </button>
       </div>

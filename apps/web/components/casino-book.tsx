@@ -10,6 +10,7 @@ import { GamblePanel, countUpTime, overview, useCountUp } from "./casino-slot";
 import { HelpTip } from "./help-tip";
 import { useI18n, type I18n } from "./i18n-provider";
 import { LoadingSpinner, PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { SlotReels, type ReelWin, type SlotReelsHandle } from "./slot-reels";
 import { slotSound } from "./slot-sounds";
@@ -278,6 +279,8 @@ export function BookGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The top bar waits for the animation too.
+  useChipBalance(state ? balance : null);
   useRealtime((event) => {
     if (event.type === "balance.changed" && !spinning) setBalance(event.balance);
   });
@@ -549,7 +552,8 @@ export function BookGame() {
           <p className="muted report-subtitle">{t("5 reels, 10 lines, and the book that opens free spins. Played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to spin, and again to stop the reels.")}</p>
         </div>
-        <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
+        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
+          <span className="game-rules-icon" aria-hidden="true">?</span>
           {t("Pays and rules")}
         </button>
       </div>
@@ -754,7 +758,7 @@ export function BookGame() {
                 <div className="book-ring-spot is-start">
                   <button type="button" className="book-ring is-start" data-key="Space" onClick={() => (auto ? setAuto(null) : spinning ? reels.current?.skip() : spin())} disabled={!auto && !spinning && !canSpin}>
                     <StartArrows />
-                    <span>{auto ? t("Stop") : playingFree ? t("Free spin") : t("Start")}</span>
+                    <span>{auto || spinning ? t("Stop") : playingFree ? t("Free spin") : t("Start")}</span>
                   </button>
                 </div>
                 <div className="book-ring-spot is-bet">

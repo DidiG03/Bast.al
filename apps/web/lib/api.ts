@@ -739,10 +739,10 @@ export type CasinoGame = "slot" | "book" | "roulette" | "blackjack" | "penalty" 
 export type CasinoState = {
   /** Why the slot can't be played (the Casino's reason, or the slot being off), or null. */
   closed: string | null;
-  /** Why the Casino as a whole can't be played, or null: what the lobby shows. */
-  casinoClosed: string | null;
-  /** The games this Player can play, for the lobby's tiles. */
-  games: CasinoGame[];
+  /** Why the Casino as a whole can't be played, or null: what the lobby shows. Missing from an API older than the website. */
+  casinoClosed?: string | null;
+  /** The games this Player can play, for the lobby's tiles. Missing from an API older than the website. */
+  games?: CasinoGame[];
   balance: number;
   maxStake: number | null;
   freeSpins: CasinoFreeSpins | null;

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { formatMoney } from "../lib/format";
 import { formatDate, LANG_COOKIE, setBrowserLang, translate, translatePlural, translateServer, type Lang, type Vars } from "../lib/i18n/core";
 
 export type I18n = {
@@ -17,12 +18,17 @@ export type I18n = {
   setLang: (lang: Lang) => void;
 };
 
+/** The API writes amounts plainly ("100000.00 ALL"); they show like the rest of the site ("100,000.00 ALL"). */
+function readableAmounts(text: string): string {
+  return text.replace(/(?<![\d.,])-?\d+(?:\.\d{1,2})?(?= ALL\b)/g, (amount) => formatMoney(amount).replace(/ ALL$/, ""));
+}
+
 function make(lang: Lang): I18n {
   return {
     lang,
     t: (text, vars) => translate(lang, text, vars),
     tn: (count, one, other, vars) => translatePlural(lang, count, one, other, vars),
-    ts: (text) => translateServer(lang, text),
+    ts: (text) => readableAmounts(translateServer(lang, text)),
     date: (value, options) => formatDate(lang, value, options),
     setLang: (next) => {
       document.cookie = `${LANG_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;

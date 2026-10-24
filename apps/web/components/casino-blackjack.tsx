@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { HelpTip } from "./help-tip";
 import { useI18n, type I18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -74,7 +75,7 @@ export function BlackjackGame() {
     setBalance(next.balance);
     setRound(next.round);
     setRevealed(next.round?.phase === "DONE" ? next.round.dealer.length : 1);
-    setBet((current) => current || Math.min(next.game.chips[2] ?? next.game.chips[0], next.tableMax));
+    setBet((current) => current || Math.min(next.game.chips[0], next.tableMax));
   }, [getToken, t]);
 
   useEffect(() => {
@@ -82,6 +83,8 @@ export function BlackjackGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The top bar waits for the animation too.
+  useChipBalance(state ? balance : null);
   useRealtime((event) => {
     if (event.type === "balance.changed" && !busy) setBalance(event.balance);
   });
@@ -307,7 +310,8 @@ export function BlackjackGame() {
           <p className="muted report-subtitle">{t("Beat the dealer to 21, played with your balance.")}</p>
           <p className="game-keys-hint">{t("Keys: Space deals, H hits, S stands, D doubles, P splits, Y and N answer insurance.")}</p>
         </div>
-        <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
+        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
+          <span className="game-rules-icon" aria-hidden="true">?</span>
           {t("Pays and rules")}
         </button>
       </div>

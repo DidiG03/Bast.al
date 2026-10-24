@@ -115,7 +115,8 @@ export function formatDate(lang: Lang, value: Date | string | number, requested:
   const key = `${lang}:${fallback}:${JSON.stringify(options)}`;
   let formatter = formatters.get(key);
   if (!formatter) {
-    const withClock = lang === "sq" && (options.hour !== undefined || options.timeStyle !== undefined) ? { hourCycle: "h23" as const, ...options } : options;
+    // A 24-hour clock in both languages ("13:30", never "01:30 PM"), so times read the same everywhere.
+    const withClock = options.hour !== undefined || options.timeStyle !== undefined ? { hourCycle: "h23" as const, ...options } : options;
     formatter = new Intl.DateTimeFormat(lang === "sq" ? (fallback ? "en-GB" : "sq-AL") : "en", withClock);
     formatters.set(key, formatter);
   }

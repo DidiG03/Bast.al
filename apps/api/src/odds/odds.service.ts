@@ -17,6 +17,17 @@ export type Sport = "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "
 
 /** How long a finished match stays on the live list, marked full time. */
 const JUST_FINISHED_MS = 10 * 60_000;
+/**
+ * A football match still "live" this long after kick-off has finished; the feed just never said so (it dropped the
+ * match, or kept its last minute). Extra time and penalties are over well inside it. It leaves the live lists; the
+ * result still settles from the feed as usual.
+ */
+const FOOTBALL_LIVE_MAX_MS = 3.5 * 3_600_000;
+
+/** Live matches still worth listing: for football, not one stuck at its last minute hours after kick-off. */
+function stillLive(sport: Sport, now: Date): Prisma.EventWhereInput {
+  return { status: EventStatus.LIVE, ...(sport === "football" ? { startsAt: { gte: new Date(now.getTime() - FOOTBALL_LIVE_MAX_MS) } } : {}) };
+}
 
 /** The most matches the list view sends: a week of every synced league, with room to spare. */
 const LIST_LIMIT = 2_000;
@@ -221,7 +232,7 @@ export class OddsService {
       sport,
       // Live also keeps matches that finished in the last few minutes, marked full time, so they don't just vanish.
       ...(filter === "live"
-        ? { OR: [{ status: { in: FILTER_STATUSES.live } }, { status: EventStatus.COMPLETED, finishedAt: { gte: new Date(now.getTime() - JUST_FINISHED_MS) } }] }
+        ? { OR: [stillLive(sport, now), { status: EventStatus.COMPLETED, finishedAt: { gte: new Date(now.getTime() - JUST_FINISHED_MS) } }] }
         : { status: { in: FILTER_STATUSES[filter] } }),
       ...(isAdmin ? {} : { hidden: false }),
       // Finished matches only for the last three days; races (dozens an hour) for the last six hours.
@@ -253,7 +264,7 @@ export class OddsService {
     const soon = now.getTime() + 2 * 86_400_000;
     const rows = await this.kept(`top:${sport}`, LIST_TTL_MS.top, () =>
       this.prisma.event.findMany({
-        where: { sport, status: { in: [EventStatus.LIVE, ...FILTER_STATUSES.upcoming] }, hidden: false },
+        where: { sport, OR: [stillLive(sport, now), { status: { in: FILTER_STATUSES.upcoming } }], hidden: false },
         orderBy: { startsAt: "asc" },
         take: LIST_LIMIT,
         include: COUNT_MARKETS,

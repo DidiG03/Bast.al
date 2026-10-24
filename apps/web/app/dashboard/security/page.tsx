@@ -13,6 +13,12 @@ import { HelpTip } from "../../../components/help-tip";
 /** "::ffff:1.2.3.4" is an IPv4 address written the IPv6 way. */
 const plainIp = (ip: string) => (ip.startsWith("::ffff:") && ip.includes(".") ? ip.slice(7) : ip);
 
+/** Enough of an address to tell networks apart, not the whole of it: "79.106.•.•", "2a02:4780:…". */
+const maskedIp = (ip: string) => (ip.includes(".") ? ip.split(".").slice(0, 2).concat("•", "•").join(".") : `${ip.split(":").slice(0, 2).join(":")}:…`);
+
+/** Longer lists show this many rows until "Show all". */
+const ROWS_SHOWN = 4;
+
 /**
  * Addresses that belong to a network in between (a hosting proxy, the local
  * machine), not to the visitor. Older sign-ins were recorded with these
@@ -28,6 +34,9 @@ function isInternalIp(ip: string): boolean {
 export default function SecurityPage() {
   const { getToken, sessionId: currentSessionId } = useAuth();
   const { t, tn, ts, date, lang } = useI18n();
+  const [allSessions, setAllSessions] = useState(false);
+  const [allHistory, setAllHistory] = useState(false);
+  const [confirmOthers, setConfirmOthers] = useState(false);
   const regionNames = useMemo(() => {
     try {
       return new Intl.DisplayNames([lang === "sq" ? "sq" : "en"], { type: "region" });
@@ -39,7 +48,7 @@ export default function SecurityPage() {
   const ipText = (ip: string | null) => {
     if (!ip) return t("Unknown IP");
     const plain = plainIp(ip);
-    return isInternalIp(plain) ? t("Hosting network") : plain;
+    return isInternalIp(plain) ? t("Hosting network") : maskedIp(plain);
   };
 
   /** "Tirana, AL" → "Tirana, Shqipëri" (or "Albania" in English); a bare "AL" → the country. */
@@ -124,6 +133,7 @@ export default function SecurityPage() {
   }
 
   async function revokeOthers() {
+      setConfirmOthers(false);
       try {
         const token = await getToken();
         if (!token) throw new Error(t("You're not signed in"));
@@ -171,27 +181,47 @@ export default function SecurityPage() {
         </div>
       </section>
       <section className="card stack">
-        <div className="tree-header"><h2>{t("Active devices")}<HelpTip text="Phones and computers signed in to your account right now. If you see one that isn't yours, press Sign out next to it, then change your password." /></h2><div className="row tree-header-actions"><span className="muted">{tn(data.sessions.length, "{count} session", "{count} sessions")}</span><button type="button" className="secondary" onClick={revokeOthers}>{t("Sign out other devices")}</button></div></div>
-        {data.sessions.length === 0 ? <p className="muted">{t("No active sessions found.")}</p> : data.sessions.map((session) => (
+        <div className="tree-header">
+          <h2>{t("Active devices")}<HelpTip text="Phones and computers signed in to your account right now. If you see one that isn't yours, press Sign out next to it, then change your password." /></h2>
+          <div className="row tree-header-actions">
+            <span className="muted">{tn(data.sessions.length, "{count} session", "{count} sessions")}</span>
+            {/* Signing every other device out is asked twice. */}
+            {confirmOthers ? (
+              <>
+                <button type="button" className="danger-button" onClick={revokeOthers}>{tn(data.sessions.length - 1, "Sign out {count} device", "Sign out {count} devices")}</button>
+                <button type="button" className="secondary" onClick={() => setConfirmOthers(false)}>{t("Cancel")}</button>
+              </>
+            ) : (
+              <button type="button" className="secondary" onClick={() => setConfirmOthers(true)} disabled={data.sessions.length < 2}>{t("Sign out other devices")}</button>
+            )}
+          </div>
+        </div>
+        {data.sessions.length === 0 ? <p className="muted">{t("No active sessions found.")}</p> : null}
+        {(allSessions ? data.sessions : data.sessions.slice(0, ROWS_SHOWN)).map((session) => (
           <div className="security-row" key={session.id}>
             <div>
-              <strong>
-                {deviceText(session.device, session.browser)}
-                {session.id === currentSessionId ? <span className="security-badge">{t("This device")}</span> : null}
-              </strong>
+              <strong>{deviceText(session.device, session.browser)}</strong>
               <span className="muted">
                 {placeText(session.location)} · {ipText(session.ipAddress)} · {t("Last active {when}", { when: when(session.lastActiveAt) })}
               </span>
             </div>
-            {session.id === currentSessionId ? null : (
+            {/* The same slot on every row, so they line up: this device can't be signed out from here. */}
+            {session.id === currentSessionId ? (
+              <button type="button" className="secondary security-this-device" disabled>{t("This device")}</button>
+            ) : (
               <button type="button" className="secondary" onClick={() => revoke(session.id)}>{t("Sign out")}</button>
             )}
           </div>
         ))}
+        {data.sessions.length > ROWS_SHOWN ? (
+          <button type="button" className="text-button security-show-all" onClick={() => setAllSessions((value) => !value)}>
+            {allSessions ? t("Show fewer") : t("Show all ({count})", { count: data.sessions.length })}
+          </button>
+        ) : null}
       </section>
       <section className="card stack">
         <h2 style={{ margin: 0 }}>{t("Sign-in history")}<HelpTip text="Every time your account was used: on which device, from where, and when. Check it for anything you don't recognise." /></h2>
-        {data.loginHistory.length === 0 ? <p className="muted">{t("No successful sign-ins recorded yet.")}</p> : data.loginHistory.map((entry) => (
+        {data.loginHistory.length === 0 ? <p className="muted">{t("No successful sign-ins recorded yet.")}</p> : (allHistory ? data.loginHistory : data.loginHistory.slice(0, ROWS_SHOWN)).map((entry) => (
           <div className="security-row" key={entry.id}>
             <div>
               <strong>
@@ -204,6 +234,11 @@ export default function SecurityPage() {
             </div>
           </div>
         ))}
+        {data.loginHistory.length > ROWS_SHOWN ? (
+          <button type="button" className="text-button security-show-all" onClick={() => setAllHistory((value) => !value)}>
+            {allHistory ? t("Show fewer") : t("Show all ({count})", { count: data.loginHistory.length })}
+          </button>
+        ) : null}
       </section>
       <section className="card stack">
         <h2 style={{ margin: 0 }}>{t("Sign-in alerts")}<HelpTip text="Wrong-password tries and other warnings about your account. Many failed tries lock the account for a while, to keep it safe." /></h2>

@@ -1,6 +1,6 @@
 "use client";
 
-import { SignIn } from "@clerk/nextjs";
+import { ClerkLoading, SignIn } from "@clerk/nextjs";
 import { useTheme } from "./theme-provider";
 
 /** Clerk can't read CSS variables, so these mirror the admin palette in admin.css. */
@@ -14,7 +14,20 @@ export function SignInForm() {
   const colors = PALETTE[theme];
 
   return (
-    <SignIn
+    <>
+      {/* Clerk draws the form a second or two after the page: its shape holds the space meanwhile. */}
+      <ClerkLoading>
+        <div className="sign-in-skeleton" aria-hidden="true">
+          <span className="skeleton-bar is-title" />
+          <span className="skeleton-bar is-line" />
+          <span className="skeleton-bar is-label" />
+          <span className="skeleton-bar is-field" />
+          <span className="skeleton-bar is-label" />
+          <span className="skeleton-bar is-field" />
+          <span className="skeleton-bar is-button" />
+        </div>
+      </ClerkLoading>
+      <SignIn
       routing="path"
       path="/sign-in"
       signUpUrl="/sign-in"
@@ -47,6 +60,7 @@ export function SignInForm() {
           formButtonPrimary: { minHeight: "2.75rem", fontWeight: 500, boxShadow: "none", textTransform: "none" },
         },
       }}
-    />
+      />
+    </>
   );
 }

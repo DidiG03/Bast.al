@@ -7,6 +7,7 @@ import { SeedLine, Sheet, ShieldIcon } from "./fair-play";
 import { HelpTip } from "./help-tip";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -45,7 +46,8 @@ export function KenoGame() {
 
   const [state, setState] = useState<KenoState | null>(null);
   const [balance, setBalance] = useState(0);
-  const [bet, setBet] = useState(100);
+  // 0 until the table loads: the smallest stake it allows is then picked.
+  const [bet, setBet] = useState(0);
   const [picks, setPicks] = useState<number[]>([]);
   /** The round on the board, and how many of its balls are out so far. */
   const [round, setRound] = useState<KenoRound | null>(null);
@@ -115,6 +117,8 @@ export function KenoGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The top bar waits for the animation too.
+  useChipBalance(state ? balance : null);
   useRealtime((event) => {
     if (event.type === "balance.changed" && !busy && !auto) setBalance(event.balance);
   });
@@ -361,7 +365,8 @@ export function KenoGame() {
           <button type="button" className="secondary" onClick={() => setSheet("fair")}>
             {t("Provably fair")}
           </button>
-          <button type="button" className="secondary" onClick={() => setSheet("rules")}>
+          <button type="button" className="secondary game-rules-button" onClick={() => setSheet("rules")}>
+            <span className="game-rules-icon" aria-hidden="true">?</span>
             {t("Pays and rules")}
           </button>
         </div>

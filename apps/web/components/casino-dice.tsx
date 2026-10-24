@@ -9,6 +9,7 @@ import { SeedLine, Sheet, ShieldIcon } from "./fair-play";
 import { HelpTip } from "./help-tip";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -45,7 +46,8 @@ export function DiceGame() {
 
   const [state, setState] = useState<DiceState | null>(null);
   const [balance, setBalance] = useState(0);
-  const [stake, setStake] = useState(100);
+  // 0 until the table loads: the smallest stake it allows is then picked.
+  const [stake, setStake] = useState(0);
   const [direction, setDirection] = useState<DiceDirection>("UNDER");
   const [target, setTarget] = useState(5000);
   /** A field the Player is typing in, kept as text until they leave it. */
@@ -118,6 +120,8 @@ export function DiceGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The top bar waits for the animation too.
+  useChipBalance(state ? balance : null);
   useRealtime((event) => {
     if (event.type === "balance.changed" && !busy && !auto) setBalance(event.balance);
   });
@@ -374,7 +378,8 @@ export function DiceGame() {
           <button type="button" className="secondary" onClick={() => setSheet("fair")}>
             {t("Provably fair")}
           </button>
-          <button type="button" className="secondary" onClick={() => setSheet("rules")}>
+          <button type="button" className="secondary game-rules-button" onClick={() => setSheet("rules")}>
+            <span className="game-rules-icon" aria-hidden="true">?</span>
             {t("Pays and rules")}
           </button>
         </div>

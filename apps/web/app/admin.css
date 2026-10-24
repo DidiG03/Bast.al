@@ -88,25 +88,25 @@
   }
 }
 
-/* The theme toggle shows the theme it switches to. */
-.theme-toggle .theme-icon-sun {
+/* The theme toggle shows the theme that's on: the sun in light, the moon in dark. */
+.theme-toggle .theme-icon-moon {
   display: none;
 }
 
-:root[data-theme="dark"] .theme-toggle .theme-icon-sun {
+:root[data-theme="dark"] .theme-toggle .theme-icon-moon {
   display: block;
 }
 
-:root[data-theme="dark"] .theme-toggle .theme-icon-moon {
+:root[data-theme="dark"] .theme-toggle .theme-icon-sun {
   display: none;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .theme-toggle .theme-icon-sun {
+  :root:not([data-theme]) .theme-toggle .theme-icon-moon {
     display: block;
   }
 
-  :root:not([data-theme]) .theme-toggle .theme-icon-moon {
+  :root:not([data-theme]) .theme-toggle .theme-icon-sun {
     display: none;
   }
 }
@@ -3534,4 +3534,38 @@ html:has(.role-admin) body {
     grid-row: 1 / span 2;
     align-self: center;
   }
+}
+
+/* The sign-in form's shape while Clerk loads (components/sign-in-form.tsx). */
+.sign-in-skeleton {
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.sign-in-skeleton .skeleton-bar.is-title {
+  width: 55%;
+  height: 1.9rem;
+}
+
+.sign-in-skeleton .skeleton-bar.is-line {
+  width: 80%;
+  height: 0.95rem;
+  margin-bottom: 1.2rem;
+}
+
+.sign-in-skeleton .skeleton-bar.is-label {
+  width: 30%;
+  height: 0.8rem;
+  margin-top: 0.4rem;
+}
+
+.sign-in-skeleton .skeleton-bar.is-field,
+.sign-in-skeleton .skeleton-bar.is-button {
+  height: 2.75rem;
+  border-radius: 0.5rem;
+}
+
+.sign-in-skeleton .skeleton-bar.is-button {
+  margin-top: 0.9rem;
 }

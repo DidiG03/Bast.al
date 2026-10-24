@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { HelpTip } from "./help-tip";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
+import { useChipBalance } from "./balance-chip";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -99,7 +100,7 @@ export function PlinkoGame() {
     setState(next);
     setLanded(next.balance);
     setRecent(next.recent);
-    setBet((current) => current || Math.min(next.game.bets[2] ?? next.game.bets[0], next.tableMax));
+    setBet((current) => current || Math.min(next.game.bets[0], next.tableMax));
   }, [getToken, t]);
 
   useEffect(() => {
@@ -112,6 +113,8 @@ export function PlinkoGame() {
   });
 
   const balance = Math.round((landed - inPlay.stakes) * 100) / 100;
+  // The top bar waits for the balls too.
+  useChipBalance(state ? balance : null);
 
   /** Draws the pegs and every falling ball, and keeps going while anything moves. */
   const draw = useCallback(() => {
@@ -347,7 +350,8 @@ export function PlinkoGame() {
           <h1 style={{ margin: 0 }}>Plinko</h1>
           <p className="muted report-subtitle">{t("Drop a ball through the pegs and see where it lands. Played with your balance.")}</p>
         </div>
-        <button type="button" className="secondary" onClick={() => setRulesOpen(true)}>
+        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
+          <span className="game-rules-icon" aria-hidden="true">?</span>
           {t("Pays and rules")}
         </button>
       </div>

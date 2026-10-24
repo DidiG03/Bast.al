@@ -16,6 +16,7 @@ import { SportIcon } from "../../../components/sport-icon";
 import { TeamCrest } from "../../../components/team-crest";
 import { ApiError, apiFetch, type Bet, type BuilderQuote, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney, formatStake } from "../../../lib/format";
+import { byImportance } from "../../../lib/importance";
 import { MAX_SLIP, readSlip, saveSlip, type SlipItem } from "../../../lib/slip";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
@@ -621,16 +622,18 @@ function BetPage() {
     const playing = matching.filter((event) => event.live && !finishedNow(event)).sort((a, b) => open(a) - open(b));
     const ended = matching.filter((event) => finishedNow(event));
     const later = matching.filter((event) => !event.live && !finishedNow(event));
-    const shown = [...playing, ...ended, ...later];
+    const inOrder = [...playing, ...ended, ...later];
     const allGroups: Array<[string, OddsEvent[]]> = [];
     const label = dayLabeller(i18n);
-    for (const event of shown) {
+    for (const event of inOrder) {
       const heading = finishedNow(event) ? endedLabel : event.live ? liveLabel : label(event.startsAt);
       const last = allGroups[allGroups.length - 1];
       if (last && last[0] === heading) last[1].push(event);
       else allGroups.push([heading, [event]]);
     }
-    return { shown, allGroups, starredCount };
+    // Within each heading the big matches come first: a big club playing, then the top leagues, then the rest.
+    for (const group of allGroups) group[1] = byImportance(group[1]);
+    return { shown: allGroups.flatMap(([, list]) => list), allGroups, starredCount };
   }, [merged, league, query, liveLabel, endedLabel, i18n, favourites, favouritesOnly]);
   // A day that no longer has matches (a search, a league filter) falls back to every day.
   const dayShown = day === "" ? "" : day === "live" ? liveLabel : day;

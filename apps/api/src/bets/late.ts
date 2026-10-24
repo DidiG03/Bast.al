@@ -6,7 +6,8 @@
  * (LateTimeline). A bet placed after a goal we hadn't shown yet is void, its
  * stake back, whichever way it would have gone, like any bookmaker's rule on
  * bets accepted after the event. The same goes for a bet on a cards market
- * placed after a card we hadn't shown yet.
+ * placed after a card we hadn't shown yet, and for any bet but corners and
+ * cards placed after a red card we hadn't shown yet (it changes the match).
  *
  * The feed gives each goal's minute, not its second, and the bet's minute is
  * worked out from when each half kicked off. A goal in the same minute as the
@@ -24,10 +25,36 @@ export type LiveState = {
   minute: number | null;
   /** Cards shown so far (yellow and red), or null when the site had no timeline for the match. */
   cards: number | null;
+  /** Red cards shown so far, or null when not known (older bets, or no timeline). */
+  reds?: number | null;
+  /** How the bet was confirmed, for checking a case afterwards; the late check doesn't read it. */
+  audit?: LiveAudit;
 };
 
-/** A goal or a card, at its minute plus added time (45+2 is minute 45, extra 2). */
-export type Moment = { minute: number; extra: number | null; side: Side };
+/**
+ * A live bet's timing, kept with it: when it was asked for and confirmed, the
+ * price then and at the end of the wait, and how fresh the feed was at each
+ * point (the time it last sent prices, the time the bookmaker last changed
+ * them, and the match clock it gave).
+ */
+export type LiveAudit = {
+  submittedAt: string;
+  confirmedAt: string;
+  delayMs: number;
+  /** Why the wait was longer than usual, or null. */
+  longerBecause: string | null;
+  askedOdds: number | null;
+  confirmedOdds: number | null;
+  feedAtSubmit: string | null;
+  feedAtConfirm: string | null;
+  /** The bookmaker's own "updated at" on the prices read at the end of the wait. */
+  bookmakerUpdate: string | null;
+  /** The match clock the feed gave with those prices ("61:57"). */
+  clock: string | null;
+};
+
+/** A goal or a card, at its minute plus added time (45+2 is minute 45, extra 2). `red` marks a red card (a second yellow too). */
+export type Moment = { minute: number; extra: number | null; side: Side; red?: boolean };
 
 /** A finished match's goals and cards with their minutes, and when each half kicked off (Unix seconds, from the feed). */
 export type LateTimeline = { first: number | null; second: number | null; goals: Moment[]; cards: Moment[] };
@@ -41,7 +68,13 @@ export function liveStateOf(value: unknown): LiveState | null {
   if (!value || typeof value !== "object") return null;
   const state = value as Partial<LiveState>;
   if (typeof state.home !== "number" || typeof state.away !== "number") return null;
-  return { home: state.home, away: state.away, minute: typeof state.minute === "number" ? state.minute : null, cards: typeof state.cards === "number" ? state.cards : null };
+  return {
+    home: state.home,
+    away: state.away,
+    minute: typeof state.minute === "number" ? state.minute : null,
+    cards: typeof state.cards === "number" ? state.cards : null,
+    reds: typeof state.reds === "number" ? state.reds : null,
+  };
 }
 
 /** Reads a stored LateTimeline, or null. */
@@ -91,7 +124,13 @@ export function lateReason(state: LiveState, placedAt: Date, marketKey: string, 
   const before = timeline.goals.filter((goal) => atOrBefore(goal, bet));
   const home = before.filter((goal) => goal.side === "home").length;
   const away = before.filter((goal) => goal.side === "away").length;
-  return home > state.home || away > state.away ? "placed after a goal that hadn't shown yet" : null;
+  if (home > state.home || away > state.away) return "placed after a goal that hadn't shown yet";
+  // A red card changes every other market's odds. Only bets that recorded the reds shown can be checked.
+  if (typeof state.reds === "number") {
+    const reds = timeline.cards.filter((card) => card.red && atOrBefore(card, bet)).length;
+    if (reds > state.reds) return "placed after a red card that hadn't shown yet";
+  }
+  return null;
 }
 
 /**

@@ -425,6 +425,7 @@ export const server: Record<string, string> = {
   "{pick} is now {odds}": "{pick} tani është {odds}",
   "{pick} ({event})": "{pick} ({event})",
   "The score changed while your bet on {pick} was being confirmed. Check the new odds and try again.": "Rezultati ndryshoi ndërsa basti yt për {pick} po konfirmohej. Kontrollo koeficientët e rinj dhe provo sërish.",
+  "A red card was shown while your bet on {pick} was being confirmed. Check the new odds and try again.": "U tregua një karton i kuq ndërsa basti yt për {pick} po konfirmohej. Kontrollo koeficientët e rinj dhe provo sërish.",
   "The total margin can't be more than {max}%": "Marzhi total nuk mund të jetë më shumë se {max}%",
   "There's no commission to collect for this period": "Nuk ka komision për të mbledhur për këtë periudhë",
   "There's nothing to collect yet: losses of {amount} since the last payment have to be made up first": "Ende nuk ka asgjë për të mbledhur: humbjet prej {amount} që nga pagesa e fundit duhet të mbulohen më parë",

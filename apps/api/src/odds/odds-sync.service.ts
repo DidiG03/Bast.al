@@ -7,7 +7,7 @@ import { GOAL_MARKET_KEYS } from "../bets/goals";
 import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseMarkets, parseMatchCentre } from "./api-football";
 import { savedCrests, savedMarks } from "./crest";
 import { PREMATCH_REFRESH_MS, RICH_PLAN, isDailyLimitError, msUntilReset, pacedInterval, quotaReserve } from "./feed-budget";
-import { bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "./live-guard";
+import { SWING_COOLDOWN_MS, bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "./live-guard";
 import { mockFetchJson } from "./mock-feed";
 
 /**
@@ -152,6 +152,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   onFinished?: () => Promise<unknown>;
   /** Checks with the feed for one match, shared by bets placed at the same moment. */
   private readonly verifying = new Map<string, { at: number; done: Promise<void> }>();
+  /** Each live match's latest price reading: when it came, the bookmaker's own update time and the match clock (for a live bet's record). */
+  private readonly readings = new Map<string, { at: Date; bookmakerUpdate: string | null; clock: string | null }>();
   /** The same for the cards of matches with a live cards bet being confirmed (verifyCards). */
   private readonly verifyingCards = new Map<string, { at: number; done: Promise<void> }>();
   readonly mode: FeedMode;
@@ -720,13 +722,33 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   /** Fetches up to 20 matches' centres in one request and saves them. */
   private async saveMatchCentres(batch: Array<{ id: string; externalId: string | null }>): Promise<number> {
     const byExternal = new Map(batch.map((event) => [event.externalId!, event.id]));
+    const savedBefore = await this.prisma.event.findMany({
+      where: { id: { in: batch.map((event) => event.id) } },
+      select: { id: true, status: true, matchCentre: true, liveCooldownUntil: true, liveCooldownReason: true },
+    });
+    const before = new Map(savedBefore.map((event) => [event.id, event]));
     let saved = 0;
+    const paused: string[] = [];
     for (const raw of await this.client!.fixtureDetails(batch.map((event) => event.externalId!))) {
       const eventId = byExternal.get(String(raw.fixture.id));
       if (!eventId) continue;
-      await this.prisma.event.update({ where: { id: eventId }, data: { matchCentre: parseMatchCentre(raw) as unknown as Prisma.InputJsonValue, matchCentreAt: new Date() } });
+      const centre = parseMatchCentre(raw);
+      const was = before.get(eventId);
+      // A red card the site hadn't shown yet pauses the whole live match, like a big jump in its prices.
+      const reds = (value: unknown) => ((value as { moments?: Array<{ kind: string }> } | null)?.moments ?? []).filter((moment) => moment.kind === "red").length;
+      const newRed = was?.status === EventStatus.LIVE && was.matchCentre !== null && reds(centre) > reds(was.matchCentre) && SWING_COOLDOWN_MS > 0;
+      const pause = newRed ? laterCooldown({ until: was.liveCooldownUntil, reason: was.liveCooldownReason }, { until: new Date(Date.now() + SWING_COOLDOWN_MS), reason: "swing" }) : null;
+      await this.prisma.event.update({
+        where: { id: eventId },
+        data: { matchCentre: centre as unknown as Prisma.InputJsonValue, matchCentreAt: new Date(), ...(pause ? { liveCooldownUntil: pause.until, liveCooldownReason: pause.reason } : {}) },
+      });
+      if (newRed) {
+        this.logger.log(`Live betting paused on event ${eventId} (red card) until ${pause!.until?.toISOString()}`);
+        paused.push(eventId);
+      }
       saved++;
     }
+    if (paused.length > 0) await this.announceLive(paused);
     return saved;
   }
 
@@ -1022,7 +1044,15 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * it blocked, the score and minute, and a pause (live-guard.ts) if a goal
    * went in, the match-result prices jumped, or the bookmaker just reopened it.
    */
+  /** The latest live price reading for a match, or null if none came since the API started. */
+  liveReading(eventId: string) {
+    return this.readings.get(eventId) ?? null;
+  }
+
   private async applyLiveOdds(eventId: string, odds: FeedLiveOdds) {
+    this.readings.set(eventId, { at: new Date(), bookmakerUpdate: odds.bookmakerUpdate ?? null, clock: odds.clock ?? null });
+    // A match not read for an hour is over; the map keeps only the live ones.
+    if (this.readings.size > 500) for (const [id, reading] of this.readings) if (Date.now() - reading.at.getTime() > 3_600_000) this.readings.delete(id);
     const before = await this.prisma.event.findUniqueOrThrow({
       where: { id: eventId },
       select: { homeScore: true, awayScore: true, liveStopped: true, liveCooldownUntil: true, liveCooldownReason: true },

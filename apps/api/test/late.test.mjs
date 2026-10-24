@@ -1,6 +1,6 @@
 // Run with `npm test --workspace apps/api` (builds first). Late live bets
-// (bets/late.ts): a live bet placed after a goal, or on a cards market after a
-// card, that the site hadn't shown yet is void. And the feed's delay on goals
+// (bets/late.ts): a live bet placed after a goal or a red card, or on a cards
+// market after any card, that the site hadn't shown yet is void. And the feed's delay on goals
 // (odds/feed-delay.ts), from when the site first saw each one.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -20,7 +20,8 @@ const secondHalf = (m, s = 0) => new Date((SECOND + m * 60 + s) * 1000);
 
 const timeline = (goals = [], cards = []) => ({ first: FIRST, second: SECOND, goals, cards });
 const goal = (minute, side, extra = null) => ({ minute, extra, side });
-const state = (home, away, minute = null, cards = null) => ({ home, away, minute, cards });
+const state = (home, away, minute = null, cards = null, reds = null) => ({ home, away, minute, cards, reds });
+const red = (minute, side) => ({ minute, extra: null, side, red: true });
 
 test("a bet's match minute comes from its half's kick-off, counting like the feed: 22:30 in is the 23rd minute", () => {
   assert.deepEqual(betMoment(firstHalf(22, 30), state(0, 0), timeline()), { minute: 23, extra: 0 });
@@ -68,8 +69,24 @@ test("a goal doesn't make a corners or cards bet late; a card the site hadn't sh
   assert.equal(lateReason(state(0, 0, null, null), firstHalf(30), "cards_4_5", timeline([], [goal(10, "home"), goal(29, "away")])), null);
 });
 
+test("a red card the site hadn't shown makes any bet but corners and cards late; bets that didn't record the reds stand", () => {
+  const cards = [goal(10, "home"), red(28, "away")];
+  // One card shown (the yellow), no red: placed in the 30th minute, after the 28th-minute red.
+  assert.equal(lateReason(state(0, 0, 29, 1, 0), firstHalf(29, 30), "match_winner", timeline([], cards)), "placed after a red card that hadn't shown yet");
+  assert.equal(lateReason(state(0, 0, 29, 1, 0), firstHalf(29, 30), "goals_2_5", timeline([], cards)), "placed after a red card that hadn't shown yet");
+  // The red was showing: fine. Placed before it: fine.
+  assert.equal(lateReason(state(0, 0, 29, 2, 1), firstHalf(29, 30), "match_winner", timeline([], cards)), null);
+  assert.equal(lateReason(state(0, 0, 20, 1, 0), firstHalf(20), "match_winner", timeline([], cards)), null);
+  // Corners aren't checked; a cards bet goes by every card, as before.
+  assert.equal(lateReason(state(0, 0, 29, 1, 0), firstHalf(29, 30), "corners_9_5", timeline([], cards)), null);
+  assert.equal(lateReason(state(0, 0, 29, 1, 0), firstHalf(29, 30), "cards_3_5", timeline([], cards)), "placed after a card that hadn't shown yet");
+  // A bet from before the reds were recorded: only goals are checked.
+  assert.equal(lateReason(state(0, 0, 29, 1), firstHalf(29, 30), "match_winner", timeline([], cards)), null);
+});
+
 test("stored states and timelines are read safely", () => {
   assert.deepEqual(liveStateOf({ home: 1, away: 0, minute: 30, cards: 2 }), state(1, 0, 30, 2));
+  assert.deepEqual(liveStateOf({ home: 1, away: 0, minute: 30, cards: 2, reds: 1, audit: { submittedAt: "x" } }), state(1, 0, 30, 2, 1));
   assert.deepEqual(liveStateOf({ home: 1, away: 0 }), state(1, 0, null, null));
   assert.equal(liveStateOf(null), null);
   assert.equal(liveStateOf({ home: "1" }), null);
@@ -97,7 +114,8 @@ test("the feed's timeline: VAR's cancelled goals out, own goals for the other si
   assert.equal(parsed.first, FIRST);
   assert.equal(parsed.second, SECOND);
   assert.deepEqual(parsed.goals, [goal(12, "home"), goal(45, "home", 2), goal(88, "away")]);
-  assert.deepEqual(parsed.cards, [goal(30, "away"), goal(70, "home")]);
+  // The red one is marked, for the red card check.
+  assert.deepEqual(parsed.cards, [goal(30, "away"), red(70, "home")]);
   // Goals that don't add up to the result: no timeline rather than a wrong one.
   assert.equal(parseLateTimeline(raw, { home: 3, away: 1 }), null);
 });

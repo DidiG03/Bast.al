@@ -454,7 +454,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
 
     await this.announce(changes, regrade ? "corrected" : "settled");
     if (late.length > 0) {
-      this.logger.warn(`${late.length} late live bet(s) on ${event.name} voided`);
+      this.logger.warn(`${late.length} late live bet(s) on ${event.name} voided: ${late.map((change) => `${change.betId ?? "?"} (${change.voidReason ?? "late"})`).join(", ")}`);
       await this.announce(late, "voided");
     }
     return [...changes, ...late];

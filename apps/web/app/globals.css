@@ -15993,3 +15993,11 @@ html[data-theme="light"] .role-player .bet-status-lost {
     display: none;
   }
 }
+
+/* The Place button while a live bet confirms: the spinner and the seconds left. */
+.bet-live-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-variant-numeric: tabular-nums;
+}

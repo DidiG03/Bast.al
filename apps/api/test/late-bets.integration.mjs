@@ -217,7 +217,7 @@ test("the feed's delay: when the site first saw each goal, against the timeline"
   assert.equal(delay.recent[0].minute, "22");
 });
 
-test("placing a live bet records the score, the minute and the cards the site showed; a pre-match pick records nothing", async () => {
+test("placing a live bet records the score, the minute, the cards and red cards the site showed; a pre-match pick records nothing", async () => {
   await prisma.user.update({ where: { id: player.id }, data: { balance: 1000 } });
   const live = await prisma.event.create({
     data: {
@@ -263,11 +263,13 @@ test("placing a live bet records the score, the minute and the cards the site sh
     bets: [{ selectionId: home.id, stake: 10, odds: await quote(home) }],
     accumulator: { legs: [{ selectionId: home.id, odds: await quote(home) }, { selectionId: preMatchPick.id, odds: await quote(preMatchPick) }], stake: 10 },
   });
+  // The score, minute, cards and red cards shown; how it was confirmed is kept beside them (live-confirm.integration.mjs).
+  const shown = ({ audit, ...rest }) => (assert.ok(audit?.confirmedAt), rest);
   const single = await reload(placed.bets.find((bet) => bet.kind === "SINGLE"));
-  assert.deepEqual(single.live, { home: 1, away: 0, minute: 34, cards: 2 });
+  assert.deepEqual(shown(single.live), { home: 1, away: 0, minute: 34, cards: 2, reds: 1 });
   const combined = await reload(placed.bets.find((bet) => bet.kind === "ACCUMULATOR"));
   const legOf = (selection) => combined.legs.find((leg) => leg.selectionId === selection.id);
-  assert.deepEqual(legOf(home).live, { home: 1, away: 0, minute: 34, cards: 2 });
+  assert.deepEqual(shown(legOf(home).live), { home: 1, away: 0, minute: 34, cards: 2, reds: 1 });
   assert.equal(legOf(preMatchPick).live, null);
 });
 

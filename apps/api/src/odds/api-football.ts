@@ -39,9 +39,10 @@ export type RawOdds = {
  * on a value means that price is off the board.
  */
 export type RawLiveOdds = {
-  fixture: { id: number; status?: { long?: string; elapsed?: number | null } };
+  fixture: { id: number; status?: { long?: string; elapsed?: number | null; seconds?: string | null } };
   teams?: { home?: { goals?: number | null }; away?: { goals?: number | null } };
   status?: { stopped?: boolean; blocked?: boolean; finished?: boolean };
+  /** When the bookmaker last changed these prices. */
   update?: string;
   odds: Array<{ id: number; name: string; values: Array<{ value: string | number; odd: string; handicap?: string | null; main?: boolean | null; suspended?: boolean }> }>;
 };
@@ -61,6 +62,9 @@ export type FeedLiveOdds = {
   homeScore: number | null;
   awayScore: number | null;
   elapsed: number | null;
+  /** When the bookmaker last changed the prices, and the match clock with them ("61:57"), when the feed sends them. */
+  bookmakerUpdate?: string | null;
+  clock?: string | null;
   markets: FeedLiveMarket[];
 };
 
@@ -740,6 +744,8 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
     homeScore: goals(raw.teams?.home?.goals),
     awayScore: goals(raw.teams?.away?.goals),
     elapsed: goals(raw.fixture.status?.elapsed),
+    bookmakerUpdate: typeof raw.update === "string" ? raw.update : null,
+    clock: typeof raw.fixture.status?.seconds === "string" ? raw.fixture.status.seconds : null,
     markets: [...markets.values()].sort((a, b) => a.sortOrder - b.sortOrder),
   };
 }
@@ -1085,7 +1091,8 @@ export function parseGoalRecord(raw: RawFixtureDetail, score: { home: number; aw
  * kicked off, for the late live bet check (bets/late.ts). The goals are the
  * ones parseGoalRecord counts (VAR's cancelled ones out, own goals on the
  * right side); null when they don't add up to `score`. Cards are every
- * yellow and red, a second yellow included, as the timeline lists them.
+ * yellow and red, a second yellow included, as the timeline lists them; the
+ * red ones (a second yellow too) are marked.
  */
 export function parseLateTimeline(raw: RawFixtureDetail, score: { home: number; away: number }): LateTimeline | null {
   const record = parseGoalRecord(raw, score);
@@ -1094,7 +1101,7 @@ export function parseLateTimeline(raw: RawFixtureDetail, score: { home: number; 
   const sideOfTeam = (team: { id: number; name: string }): Side => (homeId !== undefined ? (team.id === homeId ? "home" : "away") : team.name === raw.teams.home.name ? "home" : "away");
   const cards = (raw.events ?? [])
     .filter((event) => event.type === "Card" && event.time.elapsed !== null)
-    .map((event) => ({ minute: event.time.elapsed!, extra: event.time.extra ?? null, side: sideOfTeam(event.team) }));
+    .map((event) => ({ minute: event.time.elapsed!, extra: event.time.extra ?? null, side: sideOfTeam(event.team), ...(/red|second yellow/i.test(event.detail ?? "") ? { red: true } : {}) }));
   const goals = record.goals.map((goal) => ({ minute: goal.minute, extra: goal.extra ?? null, side: goal.side }));
   const periods = raw.fixture.periods ?? {};
   return { first: periods.first ?? null, second: periods.second ?? null, goals, cards };

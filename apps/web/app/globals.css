@@ -4770,6 +4770,7 @@ button.odds-selection:hover,
 
 /* The current device's row keeps its button slot, as a quiet label. */
 .security-row button.security-this-device:disabled {
+  white-space: nowrap;
   border-style: dashed;
   color: var(--accent);
   opacity: 1;
@@ -15984,4 +15985,11 @@ html[data-theme="light"] .role-player .bet-status-lost {
 .role-player .dice-input:focus-within {
   outline: 2px solid var(--focus, var(--accent));
   outline-offset: 2px;
+}
+
+/* A narrow phone: the logo alone, so the balance and the bigger touch buttons fit on the top bar. */
+@media (max-width: 400px) {
+  .role-player .dashboard-topbar .topbar-brand > span:last-child {
+    display: none;
+  }
 }

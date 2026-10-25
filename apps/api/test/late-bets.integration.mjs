@@ -197,14 +197,22 @@ test("a late bet stays void when the result is corrected", async () => {
   assert.equal((await reload(lateSingle)).status, "VOID");
 });
 
-test("without a timeline after LATE_CHECK_WAIT_MS, live bets settle without the check", async () => {
+test("without a timeline after LATE_CHECK_WAIT_MS, a live bet isn't paid without the check: a later goal nothing can time voids it; a bet the result can't touch is paid", async () => {
   const stale = await finishedMatch("No v Timeline", { finishedAt: new Date(Date.now() - 4 * 3_600_000) });
   const team = await teamOf(prisma, player.id);
-  const bet = await prisma.bet.create({
+  // Placed on 0–0, the match ended 1–0, and neither the feed's timeline nor the site ever timed that goal.
+  const untimed = await prisma.bet.create({
     data: { playerId: player.id, selectionId: pick(stale, "match_winner", "home").id, stake: 50, odds: 2, description: "Home", placedAt: at(22, 30), live: { home: 0, away: 0, minute: 21, cards: 1 }, ...team },
   });
+  // Placed on 1–0: no goal came after it, so there's nothing to time.
+  const after = await prisma.bet.create({
+    data: { playerId: player.id, selectionId: pick(stale, "match_winner", "home").id, stake: 50, odds: 2, description: "Home", placedAt: at(60), live: { home: 1, away: 0, minute: 59, cards: 1 }, ...team },
+  });
   await settlement.settleEvent(stale.id);
-  assert.equal((await reload(bet)).status, "WON");
+  const voided = await reload(untimed);
+  assert.equal(voided.status, "VOID");
+  assert.equal(voided.voidReason, "couldn't confirm it was placed before a goal the feed reported late");
+  assert.equal((await reload(after)).status, "WON");
 });
 
 test("the feed's delay: when the site first saw each goal, against the timeline", async () => {

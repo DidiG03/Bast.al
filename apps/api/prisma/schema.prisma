@@ -335,6 +335,10 @@ model Event {
   liveCooldownUntil  DateTime?   @map("live_cooldown_until")
   /// Why: goal, swing or reopen.
   liveCooldownReason String?     @map("live_cooldown_reason")
+  /// Goes up whenever the site sees the live match change (score, pause, the bookmaker blocking or reopening it): a live bet compares it before and after its wait.
+  liveVersion        Int         @default(0) @map("live_version")
+  /// A goal on this live match reached the site more than LIVE_SLOW_MATCH_MS after it went in: no more live bets on it.
+  liveSlowFeed       Boolean     @default(false) @map("live_slow_feed")
   /// The score bets are settled on: 90 minutes plus stoppage time, never
   /// extra time or penalties. Set by the feed when the match ends, or by
   /// Super Admin when correcting a result.
@@ -631,18 +635,22 @@ enum BetKind {
 /// goal's real minute once the match's timeline is in, it shows how many
 /// seconds the feed reports goals after they happen.
 model GoalSeen {
-  id         String   @id @default(cuid())
-  eventId    String   @map("event_id")
-  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  homeScore  Int      @map("home_score")
-  awayScore  Int      @map("away_score")
+  id         String    @id @default(cuid())
+  eventId    String    @map("event_id")
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  homeScore  Int       @map("home_score")
+  awayScore  Int       @map("away_score")
   /// The match minute the feed gave with it.
   elapsed    Int?
   /// "scores" (the live fixtures list), "odds" (the live prices) or "centre" (the fixture's timeline).
-  source     String   @db.VarChar(10)
-  seenAt     DateTime @default(now()) @map("seen_at")
+  source     String    @db.VarChar(10)
+  seenAt     DateTime  @default(now()) @map("seen_at")
   /// Who scored and the match-result prices just before (`{ side, home, draw, away }`), to tell prices that haven't caught up with the goal.
-  beforeGoal Json?    @map("before_goal")
+  beforeGoal Json?     @map("before_goal")
+  /// When the goal went in by the feed's timeline (the middle of its minute), and how long after that the site saw it: about, and at least.
+  eventAt    DateTime? @map("event_at")
+  lagMs      Int?      @map("lag_ms")
+  lagMinMs   Int?      @map("lag_min_ms")
 
   @@unique([eventId, homeScore, awayScore])
   @@index([seenAt])

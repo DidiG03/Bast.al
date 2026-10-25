@@ -1,4 +1,4 @@
-import type { LateTimeline, Moment } from "../bets/late";
+import { type LateTimeline, type Moment, minuteStart } from "../bets/late";
 
 /**
  * How long after a goal goes in the site first sees it (GoalSeen), measured
@@ -31,6 +31,62 @@ export function goalTime(goal: Moment, timeline: LateTimeline): number | null {
   if (start === null) return null;
   return start + (goal.minute - (firstHalf ? 0 : 45) - 0.5 + (goal.extra ?? 0)) * 60;
 }
+
+/**
+ * How far behind the ground the site was on one goal, from its minute in the
+ * feed's timeline and when the site first saw it: `eventAt` is the middle of
+ * the goal's minute (ms), `lagMs` the delay from it (good to about half a
+ * minute either way), and `lagMinMs` the least it can have been (from the
+ * end of the minute), which no goal timed by its minute can make look worse
+ * than it was. Null without the half's kick-off.
+ */
+export function goalLag(goal: Moment, timeline: LateTimeline, seenAt: Date): { eventAt: number; lagMs: number; lagMinMs: number } | null {
+  const start = minuteStart(goal, timeline);
+  if (start === null) return null;
+  const eventAt = start + 30_000;
+  return { eventAt, lagMs: seenAt.getTime() - eventAt, lagMinMs: seenAt.getTime() - (start + 60_000) };
+}
+
+/** The goal of a timeline that made a score: the n-th of the match in time order, when the goals up to it add up to the score. */
+export function goalForScore(timeline: LateTimeline, home: number, away: number): Moment | null {
+  const ordered = [...timeline.goals].sort((a, b) => a.minute - b.minute || (a.extra ?? 0) - (b.extra ?? 0));
+  const goal = ordered[home + away - 1];
+  if (!goal || ordered.slice(0, home + away).filter((g) => g.side === "home").length !== home) return null;
+  return goal;
+}
+
+/** One goal's delay (GoalSeen.lagMinMs, the least it can have been) with where its match came from. */
+export type GoalLagRow = { lagMinMs: number; provider: string; league: string };
+/** The delay on goals for one group of matches: how many goals, and the share (`percentile`) that arrived within `p`, seconds. */
+export type LagGroup = { goals: number; p: number; median: number };
+
+/**
+ * The feed's delay on goals, overall, by provider and by competition
+ * ("provider · league"). It goes by each goal's least possible delay
+ * (goalLag's lagMinMs): a goal's minute gives its time only to the minute,
+ * so its middle would put up to half a minute of guesswork into every goal,
+ * and the slowest ones would all look half a minute slower than they were.
+ * The least possible delay never makes the feed look slower than it was,
+ * and over many goals its high end (`percentile`, 0.95 by default) comes
+ * close to the real one.
+ */
+export function lagStats(rows: GoalLagRow[], percentile = 0.95): { all: LagGroup | null; byProvider: Record<string, LagGroup>; byCompetition: Record<string, LagGroup> } {
+  const group = (values: number[]): LagGroup | null => {
+    if (values.length === 0) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const at = (share: number) => Math.round(Math.max(0, sorted[Math.min(sorted.length - 1, Math.floor(share * sorted.length))]) / 1000);
+    return { goals: sorted.length, p: at(percentile), median: at(0.5) };
+  };
+  const by = (key: (row: GoalLagRow) => string) => {
+    const groups = new Map<string, number[]>();
+    for (const row of rows) groups.set(key(row), [...(groups.get(key(row)) ?? []), row.lagMinMs]);
+    return Object.fromEntries([...groups].map(([name, values]) => [name, group(values)!]));
+  };
+  return { all: group(rows.map((row) => row.lagMinMs)), byProvider: by((row) => row.provider), byCompetition: by((row) => competitionKey(row.provider, row.league)) };
+}
+
+/** How a competition is named in lagStats. */
+export const competitionKey = (provider: string, league: string) => `${provider} · ${league}`;
 
 /** A measured delay outside this (seconds) means the goal was matched wrongly, not that the feed was that late or early. */
 const PLAUSIBLE = { min: -90, max: 900 };

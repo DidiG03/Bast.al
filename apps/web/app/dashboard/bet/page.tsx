@@ -22,6 +22,7 @@ import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { showBalance } from "../../../components/balance-chip";
 import { useTopUpRequest } from "../../../components/top-up-request";
 import { breakPause, liveClock } from "../../../lib/live";
 import { applyDelta, applyToList, applyToSlip, byMatch, hasUnknownSelections } from "../../../lib/live-push";
@@ -1496,6 +1497,8 @@ function BetSlip({
       const result = await apiFetch<PlaceBetsResponse>("/bets", token, { method: "POST", body, idempotencyKey: idempotency.keyFor("/bets", body) });
       idempotency.done();
       setReceipt(result);
+      // The top bar's balance, now: the live stream that normally brings it may be reconnecting.
+      if (typeof result.balance === "number") showBalance(result.balance);
       toast.success(
         result.bets.length === 1
           ? result.bets[0].kind === "ACCUMULATOR"

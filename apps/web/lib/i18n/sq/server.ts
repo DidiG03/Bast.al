@@ -429,6 +429,8 @@ export const server: Record<string, string> = {
   "There was a VAR check while your bet on {pick} was being confirmed. Check the new odds and try again.": "Pati një kontroll VAR ndërsa basti yt për {pick} po konfirmohej. Kontrollo koeficientët e rinj dhe provo sërish.",
   "There was a penalty while your bet on {pick} was being confirmed. Check the new odds and try again.": "Pati një penallti ndërsa basti yt për {pick} po konfirmohej. Kontrollo koeficientët e rinj dhe provo sërish.",
   "A card was shown while your bet on {pick} was being confirmed. Check the new odds and try again.": "U tregua një karton ndërsa basti yt për {pick} po konfirmohej. Kontrollo koeficientët e rinj dhe provo sërish.",
+  "Something happened in the match while your bet on {pick} was being confirmed. Check the new odds and try again.": "Ndodhi diçka në ndeshje ndërsa basti yt për {pick} po konfirmohej. Kontrollo koeficientët e rinj dhe provo sërish.",
+  "Live betting on {league} is paused: our feed for it is running too far behind. Try a match from another competition.": "Bastet live për {league} janë pezulluar: të dhënat tona për të vijnë me shumë vonesë. Provo një ndeshje nga një kompeticion tjetër.",
   "The odds on {pick} haven't caught up with the last goal yet. Try again in a moment.": "Koeficientët për {pick} ende nuk janë përditësuar pas golit të fundit. Provo sërish pas pak.",
   "Your session needs refreshing. Try again.": "Seanca jote duhet rifreskuar. Provo sërish.",
   "The server took too long to answer. Check your open bets before trying again.": "Serveri u vonua shumë të përgjigjej. Kontrollo bastet e hapura para se të provosh sërish.",

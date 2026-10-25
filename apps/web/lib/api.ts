@@ -647,7 +647,8 @@ export type SlipInfo = {
   liveWait?: { usual: number; busy: number; corners: number; check: number };
 };
 
-export type PlaceBetsResponse = { bets: Bet[]; total: number; adjusted?: boolean };
+/** `balance`: the Player's balance after the slip. */
+export type PlaceBetsResponse = { bets: Bet[]; total: number; adjusted?: boolean; balance?: number };
 
 /** The bet builder's price for picks from one match, and each pick's own price in it. */
 export type BuilderQuote = { odds: number; legs: Array<{ selectionId: string; odds: number }> };

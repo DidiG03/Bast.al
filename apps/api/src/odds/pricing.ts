@@ -67,6 +67,8 @@ type LiveEventState = {
   elapsed?: number | null;
   liveCooldownUntil?: Date | null;
   liveCooldownReason?: string | null;
+  /** A goal on the match reached the site too long after it went in (Event.liveSlowFeed): no more live bets on it. */
+  liveSlowFeed?: boolean;
 };
 
 /**
@@ -76,7 +78,7 @@ type LiveEventState = {
  */
 export function livePause(event: LiveEventState, now: Date = new Date()): LivePause | null {
   if (event.status !== "LIVE") return null;
-  if (event.liveStopped) return "feed";
+  if (event.liveStopped || event.liveSlowFeed) return "feed";
   if (event.liveCooldownUntil && event.liveCooldownUntil > now) {
     // A red card, a VAR check or a penalty shows as a jump in the prices.
     if (event.liveCooldownReason === "red" || event.liveCooldownReason === "var") return "swing";

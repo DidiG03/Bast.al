@@ -6,7 +6,7 @@ import { PrismaService } from "../prisma.service";
 import { type LiveDelta, RealtimeService, STAFF_TOPIC, teamTopic } from "../realtime/realtime.service";
 import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
-import { feedDelay } from "./feed-delay";
+import { feedDelay, lagStats } from "./feed-delay";
 import { timelineOf } from "../bets/late";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
@@ -628,7 +628,22 @@ export class OddsService {
       const timeline = timelineOf(row.event.lateCheck);
       return timeline ? [{ eventName: row.event.name, homeScore: row.homeScore, awayScore: row.awayScore, source: row.source, seenAt: row.seenAt, timeline }] : [];
     });
-    return { days, ...feedDelay(seen) };
+    return { days, ...feedDelay(seen), lag: await this.feedLagStats(days) };
+  }
+
+  /**
+   * The feed's delay on goals over the last `days` days, overall, by provider
+   * and by competition, from each goal's delay kept as it arrived (or at full
+   * time): see lagStats.
+   */
+  async feedLagStats(days = 3, percentile = 0.95) {
+    const rows = await this.prisma.goalSeen.findMany({
+      where: { seenAt: { gte: new Date(Date.now() - days * 86_400_000) }, lagMinMs: { not: null } },
+      select: { lagMinMs: true, event: { select: { provider: true, league: true } } },
+      orderBy: { seenAt: "desc" },
+      take: 5_000,
+    });
+    return { percentile, ...lagStats(rows.map((row) => ({ lagMinMs: row.lagMinMs!, provider: row.event.provider, league: row.event.league })), percentile) };
   }
 
   async leagues() {

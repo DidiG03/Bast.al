@@ -20,6 +20,15 @@ const setGameBalance = (value: number | null) => {
   listeners.forEach((listener) => listener());
 };
 
+// A balance an action on the page already knows (a bet just placed answers with it): shown at once, without
+// waiting for the live stream, which may be reconnecting or held up on the way.
+const balanceListeners = new Set<(balance: number) => void>();
+
+/** Shows a balance the page just learned in every chip, e.g. from the answer to a bet. */
+export function showBalance(balance: number) {
+  balanceListeners.forEach((listener) => listener(balance));
+}
+
 /** A casino game hands the chip the credits it shows; null while it hasn't loaded. */
 export function useChipBalance(balance: number | null) {
   useEffect(() => setGameBalance(balance), [balance]);
@@ -39,6 +48,10 @@ export function BalanceChip({ balance, title, href = "/dashboard/money" }: { bal
   useRealtime((event) => {
     if (event.type === "balance.changed") setShown(event.balance);
   });
+  useEffect(() => {
+    balanceListeners.add(setShown);
+    return () => void balanceListeners.delete(setShown);
+  }, []);
   return (
     <Link href={href} className="player-balance-chip" title={title}>
       <span className="player-balance-chip-icon" aria-hidden="true">

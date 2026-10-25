@@ -95,6 +95,17 @@ async function place(event, stake = 100) {
 const balance = async () => Number((await prisma.user.findUniqueOrThrow({ where: { id: player.id } })).balance);
 const reload = (id) => prisma.bet.findUniqueOrThrow({ where: { id } });
 
+/**
+ * The match is over and the bet was paid as a win the way the site did before the late check could see it (before
+ * the rule in force): no decision kept with it, the win in the Player's balance. Like the bets from earlier tests.
+ */
+async function paidBeforeTheCheck(match, bet) {
+  await prisma.event.update({ where: { id: match.id }, data: { status: "COMPLETED", period: "FT", homeScore: 1, resultHome: 1, resultAway: 0, resultHalfHome: 1, resultHalfAway: 0, finishedAt: new Date(Date.now() - 4 * 3_600_000) } });
+  const payout = Math.round(Number(bet.stake) * Number(bet.odds) * 100) / 100;
+  await prisma.bet.update({ where: { id: bet.id }, data: { status: "WON", payout, settledAt: new Date(Date.now() - 3 * 3_600_000) } });
+  await prisma.user.update({ where: { id: bet.playerId }, data: { balance: { increment: payout } } });
+}
+
 /** The match ends 1–0 (the home goal in `minute`), with the feed's timeline in; `first` is the first half's kick-off, or null when the feed sent none. */
 async function finish(match, minute, { first = Math.floor(match.startsAt.getTime() / 1000), finishedAt = new Date(), timeline = true } = {}) {
   await prisma.event.update({
@@ -189,9 +200,8 @@ test("a winning live bet paid before the check could see its goal is voided when
   const match = await liveMatch("Paid, then voided");
   const placed = await place(match);
   const bet = await reload(placed.bets[0].id);
-  // Full time hours ago, no timeline and no goal seen live (the feed never sent the score in time): it settled as a win.
-  await finish(match, 31, { timeline: false, finishedAt: new Date(Date.now() - 4 * 3_600_000) });
-  await settlement.settleEvent(match.id);
+  // Paid as a win before the check could see it.
+  await paidBeforeTheCheck(match, bet);
   assert.equal((await reload(bet.id)).status, "WON");
   const afterWin = await balance();
   // Then the timeline comes in: the goal was in the bet's minute.
@@ -213,8 +223,7 @@ test("Super Admin's re-check by username: a dry run only says what it would do, 
   const match = await liveMatch("Admin re-check");
   const placed = await place(match);
   const bet = await reload(placed.bets[0].id);
-  await finish(match, 31, { timeline: false, finishedAt: new Date(Date.now() - 4 * 3_600_000) });
-  await settlement.settleEvent(match.id);
+  await paidBeforeTheCheck(match, bet);
   assert.equal((await reload(bet.id)).status, "WON");
   await prisma.event.update({ where: { id: match.id }, data: { lateCheck: { first: Math.floor(match.startsAt.getTime() / 1000), second: null, goals: [{ minute: 31, extra: null, side: "home" }], cards: [] } } });
   const since = new Date(Date.now() - 3_600_000);
@@ -268,6 +277,121 @@ test("prices that haven't caught up with a goal (the side that scored no shorter
   await prisma.selection.update({ where: { id: homeOf(match).id }, data: { liveOdds: 1.4 } });
   const placed = await place(match);
   assert.equal(placed.bets.length, 1);
+});
+
+/** Places a bet on the home side and, `afterMs` into the wait, runs `change`. */
+async function placeWhile(event, afterMs, change, stake = 100) {
+  const placing = place(event, stake);
+  await sleep(afterMs);
+  await change();
+  return placing;
+}
+
+test("a live price better than the slip showed is never taken: refused even when the slip says to take new prices; placed at the shown new price, it goes in at exactly that", async () => {
+  const match = await liveMatch("Better than shown");
+  const home = homeOf(match);
+  const shown = (await odds.priceForPlayer(player.id, home.id)).odds;
+  // NEC: the slip showed 7.00-ish; the price went up a little before the slip came in.
+  await prisma.selection.update({ where: { id: home.id }, data: { liveOdds: 2.05 } });
+  const now = (await odds.priceForPlayer(player.id, home.id)).odds;
+  assert.ok(now > shown);
+  await assert.rejects(bets.place(actor, { bets: [{ selectionId: home.id, stake: 100, odds: shown }], acceptOddsChanges: true }), /odds changed/);
+  assert.equal(await prisma.bet.count({ where: { selectionId: home.id } }), 0);
+  // The slip shows the new price; placed at it, the bet is stored at exactly that, nothing "adjusted".
+  const placed = await bets.place(actor, { bets: [{ selectionId: home.id, stake: 100, odds: now }] });
+  assert.equal(placed.bets[0].odds, now);
+  assert.equal(placed.adjusted, false);
+});
+
+test("a price that goes up during the wait (the bettor's favour, right after a goal) refuses the slip; so does any change to the match", async () => {
+  const match = await liveMatch("Up during the wait");
+  await assert.rejects(placeWhile(match, 200, () => prisma.selection.update({ where: { id: homeOf(match).id }, data: { liveOdds: 2.02 } })), /odds changed/);
+  // A pause that began and ended within the wait still changed the match (Event.liveVersion).
+  const other = await liveMatch("Changed during the wait");
+  await assert.rejects(placeWhile(other, 200, () => prisma.event.update({ where: { id: other.id }, data: { liveVersion: { increment: 1 } } })), /Something happened in the match/);
+  assert.equal(await prisma.bet.count({ where: { selectionId: { in: [homeOf(match).id, homeOf(other).id] } } }), 0);
+});
+
+test("a settlement run on a match with a late-arriving goal pays no stale winning bet; a bet from before the goal is paid", async () => {
+  const match = await liveMatch("Settlement run");
+  const placed = await place(match);
+  const stale = await reload(placed.bets[0].id);
+  const team = { ownerId: stale.ownerId, managerId: stale.managerId, ownerRate: stale.ownerRate, managerRate: stale.managerRate };
+  const before = await prisma.bet.create({
+    data: { playerId: player.id, selectionId: homeOf(match).id, stake: 100, odds: stale.odds, description: "before", placedAt: new Date(stale.placedAt.getTime() - 6 * 60_000), live: { home: 0, away: 0, minute: 24, cards: 0, reds: 0 }, ...team },
+  });
+  // The goal went in a second before the stale bet was asked for; the site saw it 40 s after the bet was confirmed.
+  await prisma.goalSeen.create({ data: { eventId: match.id, homeScore: 1, awayScore: 0, elapsed: 31, source: "odds", seenAt: new Date(stale.placedAt.getTime() + 40_000) } });
+  await finish(match, 31);
+  await settlement.settleDue();
+  const voided = await reload(stale.id);
+  assert.equal(voided.status, "VOID");
+  assert.equal(Number(voided.payout), 100);
+  assert.equal((await reload(before.id)).status, "WON");
+  assert.match((await reload(before.id)).live.late.detail, /not voided because goal 1–0 at 31' .*: after the bet/);
+});
+
+test("the sweep voids live bets paid before the check could see them, takes the winnings back, and leaves decided the ones that stand", async () => {
+  const match = await liveMatch("Swept");
+  const placed = await place(match);
+  const late = await reload(placed.bets[0].id);
+  const team = { ownerId: late.ownerId, managerId: late.managerId, ownerRate: late.ownerRate, managerRate: late.managerRate };
+  const early = await prisma.bet.create({
+    data: { playerId: player.id, selectionId: homeOf(match).id, stake: 100, odds: late.odds, description: "early", placedAt: new Date(late.placedAt.getTime() - 10 * 60_000), live: { home: 0, away: 0, minute: 20, cards: 0, reds: 0 }, ...team },
+  });
+  await paidBeforeTheCheck(match, late);
+  await paidBeforeTheCheck(match, early);
+  await prisma.event.update({ where: { id: match.id }, data: { lateCheck: { first: Math.floor(match.startsAt.getTime() / 1000), second: null, goals: [{ minute: 31, extra: null, side: "home" }], cards: [] } } });
+  const paid = await balance();
+  settlement.sweptAt = 0;
+  await settlement.settleDue();
+  const voided = await reload(late.id);
+  assert.equal(voided.status, "VOID");
+  assert.equal(voided.live.late.when, "recheck");
+  assert.equal(await balance(), paid - Math.round(100 * (Number(late.odds) - 1) * 100) / 100);
+  const stands = await reload(early.id);
+  assert.equal(stands.status, "WON");
+  assert.equal(stands.live.late.version, 3, "decided under the rule in force, so the sweep leaves it alone from now on");
+  // Nothing left for the next sweep.
+  settlement.sweptAt = 0;
+  const again = await settlement.recheckLate({ since: new Date(Date.now() - 86_400_000), unchecked: true });
+  assert.equal(again.checked, 0);
+});
+
+test("a competition whose feed has been too far behind takes no live bets, and the wait is sized from its delay; a match whose goal certainly came too late takes none either", async () => {
+  delete process.env.LIVE_BET_ADAPTIVE_DELAY;
+  try {
+    const slow = await liveMatch("Slow league match", { league: "Slow League" });
+    const quick = await liveMatch("Quick league match", { league: "Quick League" });
+    // Five goals in each: Slow League's at least 40 s late, Quick League's at least 6 s.
+    for (let i = 0; i < 5; i++) {
+      const old = await prisma.event.create({ data: { sport: "football", provider: "api-football", name: `Old ${i}`, league: "Slow League", startsAt: new Date(Date.now() - 86_400_000), status: "COMPLETED" } });
+      await prisma.goalSeen.create({ data: { eventId: old.id, homeScore: 1, awayScore: 0, source: "odds", seenAt: new Date(Date.now() - 3_600_000), lagMs: 70_000, lagMinMs: 40_000 } });
+      const fine = await prisma.event.create({ data: { sport: "football", provider: "api-football", name: `Fine ${i}`, league: "Quick League", startsAt: new Date(Date.now() - 86_400_000), status: "COMPLETED" } });
+      await prisma.goalSeen.create({ data: { eventId: fine.id, homeScore: 1, awayScore: 0, source: "odds", seenAt: new Date(Date.now() - 3_600_000), lagMs: 30_000, lagMinMs: 6_000 } });
+    }
+    bets.lag = null;
+    await assert.rejects(place(slow), /Live betting on Slow League is paused: our feed for it is running too far behind/);
+    // Quick League: 95% of goals within 6 s, plus the 2 s margin: an 8 s wait (this test's usual one is 0.6 s).
+    const waits = await bets.liveWait([{ provider: "api-football", league: "Quick League" }]);
+    assert.equal(waits.usualMs, 8_000);
+    assert.equal(waits.tooSlow, null);
+    // A goal on this match that certainly reached the site 45 s late: no more live bets on it.
+    await sync["stopSlowMatch"](quick.id, quick.name, 45_000);
+    const stopped = await prisma.event.findUniqueOrThrow({ where: { id: quick.id } });
+    assert.equal(stopped.liveSlowFeed, true);
+    assert.equal(stopped.liveVersion, 1);
+    await assert.rejects(place(quick), /paused right now/);
+  } finally {
+    process.env.LIVE_BET_ADAPTIVE_DELAY = "off";
+    bets.lag = null;
+  }
+});
+
+test("placing a bet answers with the balance after it, for the top bar", async () => {
+  const match = await liveMatch("Balance after");
+  const placed = await place(match);
+  assert.equal(placed.balance, await balance());
 });
 
 test("teardown", async () => {

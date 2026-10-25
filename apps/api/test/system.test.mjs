@@ -68,3 +68,13 @@ test("open until every pick is decided, unless every line has already lost; void
   const voided = systemOutcome(legs(["VOID", "VOID", "VOID", "VOID"]), [2, 3, 4], D(2));
   assert.deepEqual([voided.status, Number(voided.payout)], ["VOID", 22]);
 });
+
+test("a Yankee's return adds every line up exactly and rounds only the total down (no line loses its fraction of a cent first)", () => {
+  // 2.15, 3.40, 1.85 and 2.60 at 100 a line: the 11 lines add up to 13,120.369…, so 13,120.36.
+  const odds = [2.15, 3.4, 1.85, 2.6].map(D);
+  const { payout } = systemMaxReturn(odds, [2, 3, 4], D(100));
+  assert.equal(payout.toFixed(2), "13120.36");
+  // Every pick won: settlement pays exactly that.
+  const won = systemOutcome(odds.map((o) => ({ odds: o, result: "WON" })), [2, 3, 4], D(100));
+  assert.equal(won.payout.toFixed(2), "13120.36");
+});

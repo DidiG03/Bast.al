@@ -3488,6 +3488,169 @@ button.odds-selection:hover,
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
 
+/* Why a bet type is greyed out on the slip. */
+.bet-mode-hint {
+  margin: -0.35rem 0 0;
+  font-size: 0.8rem;
+}
+
+/* Prices that moved since the picks were added: old and new, and the new return, before the Player places. */
+.bet-slip-moved {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 55%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 10%, var(--bg-elevated));
+  font-size: 0.85rem;
+}
+
+.bet-slip-moved ul {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bet-slip-moved li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bet-slip-moved li > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bet-slip-moved li > span:last-child {
+  flex: none;
+}
+
+.bet-slip-moved .is-up {
+  color: var(--success, var(--accent));
+}
+
+.bet-slip-moved .is-down {
+  color: var(--danger);
+}
+
+.bet-slip-moved p {
+  margin: 0;
+  font-weight: 700;
+}
+
+/* The Player's choice for prices that move before a bet goes in. */
+/* The label over its choice, both at the start of the line (a phone has no room for them side by side). */
+.bet-slip label.bet-price-setting {
+  display: grid;
+  justify-items: start;
+  gap: 0.3rem;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.bet-slip label.bet-price-setting select {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bet-price-setting-note {
+  margin: -0.4rem 0 0;
+  font-size: 0.78rem;
+}
+
+/* A live match's markets the feed isn't pricing right now: folded away at the bottom. */
+.odds-market-group.is-unavailable {
+  opacity: 0.85;
+}
+
+.odds-unavailable-toggle {
+  justify-self: start;
+  font-size: 0.85rem;
+}
+
+/* Above the live matches: why betting pauses and why live bets take a few seconds. */
+.bet-live-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  font-size: 0.85rem;
+}
+
+.bet-live-note p {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+
+.bet-live-note-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--accent-fill, var(--accent));
+  color: #08110a;
+  font-size: 0.75rem;
+  font-weight: 900;
+  font-style: italic;
+}
+
+.bet-live-note-close {
+  flex: none;
+  padding: 0 0.25rem;
+}
+
+/* A system's lines, every pick winning: what each returns, and the total. */
+.bet-system-breakdown {
+  font-size: 0.85rem;
+}
+
+.bet-system-breakdown summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.bet-system-breakdown ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bet-system-breakdown li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bet-system-breakdown li > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bet-system-breakdown li > span:last-child {
+  flex: none;
+}
+
+/* Paused for now: greyed out and left out of the totals until it reopens. */
+.bet-slip-item.is-paused {
+  opacity: 0.6;
+  filter: grayscale(0.6);
+  border-style: dashed;
+}
+
 .bet-slip-item-top {
   display: flex;
   justify-content: space-between;
@@ -3663,6 +3826,21 @@ button.odds-selection:hover,
 
 .bet-sheet-layer.is-closing .bet-sheet {
   animation: bet-drawer-out 360ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+/* Wider than the ticket: the space beside it is the dimmed backdrop, and a click there closes the slip (the sheet
+   lets clicks through everywhere but the ticket itself). */
+@media (min-width: 761px) {
+  .bet-sheet {
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .bet-sheet .bet-slip,
+  .role-player .bet-sheet .card.bet-slip {
+    pointer-events: auto;
+    box-shadow: 0 0 0 1px var(--border), 0 24px 60px rgb(0 0 0 / 35%);
+  }
 }
 
 .bet-sheet .bet-slip,
@@ -3883,7 +4061,9 @@ button.odds-selection:hover,
 /* Singles / Accumulator switch and accumulator picks */
 .bet-mode {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* One row, however many bet types: Singles, Accumulator and System side by side. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 0.25rem;
   padding: 0.25rem;
   border: 1px solid var(--border);
@@ -3897,6 +4077,12 @@ button.odds-selection:hover,
   color: var(--muted);
   min-height: 2.25rem;
   font-weight: 600;
+  /* Three to a row on a phone, in either language: a name never breaks mid-word. */
+  min-width: 0;
+  padding-inline: 0.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bet-mode-option.is-active {
@@ -4281,6 +4467,19 @@ button.odds-selection:hover,
 .player-balance-chip-icon svg {
   width: 0.85rem;
   height: 0.85rem;
+}
+
+/* The balance, and under it a stake waiting to be confirmed. */
+.player-balance-chip-amounts {
+  display: inline-grid;
+  justify-items: start;
+  line-height: 1.15;
+}
+
+.player-balance-chip-pending {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--warning, var(--text-2, var(--muted)));
 }
 
 /* Balance hero (My money page) */

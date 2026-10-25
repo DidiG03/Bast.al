@@ -194,7 +194,11 @@ export class BetsService {
    * Places a slip: any number of singles, plus at most one accumulator, one
    * bet builder and one system bet. Everything goes on or nothing does.
    */
-  async place(actor: Actor, input: { bets?: SlipBet[]; accumulator?: SlipAccumulator; builder?: SlipBuilder; system?: SlipSystem; acceptOddsChanges?: boolean }, ipAddress?: string) {
+  async place(
+    actor: Actor,
+    input: { bets?: SlipBet[]; accumulator?: SlipAccumulator; builder?: SlipBuilder; system?: SlipSystem; acceptOddsChanges?: boolean; priceChanges?: "never" | "higher" },
+    ipAddress?: string,
+  ) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players can place bets");
     // Recorded on each bet, so later moves and rate changes never rewrite its commission.
     const team = await this.assertOnTeam(actor);
@@ -211,6 +215,14 @@ export class BetsService {
     });
     const byId = new Map(selections.map((s) => [s.id, s]));
 
+    /**
+     * Whether a pre-match price that moved from `sent` to `now` is taken without
+     * asking: by the Player's setting when the slip says it ("higher": a better
+     * price; "never": none), otherwise a small move up, or any move when the
+     * slip already chose the new price (acceptOddsChanges).
+     */
+    const takesMove = (sent: number, now: number) =>
+      input.priceChanges === "higher" ? now > sent : input.priceChanges === "never" ? false : Boolean(input.acceptOddsChanges) || takenWithoutAsking(sent, now);
     const changed: string[] = [];
     /** Live picks whose price isn't the one the slip showed: refused whatever the slip says, so the Player sees the new price first. */
     const liveChanged: string[] = [];
@@ -234,7 +246,7 @@ export class BetsService {
       // in it yet, up or down, so the slip shows it and the Player places again at it.
       if (!sp && Math.abs(odds - pick.odds) > 0.001) {
         if (live) liveChanged.push(`${selection.name} is now ${odds.toFixed(2)}`);
-        else if (input.acceptOddsChanges || takenWithoutAsking(pick.odds, odds)) adjusted = true;
+        else if (takesMove(pick.odds, odds)) adjusted = true;
         else changed.push(`${selection.name} is now ${odds.toFixed(2)}`);
       }
       return {
@@ -299,12 +311,12 @@ export class BetsService {
     if (input.builder) {
       const quote = await this.priceBuilderFor(actor.id, input.builder.legs.map((leg) => leg.selectionId));
       if (Math.abs(Number(quote.odds) - input.builder.odds) > 0.001) {
-        if (input.acceptOddsChanges || takenWithoutAsking(input.builder.odds, Number(quote.odds))) adjusted = true;
+        if (takesMove(input.builder.odds, Number(quote.odds))) adjusted = true;
         else changed.push(`the bet builder is now ${Number(quote.odds).toFixed(2)}`);
       }
       pricedBuilder = { ...quote, stake: new Prisma.Decimal(input.builder.stake.toFixed(2)) };
     }
-    if (liveChanged.length > 0 || (changed.length > 0 && !input.acceptOddsChanges)) {
+    if (liveChanged.length > 0 || changed.length > 0) {
       throw new ConflictException(`The odds changed: ${[...liveChanged, ...changed].join(", ")}. Check your slip and place it again.`);
     }
     // The corners cap is checked before the wait too, so a slip over it is refused straight away; and again when it's stored.
@@ -606,15 +618,12 @@ export class BetsService {
     const atSubmit = new Map(
       (await this.prisma.event.findMany({ where: { id: { in: liveIds } }, select: { id: true, name: true, provider: true, league: true, liveOddsAt: true, liveCooldownUntil: true, matchCentre: true, liveVersion: true } })).map((event) => [event.id, event]),
     );
-    const longerBecause = await this.eventfulReason(liveIds, atSubmit, submittedAt);
-    const waits = await this.liveWait([...atSubmit.values()]);
+    const { delay, longerBecause, waits } = await this.waitFor(atSubmit, live.some((pick) => isCornersMarket(pick.marketKey)), submittedAt);
     // A competition whose feed is further behind than the longest wait: a wait wouldn't cover it, so no live bets.
     if (waits.tooSlow) {
       this.logger.warn(`Live slip refused for player ${playerId}: the feed for ${waits.tooSlow} is too far behind (${waits.feedLagMs} ms with the margin, ${waits.mostMs} ms the longest wait)`);
       throw new ConflictException(`Live betting on ${waits.tooSlow} is paused: our feed for it is running too far behind. Try a match from another competition.`);
     }
-    const usual = longerBecause ? waits.busyMs : waits.usualMs;
-    const delay = live.some((pick) => isCornersMarket(pick.marketKey)) ? Math.max(usual, waits.cornersMs) : usual;
     const askedOdds = new Map(live.map((pick) => [pick, pick.price === null ? null : Number(pick.price)]));
     const refuse = (message: string) => {
       this.logger.warn(`Live slip refused for player ${playerId} after ${Date.now() - submittedAt.getTime()} ms (${delay} ms wait${longerBecause ? `, longer: ${longerBecause}` : ""}): ${message}`);
@@ -751,6 +760,44 @@ export class BetsService {
   }
 
   /**
+   * The wait a live slip on these matches gets (confirmLive): busy matches
+   * wait longer (eventfulReason), a corners pick longer still.
+   */
+  private async waitFor(
+    events: Map<string, { id: string; provider: string; league: string; liveOddsAt: Date | null; liveCooldownUntil: Date | null }>,
+    corners: boolean,
+    now: Date,
+  ) {
+    const longerBecause = await this.eventfulReason([...events.keys()], events, now);
+    const waits = await this.liveWait([...events.values()]);
+    const usual = longerBecause ? waits.busyMs : waits.usualMs;
+    return { delay: corners ? Math.max(usual, waits.cornersMs) : usual, longerBecause, waits };
+  }
+
+  /**
+   * How long a slip with these picks would wait to be confirmed if it were
+   * placed now (confirmLive works it out the same way), for the slip's
+   * countdown and its note: `waitMs`, the wait itself, and `checkMs`, the
+   * most the checks with the feed after it may take (they usually take about
+   * a second). Nothing to wait for when no pick is live.
+   */
+  async plannedWait(actor: Actor, selectionIds: string[]) {
+    if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players have a bet slip");
+    const quotes = await this.odds.pricesForPlayer(actor.id, selectionIds);
+    const live = [...quotes.entries()].filter(([, quote]) => quote.live);
+    if (live.length === 0) return { live: false, waitMs: 0, checkMs: 0, longerBecause: null };
+    const rows = await this.prisma.selection.findMany({ where: { id: { in: live.map(([id]) => id) } }, select: { market: { select: { eventId: true } } } });
+    const events = new Map(
+      (await this.prisma.event.findMany({
+        where: { id: { in: [...new Set(rows.map((row) => row.market.eventId))] } },
+        select: { id: true, provider: true, league: true, liveOddsAt: true, liveCooldownUntil: true },
+      })).map((event) => [event.id, event]),
+    );
+    const { delay, longerBecause, waits } = await this.waitFor(events, live.some(([, quote]) => isCornersMarket(quote.marketKey)), new Date());
+    return { live: true, waitMs: delay, checkMs: waits.checkMs, longerBecause };
+  }
+
+  /**
    * How long live picks wait (see confirmLive): the usual wait, the wait on a
    * busy match, the wait with a corners pick, and how long the checks with the
    * feed at the end may take on top. The wait is at least the feed's delay on
@@ -854,14 +901,14 @@ export class BetsService {
   }
 
   /** The Player's own bets: open ones, or settled ones newest first. */
-  async mine(actor: Actor, status: "open" | "settled" = "open", before?: string) {
+  async mine(actor: Actor, status: "open" | "settled" = "open", before?: string, limit = PAGE) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players have bets");
     const where: Prisma.BetWhereInput = { playerId: actor.id, status: status === "open" ? BetStatus.OPEN : { not: BetStatus.OPEN } };
     const beforeDate = before ? new Date(before) : null;
     if (beforeDate && !Number.isNaN(beforeDate.getTime())) where[status === "open" ? "placedAt" : "settledAt"] = { lt: beforeDate };
     const weekAgo = new Date(Date.now() - 7 * 24 * 3_600_000);
     const [bets, open, week, player] = await Promise.all([
-      this.prisma.bet.findMany({ where, orderBy: status === "open" ? { placedAt: "desc" } : { settledAt: "desc" }, take: PAGE, select: betSelect }),
+      this.prisma.bet.findMany({ where, orderBy: status === "open" ? { placedAt: "desc" } : { settledAt: "desc" }, take: limit, select: betSelect }),
       this.prisma.bet.aggregate({ where: { playerId: actor.id, status: BetStatus.OPEN }, _sum: { stake: true }, _count: { _all: true } }),
       this.prisma.bet.aggregate({ where: { playerId: actor.id, status: { not: BetStatus.OPEN }, settledAt: { gte: weekAgo } }, _sum: { stake: true, payout: true }, _count: { _all: true } }),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
@@ -872,7 +919,7 @@ export class BetsService {
       // Bets settled in the last 7 days: what went on them and what came back.
       week: { count: week._count._all, staked: Number(week._sum.stake ?? 0), returned: Number(week._sum.payout ?? 0) },
       bets: bets.map(betView),
-      hasMore: bets.length === PAGE,
+      hasMore: bets.length === limit,
     };
   }
 

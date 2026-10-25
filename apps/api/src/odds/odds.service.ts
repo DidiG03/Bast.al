@@ -444,7 +444,12 @@ export class OddsService {
           override: live ? null : overrideBy.get(row.id) ?? null,
           now,
         });
-        return { id: row.id, eventId: event.id, price: quote.price, bettable: quote.bettable, suspended: quote.suspended, live, open: eventOpen(event, now) || live, sp: event.sport === "greyhounds" };
+        const open = eventOpen(event, now) || live;
+        // Over for good, so the slip drops it: the match finished or was called off, the outcome settled, the pick withdrawn, or
+        // (in sports bet on only before the start) the start passed. A football match past kick-off may still go live.
+        const over = event.status === EventStatus.COMPLETED || event.status === EventStatus.CANCELLED || event.status === EventStatus.POSTPONED;
+        const final = !live && (over || row.result !== null || row.withdrawn || (event.sport !== "football" && !open && event.startsAt <= now));
+        return { id: row.id, eventId: event.id, price: quote.price, bettable: quote.bettable, suspended: quote.suspended, live, open, final, sp: event.sport === "greyhounds" };
       });
   }
 

@@ -14,22 +14,22 @@ import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
 import { SportIcon } from "../../../components/sport-icon";
 import { TeamCrest } from "../../../components/team-crest";
-import { ApiError, apiFetch, type Bet, type BuilderQuote, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
+import { ApiError, apiFetch, type Bet, type BuilderQuote, type LiveWait, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney, formatStake } from "../../../lib/format";
 import { byImportance } from "../../../lib/importance";
-import { MAX_SLIP, readSlip, saveSlip, type SlipItem } from "../../../lib/slip";
+import { MAX_SLIP, forgetPicks, readSlip, saveSlip, slipStorageKey, type SlipItem } from "../../../lib/slip";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
-import { showBalance } from "../../../components/balance-chip";
+import { showBalance, showPending } from "../../../components/balance-chip";
 import { useTopUpRequest } from "../../../components/top-up-request";
 import { breakPause, liveClock } from "../../../lib/live";
 import { applyDelta, applyToList, applyToSlip, byMatch, hasUnknownSelections } from "../../../lib/live-push";
 import { usePolling } from "../../../lib/use-polling";
 import { pickLabel } from "../../../lib/picks";
 import { addDays, dayKey } from "../../../lib/time";
-import { MIN_SYSTEM_LINE_STAKE, systemMaxReturn, systemOptions, type SystemOption } from "../../../lib/system-bets";
+import { MIN_SYSTEM_LINE_STAKE, systemBreakdown, systemLineCount, systemMaxReturn, systemOptions, type SystemOption } from "../../../lib/system-bets";
 
 type Tab = "matches" | "open" | "settled";
 /** "accumulator" combines the picks: an accumulator, or a bet builder when they're all from one match. "system" makes every double, treble… of them. */
@@ -41,6 +41,8 @@ const MOVE_SHOWN_MS = 15_000;
 const DETAIL_FRESH_MS = 10_000;
 
 type PriceMove = { up: boolean; until: number };
+/** How long a live slip's checks with the feed usually take after its wait (the API allows more, rarely needed). */
+const CHECK_TYPICAL_MS = 1_000;
 /** One tap fills the stake on the ticket, in ALL. */
 const QUICK_STAKES = [10, 50, 100, 500, 1000];
 /** Matches the API's cap on an accumulator's combined odds. */
@@ -203,7 +205,16 @@ function BetPage() {
       if (!token) return;
       const list = (filter: "live" | "upcoming") => apiFetch<OddsEvent[]>(`/odds/events?filter=${filter}&view=list&sport=${sport}`, token, { revalidate: true });
       // Only football is bet on once it starts: the other sports have no live list.
-      const [live, upcoming] = await Promise.all([sport !== "football" ? [] : list("live"), only === "live" && lists.current.upcoming ? lists.current.upcoming : list("upcoming")]);
+      const livePromise = sport !== "football" ? Promise.resolve([] as OddsEvent[]) : list("live");
+      // The first time, the live matches show as soon as they come, before the (longer) list of the days ahead.
+      if (lists.current.live === null && lists.current.upcoming === null && sport === "football") {
+        void livePromise
+          .then((live) => {
+            if (sportRef.current === sport && lists.current.upcoming === null && live.length > 0) setEvents((current) => current ?? live);
+          })
+          .catch(() => undefined);
+      }
+      const [live, upcoming] = await Promise.all([livePromise, only === "live" && lists.current.upcoming ? lists.current.upcoming : list("upcoming")]);
       // Nothing changed (the API said so), or the Player switched sport meanwhile: the page keeps what it has.
       if ((live === lists.current.live && upcoming === lists.current.upcoming) || sportRef.current !== sport) return;
       lists.current = { live, upcoming };
@@ -248,8 +259,18 @@ function BetPage() {
     if (!token) return;
     const quotes = await apiFetch<SelectionQuote[]>(`/odds/selections?ids=${ids.map(encodeURIComponent).join(",")}`, token);
     const byId = new Map(quotes.map((quote) => [quote.id, quote]));
+    // Picks that are over for good (the match finished, the market settled, the pick withdrawn, or gone): off the slip.
+    const gone = slipRef.current.filter((item) => ids.includes(item.selectionId) && (!byId.has(item.selectionId) || byId.get(item.selectionId)!.final));
+    if (gone.length > 0) {
+      toast.info(
+        gone.length === 1
+          ? t("{pick} was taken off your slip: that market has closed for good.", { pick: `${gone[0].name} (${gone[0].eventName})` })
+          : t("{count} picks were taken off your slip: their markets have closed for good.", { count: gone.length }),
+      );
+    }
+    const goneIds = new Set(gone.map((item) => item.selectionId));
     setSlip((items) =>
-      items.map((item) => {
+      items.filter((item) => !goneIds.has(item.selectionId)).map((item) => {
         const quote = byId.get(item.selectionId);
         if (!quote || !quote.open) return { ...item, closed: true, paused: false };
         const paused = !quote.bettable;
@@ -260,7 +281,7 @@ function BetPage() {
         return { ...item, closed: false, paused, live: quote.live, odds: quote.price, previousOdds: previous === quote.price ? undefined : previous };
       }),
     );
-  }, [getToken]);
+  }, [getToken, toast, t]);
 
   /** Everything on the page again: the list (or only its live matches), every opened match, and the slip's prices. */
   const refreshAll = useCallback(
@@ -373,9 +394,24 @@ function BetPage() {
   }, [userId]);
 
   useEffect(() => {
-    if (slipLoaded && userId) saveSlip(userId, slip);
+    if (slipLoaded && userId) {
+      // Picks taken off (removed, cleared, placed, or dropped as over) stay off, even if another tab still holds them.
+      const kept = new Set(slip.map((item) => item.selectionId));
+      forgetPicks(userId, slipRef.current.filter((item) => !kept.has(item.selectionId)).map((item) => item.selectionId));
+      saveSlip(userId, slip);
+    }
     slipRef.current = slip;
   }, [slip, slipLoaded, userId]);
+
+  // The slip changed in another tab (a pick added, removed or placed there): this one follows.
+  useEffect(() => {
+    if (!userId) return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === slipStorageKey(userId)) setSlip(readSlip(userId));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [userId]);
 
   // A slip kept from last time is checked against today's prices once it's loaded.
   useEffect(() => {
@@ -425,6 +461,12 @@ function BetPage() {
       window.clearTimeout(timer);
     };
   }, [focused]);
+
+  // On Open bets or Settled, the matches (live ones first) load behind, so going back to them is instant.
+  useEffect(() => {
+    if (tab === "matches" || lists.current.live !== null) return;
+    void loadEvents().catch(() => undefined);
+  }, [tab, loadEvents]);
 
   useEffect(() => {
     if (tab !== "matches" || !listed) return;
@@ -601,7 +643,7 @@ function BetPage() {
       const lastStake = items[items.length - 1]?.stake ?? "";
       return [
         ...items,
-        { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, name: selection.name, odds: selection.price, stake: lastStake, live: event.live, sp: selection.sp },
+        { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, name: selection.name, odds: selection.price, stake: lastStake, live: event.live, sp: selection.sp, addedAt: Date.now() },
       ];
     });
   }, [toast, t]);
@@ -673,11 +715,13 @@ function BetPage() {
     />
   );
   const slipSystem = mode === "system" ? chosenSystem(slip, systemKey) : null;
+  // The same total the slip shows: closed and paused picks aren't counted.
+  const slipValid = slip.filter((item) => !item.closed && !item.paused);
   const totalStake = slipSystem
-    ? Math.round(stakeValue(accaStake) * slipSystem.lines * 100) / 100
+    ? Math.round(stakeValue(accaStake) * systemLineCount(slipValid.length, slipSystem.sizes.filter((size) => size <= slipValid.length)) * 100) / 100
     : mode !== "singles" && slip.length >= 2
-      ? stakeValue(accaStake)
-      : slip.reduce((sum, item) => sum + stakeValue(item.stake), 0);
+      ? slipValid.length > 0 ? stakeValue(accaStake) : 0
+      : slipValid.reduce((sum, item) => sum + stakeValue(item.stake), 0);
 
   // The first time, rows shaped like the matches show until the account and the matches have loaded.
   if (!info || (tab === "matches" && listed && events === null && sport === "football"))
@@ -752,9 +796,7 @@ function BetPage() {
           <div className="stack bet-matches">
             <GreyhoundRaces selected={selected} onPick={toggle} active />
           </div>
-          <aside className="bet-slip-desktop" aria-label={t("Bet slip")}>
-            {slipPanel}
-          </aside>
+
         </div>
       ) : tab === "matches" ? (
         <div className="bet-layout">
@@ -845,6 +887,7 @@ function BetPage() {
                       {label}
                       <span className="odds-day-count">{count}</span>
                     </h2>
+                    {label === liveLabel ? <LiveNote /> : null}
                     {byLeague(dayEvents).map((group) => (
                       <div key={group.key} className="bm-league">
                         <h3 className="bm-league-head">
@@ -891,9 +934,7 @@ function BetPage() {
               </>
             )}
           </div>
-          <aside className="bet-slip-desktop" aria-label={t("Bet slip")}>
-            {slipPanel}
-          </aside>
+
         </div>
       ) : (
         <MyBetsList status={tab} version={betsVersion} />
@@ -1034,9 +1075,17 @@ const MatchCard = memo(function MatchCard({
   const isFavourite = (entry: Entry) => favouriteMarkets.has(marketKind("kind" in entry ? entry.lines[0] : entry));
   // Starred kinds of market come out of their groups into Favourites, on top.
   const favourite = bundled.flatMap(([, list]) => list.filter(isFavourite));
-  const grouped = [...(favourite.length > 0 ? [[FAVOURITES_GROUP, favourite] as const] : []), ...bundled.map(([label, list]) => [label, list.filter((entry) => !isFavourite(entry))] as const)].filter(
-    ([, list]) => list.length > 0,
-  );
+  const hasPick = (markets: Array<{ selections: OddsSelection[] }>) => markets.some((market) => market.selections.some((selection) => selected.has(selection.id)));
+  const playing = event.live && !finishedNow(event);
+  // During play, markets the feed isn't pricing right now (every outcome off the board) go out of the way, into
+  // "Unavailable during play" at the bottom, closed; one holding a pick on the slip stays where it is.
+  const heldMarket = (market: { suspended?: boolean; selections: OddsSelection[] }) => Boolean(market.suspended) || market.selections.every((selection) => selection.suspended);
+  const unavailable = (entry: Entry) => playing && ("kind" in entry ? entry.lines.every(heldMarket) && !hasPick(entry.lines) : heldMarket(entry) && !hasPick([entry]));
+  const grouped = [...(favourite.length > 0 ? [[FAVOURITES_GROUP, favourite] as const] : []), ...bundled.map(([label, list]) => [label, list.filter((entry) => !isFavourite(entry))] as const)]
+    .map(([label, list]) => [label, list.filter((entry) => !unavailable(entry))] as const)
+    .filter(([, list]) => list.length > 0);
+  const offBoard = bundled.flatMap(([, list]) => list.filter(unavailable));
+  const [showOffBoard, setShowOffBoard] = useState(false);
   const entries = grouped.flatMap(([, list]) => list);
   const isOpen = (entry: Entry) => isFavourite(entry) !== flipped.has(entryKey(entry));
   const allOpen = entries.length > 0 && entries.every(isOpen);
@@ -1056,10 +1105,8 @@ const MatchCard = memo(function MatchCard({
     });
     onStarMarket(marketKind("kind" in entry ? entry.lines[0] : entry));
   };
-  const hasPick = (markets: Array<{ selections: OddsSelection[] }>) => markets.some((market) => market.selections.some((selection) => selected.has(selection.id)));
   const toggleLabel = expanded ? t("Fewer markets") : tn(more, "{count} more market", "{count} more markets");
   const scored = (event.live || over) && event.homeScore !== null && event.awayScore !== null;
-  const playing = event.live && !over;
   const winnerHeld =
     playing &&
     event.bettable &&
@@ -1098,6 +1145,29 @@ const MatchCard = memo(function MatchCard({
           {offBoard ? null : <PriceArrow move={moves.get(selection.id)} />}
         </strong>
       </button>
+    );
+  };
+
+  /** One market, or a family of lines, with its head and (when open) its prices. */
+  const renderEntry = (entry: Entry) => {
+    const key = entryKey(entry);
+    const open = isOpen(entry);
+    const starred = isFavourite(entry);
+    if ("kind" in entry) {
+      return (
+        <LineFamily key={key} lines={entry.lines} open={open} onToggle={() => flip(key)} picked={hasPick(entry.lines)} starred={starred} onStar={() => starMarket(entry)}>
+          {(market) => marketOutcomes(market)}
+        </LineFamily>
+      );
+    }
+    const scorers = entry.key.startsWith("scorer_");
+    return (
+      <div key={key} className={`odds-market${open ? " is-open" : ""}`}>
+        <MarketHead title={ts(entry.name)} suspended={entry.suspended} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
+          {scorers ? null : <MarketPriceHistory selections={entry.selections} compact />}
+        </MarketHead>
+        {open ? marketOutcomes(entry) : null}
+      </div>
     );
   };
 
@@ -1223,29 +1293,23 @@ const MatchCard = memo(function MatchCard({
           {grouped.map(([label, list]) => (
             <div key={label} className={`odds-market-group${label === FAVOURITES_GROUP ? " is-favourites" : ""}`}>
               {grouped.length > 1 || label === FAVOURITES_GROUP ? <h3 className="odds-market-group-title">{t(label)}</h3> : null}
-              {list.map((entry) => {
-                const key = entryKey(entry);
-                const open = isOpen(entry);
-                const starred = isFavourite(entry);
-                if ("kind" in entry) {
-                  return (
-                    <LineFamily key={key} lines={entry.lines} open={open} onToggle={() => flip(key)} picked={hasPick(entry.lines)} starred={starred} onStar={() => starMarket(entry)}>
-                      {(market) => marketOutcomes(market)}
-                    </LineFamily>
-                  );
-                }
-                const scorers = entry.key.startsWith("scorer_");
-                return (
-                  <div key={key} className={`odds-market${open ? " is-open" : ""}`}>
-                    <MarketHead title={ts(entry.name)} suspended={entry.suspended} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
-                      {scorers ? null : <MarketPriceHistory selections={entry.selections} compact />}
-                    </MarketHead>
-                    {open ? marketOutcomes(entry) : null}
-                  </div>
-                );
-              })}
+              {list.map(renderEntry)}
             </div>
           ))}
+          {offBoard.length > 0 ? (
+            <div className="odds-market-group is-unavailable">
+              <button type="button" className="text-button odds-unavailable-toggle" onClick={() => setShowOffBoard((open) => !open)} aria-expanded={showOffBoard}>
+                {tn(offBoard.length, "Unavailable during play ({count} market)", "Unavailable during play ({count} markets)")}
+                <span aria-hidden="true">{showOffBoard ? " ▴" : " ▾"}</span>
+              </button>
+              {showOffBoard ? (
+                <>
+                  <p className="muted odds-market-rule">{t("The feed isn't pricing these right now. They come back here when it does.")}</p>
+                  {offBoard.map(renderEntry)}
+                </>
+              ) : null}
+            </div>
+          ) : null}
           {loading ? (
             <div className="loading-state bet-markets-loading">
               <LoadingSpinner label="Loading markets" />
@@ -1281,24 +1345,91 @@ function byLeague(events: OddsEvent[]): Array<{ key: string; league: string; cou
 }
 
 /**
- * The Place button while a live bet is confirmed: a spinner and about how many seconds are left. The API says
- * how long the usual wait is (bets.service liveWait): this counts down from it, plus a second for the checks
- * with the feed after it, then says it's nearly done (a busy match waits a few seconds more).
+ * The Place button while a live bet is confirmed: a spinner and about how many seconds are left until
+ * `deadline` (ms), when the API should answer: the wait it gives this slip (bets.service plannedWait) plus
+ * about a second for its checks with the feed. Past it, it says it's nearly done.
  */
-function LiveCountdown({ corners, wait }: { corners: boolean; wait: SlipInfo["liveWait"] }) {
+function LiveCountdown({ deadline }: { deadline: number }) {
   const { t } = useI18n();
-  const most = (corners ? wait?.corners ?? 20 : wait?.usual ?? 8) + 1;
-  const [left, setLeft] = useState(most);
+  const secondsLeft = () => Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  const [left, setLeft] = useState(secondsLeft);
+  // Worked out from the deadline on every tick, never counted down: a tab the browser slows down still shows the true time.
   useEffect(() => {
-    const timer = window.setInterval(() => setLeft((value) => Math.max(0, value - 1)), 1_000);
+    setLeft(secondsLeft());
+    const timer = window.setInterval(() => setLeft(secondsLeft()), 250);
     return () => window.clearInterval(timer);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deadline]);
   return (
     <span className="bet-live-countdown" role="status">
       <LoadingSpinner label="Confirming live bet" size="small" />
       <span aria-live="off">{left > 0 ? t("Confirming live bet · about {seconds} s", { seconds: left }) : t("Almost done…")}</span>
     </span>
   );
+}
+
+/**
+ * Above the live matches: why betting pauses after a goal, and why a live bet takes a few seconds. Closed for
+ * good with its ✕ (kept in this browser).
+ */
+function LiveNote() {
+  const { t } = useI18n();
+  const [hidden, setHidden] = useState(true);
+  useEffect(() => {
+    try {
+      setHidden(window.localStorage.getItem(LIVE_NOTE_KEY) === "hidden");
+    } catch {
+      setHidden(false);
+    }
+  }, []);
+  if (hidden) return null;
+  return (
+    <div className="bet-live-note" role="note">
+      <span className="bet-live-note-icon" aria-hidden="true">i</span>
+      <p>
+        {t("Betting pauses briefly after goals so prices stay fair, and live bets take a few seconds to confirm. A bet placed after a goal that hadn't shown here yet is voided and your stake comes back.")}
+      </p>
+      <button
+        type="button"
+        className="text-button bet-live-note-close"
+        aria-label={t("Hide this note")}
+        onClick={() => {
+          setHidden(true);
+          try {
+            window.localStorage.setItem(LIVE_NOTE_KEY, "hidden");
+          } catch {
+            // Hidden for this visit.
+          }
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+const LIVE_NOTE_KEY = "bastal-live-note";
+
+/** The Player's choice of what to do with a price that moves before a bet goes in, kept in this browser. */
+type PriceChanges = "never" | "higher";
+const PRICE_CHANGES_KEY = "bastal-price-changes";
+function usePriceChangeSetting(): [PriceChanges, (value: PriceChanges) => void] {
+  const [value, setValue] = useState<PriceChanges>("higher");
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(PRICE_CHANGES_KEY) === "never") setValue("never");
+    } catch {
+      // The default stands.
+    }
+  }, []);
+  const save = useCallback((next: PriceChanges) => {
+    setValue(next);
+    try {
+      window.localStorage.setItem(PRICE_CHANGES_KEY, next);
+    } catch {
+      // Kept for this visit.
+    }
+  }, []);
+  return [value, save];
 }
 
 /** Just finished: the live list keeps it a few minutes, marked full time, instead of dropping it. */
@@ -1364,6 +1495,9 @@ function BetSlip({
   const [takeNewPrice, setTakeNewPrice] = useState(false);
   const toast = useToast();
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
+  const router = useRouter();
+  /** When a live slip being confirmed should be answered (ms), for the countdown. */
+  const [deadline, setDeadline] = useState(0);
   // Removing the last pick closes the sheet instead of leaving an empty slip over the page. Placing keeps it open, for the receipt.
   const hadItems = useRef(items.length > 0);
   useEffect(() => {
@@ -1373,10 +1507,13 @@ function BetSlip({
 
   // Combined picks all from one match are a bet builder, priced by the server; from different matches, an accumulator.
   const oneMatch = items.length >= 2 && new Set(items.map((item) => item.eventId)).size === 1;
+  // The bet builder is for matches that haven't started: picks all from one live match can only be singles.
+  const liveBuilder = oneMatch && items.some((item) => item.live);
+  const canCombine = items.length >= 2 && !liveBuilder;
   // A system: every double, treble… of picks from different matches, the same stake on each line.
   const systemChoice = chosenSystem(items, systemKey);
   const system = mode === "system" && systemChoice !== null;
-  const combined = mode === "accumulator" || (mode === "system" && !system);
+  const combined = canCombine && (mode === "accumulator" || (mode === "system" && !system));
   const builder = combined && oneMatch;
   const acca = combined && !oneMatch;
   const [builderQuote, setBuilderQuote] = useState<{ key: string; odds: number | null; error: string | null } | null>(null);
@@ -1402,24 +1539,76 @@ function BetSlip({
   const quote = builder && builderQuote?.key === builderKey ? builderQuote : null;
   const builderOdds = quote?.odds ?? 0;
   const hasSp = items.some((item) => item.sp);
-  const accaOdds = combinedOdds(items.map((item) => item.odds));
+  // Closed or paused picks can't be bet on: they're greyed out and left out of every total (odds, stake, return)
+  // until they reopen or are removed.
+  const valid = items.filter((item) => !item.closed && !item.paused);
+  const accaOdds = combinedOdds(valid.map((item) => item.odds));
   const accaStakeValue = stakeValue(accaStake);
   const sameMatch = new Set(items.map((item) => item.eventId)).size < items.length;
 
-  const systemLines = system ? systemChoice.lines : 0;
-  const totalStake = system ? Math.round(accaStakeValue * systemLines * 100) / 100 : combined ? accaStakeValue : items.reduce((sum, item) => sum + stakeValue(item.stake), 0);
+  // A system over the picks that can be bet on: its line sizes that still fit, and how many lines that makes.
+  const systemSizes = system ? systemChoice.sizes.filter((size) => size <= valid.length) : [];
+  const systemLines = system ? systemLineCount(valid.length, systemSizes) : 0;
+  const totalStake = system ? Math.round(accaStakeValue * systemLines * 100) / 100 : combined ? (valid.length > 0 ? accaStakeValue : 0) : valid.reduce((sum, item) => sum + stakeValue(item.stake), 0);
   // Race picks pay the starting price, so they add nothing known to the return.
   const totalReturn = system
-    ? systemMaxReturn(items.map((item) => item.odds), systemChoice.sizes, accaStakeValue)
-    : builder ? returns(accaStakeValue, builderOdds) : acca ? returns(accaStakeValue, accaOdds) : items.reduce((sum, item) => sum + (item.sp ? 0 : returns(stakeValue(item.stake), item.odds)), 0);
-  const missingStake = system ? accaStakeValue < MIN_SYSTEM_LINE_STAKE || totalStake < 1 : combined ? accaStakeValue < 1 : items.some((item) => stakeValue(item.stake) < 1);
+    ? systemMaxReturn(valid.map((item) => item.odds), systemSizes, accaStakeValue)
+    : builder ? returns(accaStakeValue, builderOdds) : acca ? returns(accaStakeValue, accaOdds) : valid.reduce((sum, item) => sum + (item.sp ? 0 : returns(stakeValue(item.stake), item.odds)), 0);
+  const missingStake = system ? accaStakeValue < MIN_SYSTEM_LINE_STAKE || totalStake < 1 : combined ? accaStakeValue < 1 : valid.some((item) => stakeValue(item.stake) < 1);
   const closed = items.filter((item) => item.closed);
   const paused = items.filter((item) => item.paused && !item.closed);
   const hasLive = items.some((item) => item.live);
+  // How long this slip would wait if placed now, from the API: the countdown and the note below say the same.
+  const [planned, setPlanned] = useState<LiveWait | null>(null);
+  const liveKey = hasLive ? items.map((item) => item.selectionId).join(",") : "";
+  const loadPlanned = useCallback(async (): Promise<LiveWait | null> => {
+    if (!liveKey) return null;
+    const token = await getToken();
+    if (!token) return null;
+    const wait = await apiFetch<LiveWait>("/bets/live-wait", token, { method: "POST", body: JSON.stringify({ selectionIds: liveKey.split(",") }) });
+    setPlanned(wait);
+    return wait;
+  }, [liveKey, getToken]);
+  useEffect(() => {
+    if (!liveKey) {
+      setPlanned(null);
+      return;
+    }
+    void loadPlanned().catch(() => undefined);
+    // A match turns busy (a goal) or quiet again: asked again now and then.
+    const timer = window.setInterval(() => void loadPlanned().catch(() => undefined), 20_000);
+    return () => window.clearInterval(timer);
+  }, [liveKey, loadPlanned]);
+  /** Seconds a live slip takes: the wait, and about a second for the checks after it. */
+  const liveSeconds = planned?.live ? Math.ceil((planned.waitMs + CHECK_TYPICAL_MS) / 1000) : null;
   const overMax = info?.maxStake != null ? (system ? totalStake > info.maxStake : combined ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
   const tooLittle = info ? totalStake > info.balance : false;
   const moved = items.some((item) => item.previousOdds !== undefined);
   const priceMoved = moved || takeNewPrice;
+  // What to do when a price moves between the tap and the bet going in (before kick-off; a live bet is only ever
+  // placed at the price on the slip): "never" asks every time, "higher" takes a better price on its own.
+  const [priceChanges, setPriceChanges] = usePriceChangeSetting();
+  const movedItems = items.filter((item) => item.previousOdds !== undefined && !item.closed);
+  /** What the slip would have returned at the prices it was added at, to show beside the new return. */
+  const returnBefore = moved
+    ? (() => {
+        const before = valid.map((item) => ({ ...item, odds: item.previousOdds ?? item.odds }));
+        if (system) return systemMaxReturn(before.map((item) => item.odds), systemSizes, accaStakeValue);
+        if (acca) return returns(accaStakeValue, combinedOdds(before.map((item) => item.odds)));
+        if (builder) return null;
+        return before.reduce((sum, item) => sum + (item.sp ? 0 : returns(stakeValue(item.stake), item.odds)), 0);
+      })()
+    : null;
+  const modeHint =
+    items.length === 1
+      ? t("Add another selection to build an accumulator.")
+      : liveBuilder
+        ? t("The bet builder is for matches that haven't started. Picks from this live match can only be singles.")
+        : !oneMatch && items.length === 2
+          ? t("Add a third selection from another match for a system bet.")
+          : !oneMatch && !systemChoice && items.length >= 3
+            ? t("A system bet needs every pick from a different match.")
+            : null;
   const summaryTitle = system
     ? tn(systemLines, "{count} bet", "{count} bets", { count: systemLines })
     : builder
@@ -1448,19 +1637,10 @@ function BetSlip({
   else if (tooLittle) blocker = t("Your balance is too low for this slip. Tap here to ask for a top-up.");
   const needsMoney = Boolean(blocker) && !info?.blocked && closed.length === 0 && paused.length === 0 && !(acca && (hasSp || sameMatch || accaOdds > MAX_ACCUMULATOR_ODDS)) && !(builder && !quote?.odds) && !missingStake && !overMax && tooLittle;
 
-  // Prices that moved since they were added: say so once per slip. The slip itself shows which ones.
-  const movedShown = useRef(false);
+  // A moved price shows on the slip itself (the old price struck through); a toast only says so when a bet is refused for it.
   useEffect(() => {
-    if (items.length === 0) {
-      movedShown.current = false;
-      setTakeNewPrice(false);
-    }
-    else if (moved && !movedShown.current) {
-      movedShown.current = true;
-      // Live, a bet only goes in at the price on the slip, so the Player places again at the new one.
-      toast.info(items.some((item) => item.live && item.previousOdds !== undefined) ? t("The price changed. Check your slip and place again at the new price.") : t("Some prices moved since you added them. The new price is what you get."));
-    }
-  }, [moved, items.length, toast, t]);
+    if (items.length === 0) setTakeNewPrice(false);
+  }, [items.length]);
 
   function setStake(id: string, stake: string) {
     onChange((list) => list.map((item) => (item.selectionId === id ? { ...item, stake } : item)));
@@ -1483,7 +1663,16 @@ function BetSlip({
       setPlacing(false);
       return;
     }
-    if (hasLive) toast.info(t("Live bets take a few seconds to confirm. If the price or score changes meanwhile, you'll see the new price first."));
+    // The stake shows as pending under the balance at once; it's taken or given back when the API answers.
+    showPending(totalStake);
+    if (hasLive) {
+      // The countdown runs to when the API should answer: the wait it gives this slip right now, asked as the slip goes.
+      const started = Date.now();
+      setDeadline(started + (planned?.live ? planned.waitMs : (info?.liveWait?.usual ?? 8) * 1000) + CHECK_TYPICAL_MS);
+      void loadPlanned()
+        .then((wait) => wait?.live && setDeadline(started + wait.waitMs + CHECK_TYPICAL_MS))
+        .catch(() => undefined);
+    }
     const body = JSON.stringify({
       ...(system
         ? { system: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), sizes: systemChoice.sizes, lineStake: accaStakeValue } }
@@ -1492,7 +1681,8 @@ function BetSlip({
           : acca
             ? { accumulator: { legs: items.map((item) => ({ selectionId: item.selectionId, odds: item.odds })), stake: accaStakeValue } }
             : { bets: items.map((item) => ({ selectionId: item.selectionId, stake: stakeValue(item.stake), odds: item.odds })) }),
-      ...(priceMoved ? { acceptOddsChanges: true } : {}),
+      // The prices sent are the ones on the slip, new ones included: the Player's setting says what to do if they move again.
+      priceChanges,
     });
     try {
       const result = await apiFetch<PlaceBetsResponse>("/bets", token, { method: "POST", body, idempotencyKey: idempotency.keyFor("/bets", body) });
@@ -1500,6 +1690,9 @@ function BetSlip({
       setReceipt(result);
       // The top bar's balance, now: the live stream that normally brings it may be reconnecting.
       if (typeof result.balance === "number") showBalance(result.balance);
+      showPending(null);
+      // Every placement says so, with a way to the open bets, whether or not the slip stays open to show the receipt.
+      const openBets = () => router.push("/dashboard/bet?tab=open");
       toast.success(
         result.bets.length === 1
           ? result.bets[0].kind === "ACCUMULATOR"
@@ -1510,6 +1703,7 @@ function BetSlip({
               ? t("Your bet builder is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
               : t("Your bet is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
           : t("Your {count} bets are on. {amount} was taken from your balance.", { count: result.bets.length, amount: formatMoney(result.total) }),
+        { title: t("Bets placed · tap to see your open bets"), onClick: openBets },
       );
       if (result.adjusted) toast.info(t("Placed at the latest price."));
       setTakeNewPrice(false);
@@ -1518,6 +1712,7 @@ function BetSlip({
       onMode("singles");
       onPlaced();
     } catch (err) {
+      showPending(null);
       const message = err instanceof Error ? err.message : t("Couldn't place your bets");
       const original = err instanceof ApiError ? err.original : message;
       // A big move keeps the slip and asks for the new price. A goal, a pause, or a closed match still stops it.
@@ -1598,21 +1793,22 @@ function BetSlip({
       ) : (
         <>
           <div className="bet-slip-body">
-          {items.length >= 2 ? (
-            <div className="bet-mode" role="group" aria-label={t("Bet type")}>
-              <button type="button" className={`bet-mode-option${mode === "singles" ? " is-active" : ""}`} aria-pressed={mode === "singles"} onClick={() => onMode("singles")}>
-                {t("Singles")}
+          {/* Always there, so the Player sees what they can build: the ones that need more picks (or a match that
+              hasn't started, for the bet builder) are greyed out, with what to do under them. */}
+          <div className="bet-mode" role="group" aria-label={t("Bet type")}>
+            <button type="button" className={`bet-mode-option${!combined && !system ? " is-active" : ""}`} aria-pressed={!combined && !system} onClick={() => onMode("singles")}>
+              {t("Singles")}
+            </button>
+            <button type="button" className={`bet-mode-option${combined ? " is-active" : ""}`} aria-pressed={combined} disabled={!canCombine} onClick={() => onMode("accumulator")}>
+              {oneMatch ? t("Bet builder") : t("Accumulator")}
+            </button>
+            {!oneMatch ? (
+              <button type="button" className={`bet-mode-option${system ? " is-active" : ""}`} aria-pressed={system} disabled={!systemChoice || systemOptions(items.length).length === 0} onClick={() => onMode("system")}>
+                {t("System")}
               </button>
-              <button type="button" className={`bet-mode-option${combined ? " is-active" : ""}`} aria-pressed={combined} onClick={() => onMode("accumulator")}>
-                {oneMatch ? t("Bet builder") : t("Accumulator")}
-              </button>
-              {systemOptions(items.length).length > 0 && !oneMatch ? (
-                <button type="button" className={`bet-mode-option${system ? " is-active" : ""}`} aria-pressed={system} disabled={!systemChoice} onClick={() => onMode("system")}>
-                  {t("System")}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+          </div>
+          {modeHint ? <p className="muted bet-mode-hint">{modeHint}</p> : null}
           {system ? (
             <label className="bet-system-pick">
               <span className="muted">{t("System")}</span>
@@ -1647,7 +1843,7 @@ function BetSlip({
             {items.map((item) => {
               const stake = stakeValue(item.stake);
               return (
-                <li key={item.selectionId} className={`bet-slip-item${item.closed ? " is-closed" : ""}`}>
+                <li key={item.selectionId} className={`bet-slip-item${item.closed ? " is-closed" : item.paused ? " is-paused" : ""}`}>
                   <div className="bet-slip-item-top">
                     <div className="bet-slip-item-name">
                       <strong>{pickLabel(item.name, i18n)}</strong>
@@ -1696,7 +1892,7 @@ function BetSlip({
                     )}
                     {combined || system ? null : (
                       <span className="bet-slip-return muted">
-                        {item.sp ? t("Paid at the starting price") : stake > 0 ? t("Returns {amount}", { amount: formatMoney(returns(stake, item.odds)) }) : ""}
+                        {item.closed || item.paused ? t("Not counted") : item.sp ? t("Paid at the starting price") : stake > 0 ? t("Returns {amount}", { amount: formatMoney(returns(stake, item.odds)) }) : ""}
                       </span>
                     )}
                   </div>
@@ -1734,6 +1930,22 @@ function BetSlip({
                   total: formatMoney(totalStake),
                 })}
               </p>
+              {systemLines > 0 && accaStakeValue > 0 ? (
+                <details className="bet-system-breakdown">
+                  <summary>{tn(systemLines, "Show the {count} bet", "Show the {count} bets", { count: systemLines })}</summary>
+                  <ul>
+                    {systemBreakdown(valid.map((item) => item.odds), systemSizes, accaStakeValue).map((line) => (
+                      <li key={line.picks.join("-")}>
+                        <span>{line.picks.map((i) => pickLabel(valid[i].name, i18n)).join(" + ")}</span>
+                        <span className="muted">
+                          {line.price.toFixed(2)} → {formatMoney(line.returns)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="muted">{t("Every bet's return is added up exactly, and only the total is rounded down to the cent: {total}.", { total: formatMoney(totalReturn) })}</p>
+                </details>
+              ) : null}
             </div>
           ) : null}
           {combined ? (
@@ -1798,10 +2010,28 @@ function BetSlip({
                 ) : null}
               </dl>
             </div>
+            {movedItems.length > 0 ? (
+              <div className="bet-slip-moved" role="status">
+                <strong>{tn(movedItems.length, "A price changed. Check it before you place:", "{count} prices changed. Check them before you place:")}</strong>
+                <ul>
+                  {movedItems.map((item) => (
+                    <li key={item.selectionId}>
+                      <span>{pickLabel(item.name, i18n)}</span>
+                      <span className={item.odds > item.previousOdds! ? "is-up" : "is-down"}>
+                        <s>{item.previousOdds!.toFixed(2)}</s> → <strong>{item.odds.toFixed(2)}</strong> {item.odds > item.previousOdds! ? "▲" : "▼"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {returnBefore !== null && Math.abs(returnBefore - totalReturn) >= 0.01 ? (
+                  <p>{t("If they win: {now} (was {before})", { now: formatMoney(totalReturn), before: formatMoney(returnBefore) })}</p>
+                ) : null}
+              </div>
+            ) : null}
             <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing} aria-disabled={Boolean(blocker)}>
               {placing
                 ? hasLive
-                  ? <LiveCountdown corners={items.some((item) => item.live && /corner/i.test(item.market))} wait={info?.liveWait} />
+                  ? <LiveCountdown deadline={deadline} />
                   : <LoadingSpinner label="Placing" size="small" />
                 : priceMoved
                   ? t("Place at the new price · {amount}", { amount: formatMoney(totalStake) })
@@ -1813,14 +2043,19 @@ function BetSlip({
                   ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
                   : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
             </button>
+            <label className="bet-price-setting">
+              <span className="muted">{t("Accept price changes")}</span>
+              <select value={priceChanges} onChange={(e) => setPriceChanges(e.target.value === "never" ? "never" : "higher")}>
+                <option value="higher">{t("Only higher odds")}</option>
+                <option value="never">{t("Never")}</option>
+              </select>
+            </label>
+            {hasLive ? <p className="muted bet-price-setting-note">{t("Live bets are only placed at the price on your slip.")}</p> : null}
             {info ? <SlipLimits info={info} staking={totalStake} /> : null}
             {hasLive ? (
               <p className="muted bet-slip-live-rule">
-                {t("Live: a bet placed after a goal or a red card that hadn't shown here yet, and that helped it, is void and the stake comes back, even after it has settled. Live bets usually take about {usual} seconds to confirm, at most {most} on a busy match; corners about {corners}, and they're capped for each match.", {
-                  usual: (info?.liveWait?.usual ?? 8) + 1,
-                  most: (info?.liveWait?.busy ?? 12) + (info?.liveWait?.check ?? 6),
-                  corners: (info?.liveWait?.corners ?? 20) + 1,
-                })}
+                {t("Live: a bet placed after a goal or a red card that hadn't shown here yet, and that helped it, is void and the stake comes back, even after it has settled. Live corners bets are capped for each match.")}{" "}
+                {t("This slip takes about {seconds} seconds to confirm.", { seconds: liveSeconds ?? (info?.liveWait?.usual ?? 8) + 1 })}
               </p>
             ) : null}
           </div>
@@ -1888,10 +2123,16 @@ function voidText(reason: string | null, ts: I18n["ts"], t: I18n["t"]) {
   return reason ? ` · ${t("Cancelled: {reason}", { reason: ts(reason) })}` : "";
 }
 
+/** Each tab's last list of bets this visit, shown at once when the tab opens again while it's fetched afresh. */
+const betsSeen = new Map<string, MyBets>();
+/** Bets on a page: a short first page shows sooner; "Show more" brings the next. */
+const BETS_PAGE = 20;
+
 function MyBetsList({ status, version }: { status: "open" | "settled"; version: number }) {
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
   const { t, tn } = useI18n();
-  const [data, setData] = useState<MyBets | null>(null);
+  const seenKey = `${userId ?? ""}:${status}`;
+  const [data, setData] = useState<MyBets | null>(() => betsSeen.get(seenKey) ?? null);
   const [more, setMore] = useState<Bet[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -1903,8 +2144,9 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
     (async () => {
       const token = await getToken();
       if (!token) return;
-      const next = await apiFetch<MyBets>(`/bets/mine?status=${status}`, token);
+      const next = await apiFetch<MyBets>(`/bets/mine?status=${status}&limit=${BETS_PAGE}`, token);
       if (cancelled) return;
+      betsSeen.set(seenKey, next);
       setData(next);
       setMore([]);
       setHasMore(next.hasMore);
@@ -1915,7 +2157,7 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
     return () => {
       cancelled = true;
     };
-  }, [getToken, status, version, toast, t]);
+  }, [getToken, status, version, toast, t, seenKey]);
 
   // While a match on an open bet is live, its score and match updates refresh every 20 seconds.
   const loaded = [...(data?.bets ?? []), ...more];
@@ -1925,7 +2167,8 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
       void (async () => {
         const token = await getToken();
         if (!token) return;
-        const next = await apiFetch<MyBets>(`/bets/mine?status=${status}`, token);
+        const next = await apiFetch<MyBets>(`/bets/mine?status=${status}&limit=${BETS_PAGE}`, token);
+        betsSeen.set(seenKey, next);
         setData(next);
         // Bets loaded with "Show more" get their fresh copy too, where the first page has one.
         const fresh = new Map(next.bets.map((bet) => [bet.id, bet]));
@@ -1944,7 +2187,7 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
     setLoadingMore(true);
     try {
       const before = status === "open" ? last.placedAt : last.settledAt ?? last.placedAt;
-      const next = await apiFetch<MyBets>(`/bets/mine?status=${status}&before=${encodeURIComponent(before)}`, token);
+      const next = await apiFetch<MyBets>(`/bets/mine?status=${status}&limit=${BETS_PAGE}&before=${encodeURIComponent(before)}`, token);
       setMore((list) => [...list, ...next.bets]);
       setHasMore(next.hasMore);
     } catch (err) {
@@ -1956,11 +2199,8 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
 
   if (!data) {
     if (failed) return null;
-    return (
-      <div className="loading-state">
-        <LoadingSpinner label="Loading your bets" />
-      </div>
-    );
+    // Rows shaped like bets while the first page loads.
+    return <ListSkeleton label="Loading your bets" groups={1} rows={4} />;
   }
   const bets = [...data.bets, ...more];
 

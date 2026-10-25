@@ -68,16 +68,21 @@ export function systemLines(picks: number, sizes: number[]): number[][] {
   return sizes.flatMap((size) => combinations(picks, size));
 }
 
-/** One line's return at these prices, stake included, rounded down to the cent like any accumulator. */
+/**
+ * One line's return at these prices, stake included, exactly: a system's
+ * lines are added up first and only the total is rounded down to the cent
+ * (roundDown), so eleven lines don't each lose a fraction of a cent of price.
+ */
 function lineReturn(stake: Prisma.Decimal, odds: Prisma.Decimal[]): Prisma.Decimal {
-  const price = odds.reduce((product, value) => product.mul(value), new Prisma.Decimal(1)).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
-  return stake.mul(price).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  return stake.mul(odds.reduce((product, value) => product.mul(value), new Prisma.Decimal(1)));
 }
+
+const roundDown = (amount: Prisma.Decimal) => amount.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
 
 /** The most a system can return, every pick winning, and its biggest line's price (for the accumulator cap). */
 export function systemMaxReturn(odds: Prisma.Decimal[], sizes: number[], lineStake: Prisma.Decimal): { payout: Prisma.Decimal; topOdds: Prisma.Decimal } {
   const lines = systemLines(odds.length, sizes);
-  const payout = lines.reduce((total, line) => total.add(lineReturn(lineStake, line.map((i) => odds[i]))), new Prisma.Decimal(0));
+  const payout = roundDown(lines.reduce((total, line) => total.add(lineReturn(lineStake, line.map((i) => odds[i]))), new Prisma.Decimal(0)));
   const top = lines.reduce((best, line) => {
     const price = line.reduce((product, i) => product.mul(odds[i]), new Prisma.Decimal(1));
     return price.greaterThan(best) ? price : best;
@@ -111,5 +116,6 @@ export function systemOutcome(
     won++;
     payout = payout.add(lineReturn(lineStake, line.map((i) => (legs[i].result === SelectionResult.VOID ? new Prisma.Decimal(1) : legs[i].odds))));
   }
+  payout = roundDown(payout);
   return { status: payout.greaterThan(0) ? "WON" : "LOST", payout, won, lines: lines.length };
 }

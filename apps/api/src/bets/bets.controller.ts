@@ -10,7 +10,7 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { Idempotent } from "../idempotency/idempotency.interceptor";
 import { clientIp } from "../security/client-ip";
-import { AdminBetsQueryDto, BuilderQuoteDto, LateRecheckDto, MyBetsQueryDto, PlaceBetsDto, ResultDto, SelectionResultDto, VoidDto } from "./bets.dto";
+import { AdminBetsQueryDto, BuilderQuoteDto, LateRecheckDto, LiveWaitDto, MyBetsQueryDto, PlaceBetsDto, ResultDto, SelectionResultDto, VoidDto } from "./bets.dto";
 import { BetsService } from "./bets.service";
 import { SettlementService } from "./settlement.service";
 
@@ -41,10 +41,18 @@ export class BetsController {
     return this.bets.quoteBuilder(actor, body.selectionIds);
   }
 
+  /** How long a slip with these picks would wait to be confirmed if placed now, for the slip's countdown. */
+  @Post("live-wait")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  liveWait(@CurrentActor() actor: Actor, @Body() body: LiveWaitDto) {
+    return this.bets.plannedWait(actor, body.selectionIds);
+  }
+
   @Get("mine")
   @Roles(Role.PLAYER)
   mine(@CurrentActor() actor: Actor, @Query() query: MyBetsQueryDto) {
-    return this.bets.mine(actor, query.status, query.before);
+    return this.bets.mine(actor, query.status, query.before, query.limit);
   }
 
   @Get("slip")

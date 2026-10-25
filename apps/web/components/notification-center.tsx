@@ -53,7 +53,7 @@ type BetNotice = { title: string; short: string; detail: string; amount: string;
 const WON_TITLE: Record<BetDetails["bet"], string> = { single: msg("You won {amount}"), accumulator: msg("Your accumulator won {amount}"), builder: msg("Your bet builder won {amount}"), system: msg("Your system bet paid {amount}") };
 const WON_SHORT: Record<BetDetails["bet"], string> = { single: msg("You won"), accumulator: msg("Your accumulator won"), builder: msg("Your bet builder won"), system: msg("Your system bet paid out") };
 const LOST_TITLE: Record<BetDetails["bet"], string> = { single: msg("Bet lost"), accumulator: msg("Accumulator lost"), builder: msg("Bet builder lost"), system: msg("System bet lost") };
-const VOID_TITLE: Record<BetDetails["bet"], string> = { single: msg("Bet refunded"), accumulator: msg("Accumulator refunded"), builder: msg("Bet builder refunded"), system: msg("System bet refunded") };
+const VOID_TITLE: Record<BetDetails["bet"], string> = { single: msg("Bet voided"), accumulator: msg("Accumulator voided"), builder: msg("Bet builder voided"), system: msg("System bet voided") };
 
 /**
  * A settled bet said the way a Player reads it: who won or lost, which pick
@@ -157,7 +157,7 @@ export function NotificationCenter() {
     const parts = [
       won.length > 0 ? `${tn(won.length, "{count} bet won", "{count} bets won")} (+${formatMoney(winnings)})` : null,
       lost.length > 0 ? tn(lost.length, "{count} bet lost", "{count} bets lost") : null,
-      missed.length > won.length + lost.length ? tn(missed.length - won.length - lost.length, "{count} bet refunded", "{count} bets refunded") : null,
+      missed.length > won.length + lost.length ? tn(missed.length - won.length - lost.length, "{count} bet voided", "{count} bets voided") : null,
     ].filter(Boolean);
     const open = () => router.push("/dashboard/bet?tab=settled");
     if (won.length > 0) toaster.success(parts.join(" · "), { title: t("While you were away"), onClick: open, celebrate: true, duration: 12_000 });

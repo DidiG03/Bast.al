@@ -52,22 +52,50 @@ function combinations(picks: number, size: number): number[][] {
   return out;
 }
 
-/** The most a system returns, every pick winning: each line's price rounded down to the cent, times its stake, rounded down, like the server. In cents, to stay exact. */
+/** 100 to the power `n`, as a bigint. */
+function hundredsTo(n: number): bigint {
+  let result = BigInt(1);
+  for (let i = 0; i < n; i++) result *= BigInt(100);
+  return result;
+}
+
+/** How many lines a system with these line sizes has from this many picks. */
+export function systemLineCount(picks: number, sizes: number[]): number {
+  return sizes.reduce((sum, size) => sum + (size <= picks ? choose(picks, size) : 0), 0);
+}
+
+/**
+ * Each line of a system, every pick winning: which picks it joins, its price
+ * and what it returns at `lineStake`, exactly (not rounded), like the server.
+ */
+export function systemBreakdown(odds: number[], sizes: number[], lineStake: number): Array<{ picks: number[]; price: number; returns: number }> {
+  return sizes.flatMap((size) =>
+    combinations(odds.length, size).map((line) => {
+      const price = line.reduce((product, i) => product * odds[i], 1);
+      return { picks: line, price, returns: price * lineStake };
+    }),
+  );
+}
+
+/**
+ * The most a system returns, every pick winning: every line's stake times its
+ * price, added up exactly, and only the total rounded down to the cent, like
+ * the server. Exact, in hundredths of prices and cents.
+ */
 export function systemMaxReturn(odds: number[], sizes: number[], lineStake: number): number {
-  const stakeCents = Math.round(lineStake * 100);
-  let total = 0;
+  const stakeCents = BigInt(Math.round(lineStake * 100));
+  // Every line over the same denominator (100 per pick in the biggest line), so they add up exactly.
+  const biggest = Math.max(0, ...sizes.filter((size) => size <= odds.length));
+  const denominator = hundredsTo(biggest);
+  let total = BigInt(0);
   for (const size of sizes) {
+    if (size > odds.length) continue;
     for (const line of combinations(odds.length, size)) {
-      // Prices in hundredths, multiplied exactly, then rounded down to the cent.
       let product = BigInt(1);
-      let scale = BigInt(1);
-      for (const i of line) {
-        product *= BigInt(Math.round(odds[i] * 100));
-        scale *= BigInt(100);
-      }
-      const price = Number((product * BigInt(100)) / scale); // hundredths
-      total += Math.floor((stakeCents * price) / 100);
+      for (const i of line) product *= BigInt(Math.round(odds[i] * 100));
+      // Lifted to the common denominator: a line of `size` picks is over 100^size.
+      total += stakeCents * product * hundredsTo(biggest - size);
     }
   }
-  return total / 100;
+  return Number(total / denominator) / 100;
 }

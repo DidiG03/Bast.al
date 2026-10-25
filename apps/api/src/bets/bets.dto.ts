@@ -106,6 +106,15 @@ export class BuilderQuoteDto {
   selectionIds!: string[];
 }
 
+/** The picks on a slip, to say how long it would wait as a live slip (BetsService.plannedWait). */
+export class LiveWaitDto {
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_SLIP)
+  selectionIds!: string[];
+}
+
 export class PlaceBetsDto {
   /** Singles. */
   @IsOptional()
@@ -135,6 +144,16 @@ export class PlaceBetsDto {
   @IsOptional()
   @IsBoolean()
   acceptOddsChanges?: boolean;
+
+  /**
+   * The Player's choice for a price that moved before the slip went in (before
+   * kick-off only; a live pick is only ever taken at the price sent): "higher"
+   * takes a better price on its own, "never" refuses any move. When set,
+   * acceptOddsChanges is ignored: the prices sent are the ones the Player saw.
+   */
+  @IsOptional()
+  @IsIn(["never", "higher"])
+  priceChanges?: "never" | "higher";
 }
 
 export class MyBetsQueryDto {
@@ -146,6 +165,14 @@ export class MyBetsQueryDto {
   @IsOptional()
   @IsISO8601()
   before?: string;
+
+  /** How many bets a page has (50 at most, the default). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
 }
 
 export class AdminBetsQueryDto {

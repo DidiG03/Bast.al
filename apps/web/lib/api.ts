@@ -1,3 +1,4 @@
+import { noteServerTime } from "./clock";
 import { currentBrowserLang, msg, translateServer } from "./i18n/core";
 
 function apiBase(): string {
@@ -381,6 +382,7 @@ export async function apiFetch<T>(
     cache: "no-store",
   });
 
+  if (typeof window !== "undefined") noteServerTime(res.headers.get("date"));
   if (res.status === 304 && cached) return cached.body as T;
 
   // A sign-in token that ran out on the way (the page was open a while, or a live bet waited): once more with a fresh one.
@@ -515,6 +517,8 @@ export type SelectionQuote = {
   live: boolean;
   /** Before kick-off or in play; false once the match is over. */
   open: boolean;
+  /** Over for good: the match finished or was called off, the outcome settled, or the pick withdrawn. Taken off the slip. */
+  final?: boolean;
   /** Greyhounds: paid at the starting price; `price` is 0. */
   sp?: boolean;
 };
@@ -646,6 +650,9 @@ export type SlipInfo = {
   /** How long a live bet takes to confirm, in seconds: the usual wait, on a busy match, with a corners pick, and the checks with the feed after it. */
   liveWait?: { usual: number; busy: number; corners: number; check: number };
 };
+
+/** How long a live slip would wait to be confirmed if placed now (POST /bets/live-wait): the wait, and the most its checks may take. */
+export type LiveWait = { live: boolean; waitMs: number; checkMs: number; longerBecause: string | null };
 
 /** `balance`: the Player's balance after the slip. */
 export type PlaceBetsResponse = { bets: Bet[]; total: number; adjusted?: boolean; balance?: number };

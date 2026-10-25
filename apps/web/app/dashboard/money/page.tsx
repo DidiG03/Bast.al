@@ -146,7 +146,7 @@ export default function MoneyPage() {
                       </span>
                       <span className="money-row-text">
                         <strong>{title}</strong>
-                        <span className="muted">{ts(entry.reason)}</span>
+                        <span className="muted">{ts(ledgerText(entry.reason))}</span>
                         {pending || rejected ? <span className="muted">{pending ? t("Waiting for approval") : t("Rejected, no money moved")}</span> : null}
                       </span>
                       <strong className={`money-amount${tone}`}>
@@ -171,6 +171,12 @@ export default function MoneyPage() {
   );
 }
 
+/** A ledger line in today's words: voids recorded before they were called that said "Bet refunded: …". */
+function ledgerText(reason: string): string {
+  const old = /^Bet refunded: (.*)$/.exec(reason);
+  return old ? `Bet voided: ${old[1]}. Stake returned` : reason;
+}
+
 function describe(entry: BalanceEntry, t: (text: string, vars?: Record<string, string | number>) => string): { icon: string; title: string } {
   const who = entry.counterparty ?? "";
   switch (entry.type) {
@@ -181,6 +187,9 @@ function describe(entry: BalanceEntry, t: (text: string, vars?: Record<string, s
     case "BET_STAKE":
       return entry.amount >= 0 ? { icon: "↺", title: t("Bet money returned") } : { icon: "🎟", title: t("Bet placed") };
     case "BET_SETTLEMENT":
+      // A void (refunded or winnings taken back) and a void undone have their own names; older voids said "refunded".
+      if (/^Bet (voided|refunded):/.test(entry.reason)) return { icon: "⊘", title: t("Bet voided") };
+      if (/^Bet reinstated:/.test(entry.reason)) return { icon: "↺", title: t("Bet reinstated") };
       return entry.amount >= 0 ? { icon: "🏆", title: t("Money from a bet") } : { icon: "↺", title: t("Bet corrected") };
     case "CASINO":
       return { icon: "🎰", title: t("Casino") };

@@ -240,7 +240,7 @@ test("bets on a match not played within 48 hours of kick-off are refunded", asyn
   const accumulator = await reload(acca);
   assert.deepEqual([accumulator.status, Number(accumulator.payout)], ["WON", 20], "the postponed pick drops out and the rest still counts");
   assert.equal(Number((await find(cara)).balance), 30 + 5 + 20);
-  assert.equal(sent.find((s) => s.userId === cara.id && s.title === "Bet voided")?.message, "Laçi v Bylis: your bet was voided (Not played within 48 hours of kick-off). 30.00 ALL went back to your balance.");
+  assert.equal(sent.find((s) => s.userId === cara.id && s.title === "Bet voided")?.message, "Laçi v Bylis: bet voided (Not played within 48 hours of kick-off). Your stake of 30.00 ALL went back to your balance.");
 });
 
 test("a match moved to a later date refunds only the bets placed for the old date", async () => {

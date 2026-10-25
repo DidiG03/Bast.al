@@ -351,7 +351,7 @@ test("the sweep voids live bets paid before the check could see them, takes the 
   assert.equal(await balance(), paid - Math.round(100 * (Number(late.odds) - 1) * 100) / 100);
   const stands = await reload(early.id);
   assert.equal(stands.status, "WON");
-  assert.equal(stands.live.late.version, 3, "decided under the rule in force, so the sweep leaves it alone from now on");
+  assert.equal(stands.live.late.version, 4, "decided under the rule in force, so the sweep leaves it alone from now on");
   // Nothing left for the next sweep.
   settlement.sweptAt = 0;
   const again = await settlement.recheckLate({ since: new Date(Date.now() - 86_400_000), unchecked: true });
@@ -392,6 +392,35 @@ test("placing a bet answers with the balance after it, for the top bar", async (
   const match = await liveMatch("Balance after");
   const placed = await place(match);
   assert.equal(placed.balance, await balance());
+});
+
+test("bets the late check voided under an older rule, that the rule in force lets stand, are put back and settled on the result: a win paid, a loss lost", async () => {
+  const match = await liveMatch("Put back");
+  const placed = await place(match);
+  const won = await reload(placed.bets[0].id);
+  const team = { ownerId: won.ownerId, managerId: won.managerId, ownerRate: won.ownerRate, managerRate: won.managerRate };
+  const away = match.markets[0].selections.find((s) => s.key === "away");
+  const lost = await prisma.bet.create({ data: { playerId: player.id, selectionId: away.id, stake: 100, odds: 4, description: "away", placedAt: won.placedAt, live: won.live, ...team } });
+  // The match ends 1–0 to the home side; the goal was in the 31st minute, the bets' minute.
+  await finish(match, 31);
+  // Voided under the old rule (version 3, which didn't ask whether the goal helped): stakes refunded.
+  for (const bet of [won, lost]) {
+    await prisma.bet.update({ where: { id: bet.id }, data: { status: "VOID", payout: bet.stake, voidReason: "placed after a goal that hadn't shown yet", settledAt: new Date(), live: { ...won.live, late: { late: true, version: 3, when: "settlement", reason: "placed after a goal that hadn't shown yet", detail: "x", checkedAt: new Date().toISOString() } } } });
+  }
+  // The away bet: the home goal didn't help it (it got a worse price than it should have). The home bet: it did.
+  const before = await balance();
+  settlement.sweptAt = 0;
+  const done = await settlement.recheckLate({ since: new Date(Date.now() - 86_400_000), unchecked: true });
+  assert.equal(done.reinstated, 1);
+  const keptVoid = await reload(won.id);
+  assert.equal(keptVoid.status, "VOID", "the home goal helped the home bet: still void");
+  assert.equal(keptVoid.live.late.version, 4);
+  const back = await reload(lost.id);
+  assert.equal(back.status, "LOST", "put back and settled: the away side lost");
+  assert.equal(back.voidReason, null);
+  assert.equal(await balance(), before - 100, "the refunded stake went back off the balance");
+  const ledger = await prisma.balanceTransaction.findFirst({ where: { betId: lost.id, reason: { startsWith: "Bet reinstated" } } });
+  assert.ok(ledger);
 });
 
 test("teardown", async () => {

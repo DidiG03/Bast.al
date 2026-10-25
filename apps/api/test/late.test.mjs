@@ -263,7 +263,7 @@ test("a finished match that scored after the bet's score, with no timeline and n
   // No goal after its score: nothing to time, it stands.
   assert.equal(lateDecision({ state: state(1, 0, 70), placedAt: secondHalf(25), marketKey: "match_winner", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, undefined);
   // Every decision carries the rule's version, so bets decided under an older one are checked again.
-  assert.equal(decision.version, 3);
+  assert.equal(decision.version, 4);
 });
 
 test("each goal's delay: from the middle of its minute, and the least it can have been (from the end of its minute)", () => {
@@ -288,4 +288,75 @@ test("the feed's delay by competition goes by the least each goal's delay can ha
   assert.deepEqual(stats.byCompetition["api-football · Championship"], { goals: 5, p: 45, median: 45 });
   assert.equal(stats.byProvider["api-football"].goals, 25);
   assert.equal(lagStats([]).all, null);
+});
+
+const { goalsHelp, redHelps, cardHelps } = require("../dist/bets/late.js");
+
+test("a goal only voids a bet it helped: the scoring side's win, Over, BTTS yes when it was the side yet to score; never the other side's win, Under, or a draw it broke", () => {
+  const s = (home, away) => ({ home, away });
+  assert.equal(goalsHelp("match_winner", "home", s(0, 0), ["home"]), true);
+  assert.equal(goalsHelp("match_winner", "away", s(0, 0), ["home"]), false);
+  assert.equal(goalsHelp("match_winner", "draw", s(0, 0), ["home"]), false, "it broke the draw");
+  assert.equal(goalsHelp("match_winner", "draw", s(1, 0), ["away"]), true, "it levelled the score");
+  assert.equal(goalsHelp("double_chance", "home_draw", s(0, 1), ["home"]), true);
+  assert.equal(goalsHelp("double_chance", "draw_away", s(0, 1), ["home"]), false);
+  assert.equal(goalsHelp("double_chance", "home_away", s(0, 0), ["away"]), true);
+  assert.equal(goalsHelp("draw_no_bet", "away", s(0, 0), ["home"]), false);
+  assert.equal(goalsHelp("ah_m1_5", "home", s(0, 0), ["home"]), true);
+  assert.equal(goalsHelp("goals_2_5", "over", s(1, 0), ["away"]), true);
+  assert.equal(goalsHelp("goals_2_5", "under", s(1, 0), ["away"]), false);
+  assert.equal(goalsHelp("home_goals_1_5", "over", s(1, 0), ["away"]), false, "the other team's goal");
+  assert.equal(goalsHelp("btts", "yes", s(1, 0), ["away"]), true);
+  assert.equal(goalsHelp("btts", "yes", s(1, 0), ["home"]), false, "the side that had already scored");
+  assert.equal(goalsHelp("btts", "no", s(1, 0), ["away"]), false);
+  assert.equal(goalsHelp("clean_sheet_home", "no", s(0, 0), ["away"]), true);
+  assert.equal(goalsHelp("odd_even", "odd", s(1, 1), ["home"]), true);
+  assert.equal(goalsHelp("odd_even", "even", s(1, 1), ["home"]), false);
+  // Markets it can't tell for count as helped; so does a bet without its pick recorded.
+  assert.equal(goalsHelp("correct_score", "2-1", s(1, 1), ["home"]), true);
+  assert.equal(goalsHelp("match_winner", undefined, s(0, 0), ["away"]), true);
+});
+
+test("Kristiansund: a Draw bet placed in the minute of a goal that broke the draw isn't voided; a bet on the side that scored is", () => {
+  // 0–0, Draw at 4.00, placed in the 67th minute; the home goal went in that same minute.
+  const line = { first: FIRST, second: SECOND, goals: [goal(67, "home")], cards: [] };
+  const placed = secondHalf(21, 24);
+  const draw = lateDecision({ state: state(0, 0, 66), placedAt: placed, marketKey: "match_winner", selectionKey: "draw", timeline: line, seen: [] });
+  assert.equal(draw.late, false);
+  assert.match(draw.detail, /not voided because the goal\(s\) it hadn't shown .* didn't help match_winner draw/);
+  assert.equal(lateDecision({ state: state(0, 0, 66), placedAt: placed, marketKey: "match_winner", selectionKey: "home", timeline: line, seen: [] }).late, true);
+  assert.equal(lateDecision({ state: state(0, 0, 66), placedAt: placed, marketKey: "goals_2_5", selectionKey: "under", timeline: line, seen: [] }).late, false);
+});
+
+test("the bet's own match clock comes before the feed's kick-off times: a bet a minute before the goal stands even when the feed's kick-off is a minute early (Como)", () => {
+  // The feed says the second half kicked off a minute earlier than it did, so by it the 68th minute began at 21:00
+  // into the half (really 22:00). The bet was confirmed at 21:20 with the feed's clock at 66:20.
+  const earlyKickOff = { first: FIRST, second: SECOND - 60, goals: [goal(68, "home")], cards: [] };
+  const audit = { clock: "66:20", feedAtConfirm: new Date((SECOND + 21 * 60 + 20) * 1000).toISOString() };
+  const placed = secondHalf(21, 20);
+  assert.equal(lateDecision({ state: state(0, 0, 66), placedAt: placed, marketKey: "match_winner", selectionKey: "home", timeline: earlyKickOff, seen: [] }).late, true, "by the feed's kick-off alone, it looks late");
+  const clocked = lateDecision({ state: { ...state(0, 0, 66), audit }, placedAt: placed, marketKey: "match_winner", selectionKey: "home", timeline: earlyKickOff, seen: [] });
+  assert.equal(clocked.late, false);
+  assert.match(clocked.detail, /by the bet's clock/);
+});
+
+test("a red card only voids bets it helped (the other side's), a card only a cards Over; a late goal nothing can time leaves a bet it couldn't have helped alone", () => {
+  assert.equal(redHelps("match_winner", "home", "away"), true);
+  assert.equal(redHelps("match_winner", "away", "away"), false);
+  assert.equal(redHelps("match_winner", "draw", "away"), true, "can't be told: void");
+  assert.equal(redHelps("double_chance", "home_draw", "away"), true);
+  assert.equal(redHelps("double_chance", "draw_away", "away"), false);
+  assert.equal(cardHelps("cards_4_5", "over", "home"), true);
+  assert.equal(cardHelps("cards_4_5", "under", "home"), false);
+  assert.equal(cardHelps("home_cards_1_5", "over", "away"), false);
+  const cards = [goal(10, "home"), red(28, "away")];
+  // A red for the away side before the bet: a bet on the away side is kept, one on the home side void.
+  assert.equal(lateDecision({ state: state(0, 0, 29, 1, 0), placedAt: firstHalf(29, 30), marketKey: "match_winner", selectionKey: "away", timeline: timeline([], cards) }).late, false);
+  assert.equal(lateDecision({ state: state(0, 0, 29, 1, 0), placedAt: firstHalf(29, 30), marketKey: "match_winner", selectionKey: "home", timeline: timeline([], cards) }).late, true);
+  // Cards: the red is a card; it voids Over, not Under.
+  assert.equal(lateDecision({ state: state(0, 0, 29, 1, 0), placedAt: firstHalf(29, 30), marketKey: "cards_1_5", selectionKey: "over", timeline: timeline([], cards) }).late, true);
+  assert.equal(lateDecision({ state: state(0, 0, 29, 1, 0), placedAt: firstHalf(29, 30), marketKey: "cards_1_5", selectionKey: "under", timeline: timeline([], cards) }).late, false);
+  // No timeline, never seen, the match ended 1–0 from 0–0: a Draw bet couldn't have gained from that goal, an Over bet could.
+  assert.equal(lateDecision({ state: state(0, 0, 30), placedAt: firstHalf(30), marketKey: "match_winner", selectionKey: "draw", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, undefined);
+  assert.equal(lateDecision({ state: state(0, 0, 30), placedAt: firstHalf(30), marketKey: "goals_0_5", selectionKey: "over", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, true);
 });

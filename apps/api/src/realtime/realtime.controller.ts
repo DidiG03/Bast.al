@@ -10,10 +10,14 @@ import { RealtimeService } from "./realtime.service";
 const HEARTBEAT_MS = 25_000;
 /**
  * The session is only checked when the stream opens, so each stream ends after
- * a few minutes and the browser reconnects with a fresh token. That is how a
- * suspension or sign-out also cuts off live updates.
+ * a while and the browser reconnects with a fresh token. That is how a
+ * suspension or sign-out also cuts off live updates. 50 seconds by default
+ * (REALTIME_STREAM_MS): the stream passes through the web app's server
+ * function, which its host cuts off after a time limit (60 s is allowed on
+ * every plan); a stream the host cuts shows as an error in the browser and
+ * loses the updates until it reconnects, one this side ends cleanly doesn't.
  */
-const MAX_STREAM_MS = 5 * 60_000;
+const MAX_STREAM_MS = Number(process.env.REALTIME_STREAM_MS) || 50_000;
 
 @ApiTags("realtime")
 @ApiBearerAuth()

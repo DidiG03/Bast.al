@@ -9,7 +9,10 @@ const d = (v) => new Prisma.Decimal(v);
 
 test("ledger entries say what happened to the bet", () => {
   assert.equal(ledgerReason("OPEN", "WON", d("20"), "Spain v Croatia · Match winner: Spain", null), "Bet won: Spain v Croatia · Match winner: Spain");
-  assert.equal(ledgerReason("OPEN", "VOID", d("5"), "A v B · Correct score: 2–0", "Match abandoned"), "Bet refunded: A v B · Correct score: 2–0 (Match abandoned)");
+  assert.equal(ledgerReason("OPEN", "VOID", d("5"), "A v B · Correct score: 2–0", "Match abandoned"), "Bet voided: A v B · Correct score: 2–0 (Match abandoned). Stake returned");
+  // A won bet voided keeps its stake; its winnings go back.
+  assert.equal(ledgerReason("WON", "VOID", d("-53"), "Como v Sassuolo · Match winner: Como", "placed after a goal that hadn't shown yet"), "Bet voided: Como v Sassuolo · Match winner: Como (placed after a goal that hadn't shown yet). Stake returned and 53.00 ALL winnings taken back");
+  assert.equal(ledgerReason("VOID", "OPEN", d("-100"), "A v B", null, true), "Bet reinstated: A v B (the late check no longer voids it)");
   assert.equal(ledgerReason("WON", "LOST", d("-20"), "A v B", null), "Bet corrected, payout taken back: A v B");
   assert.equal(ledgerReason("LOST", "WON", d("20"), "A v B", null), "Bet corrected: A v B");
   assert.equal(ledgerReason("WON", "OPEN", d("-35"), null, null), "Bet corrected, payout taken back: bet");

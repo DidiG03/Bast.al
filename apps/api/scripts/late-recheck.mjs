@@ -19,7 +19,7 @@ const require = createRequire(import.meta.url);
 require("reflect-metadata");
 const dist = new URL("../dist/", import.meta.url).pathname;
 const { Prisma, PrismaClient } = require("@prisma/client");
-const { lateDecision, liveStateOf, timelineOf, minuteStart, kickOffFromClock, LATE_RULE_VERSION } = require(`${dist}bets/late.js`);
+const { lateDecision, liveStateOf, timelineOf, minuteStart, kickOffFromClock, LATE_REASONS, LATE_RULE_VERSION } = require(`${dist}bets/late.js`);
 const { SettlementService } = require(`${dist}bets/settlement.service.js`);
 const { OddsSyncService } = require(`${dist}odds/odds-sync.service.js`);
 const { AuditService } = require(`${dist}audit/audit.service.js`);
@@ -52,8 +52,8 @@ async function main() {
     orderBy: { placedAt: "asc" },
     select: {
       id: true, kind: true, stake: true, odds: true, payout: true, status: true, voidReason: true, placedAt: true, settledAt: true, description: true, live: true,
-      selection: { select: { name: true, market: { select: { key: true, name: true, eventId: true } } } },
-      legs: { where: onLive, select: { id: true, result: true, voidReason: true, live: true, selection: { select: { name: true, market: { select: { key: true, name: true, eventId: true } } } } } },
+      selection: { select: { key: true, name: true, market: { select: { key: true, name: true, eventId: true } } } },
+      legs: { where: onLive, select: { id: true, result: true, voidReason: true, live: true, selection: { select: { key: true, name: true, market: { select: { key: true, name: true, eventId: true } } } } } },
     },
   });
   // Each live pick: a single, or an accumulator's live leg.
@@ -81,6 +81,8 @@ async function main() {
 
   console.log(`Live bets by ${player.username} placed since ${iso(since)}: ${picks.length}. Late rule version ${LATE_RULE_VERSION}.\n`);
   const plan = [];
+  /** Bets the late check voided under an older rule that the rule in force lets stand. */
+  const reinstate = [];
   for (const { bet, legId, live, pick, outcome, voidReason } of picks) {
     const event = events.get(pick.market.eventId);
     const state = liveStateOf(live);
@@ -104,23 +106,28 @@ async function main() {
     for (const row of event.goalsSeen) console.log(`     site saw ${row.homeScore}–${row.awayScore} at ${iso(row.seenAt)} (${row.source}${row.lagMs !== null ? `, about ${Math.round(row.lagMs / 1000)} s after it went in, at least ${Math.round(row.lagMinMs / 1000)} s` : ""})`);
     if (event.goalsSeen.length === 0) console.log("     site saw no goal on this match");
     const before = live?.late;
-    console.log(`   decided before: ${before ? `${before.late ? "void" : before.undecided ? "can't tell" : "stands"} (${before.when}, ${iso(before.checkedAt)}, rule ${before.version ?? 2}): ${before.reason ?? before.detail}` : "never: the late check didn't run on it (it settled before the check could, or under an older version)"}`);
+    console.log(`   decided before: ${before ? `${before.late ? "VOID" : before.undecided ? "can't tell" : "stands"} (${before.when}, ${iso(before.checkedAt)}, rule ${before.version ?? 2})` : "never: the late check didn't run on it (it settled before the check could, or under an older version)"}`);
+    if (before) console.log(`     why: ${before.late ? `${before.reason}: ` : ""}${before.detail}`);
     if (!state) {
       console.log("   now: can't be checked, no score was recorded when it was placed\n");
       continue;
     }
-    let decision = lateDecision({ state, placedAt: bet.placedAt, marketKey: pick.market.key, timeline, seen, result: event.status === "COMPLETED" ? result : null });
+    let decision = lateDecision({ state, placedAt: bet.placedAt, marketKey: pick.market.key, selectionKey: pick.key, timeline, seen, result: event.status === "COMPLETED" ? result : null });
     if (decision.undecided && event.status === "COMPLETED") decision = { ...decision, late: true };
     const settled = outcome === "WON" || outcome === "LOST";
+    const lateVoid = outcome === "VOID" && LATE_REASONS.includes(voidReason);
     const change = decision.late && settled && !legId ? Number(bet.stake) - Number(bet.payout) : 0;
-    console.log(`   rule now: ${decision.late ? `VOID, ${decision.reason}` : decision.undecided ? "can't tell yet (waits for the timeline)" : "stands"}: ${decision.detail}`);
+    console.log(`   rule now (${pick.market.key} ${pick.key}): ${decision.late ? `VOID, ${decision.reason}` : decision.undecided ? "can't tell yet (waits for the timeline)" : "stands"}: ${decision.detail}`);
     if (decision.late && settled) console.log(`   → ${apply ? "voiding" : "would void"}${legId ? " this pick (the accumulator is worked out again)" : `, balance ${change >= 0 ? "+" : ""}${money(change)}`}`);
     else if (decision.late && outcome === "OPEN") console.log("   → open: settlement voids it before paying");
+    else if (!decision.late && !decision.undecided && lateVoid) console.log(`   → voided by an older rule, stands now: ${apply ? "putting it back" : "would be put back"} and settled on the result`);
     console.log("");
     if (decision.late && settled) plan.push({ bet: bet.id, change });
+    if (!decision.late && !decision.undecided && lateVoid) reinstate.push(bet.id);
   }
   const back = plan.reduce((sum, row) => sum + row.change, 0);
   console.log(`${plan.length} settled live bet(s) the rule now voids; balance change ${back >= 0 ? "+" : ""}${money(back)} for ${player.username} (singles).`);
+  console.log(`${reinstate.length} bet(s) voided under an older rule that the rule now lets stand: ${reinstate.join(", ") || "none"}.`);
 
   if (!apply) {
     console.log("Nothing changed: run again with --apply to void them.");
@@ -138,7 +145,7 @@ async function main() {
   const settlement = new SettlementService(prisma, realtime, notifications, users, audit);
   const admin = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" }, select: { id: true } });
   const done = await settlement.recheckLate({ playerId: player.id, since, actorId: admin?.id ?? null });
-  console.log(`Applied: ${done.checked} settled live bet(s) checked, ${done.voided} voided.`);
+  console.log(`Applied: ${done.checked} live bet(s) checked, ${done.voided} voided, ${done.reinstated} put back.`);
 }
 
 main()

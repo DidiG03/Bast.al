@@ -36,6 +36,8 @@ type BetDetails = {
   market?: string | null;
   odds?: number | null;
   picks?: number | null;
+  /** Why a voided bet was voided (e.g. "placed after a goal that hadn't shown yet"). */
+  reason?: string | null;
 };
 
 /** A settled bet's details, or null for any other notification (and for those sent before the details were). */
@@ -76,8 +78,11 @@ function betNotice(details: BetDetails, i18n: Pick<I18n, "t" | "tn" | "ts">): Be
     const title = t(LOST_TITLE[details.bet]);
     return { title, short: title, detail, amount: details.stake !== null ? `−${formatMoney(details.stake)}` : "", tone: "lost" };
   }
-  const title = t(VOID_TITLE[details.bet]);
-  return { title, short: title, detail, amount: `+${formatMoney(details.amount)}`, tone: "void" };
+  // A late void says why, and whether it gave the stake back or took winnings back (a won bet keeps only its stake).
+  const title = details.reason ? t("Bet voided: {reason}", { reason: ts(details.reason) }) : t(VOID_TITLE[details.bet]);
+  const money = details.amount < 0 ? t("Stake returned and {amount} winnings taken back", { amount: formatMoney(-details.amount) }) : t("Stake returned");
+  const amount = details.amount < 0 ? `−${formatMoney(-details.amount)}` : `+${formatMoney(details.amount)}`;
+  return { title, short: title, detail: [detail, money].filter(Boolean).join(" · "), amount, tone: "void" };
 }
 
 /** Where this device remembers the newest bet result it has already shown, so a result pops up once. */

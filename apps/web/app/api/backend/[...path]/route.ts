@@ -7,7 +7,9 @@ import { signedClientHeaders } from "../../../../lib/client-signature";
 
 const UPSTREAM = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 /** The longest the API gets to answer. A live bet takes under 40 seconds at most; past this something is stuck. */
-const UPSTREAM_TIMEOUT_MS = 60_000;
+const UPSTREAM_TIMEOUT_MS = 55_000;
+/** How long the host may run this function: a live bet and a live-updates stream (which the API ends after 50 s) both fit. */
+export const maxDuration = 60;
 
 /**
  * Server-side BFF proxy: attaches anti-replay HMAC so the browser never sees

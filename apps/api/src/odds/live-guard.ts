@@ -12,8 +12,8 @@ const ms = (name: string, fallback: number) => {
 
 /** After a goal (or a goal taken back by VAR): the prices need a while to settle. The longest it pauses; see goalPauseOver for reopening sooner. */
 export const GOAL_COOLDOWN_MS = ms("LIVE_GOAL_COOLDOWN_MS", 90_000);
-/** The least a goal pauses live betting, however quickly the prices catch up. */
-export const GOAL_MIN_PAUSE_MS = ms("LIVE_GOAL_MIN_PAUSE_MS", 30_000);
+/** The least a goal (a red card, a VAR check) pauses the markets it changes, however quickly the prices catch up. */
+export const GOAL_MIN_PAUSE_MS = ms("LIVE_GOAL_MIN_PAUSE_MS", 15_000);
 /** After a big jump in the main prices, which usually means a red card or a penalty. */
 export const SWING_COOLDOWN_MS = ms("LIVE_SWING_COOLDOWN_MS", 30_000);
 /** After the bookmaker reopens a match it had blocked. */
@@ -28,14 +28,22 @@ export const SWING_POINTS = Number(process.env.LIVE_SWING_POINTS) > 0 ? Number(p
 /** No live bets from this minute on: the last minutes are when a delayed feed hurts most. */
 export const LIVE_CUTOFF_MINUTE = ms("LIVE_CUTOFF_MINUTE", 89);
 
-/** Why a live match isn't taking bets right now, for the Player. */
-export type LivePause = "goal" | "swing" | "reopen" | "late" | "feed";
 /**
- * Pauses kept on a match (Event.liveCooldownReason): the ones the Player
- * sees, plus a red card, a VAR check or a penalty in the feed's timeline,
- * which pause the whole match like a goal and show as a jump in the prices.
+ * Why a whole live match isn't taking bets right now, for the Player: the
+ * last minutes, the feed (the bookmaker blocking it, prices that stopped, a
+ * goal that reached the site too late), or a competition whose feed is too
+ * slow for live betting. A goal or a card pauses single markets instead
+ * (Market.livePauseReason).
  */
-export type CooldownReason = LivePause | "red" | "var";
+export type LivePause = "late" | "feed" | "competition";
+/**
+ * The latest pause on a match (Event.liveCooldownReason, until its end):
+ * a goal, a jump in the prices, the bookmaker reopening it, or a red card, a
+ * VAR check or a penalty in the feed's timeline. The pauses themselves are
+ * on the markets each changes (eventPause); the match keeps the latest to
+ * make a live slip wait longer after it and for the record.
+ */
+export type CooldownReason = MarketPauseReason;
 /** Pauses for something that happened in the match: they last until the prices are made again after it (eventPauseOver). */
 export const EVENT_PAUSES: ReadonlySet<string> = new Set(["goal", "red", "var"]);
 
@@ -50,7 +58,7 @@ export function scoreChanged(before: LiveReading, after: LiveReading): boolean {
  * The pause a new reading of a live match calls for, if any. `before` is what
  * we had saved; `swing` says the match-result prices jumped.
  */
-export function cooldownFor(before: LiveReading, after: LiveReading, swing: boolean, now: Date = new Date()): { until: Date; reason: LivePause } | null {
+export function cooldownFor(before: LiveReading, after: LiveReading, swing: boolean, now: Date = new Date()): { until: Date; reason: MarketPauseReason } | null {
   if (scoreChanged(before, after) && GOAL_COOLDOWN_MS > 0) return { until: new Date(now.getTime() + GOAL_COOLDOWN_MS), reason: "goal" };
   if (swing && SWING_COOLDOWN_MS > 0) return { until: new Date(now.getTime() + SWING_COOLDOWN_MS), reason: "swing" };
   if (before.stopped && !after.stopped && REOPEN_COOLDOWN_MS > 0) return { until: new Date(now.getTime() + REOPEN_COOLDOWN_MS), reason: "reopen" };
@@ -62,29 +70,6 @@ export function laterCooldown(current: { until: Date | null; reason: string | nu
   if (!next) return current;
   if (current.until && current.until >= next.until) return current;
   return next;
-}
-
-/**
- * Whether a pause for a goal, a red card or a VAR check (EVENT_PAUSES) can end
- * before GOAL_COOLDOWN_MS is up, on a new reading of the match: the bookmaker
- * isn't blocking it, the reading's prices already carry the score, this
- * reading isn't another goal, at least GOAL_MIN_PAUSE_MS has gone by, and the
- * bookmaker made its prices after the pause began (when the feed says when it
- * did): prices from before the event aren't recalculated for it, however
- * they look. A jump in the prices, or the bookmaker switching bets back on,
- * is the market catching up — that must not keep the pause going, or the new
- * prices stay hidden for the whole cooldown.
- */
-export function goalPauseOver(
-  pause: { until: Date | null; reason: string | null },
-  reading: { hasScore: boolean; stopped: boolean; pausesItself: boolean; bookmakerUpdate?: Date | null },
-  now: Date = new Date(),
-): boolean {
-  if (!EVENT_PAUSES.has(pause.reason ?? "") || !pause.until || pause.until <= now) return false;
-  if (reading.stopped || !reading.hasScore || reading.pausesItself) return false;
-  const pausedAt = pause.until.getTime() - GOAL_COOLDOWN_MS;
-  if (reading.bookmakerUpdate && reading.bookmakerUpdate.getTime() <= pausedAt) return false;
-  return now.getTime() - pausedAt >= GOAL_MIN_PAUSE_MS;
 }
 
 /**
@@ -124,4 +109,111 @@ export function smallPriceMove(before: number, after: number): boolean {
 /** A move a bet takes without asking: a small one up. Any move down shows the Player the new price first. */
 export function takenWithoutAsking(before: number, after: number): boolean {
   return after > before && smallPriceMove(before, after);
+}
+
+/**
+ * Pauses on single markets. Something happening in a live match pauses the
+ * markets it changes, not the whole match: a goal the goal markets (result,
+ * double chance, totals, both teams to score, correct score, handicaps and
+ * the rest that settle on goals), a red card, a VAR check, a penalty or a
+ * jump in the prices those and the cards markets. The bookmaker reopening a
+ * match it had blocked pauses every market briefly. A market the event
+ * doesn't change stays open only if the reading that brought the event (so
+ * made after it) still prices it; otherwise it pauses too, until a reading
+ * made after the event prices it again.
+ *
+ * Each pause lasts until the market's prices are made again after the event
+ * (freshUntil), at least GOAL_MIN_PAUSE_MS for a market the event changes,
+ * and at most the fallback (GOAL_COOLDOWN_MS after a goal, a red card or a
+ * VAR check; SWING_COOLDOWN_MS after a jump; REOPEN_COOLDOWN_MS after a
+ * reopen) when fresh prices don't come.
+ */
+export type MarketGroup = "goals" | "cards" | "corners";
+export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen";
+
+export function marketGroup(key: string): MarketGroup {
+  if (/^(home_|away_)?corners_/.test(key)) return "corners";
+  if (/^(home_|away_)?cards_/.test(key)) return "cards";
+  return "goals";
+}
+
+/** The markets each kind of event changes. */
+export const EVENT_HITS: Record<MarketPauseReason, readonly MarketGroup[]> = {
+  goal: ["goals"],
+  red: ["goals", "cards"],
+  var: ["goals", "cards"],
+  swing: ["goals", "cards"],
+  reopen: ["goals", "cards", "corners"],
+};
+
+/** The longest each kind of event pauses a market when fresh prices don't come. */
+export function fallbackMs(reason: MarketPauseReason): number {
+  return reason === "swing" ? SWING_COOLDOWN_MS : reason === "reopen" ? REOPEN_COOLDOWN_MS : GOAL_COOLDOWN_MS;
+}
+
+export const hitBy = (reason: MarketPauseReason, marketKey: string) => EVENT_HITS[reason].includes(marketGroup(marketKey));
+
+/** A market's pause (Market.livePausedAt, livePausedUntil, liveReopenFrom, livePauseReason). */
+export type MarketPause = { pausedAt: Date | null; until: Date | null; reopenFrom: Date | null; reason: string | null };
+
+/**
+ * The pause an event puts on one market, or null if it stays open.
+ * `pricedSinceEvent`: a reading made after the event prices this market
+ * (the reading that brought the event, when it carried the event itself).
+ */
+export function eventPause(input: { reason: MarketPauseReason; marketKey: string; pricedSinceEvent: boolean; now: Date }): MarketPause | null {
+  const fallback = fallbackMs(input.reason);
+  if (fallback <= 0) return null;
+  const now = input.now.getTime();
+  const until = new Date(now + fallback);
+  if (hitBy(input.reason, input.marketKey)) {
+    // After a reopen the prices are already fresh: it's a short, fixed pause.
+    const least = input.reason === "reopen" ? fallback : Math.min(GOAL_MIN_PAUSE_MS, fallback);
+    return { pausedAt: input.now, until, reopenFrom: new Date(now + least), reason: input.reason };
+  }
+  if (input.pricedSinceEvent) return null;
+  return { pausedAt: input.now, until, reopenFrom: input.now, reason: input.reason };
+}
+
+/**
+ * A market's pause with a new event's added. A jump in the prices or the
+ * bookmaker reopening the match during a pause for a goal, a red card or a
+ * VAR check is the market catching up with that event, not another one: it
+ * doesn't add to the pause, or the new prices would stay hidden for the
+ * whole fallback. Anything else restarts the wait for fresh prices from the
+ * new event and keeps the later end.
+ */
+export function mergePause(current: MarketPause, next: MarketPause | null, now: Date): MarketPause {
+  if (!next) return current;
+  const active = current.until !== null && current.until > now;
+  if (!active) return next;
+  if (EVENT_PAUSES.has(current.reason ?? "") && (next.reason === "swing" || next.reason === "reopen")) return current;
+  const later = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : a ?? b);
+  return { pausedAt: next.pausedAt, until: later(current.until, next.until), reopenFrom: later(current.reopenFrom, next.reopenFrom), reason: next.reason };
+}
+
+/**
+ * When a paused market can reopen, given a new reading of its match, or null
+ * if this reading doesn't let it. The reading has to be fresh for it: the
+ * bookmaker isn't blocking the match, the reading's score is the latest the
+ * site knows (`scoreKnown`), it prices the market, and the bookmaker made it
+ * after the site saw the event (its update time, when the feed sends one).
+ * A market the event changes also needs its own prices to have moved since
+ * then (`movedAt`): prices from before the event aren't made for it, however
+ * they look. Without the bookmaker's time, any market needs that. The
+ * market then reopens at its earliest (`reopenFrom`), or now if that's past.
+ */
+export function freshUntil(
+  pause: MarketPause,
+  reading: { stopped: boolean; scoreKnown: boolean; priced: boolean; bookmakerUpdate: Date | null; movedAt: Date | null },
+  now: Date,
+): Date | null {
+  if (!pause.until || pause.until <= now || !pause.pausedAt) return null;
+  if (reading.stopped || !reading.scoreKnown || !reading.priced) return null;
+  const pausedAt = pause.pausedAt.getTime();
+  if (reading.bookmakerUpdate && reading.bookmakerUpdate.getTime() <= pausedAt) return null;
+  const changedByEvent = pause.reopenFrom !== null && pause.reopenFrom.getTime() > pausedAt;
+  if ((changedByEvent || !reading.bookmakerUpdate) && !(reading.movedAt && reading.movedAt.getTime() > pausedAt)) return null;
+  const until = new Date(Math.max(pause.reopenFrom?.getTime() ?? now.getTime(), now.getTime()));
+  return until < pause.until ? until : null;
 }

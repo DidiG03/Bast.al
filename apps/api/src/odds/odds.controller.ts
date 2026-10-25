@@ -137,6 +137,12 @@ export class OddsController {
     return this.odds.feedDelay(query.days ?? 7);
   }
 
+  @Get("live-health")
+  @Roles(Role.SUPER_ADMIN)
+  liveHealth(@Query() query: FeedDelayQueryDto) {
+    return this.odds.liveHealth(query.days ?? 1);
+  }
+
   @Get("leagues")
   @Roles(Role.SUPER_ADMIN)
   leagues() {

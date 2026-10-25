@@ -14,7 +14,7 @@ import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
 import { SportIcon } from "../../../components/sport-icon";
 import { TeamCrest } from "../../../components/team-crest";
-import { ApiError, apiFetch, type Bet, type BuilderQuote, type LiveWait, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
+import { ApiError, apiFetch, type Bet, type BuilderQuote, type LiveWait, type MarketPause, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney, formatStake } from "../../../lib/format";
 import { byImportance } from "../../../lib/importance";
 import { MAX_SLIP, forgetPicks, readSlip, saveSlip, slipStorageKey, type SlipItem } from "../../../lib/slip";
@@ -28,6 +28,7 @@ import { breakPause, liveClock } from "../../../lib/live";
 import { applyDelta, applyToList, applyToSlip, byMatch, hasUnknownSelections } from "../../../lib/live-push";
 import { usePolling } from "../../../lib/use-polling";
 import { pickLabel } from "../../../lib/picks";
+import { serverNow } from "../../../lib/clock";
 import { addDays, dayKey } from "../../../lib/time";
 import { MIN_SYSTEM_LINE_STAKE, systemBreakdown, systemLineCount, systemMaxReturn, systemOptions, type SystemOption } from "../../../lib/system-bets";
 
@@ -678,6 +679,37 @@ function BetPage() {
     for (const group of allGroups) group[1] = byImportance(group[1]);
     return { shown: allGroups.flatMap(([, list]) => list), allGroups, starredCount };
   }, [merged, league, query, liveLabel, endedLabel, i18n, favourites, favouritesOnly]);
+  // A match whose main market is paused offers another to bet on meanwhile: a live one taking bets (spread across the
+  // paused ones), or failing that the next one before kick-off.
+  const suggestions = useMemo(() => {
+    const held = (event: OddsEvent) => {
+      const main = event.markets[0];
+      return !main || Boolean(main.suspended) || main.selections.every((selection) => selection.suspended);
+    };
+    const playing = (event: OddsEvent) => event.live && !finishedNow(event);
+    const openLive = shown.filter((event) => playing(event) && event.bettable && !event.allMarketsSuspended && !held(event));
+    const nextUp = shown.find((event) => !event.live && event.bettable && !held(event));
+    const map = new Map<string, Suggestion>();
+    shown
+      .filter((event) => playing(event) && held(event))
+      .forEach((event, index) => {
+        const live = openLive.length > 0 ? openLive[index % openLive.length] : undefined;
+        const pick = live ?? nextUp;
+        if (pick && pick.id !== event.id) map.set(event.id, { id: pick.id, name: pick.name, live: Boolean(live) });
+      });
+    return map;
+  }, [shown]);
+  const goToMatch = useCallback(
+    (eventId: string) => {
+      const index = shown.findIndex((event) => event.id === eventId);
+      if (index < 0) return;
+      // A match from another day than the one picked: show every day, so it's there to scroll to.
+      if (day && !(day === "live" && shown[index].live)) setDay("");
+      if (index >= limit) setLimit(index + 10);
+      setFocused(eventId);
+    },
+    [shown, limit, day],
+  );
   // A day that no longer has matches (a search, a league filter) falls back to every day.
   const dayShown = day === "" ? "" : day === "live" ? liveLabel : day;
   const groups = dayShown && allGroups.some(([label]) => label === dayShown) ? allGroups.filter(([label]) => label === dayShown) : allGroups;
@@ -920,6 +952,8 @@ function BetPage() {
                             onStar={toggleFavourite}
                             favouriteMarkets={favouriteMarkets}
                             onStarMarket={toggleFavouriteMarket}
+                            suggestion={suggestions.get(event.id)}
+                            onGoTo={goToMatch}
                           />
                         ))}
                       </div>
@@ -1030,6 +1064,8 @@ const MatchCard = memo(function MatchCard({
   onStar,
   favouriteMarkets,
   onStarMarket,
+  suggestion,
+  onGoTo,
 }: {
   event: OddsEvent;
   selected: Set<string>;
@@ -1048,6 +1084,9 @@ const MatchCard = memo(function MatchCard({
   /** The kinds of market this account starred: they open first, under Favourites. */
   favouriteMarkets: Set<string>;
   onStarMarket: (kind: string) => void;
+  /** While its main market is paused: another match to bet on meanwhile, shown in that row instead of locked prices. */
+  suggestion?: Suggestion;
+  onGoTo: (eventId: string) => void;
 }) {
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;
@@ -1077,10 +1116,10 @@ const MatchCard = memo(function MatchCard({
   const favourite = bundled.flatMap(([, list]) => list.filter(isFavourite));
   const hasPick = (markets: Array<{ selections: OddsSelection[] }>) => markets.some((market) => market.selections.some((selection) => selected.has(selection.id)));
   const playing = event.live && !finishedNow(event);
-  // During play, markets the feed isn't pricing right now (every outcome off the board) go out of the way, into
-  // "Unavailable during play" at the bottom, closed; one holding a pick on the slip stays where it is.
-  const heldMarket = (market: { suspended?: boolean; selections: OddsSelection[] }) => Boolean(market.suspended) || market.selections.every((selection) => selection.suspended);
-  const unavailable = (entry: Entry) => playing && ("kind" in entry ? entry.lines.every(heldMarket) && !hasPick(entry.lines) : heldMarket(entry) && !hasPick([entry]));
+  // During play, markets the feed hasn't priced for a while go out of the way, into "Not available during play" at
+  // the bottom, closed; one holding a pick on the slip stays where it is. A market paused for a moment stays in place.
+  const staleMarket = (market: { stale?: boolean }) => Boolean(market.stale);
+  const unavailable = (entry: Entry) => playing && ("kind" in entry ? entry.lines.every(staleMarket) && !hasPick(entry.lines) : staleMarket(entry) && !hasPick([entry]));
   const grouped = [...(favourite.length > 0 ? [[FAVOURITES_GROUP, favourite] as const] : []), ...bundled.map(([label, list]) => [label, list.filter((entry) => !isFavourite(entry))] as const)]
     .map(([label, list]) => [label, list.filter((entry) => !unavailable(entry))] as const)
     .filter(([, list]) => list.length > 0);
@@ -1107,21 +1146,20 @@ const MatchCard = memo(function MatchCard({
   };
   const toggleLabel = expanded ? t("Fewer markets") : tn(more, "{count} more market", "{count} more markets");
   const scored = (event.live || over) && event.homeScore !== null && event.awayScore !== null;
-  const winnerHeld =
-    playing &&
-    event.bettable &&
-    !event.allMarketsSuspended &&
-    Boolean(inRow && inRow.key === "match_winner" && (inRow.suspended || inRow.selections.every((selection) => selection.suspended)) && more > 0);
+  const mainHeld = Boolean(playing && inRow && (inRow.suspended || inRow.selections.every((selection) => selection.suspended)));
+  const winnerHeld = playing && event.bettable && !event.allMarketsSuspended && !event.marketPause && Boolean(inRow && inRow.key === "match_winner" && mainHeld && more > 0);
   const pause = over
     ? { text: breakPause(event) ?? "", tone: " is-finished" }
     : event.live && !event.bettable
-      ? // A goal or the last minutes say so; otherwise a break in play explains the pause better than "a moment".
-        { text: event.livePause === "goal" || event.livePause === "late" ? PAUSE_TEXT[event.livePause] : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed, tone: event.livePause === "goal" ? " is-goal" : "" }
+      ? // The last minutes or a slow competition say so; otherwise a break in play explains the pause better than "a moment".
+        { text: event.livePause === "late" || event.livePause === "competition" ? PAUSE_TEXT[event.livePause] : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed, tone: "" }
       : event.live && event.allMarketsSuspended
         ? { text: PAUSE_TEXT.bookmaker, tone: "" }
         : winnerHeld
           ? { text: msg("The match winner is paused. The other markets are still open."), tone: "" }
           : null;
+  // The main market paused with nothing of it on the slip: another match to bet on in its place, rather than locked prices.
+  const suggest = suggestion && mainHeld && !over && !(inRow && hasPick([inRow])) ? suggestion : undefined;
 
   const pick = (market: OddsEvent["markets"][number], selection: OddsSelection, label: string, className: string) => {
     const isSelected = selected.has(selection.id);
@@ -1163,7 +1201,7 @@ const MatchCard = memo(function MatchCard({
     const scorers = entry.key.startsWith("scorer_");
     return (
       <div key={key} className={`odds-market${open ? " is-open" : ""}`}>
-        <MarketHead title={ts(entry.name)} suspended={entry.suspended} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
+        <MarketHead title={ts(entry.name)} suspended={entry.suspended} paused={Boolean(entry.paused)} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
           {scorers ? null : <MarketPriceHistory selections={entry.selections} compact />}
         </MarketHead>
         {open ? marketOutcomes(entry) : null}
@@ -1249,7 +1287,17 @@ const MatchCard = memo(function MatchCard({
           </div>
         </div>
         <div className={`bm-odds${inRow ? ` has-${inRow.selections.length}` : ""}`}>
-          {over ? <span className="bm-settled">{t("Settling")}</span> : inRow ? inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick")) : null}
+          {over ? (
+            <span className="bm-settled">{t("Settling")}</span>
+          ) : suggest ? (
+            <button type="button" className="bm-suggest" onClick={() => onGoTo(suggest.id)} title={suggest.name}>
+              <span className="bm-suggest-label">{suggest.live ? t("Meanwhile, live") : t("Meanwhile")}</span>
+              <span className="bm-suggest-name">{suggest.name}</span>
+              <span aria-hidden="true">›</span>
+            </button>
+          ) : inRow ? (
+            inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick"))
+          ) : null}
         </div>
         {more > 0 ? (
           <button type="button" className={`bm-more${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} onPointerEnter={() => !expanded && onPrefetch(event.id)} onTouchStart={() => !expanded && onPrefetch(event.id)} onFocus={() => !expanded && onPrefetch(event.id)} aria-expanded={expanded} aria-label={toggleLabel} title={toggleLabel}>
@@ -1268,7 +1316,7 @@ const MatchCard = memo(function MatchCard({
           <span className="bm-more-spacer" aria-hidden="true" />
         )}
       </div>
-      {pause ? <p className={`bet-paused bm-note${pause.tone}`}>{t(pause.text)}</p> : null}
+      {pause ? <p className={`bet-paused bm-note${pause.tone}`}>{t(pause.text)}</p> : !over && event.live && event.marketPause ? <PauseBanner pause={event.marketPause} /> : null}
       {statsOpen ? (
         <div className="bm-stats">
           <MatchStatsPanel eventId={event.id} name={event.name} live={event.live} />
@@ -1299,12 +1347,12 @@ const MatchCard = memo(function MatchCard({
           {offBoard.length > 0 ? (
             <div className="odds-market-group is-unavailable">
               <button type="button" className="text-button odds-unavailable-toggle" onClick={() => setShowOffBoard((open) => !open)} aria-expanded={showOffBoard}>
-                {tn(offBoard.length, "Unavailable during play ({count} market)", "Unavailable during play ({count} markets)")}
+                {tn(offBoard.length, "Not available during play ({count} market)", "Not available during play ({count} markets)")}
                 <span aria-hidden="true">{showOffBoard ? " ▴" : " ▾"}</span>
               </button>
               {showOffBoard ? (
                 <>
-                  <p className="muted odds-market-rule">{t("The feed isn't pricing these right now. They come back here when it does.")}</p>
+                  <p className="muted odds-market-rule">{t("Our feed hasn't priced these during play for a while. They come back to the list if it does.")}</p>
                   {offBoard.map(renderEntry)}
                 </>
               ) : null}
@@ -1387,7 +1435,7 @@ function LiveNote() {
     <div className="bet-live-note" role="note">
       <span className="bet-live-note-icon" aria-hidden="true">i</span>
       <p>
-        {t("Betting pauses briefly after goals so prices stay fair, and live bets take a few seconds to confirm. A bet placed after a goal that hadn't shown here yet is voided and your stake comes back.")}
+        {t("Betting pauses briefly after goals so prices stay fair. Bets placed after a goal that hasn't shown yet are voided and your stake is returned.")}
       </p>
       <button
         type="button"
@@ -1439,13 +1487,54 @@ function finishedNow(event: OddsEvent): boolean {
 
 /** Why a live match isn't taking bets, in words a Player understands. */
 const PAUSE_TEXT: Record<string, string> = {
-  goal: msg("⚽ Goal! Live betting reopens in a moment, once the prices catch up."),
-  swing: msg("Something big just happened in this match. Live betting reopens in a moment."),
-  reopen: msg("Live betting is reopening. One moment."),
   late: msg("Live betting has closed for the last minutes of this match."),
+  competition: msg("Pre-match only: our feed for this competition is too slow for live betting."),
   feed: msg("Live betting is paused for a moment."),
   bookmaker: msg("The bookmaker has paused bets on this match. They reopen on their own."),
 };
+
+/** Another match to bet on while one's main market is paused. */
+type Suggestion = { id: string; name: string; live: boolean };
+
+/** What paused the markets, in the banner. */
+const PAUSE_REASON: Record<string, string> = {
+  goal: msg("⚽ Goal"),
+  red: msg("🟥 Red card"),
+  var: msg("VAR check"),
+  swing: msg("Big moment in the match"),
+  reopen: msg("Betting reopening"),
+};
+
+/**
+ * A live match's paused markets: what paused them, which (the first few),
+ * and when they're back, counting down: "Back in" when fresh prices are in
+ * and the time is known, "Back within" while it's only the latest it can be.
+ */
+function PauseBanner({ pause }: { pause: MarketPause }) {
+  const { t, tn, ts } = useI18n();
+  const until = new Date(pause.until).getTime();
+  // Read on the device after it's drawn (never on the server), then every second.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(serverNow());
+    const timer = window.setInterval(() => setNow(serverNow()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const seconds = now === null ? null : Math.max(0, Math.ceil((until - now) / 1000));
+  const names = pause.markets.map((name) => ts(name)).join(", ");
+  const others = pause.count - pause.markets.length;
+  const markets = others > 0 ? tn(others, "{markets} and {count} more", "{markets} and {count} more", { markets: names }) : names;
+  return (
+    <p className={`bet-paused bm-note bm-pause${pause.reason === "goal" ? " is-goal" : ""}`} role="status">
+      <strong>{t(PAUSE_REASON[pause.reason] ?? PAUSE_REASON.swing)}</strong>
+      {" · "}
+      {t("Paused: {markets}.", { markets })}{" "}
+      {seconds === null ? null : (
+        <span className="bm-pause-time">{seconds === 0 ? t("Back any moment.") : pause.exact ? t("Back in {seconds} s.", { seconds }) : t("Back within {seconds} s.", { seconds })}</span>
+      )}
+    </p>
+  );
+}
 
 /** A green up arrow when a price went up, a red down arrow when it went down; nothing when it didn't move. */
 function PriceArrow({ move }: { move: PriceMove | undefined }) {

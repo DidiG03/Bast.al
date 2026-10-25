@@ -5,8 +5,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
-import { bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
-import { applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
+import { bigSwing, cooldownFor, eventPause, freshUntil, laterCooldown, marketGroup, mergePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
+import { applyMargin, eventOpen, livePause, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
+import { hotMatches, minuteRoom } from "../dist/odds/live-polling.js";
 
 test("a margin comes off the feed price and rounds down to the cent", () => {
   assert.equal(applyMargin(2.0, 5), 1.9);
@@ -212,13 +213,13 @@ test("live matches take bets only with fresh prices the feed hasn't stopped", ()
   assert.equal(eventOpen({ ...base, status: "UPCOMING", startsAt: new Date(now.getTime() - 60_000) }, now), false, "kicked off but not live yet");
 });
 
-test("live betting pauses after a goal, a price jump or a reopen, and in the last minutes", () => {
+test("a whole live match pauses only for the feed, a slow competition and the last minutes; a goal pauses its markets", () => {
   const now = new Date("2026-01-01T12:00:00Z");
   const base = { status: "LIVE", startsAt: new Date("2026-01-01T11:00:00Z"), suspended: false, hidden: false, liveStopped: false, liveOddsAt: new Date(now.getTime() - 5_000), elapsed: 60 };
   assert.equal(livePause(base, now), null);
-  assert.equal(livePause({ ...base, liveCooldownUntil: new Date(now.getTime() + 30_000), liveCooldownReason: "goal" }, now), "goal");
-  assert.equal(eventOpen({ ...base, liveCooldownUntil: new Date(now.getTime() + 30_000), liveCooldownReason: "goal" }, now), false);
-  assert.equal(eventOpen({ ...base, liveCooldownUntil: new Date(now.getTime() - 1), liveCooldownReason: "goal" }, now), true, "the pause runs out");
+  assert.equal(livePause({ ...base, liveCooldownUntil: new Date(now.getTime() + 30_000), liveCooldownReason: "goal" }, now), null, "a goal pauses markets, not the match");
+  assert.equal(livePause({ ...base, liveSlowCompetition: true }, now), "competition");
+  assert.equal(eventOpen({ ...base, liveSlowCompetition: true }, now), false, "pre-match only where the feed is too slow");
   assert.equal(livePause({ ...base, elapsed: 89 }, now), "late");
   assert.equal(livePause({ ...base, elapsed: 88 }, now), null);
   assert.equal(livePause({ ...base, liveStopped: true }, now), "feed");
@@ -237,19 +238,9 @@ test("live betting pauses after a goal, a price jump or a reopen, and in the las
   assert.deepEqual(laterCooldown(long, { until: new Date(now.getTime() + 15_000), reason: "reopen" }), long, "a short pause never cuts a goal pause short");
   assert.equal(laterCooldown({ until: null, reason: null }, long), long);
 
-  // A goal's pause ends sooner once the prices have caught up: 30 seconds at least, the bookmaker not blocking, the new score in the prices.
-  const goalAgo = (seconds) => ({ until: new Date(now.getTime() + 90_000 - seconds * 1000), reason: "goal" });
-  const caughtUp = { hasScore: true, stopped: false, pausesItself: false };
-  assert.equal(goalPauseOver(goalAgo(40), caughtUp, now), true);
-  assert.equal(goalPauseOver(goalAgo(20), caughtUp, now), false, "never under 30 seconds");
-  assert.equal(goalPauseOver(goalAgo(40), { ...caughtUp, stopped: true }, now), false, "the bookmaker still has it blocked");
-  assert.equal(goalPauseOver(goalAgo(40), { ...caughtUp, hasScore: false }, now), false, "prices without a score can't show they're after the goal");
-  assert.equal(goalPauseOver(goalAgo(40), { ...caughtUp, pausesItself: true }, now), false, "another goal on this reading");
   assert.equal(scoreChanged(reading(0, 0), reading(1, 0)), true);
   assert.equal(scoreChanged(reading(1, 0), reading(1, 0)), false, "the prices moving after a goal is not another goal");
   assert.equal(scoreChanged(reading(null, null), reading(0, 0)), false);
-  assert.equal(goalPauseOver({ ...goalAgo(40), reason: "swing" }, caughtUp, now), false, "only a goal's pause");
-  assert.equal(goalPauseOver(goalAgo(95), caughtUp, now), false, "already over");
 
   assert.equal(bigSwing([2.0, 3.4, 4.0], [2.1, 3.3, 4.2]), false, "normal drift");
   assert.equal(bigSwing([2.0, 3.4, 4.0], [1.4, 3.8, 7.0]), true, "a red card or a penalty");
@@ -262,6 +253,98 @@ test("live betting pauses after a goal, a price jump or a reopen, and in the las
   assert.equal(takenWithoutAsking(1.9, 1.95), true, "a tick up is taken");
   assert.equal(takenWithoutAsking(1.95, 1.9), false, "a tick down asks first");
   assert.equal(takenWithoutAsking(2, 2.5), false, "a real move up asks first");
+});
+
+test("a goal pauses the goal markets; others stay open only if priced after it", () => {
+  const goalAt = new Date("2026-01-01T12:00:00Z");
+  assert.equal(marketGroup("match_winner"), "goals");
+  assert.equal(marketGroup("odd_even"), "goals", "a goal flips odd/even");
+  assert.equal(marketGroup("home_cards_1_5"), "cards");
+  assert.equal(marketGroup("corners_9_5"), "corners");
+  const goal = (marketKey, pricedSinceEvent = false) => eventPause({ reason: "goal", marketKey, pricedSinceEvent, now: goalAt });
+  for (const key of ["match_winner", "double_chance", "goals_2_5", "btts", "correct_score", "draw_no_bet", "home_goals_1_5", "result_btts"]) {
+    const pause = goal(key, true);
+    assert.ok(pause, `${key} pauses`);
+    assert.equal(pause.until.getTime() - goalAt.getTime(), 90_000, "the fallback");
+    assert.equal(pause.reopenFrom.getTime() - goalAt.getTime(), 15_000, "15 s at least");
+  }
+  // (c) a cards market the goal's own reading still prices stays open; one it doesn't waits for a reading after the goal
+  assert.equal(goal("cards_3_5", true), null);
+  const unpriced = goal("cards_3_5", false);
+  assert.equal(unpriced.reopenFrom.getTime(), goalAt.getTime(), "no minimum: it reopens on the next fresh reading");
+  // A red card pauses cards too, not corners priced after it.
+  assert.ok(eventPause({ reason: "red", marketKey: "cards_3_5", pricedSinceEvent: true, now: goalAt }));
+  assert.equal(eventPause({ reason: "red", marketKey: "corners_9_5", pricedSinceEvent: true, now: goalAt }), null);
+  assert.equal(eventPause({ reason: "swing", marketKey: "goals_2_5", pricedSinceEvent: true, now: goalAt }).until.getTime() - goalAt.getTime(), 30_000);
+});
+
+test("a paused market reopens on fresh prices after the event, never before 15 s; otherwise the fallback", () => {
+  const goalAt = new Date("2026-01-01T12:00:00Z");
+  const at = (seconds) => new Date(goalAt.getTime() + seconds * 1000);
+  const pause = eventPause({ reason: "goal", marketKey: "match_winner", pricedSinceEvent: true, now: goalAt });
+  const fresh = { stopped: false, scoreKnown: true, priced: true, bookmakerUpdate: at(9), movedAt: at(10) };
+  // (a) fresh prices 10 s after the goal: it reopens at 15 s
+  assert.equal(freshUntil(pause, fresh, at(10)).getTime(), at(15).getTime());
+  assert.equal(freshUntil(pause, fresh, at(20)).getTime(), at(20).getTime(), "fresh prices later: now");
+  // (b) no fresh prices: the fallback stands
+  assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: at(-2) }, at(10)), null, "the bookmaker made them before the goal");
+  assert.equal(freshUntil(pause, { ...fresh, movedAt: at(-30) }, at(10)), null, "its own prices haven't moved since");
+  assert.equal(freshUntil(pause, { ...fresh, movedAt: goalAt }, at(10)), null, "the reading that brought the goal doesn't count");
+  assert.equal(freshUntil(pause, { ...fresh, scoreKnown: false }, at(10)), null, "the score isn't the latest");
+  assert.equal(freshUntil(pause, { ...fresh, stopped: true }, at(10)), null, "blocked");
+  assert.equal(freshUntil(pause, { ...fresh, priced: false }, at(10)), null, "not priced");
+  assert.equal(freshUntil(pause, fresh, at(95)), null, "already over");
+  assert.equal(marketPause({ liveSuspended: false, livePausedUntil: pause.until, livePauseReason: "goal" }, at(89)), "goal");
+  assert.equal(marketPause({ liveSuspended: false, livePausedUntil: pause.until, livePauseReason: "goal" }, at(90)), null);
+  // Without the bookmaker's time, a market needs its own prices to move after the event.
+  const corners = eventPause({ reason: "goal", marketKey: "corners_9_5", pricedSinceEvent: false, now: goalAt });
+  assert.equal(freshUntil(corners, { ...fresh, bookmakerUpdate: null, movedAt: at(-1) }, at(6)), null);
+  assert.equal(freshUntil(corners, { ...fresh, bookmakerUpdate: at(5), movedAt: at(-60) }, at(6)).getTime(), at(6).getTime(), "an unrelated market: a fresh reading pricing it is enough");
+
+  // A jump or a reopen during a goal's pause is the market catching up, not a new event; a second goal restarts the wait.
+  assert.equal(mergePause(pause, eventPause({ reason: "swing", marketKey: "match_winner", pricedSinceEvent: true, now: at(8) }), at(8)), pause);
+  const second = mergePause(pause, eventPause({ reason: "goal", marketKey: "match_winner", pricedSinceEvent: true, now: at(40) }), at(40));
+  assert.equal(second.pausedAt.getTime(), at(40).getTime());
+  assert.equal(second.reopenFrom.getTime(), at(55).getTime());
+  assert.equal(second.until.getTime(), at(130).getTime());
+});
+
+test("a market the feed hasn't priced live for 5 minutes is stale; the banner lists what's paused", () => {
+  const now = new Date("2026-01-01T12:00:00Z");
+  const event = { status: "LIVE", startsAt: new Date("2026-01-01T11:00:00Z"), period: "2H" };
+  // (e)
+  assert.equal(marketStale(event, { liveSuspended: true, liveQuotedAt: new Date(now.getTime() - 6 * 60_000) }, now), true);
+  assert.equal(marketStale(event, { liveSuspended: false, liveQuotedAt: new Date(now.getTime() - 60_000) }, now), false);
+  assert.equal(marketStale(event, { liveSuspended: true, liveQuotedAt: null }, now, false), true, "never priced live since kick-off");
+  assert.equal(marketStale({ ...event, period: "HT" }, { liveSuspended: true, liveQuotedAt: new Date(now.getTime() - 6 * 60_000) }, now), false, "not at half-time");
+  const summary = pauseSummary(
+    [
+      { name: "Match winner", sortOrder: 0, livePausedAt: now, livePausedUntil: new Date(now.getTime() + 90_000), liveReopenFrom: new Date(now.getTime() + 15_000), livePauseReason: "goal" },
+      { name: "Total goals 2.5", sortOrder: 2, livePausedAt: now, livePausedUntil: new Date(now.getTime() + 15_000), liveReopenFrom: new Date(now.getTime() + 15_000), livePauseReason: "goal" },
+      { name: "Total corners 9.5", sortOrder: 9, livePausedUntil: new Date(now.getTime() - 1) },
+    ],
+    now,
+  );
+  assert.deepEqual(summary, { reason: "goal", count: 2, markets: ["Match winner", "Total goals 2.5"], until: new Date(now.getTime() + 90_000).toISOString(), exact: false });
+});
+
+test("matches waiting for fresh prices and the most exposed are read on their own, within the minute's limit", () => {
+  const now = 1_000_000;
+  const picked = hotMatches(
+    [
+      { eventId: "quiet", exposure: 0, waiting: false, lastRead: null },
+      { eventId: "big", exposure: 5_000, waiting: false, lastRead: now - 6_000 },
+      { eventId: "small", exposure: 100, waiting: false, lastRead: now - 6_000 },
+      { eventId: "paused", exposure: 0, waiting: true, lastRead: now - 7_000 },
+      { eventId: "just read", exposure: 9_000, waiting: true, lastRead: now - 1_000 },
+    ],
+    now,
+    2,
+  );
+  assert.deepEqual(picked.map((match) => match.eventId), ["paused", "big"]);
+  assert.equal(minuteRoom(100, 450, 4), true);
+  assert.equal(minuteRoom(90, 450, 4), false, "a fifth of the minute is kept back");
+  assert.equal(minuteRoom(null, null, 4), true);
 });
 
 test("live odds carry the score and minute they were made for, and can be fetched for one match", async () => {
@@ -423,9 +506,12 @@ test("a live bet's match is checked with the feed itself, and a goal found there
     // The match-result prices just before the goal are kept with it.
     selection: { findMany: async () => [{ key: "home", liveOdds: 2.1 }, { key: "draw", liveOdds: 3.2 }, { key: "away", liveOdds: 3.6 }] },
     goalSeen: { createMany: async ({ data }) => (goals.push(...data), { count: data.length }) },
+    market: { findMany: async () => [{ id: "m1", key: "match_winner", liveSuspended: false, livePausedAt: null, livePausedUntil: null, liveReopenFrom: null, livePauseReason: null, liveMovedAt: null, liveQuotedAt: null }], updateMany: async ({ data }) => marketUpdates.push(data) },
+    livePause: { create: async () => ({}), updateMany: async () => ({}) },
     $transaction: async (fn) => fn(tx),
   };
   const goals = [];
+  const marketUpdates = [];
   const service = new OddsSyncService(prisma);
   let calls = 0;
   let answer = { ...liveRaw(), fixture: { id: 7, status: { elapsed: 63 } }, teams: { home: { goals: 1 }, away: { goals: 0 } } };
@@ -442,8 +528,10 @@ test("a live bet's match is checked with the feed itself, and a goal found there
   const last = updates.at(-1);
   assert.equal(last.homeScore, 1);
   assert.equal(last.elapsed, 63);
-  assert.equal(last.liveCooldownReason, "goal", "the goal the feed knows about pauses the match");
+  assert.equal(last.liveCooldownReason, "goal", "the match keeps the goal as its latest pause");
   assert.ok(last.liveCooldownUntil > new Date());
+  assert.equal(marketUpdates.at(-1).livePauseReason, "goal", "the goal the feed knows about pauses the goal markets");
+  assert.ok(marketUpdates.at(-1).livePausedUntil > new Date());
   // The site saw it then, with who scored and the prices from before it.
   assert.equal(goals.length, 1);
   assert.deepEqual(goals[0].beforeGoal, { side: "home", home: 2.1, draw: 3.2, away: 3.6 });
@@ -488,37 +576,48 @@ test("a live cards bet fetches the match's events right then; bets at the same m
   assert.equal(calls, 2);
 });
 
-test("after a goal, live betting reopens once a later reading's prices carry the new score", async () => {
+test("after a goal, a paused market reopens once a later reading is fresh for it", async () => {
   const { OddsSyncService } = await import("../dist/odds/odds-sync.service.js");
-  const run = async (secondsSinceGoal, goals = { home: 1, away: 0 }, update = null) => {
-    const saved = { id: "e1", externalId: "7", homeTeam: "A", awayTeam: "B", name: "A v B", homeScore: 1, awayScore: 0, liveStopped: false, liveCooldownUntil: new Date(Date.now() + 90_000 - secondsSinceGoal * 1000), liveCooldownReason: "goal" };
+  const run = async (secondsSinceGoal, goals = { home: 1, away: 0 }, update = new Date(Date.now() - 2_000).toISOString(), movedSecondsAgo = 3) => {
+    const goalAt = new Date(Date.now() - secondsSinceGoal * 1000);
+    const saved = { id: "e1", externalId: "7", homeTeam: "A", awayTeam: "B", name: "A v B", homeScore: 1, awayScore: 0, liveStopped: false, liveCooldownUntil: new Date(goalAt.getTime() + 90_000), liveCooldownReason: "goal", liveScoreAhead: null, status: "LIVE", startsAt: new Date(Date.now() - 40 * 60_000), period: "1H" };
+    const market = {
+      id: "m1",
+      key: "match_winner",
+      liveSuspended: false,
+      livePausedAt: goalAt,
+      livePausedUntil: new Date(goalAt.getTime() + 90_000),
+      liveReopenFrom: new Date(goalAt.getTime() + 15_000),
+      livePauseReason: "goal",
+      liveMovedAt: new Date(Date.now() - movedSecondsAgo * 1000),
+      liveQuotedAt: new Date(),
+    };
     const updates = [];
     const tx = { selection: { createMany: async () => ({ count: 0 }) }, market: { findMany: async () => [], create: async () => ({ id: "m1" }), updateMany: async () => ({}) }, $executeRaw: async () => 0 };
     const prisma = {
       event: { findMany: async () => [saved], findUniqueOrThrow: async () => saved, update: async ({ data }) => updates.push(data) },
       selection: { findMany: async () => [] },
       goalSeen: { createMany: async ({ data }) => ({ count: data.length }) },
+      market: { findMany: async () => [market], updateMany: async ({ data }) => updates.push({ market: data }) },
+      livePause: { create: async () => ({}), updateMany: async () => ({}) },
       $transaction: async (fn) => fn(tx),
     };
     const service = new OddsSyncService(prisma);
-    service.client = new ApiFootballClient(async () => ({ response: [{ ...liveRaw(), ...(update ? { update } : {}), fixture: { id: 7, status: { elapsed: 34 } }, teams: { home: { goals: goals.home }, away: { goals: goals.away } } }] }));
+    service.client = new ApiFootballClient(async () => ({ response: [{ ...liveRaw(), update, fixture: { id: 7, status: { elapsed: 34 } }, teams: { home: { goals: goals.home }, away: { goals: goals.away } } }] }));
     await service.verifyLive(["e1"]);
-    return updates.at(-1);
+    return { goalAt, market: updates.find((row) => row.market)?.market ?? null, event: updates.at(-1) };
   };
   const reopened = await run(40);
-  assert.ok(reopened.liveCooldownUntil <= new Date(), "40 seconds after the goal, prices with the new score reopen it");
-  assert.equal(reopened.liveCooldownReason, null);
-  const tooSoon = await run(10);
-  assert.equal(tooSoon.liveCooldownReason, "goal", "10 seconds in, it stays paused");
-  assert.ok(tooSoon.liveCooldownUntil > new Date());
+  assert.ok(reopened.market.livePausedUntil <= new Date(), "40 seconds after the goal, fresh prices reopen it now");
+  assert.ok(reopened.event.liveCooldownUntil <= new Date(), "and the match's pause ends with its main market");
+  const soon = await run(10);
+  assert.equal(soon.market.livePausedUntil.getTime(), soon.goalAt.getTime() + 15_000, "10 seconds in, fresh prices: it reopens at 15 s");
   const another = await run(40, { home: 2, away: 0 });
-  assert.equal(another.liveCooldownReason, "goal", "another goal starts a new pause");
-  assert.ok(another.liveCooldownUntil.getTime() > Date.now() + 80_000);
-  // Prices the bookmaker made before the goal aren't recalculated for it, whatever score they carry: it stays paused.
-  const stale = await run(40, { home: 1, away: 0 }, new Date(Date.now() - 60_000).toISOString());
-  assert.equal(stale.liveCooldownReason, "goal");
-  const remade = await run(40, { home: 1, away: 0 }, new Date(Date.now() - 5_000).toISOString());
-  assert.equal(remade.liveCooldownReason, null, "made after the goal: it reopens");
+  assert.ok(another.market.livePausedAt > another.goalAt, "another goal starts a new pause");
+  assert.ok(another.market.livePausedUntil.getTime() > Date.now() + 80_000);
+  // Prices the bookmaker made before the goal aren't made for it, whatever score they carry; nor are prices that haven't moved since.
+  assert.equal((await run(40, { home: 1, away: 0 }, new Date(Date.now() - 60_000).toISOString())).market, null);
+  assert.equal((await run(40, { home: 1, away: 0 }, undefined, 60)).market, null);
 });
 
 test("an Owner's own price can't go more than 10% above the feed price", () => {

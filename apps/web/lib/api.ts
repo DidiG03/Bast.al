@@ -494,15 +494,40 @@ export type OddsEvent = {
   provider: string;
   /** Before kick-off, or live with fresh in-play prices. */
   bettable: boolean;
-  /** Live only: why bets are paused right now, if they are. */
-  livePause?: "goal" | "swing" | "reopen" | "late" | "feed" | null;
+  /** Live only: why the whole match isn't taking bets right now, if it isn't ("competition": its feed is too slow for live betting). */
+  livePause?: "late" | "feed" | "competition" | null;
+  /** Live only: markets paused after something in the match (a goal, a card…), for the banner. */
+  marketPause?: MarketPause | null;
   /** In play. Prices are the feed's live prices less the team margin. */
   live: boolean;
   /** Live, and the bookmaker has every market off the board for now. */
   allMarketsSuspended?: boolean;
   /** Every market the match has. The list view (`view=list`) sends only the first; `/odds/events/:id` sends them all. */
   marketCount: number;
-  markets: Array<{ id: string; key: string; name: string; /** Live only: off the board right now. */ suspended?: boolean; selections: OddsSelection[] }>;
+  markets: Array<{
+    id: string;
+    key: string;
+    name: string;
+    /** Live only: off the board right now. */
+    suspended?: boolean;
+    /** Live only: paused after something in the match, and why ("goal", "red", "var", "swing", "reopen"). */
+    paused?: string | null;
+    /** Live only: the feed hasn't priced it during play for a while (shown under "Not available during play"). */
+    stale?: boolean;
+    selections: OddsSelection[];
+  }>;
+};
+
+/** What's paused on a live match after something happened in it. */
+export type MarketPause = {
+  reason: string;
+  count: number;
+  /** The first few paused markets' names, in board order. */
+  markets: string[];
+  /** When the last of them reopens at the latest (ISO). */
+  until: string;
+  /** Fresh prices are in for all of them: `until` is when they reopen, not just the latest they might. */
+  exact: boolean;
 };
 
 /** A bet slip pick's price right now, from `/odds/selections`. */

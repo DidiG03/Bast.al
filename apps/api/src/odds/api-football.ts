@@ -1216,8 +1216,12 @@ export class ApiFootballClient {
  * Detected from the host string, so switching providers is just an env var
  * change (API_FOOTBALL_HOST) — no other config needed.
  */
-/** `onQuota` gets the requests left on today's plan and how many the plan allows, from each answer's rate-limit headers. */
-export function httpFetchJson(host: string, apiKey: string, onQuota?: (left: number, limit: number | null) => void): FetchJson {
+/**
+ * `onQuota` gets the requests left on today's plan and how many the plan
+ * allows, and the same for the current minute when the answer says (the
+ * plans also limit requests a minute), from each answer's rate-limit headers.
+ */
+export function httpFetchJson(host: string, apiKey: string, onQuota?: (left: number, limit: number | null, minute?: { left: number; limit: number | null }) => void): FetchJson {
   const rapidApi = host.includes("rapidapi.com");
   const base = rapidApi ? `${host}/v3` : host;
   return async (path, params) => {
@@ -1230,7 +1234,10 @@ export function httpFetchJson(host: string, apiKey: string, onQuota?: (left: num
     });
     const left = Number(res.headers.get("x-ratelimit-requests-remaining"));
     const limit = Number(res.headers.get("x-ratelimit-requests-limit"));
-    if (onQuota && res.headers.has("x-ratelimit-requests-remaining") && Number.isFinite(left)) onQuota(left, res.headers.has("x-ratelimit-requests-limit") && limit > 0 ? limit : null);
+    const minuteLeft = Number(res.headers.get("x-ratelimit-remaining"));
+    const minuteLimit = Number(res.headers.get("x-ratelimit-limit"));
+    const minute = res.headers.has("x-ratelimit-remaining") && Number.isFinite(minuteLeft) ? { left: minuteLeft, limit: res.headers.has("x-ratelimit-limit") && minuteLimit > 0 ? minuteLimit : null } : undefined;
+    if (onQuota && res.headers.has("x-ratelimit-requests-remaining") && Number.isFinite(left)) onQuota(left, res.headers.has("x-ratelimit-requests-limit") && limit > 0 ? limit : null, minute);
     if (!res.ok) throw new Error(`API-Football answered ${res.status} for ${path}`);
     const body = (await res.json()) as ApiResponse<unknown>;
     const errors = body.errors && typeof body.errors === "object" ? Object.values(body.errors as Record<string, string>) : [];

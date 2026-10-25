@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { LeaguePicker } from "../../../components/league-picker";
+import { LiveHealth } from "../../../components/live-health";
 import { MarketPriceHistory } from "../../../components/price-history";
 import { usePolling } from "../../../lib/use-polling";
 import { apiFetch, type MeResponse, type OddsEvent, type OddsFilter, type OddsSelection, type OddsSettings, type Sport, type UserRow } from "../../../lib/api";
@@ -179,6 +180,7 @@ export default function OddsPage() {
       ) : null}
 
       {settings?.canManageEvents && !ownerId && sport === "football" ? <LeaguePicker onSaved={toast.success} /> : null}
+      {settings?.canManageEvents && !ownerId && sport === "football" && settings.feed?.mode && settings.feed.mode !== "off" ? <LiveHealth /> : null}
 
 
       <div className="sport-switch" role="group" aria-label={t("Sport")}>

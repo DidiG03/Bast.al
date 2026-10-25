@@ -14727,6 +14727,56 @@ button.is-blocked {
   grid-area: more;
 }
 
+/* While the main market is paused: another match to bet on, in its place. */
+.role-player .bet-page button.bm-suggest {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  height: 2.75rem;
+  padding: 0 0.75rem;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--radius-control, 10px);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.role-player .bet-page button.bm-suggest:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--surface-3);
+}
+
+.bm-suggest-label {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.bm-suggest-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Which markets are paused after a goal or a card, and when they're back. */
+.bet-page .bm-pause strong {
+  font-weight: 800;
+}
+
+.bm-pause-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* Why the match can't be bet on right now. */
 .bet-page .bet-paused.bm-note {
   margin: -0.15rem 1rem 0.65rem;
@@ -16199,4 +16249,73 @@ html[data-theme="light"] .role-player .bet-status-lost {
   align-items: center;
   gap: 0.55rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* Super Admin: live health on the odds page. */
+.live-health {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.live-health-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.live-health-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.live-health-days {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+}
+
+.live-health-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 0.6rem;
+}
+
+.live-health-stats > div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control, 10px);
+  background: var(--surface-2);
+  font-size: 0.8rem;
+}
+
+.live-health-stats strong {
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-health-reasons {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.live-health-section > summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.25rem 0;
+}
+
+.live-health-live {
+  margin-left: 0.4rem;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }

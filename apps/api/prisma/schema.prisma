@@ -285,111 +285,119 @@ model AuditLog {
 }
 
 model Event {
-  id                 String      @id @default(cuid())
+  id                 String           @id @default(cuid())
   /// "football"; "greyhounds" for a greyhound race (league = the track,
   /// country = GB, IE or AU); "mma" for a fight (league = the card,
   /// country = the weight class, home/away team = the fighters); "tennis"
   /// for a match (league = the tournament, country = the tour and round,
   /// home/away team = the players, home/away score = sets won).
-  sport              String      @default("football")
+  sport              String           @default("football")
   name               String
   league             String
-  status             EventStatus @default(UPCOMING)
+  status             EventStatus      @default(UPCOMING)
   startsAt           DateTime
-  volume             Decimal     @default(0) @db.Decimal(12, 2)
+  volume             Decimal          @default(0) @db.Decimal(12, 2)
   /// Where the match came from: "api-football", "mock" or "manual".
-  provider           String      @default("manual")
+  provider           String           @default("manual")
   /// The match's id at the provider. Null for manual events.
-  externalId         String?     @map("external_id")
+  externalId         String?          @map("external_id")
   country            String?
-  homeTeam           String?     @map("home_team")
-  awayTeam           String?     @map("away_team")
+  homeTeam           String?          @map("home_team")
+  awayTeam           String?          @map("away_team")
   /// Crest from the feed, an https URL. Null when that feed has no picture (tennis, greyhounds).
-  homeLogo           String?     @map("home_logo")
-  awayLogo           String?     @map("away_logo")
+  homeLogo           String?          @map("home_logo")
+  awayLogo           String?          @map("away_logo")
   /// The competition's crest and the country's flag, when the feed sends them.
-  leagueLogo         String?     @map("league_logo")
-  countryFlag        String?     @map("country_flag")
-  homeScore          Int?        @map("home_score")
-  awayScore          Int?        @map("away_score")
+  leagueLogo         String?          @map("league_logo")
+  countryFlag        String?          @map("country_flag")
+  homeScore          Int?             @map("home_score")
+  awayScore          Int?             @map("away_score")
   /// Minutes played, while live.
   elapsed            Int?
   /// The feed's phase while live: "1H", "HT" (half-time), "2H", "ET", "BT" (break before extra time), "P", "SUSP", "INT".
   period             String?
   /// When the feed first reported the match finished; it stays on the live list for a few minutes after, marked "Full time".
-  finishedAt         DateTime?   @map("finished_at")
+  finishedAt         DateTime?        @map("finished_at")
   /// Super Admin: hidden events aren't shown to anyone else.
-  hidden             Boolean     @default(false)
+  hidden             Boolean          @default(false)
   /// Super Admin: suspended events are shown but can't be bet on.
-  suspended          Boolean     @default(false)
+  suspended          Boolean          @default(false)
   /// Last time the provider sent anything for this event.
-  syncedAt           DateTime?   @map("synced_at")
+  syncedAt           DateTime?        @map("synced_at")
   /// Last time live odds arrived for this match. Live bets pause when this goes stale.
-  liveOddsAt         DateTime?   @map("live_odds_at")
+  liveOddsAt         DateTime?        @map("live_odds_at")
   /// A live football match's timeline (goals, cards, substitutions, VAR) and numbers (corners, cards), for Players with bets on it. See parseMatchCentre.
-  matchCentre        Json?       @map("match_centre")
-  matchCentreAt      DateTime?   @map("match_centre_at")
+  matchCentre        Json?            @map("match_centre")
+  matchCentreAt      DateTime?        @map("match_centre_at")
   /// The feed has stopped live betting on this match (e.g. a goal or VAR check).
-  liveStopped        Boolean     @default(false) @map("live_stopped")
+  liveStopped        Boolean          @default(false) @map("live_stopped")
   /// Live bets pause until then after a goal, a big price jump or a reopen (see odds/live-guard.ts).
-  liveCooldownUntil  DateTime?   @map("live_cooldown_until")
+  liveCooldownUntil  DateTime?        @map("live_cooldown_until")
   /// Why: goal, swing or reopen.
-  liveCooldownReason String?     @map("live_cooldown_reason")
+  liveCooldownReason String?          @map("live_cooldown_reason")
   /// Goes up whenever the site sees the live match change (score, pause, the bookmaker blocking or reopening it): a live bet compares it before and after its wait.
-  liveVersion        Int         @default(0) @map("live_version")
+  liveVersion        Int              @default(0) @map("live_version")
   /// A goal on this live match reached the site more than LIVE_SLOW_MATCH_MS after it went in: no more live bets on it.
-  liveSlowFeed       Boolean     @default(false) @map("live_slow_feed")
+  liveSlowFeed       Boolean          @default(false) @map("live_slow_feed")
+  /// A score the match's timeline or fixture has and its live prices don't yet ("2:1"): paused markets don't reopen on prices behind it.
+  liveScoreAhead     String?          @map("live_score_ahead") @db.VarChar(9)
+  /// While live, market-seconds summed over its readings: every market it has, the ones on the board (not hidden as unpriced), and the ones taking bets.
+  liveMarketSec      Float            @default(0) @map("live_market_sec")
+  liveShownSec       Float            @default(0) @map("live_shown_sec")
+  liveOpenSec        Float            @default(0) @map("live_open_sec")
+  /// Pauses on its markets after goals, cards and the like, for how long they lasted.
+  livePauses         LivePause[]
   /// The score bets are settled on: 90 minutes plus stoppage time, never
   /// extra time or penalties. Set by the feed when the match ends, or by
   /// Super Admin when correcting a result.
-  resultHome         Int?        @map("result_home")
-  resultAway         Int?        @map("result_away")
+  resultHome         Int?             @map("result_home")
+  resultAway         Int?             @map("result_away")
   /// The half-time score, for the 1st and 2nd half markets.
-  resultHalfHome     Int?        @map("result_half_home")
-  resultHalfAway     Int?        @map("result_half_away")
+  resultHalfHome     Int?             @map("result_half_home")
+  resultHalfAway     Int?             @map("result_half_away")
   /// Went to extra time or penalties: match statistics include extra time then, so corner and card bets wait for Super Admin.
-  extraTime          Boolean     @default(false) @map("extra_time")
+  extraTime          Boolean          @default(false) @map("extra_time")
   /// Corners and cards (every yellow and red counts as one) the corner and card markets settle on.
-  resultCornersHome  Int?        @map("result_corners_home")
-  resultCornersAway  Int?        @map("result_corners_away")
-  resultCardsHome    Int?        @map("result_cards_home")
-  resultCardsAway    Int?        @map("result_cards_away")
+  resultCornersHome  Int?             @map("result_corners_home")
+  resultCornersAway  Int?             @map("result_corners_away")
+  resultCardsHome    Int?             @map("result_cards_home")
+  resultCardsAway    Int?             @map("result_cards_away")
   /// "feed" or "manual". The feed never overwrites numbers Super Admin entered.
-  statsSource        String?     @map("stats_source")
+  statsSource        String?          @map("stats_source")
   /// Last time the feed was asked for this match's statistics.
-  statsCheckedAt     DateTime?   @map("stats_checked_at")
+  statsCheckedAt     DateTime?        @map("stats_checked_at")
   /// The goals in the 90 minutes, in order, and who took part (see bets/goals.ts),
   /// for the first/last team to score, comeback and goalscorer markets.
-  resultGoals        Json?       @map("result_goals")
+  resultGoals        Json?            @map("result_goals")
   /// A finished football match with live bets: each goal's and card's minute
   /// and when each half kicked off (bets/late.ts LateTimeline), to find live
   /// bets placed after a goal or card the site hadn't shown yet.
-  lateCheck          Json?       @map("late_check")
-  lateCheckedAt      DateTime?   @map("late_checked_at")
+  lateCheck          Json?            @map("late_check")
+  lateCheckedAt      DateTime?        @map("late_checked_at")
   /// When the site first saw each goal, to measure how far behind the feed is.
   goalsSeen          GoalSeen[]
   /// Last time the feed was asked for this match's goals.
-  goalsCheckedAt     DateTime?   @map("goals_checked_at")
+  goalsCheckedAt     DateTime?        @map("goals_checked_at")
   /// Greyhounds: the race's details (number, grade, distance, region) and,
   /// once it's run, its official result (see odds/greyhounds.ts).
   race               Json?
-  raceResult         Json?       @map("race_result")
+  raceResult         Json?            @map("race_result")
   /// When bets close, if before the start: an MMA fight closes when its
   /// card's first fight starts (fights often go on earlier than listed).
-  closesAt           DateTime?   @map("closes_at")
+  closesAt           DateTime?        @map("closes_at")
   /// MMA: who won, how, in which round and at what time (see odds/mma.ts).
   /// Tennis: who won, every set's games, and whether a player retired (see odds/tennis.ts).
-  fightResult        Json?       @map("fight_result")
+  fightResult        Json?            @map("fight_result")
   /// "feed" or "manual". The feed never overwrites a manual result.
-  resultSource       String?     @map("result_source")
+  resultSource       String?          @map("result_source")
   /// When the feed last changed a result bets were already settled on. Once
   /// it has stayed the same for a while, settlement re-settles the bets and clears this.
-  resultChangedAt    DateTime?   @map("result_changed_at")
+  resultChangedAt    DateTime?        @map("result_changed_at")
   /// When the feed moved kick-off more than 48 hours later. Open bets placed
   /// before then are refunded, and this is cleared.
-  rescheduledAt      DateTime?   @map("rescheduled_at")
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  rescheduledAt      DateTime?        @map("rescheduled_at")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   markets            Market[]
   favourites         FavouriteEvent[]
 
@@ -428,17 +436,27 @@ model FavouriteMarket {
 
 /// One bet type on an event, e.g. "Match winner" or "Total goals 2.5".
 model Market {
-  id            String      @id @default(cuid())
-  eventId       String      @map("event_id")
-  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id              String      @id @default(cuid())
+  eventId         String      @map("event_id")
+  event           Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
   /// Stable key such as "match_winner" or "goals_2_5".
-  key           String
-  name          String
-  sortOrder     Int         @default(0) @map("sort_order")
+  key             String
+  name            String
+  sortOrder       Int         @default(0) @map("sort_order")
   /// While the match is live: the feed suspended this market, or stopped pricing it.
-  liveSuspended Boolean     @default(false) @map("live_suspended")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
-  selections    Selection[]
+  liveSuspended   Boolean     @default(false) @map("live_suspended")
+  /// While live, paused after something in the match that changes this market (odds/live-guard.ts eventPause):
+  /// when the site saw it, the latest it lasts (the fallback, or sooner once fresh prices came: freshUntil),
+  /// the earliest it can end, and why ("goal", "red", "var", "swing", "reopen").
+  livePausedAt    DateTime?   @map("live_paused_at")
+  livePausedUntil DateTime?   @map("live_paused_until")
+  liveReopenFrom  DateTime?   @map("live_reopen_from")
+  livePauseReason String?     @map("live_pause_reason") @db.VarChar(10)
+  /// While live: the last reading whose prices for it changed, and the last that priced it at all.
+  liveMovedAt     DateTime?   @map("live_moved_at")
+  liveQuotedAt    DateTime?   @map("live_quoted_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  selections      Selection[]
 
   @@unique([eventId, key])
   /// Each match's main market (its first) for the match list.
@@ -655,6 +673,26 @@ model GoalSeen {
   @@unique([eventId, homeScore, awayScore])
   @@index([seenAt])
   @@map("goals_seen")
+}
+
+/// One pause on a live match's markets after something happened in it (odds/live-guard.ts), for the live metrics.
+model LivePause {
+  id        String   @id @default(cuid())
+  eventId   String   @map("event_id")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// "goal", "red", "var", "swing" or "reopen".
+  reason    String   @db.VarChar(10)
+  startedAt DateTime @default(now()) @map("started_at")
+  /// When its main market (the match result) reopened or is due to: early on fresh prices, otherwise the fallback.
+  endsAt    DateTime @map("ends_at")
+  /// Reopened on fresh prices rather than the fallback.
+  fresh     Boolean  @default(false)
+  /// How many of the match's markets it paused.
+  markets   Int
+
+  @@index([startedAt])
+  @@index([eventId, startedAt])
+  @@map("live_pauses")
 }
 
 model BetLeg {

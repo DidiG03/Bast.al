@@ -4,12 +4,12 @@ import type { SlipItem } from "./slip";
 /**
  * What changed on one live match, as the API pushes it to a Player's team
  * (`odds.live`): the header when the score, minute or pause changed, and
- * [id, suspended] / [id, price, suspended] for markets and prices that moved.
+ * [id, suspended, stale] / [id, price, suspended] for markets and prices that moved.
  */
 export type LiveDelta = {
   id: string;
-  header?: Pick<OddsEvent, "status" | "live" | "elapsed" | "period" | "homeScore" | "awayScore" | "bettable" | "livePause" | "allMarketsSuspended">;
-  markets?: Array<[string, boolean]>;
+  header?: Pick<OddsEvent, "status" | "live" | "elapsed" | "period" | "homeScore" | "awayScore" | "bettable" | "livePause" | "allMarketsSuspended" | "marketPause">;
+  markets?: Array<[string, boolean, boolean?]>;
   prices?: Array<[string, number, boolean]>;
 };
 
@@ -24,12 +24,13 @@ export function byMatch(deltas: LiveDelta[]): Map<string, LiveDelta> {
  */
 export function applyDelta(event: OddsEvent, delta: LiveDelta | undefined): OddsEvent {
   if (!delta) return event;
-  const markets = new Map(delta.markets ?? []);
+  const markets = new Map((delta.markets ?? []).map(([id, suspended, stale]) => [id, { suspended, stale: stale ?? false }]));
   const prices = new Map((delta.prices ?? []).map(([id, price, suspended]) => [id, { price, suspended }]));
   let changed = false;
   const nextMarkets = event.markets.map((market) => {
-    const suspended = markets.get(market.id);
-    let marketChanged = suspended !== undefined && suspended !== (market.suspended ?? false);
+    const state = markets.get(market.id);
+    const suspended = state?.suspended;
+    let marketChanged = state !== undefined && (state.suspended !== (market.suspended ?? false) || state.stale !== (market.stale ?? false));
     const selections = market.selections.map((selection) => {
       const quote = prices.get(selection.id);
       if (!quote || (quote.price === selection.price && quote.suspended === (selection.suspended ?? false))) return selection;
@@ -38,7 +39,7 @@ export function applyDelta(event: OddsEvent, delta: LiveDelta | undefined): Odds
     });
     if (!marketChanged) return market;
     changed = true;
-    return { ...market, ...(suspended !== undefined ? { suspended } : {}), selections };
+    return { ...market, ...(state !== undefined ? { suspended, stale: state.stale } : {}), selections };
   });
   if (!changed && !delta.header) return event;
   return { ...event, ...(delta.header ?? {}), markets: changed ? nextMarkets : event.markets };

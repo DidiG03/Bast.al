@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { EventStatus, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
@@ -6,9 +6,9 @@ import { PrismaService } from "../prisma.service";
 import { type LiveDelta, RealtimeService, STAFF_TOPIC, teamTopic } from "../realtime/realtime.service";
 import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
-import { feedDelay, lagStats } from "./feed-delay";
-import { timelineOf } from "../bets/late";
-import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, priceCeiling, selectionQuote, teamMargin } from "./pricing";
+import { competitionKey, feedDelay, lagStats } from "./feed-delay";
+import { LATE_REASONS, timelineOf } from "../bets/late";
+import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
@@ -38,6 +38,31 @@ const COUNT_MARKETS = { _count: { select: { markets: true } } } as const;
 
 /** A live match's prices sent to a team are forgotten this long after its last update (it finished, or stopped being sent). */
 const LIVE_SENT_KEPT_MS = 30 * 60_000;
+
+/**
+ * Live betting only where the feed keeps up: a competition whose goals reached
+ * the site later than LIVE_COMPETITION_MAX_LAG_MS at its 95th percentile
+ * (lagStats, over the last LIVE_LIMIT_DAYS days, from at least
+ * LIVE_COMPETITION_MIN_GOALS goals) is offered before kick-off only.
+ * LIVE_COMPETITION_MAX_LAG_MS=0 turns it off.
+ */
+const LIVE_COMPETITION_MAX_LAG_MS = process.env.LIVE_COMPETITION_MAX_LAG_MS !== undefined && process.env.LIVE_COMPETITION_MAX_LAG_MS !== "" ? Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) : 15_000;
+const LIVE_COMPETITION_MIN_GOALS = Number(process.env.LIVE_COMPETITION_MIN_GOALS) > 0 ? Number(process.env.LIVE_COMPETITION_MIN_GOALS) : 5;
+const LIVE_LIMIT_DAYS = 3;
+/**
+ * Cards and corners markets are left off live matches in a competition whose
+ * last LIVE_STATS_MIN_MATCHES or more live matches (over LIVE_STATS_DAYS days)
+ * never had a live price for them from the feed.
+ */
+const LIVE_STATS_DAYS = 30;
+const LIVE_STATS_MIN_MATCHES = 3;
+/** How long the competitions' live limits are kept before they're worked out again. */
+const LIVE_LIMITS_TTL_MS = 5 * 60_000;
+const CARDS_MARKET = /^(home_|away_)?cards_/;
+const CORNERS_MARKET = /^(home_|away_)?corners_/;
+
+/** Which competitions have live limits ("provider · league", competitionKey). */
+export type LiveLimits = { slow: Set<string>; noCards: Set<string>; noCorners: Set<string> };
 
 /** How many matches one account can star. */
 const MAX_FAVOURITES = 200;
@@ -73,6 +98,7 @@ export type PlayerPrice = { odds: number; bettable: boolean; live: boolean; scor
 
 @Injectable()
 export class OddsService {
+  private readonly logger = new Logger(OddsService.name);
   private readonly inflight = new Map<string, Promise<unknown>>();
   /** Reads kept for a few seconds (see `kept`). */
   private readonly keptReads = new Map<string, { value: unknown; until: number }>();
@@ -82,6 +108,7 @@ export class OddsService {
    * header, market and selection.
    */
   private readonly liveSent = new Map<string, Map<string, { at: number; values: Map<string, string> }>>();
+  private limitsKept: { at: number; value: LiveLimits } | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -106,11 +133,28 @@ export class OddsService {
     const [events, platform, owners] = await Promise.all([
       this.prisma.event.findMany({
         where: { id: { in: [...new Set(eventIds)] } },
-        include: { markets: { select: { id: true, liveSuspended: true, selections: { select: { id: true, feedOdds: true, liveOdds: true, result: true, withdrawn: true } } } } },
+        include: {
+          markets: {
+            select: {
+              id: true,
+              key: true,
+              name: true,
+              sortOrder: true,
+              liveSuspended: true,
+              livePausedAt: true,
+              livePausedUntil: true,
+              liveReopenFrom: true,
+              livePauseReason: true,
+              liveQuotedAt: true,
+              selections: { select: { id: true, feedOdds: true, liveOdds: true, result: true, withdrawn: true } },
+            },
+          },
+        },
       }),
       this.platform(),
       this.prisma.user.findMany({ where: { role: Role.OWNER }, select: { id: true, oddsMargin: true } }),
     ]);
+    const limits = await this.liveLimits();
     const baseMargin = Number(platform.baseOddsMargin);
     const teams = [{ topic: teamTopic(null), margin: 0 }, ...owners.map((owner) => ({ topic: teamTopic(owner.id), margin: num(owner.oddsMargin) ?? 0 }))];
 
@@ -119,8 +163,10 @@ export class OddsService {
       if (!sent) this.liveSent.set(team.topic, (sent = new Map()));
       for (const [id, entry] of sent) if (now.getTime() - entry.at > LIVE_SENT_KEPT_MS) sent.delete(id);
       const deltas: LiveDelta[] = [];
-      for (const event of events) {
-        const live = event.status === EventStatus.LIVE;
+      for (const row of events) {
+        const live = row.status === EventStatus.LIVE;
+        const view = this.liveView(row, limits);
+        const event = { ...row, liveSlowCompetition: view.slow, markets: row.markets.filter((market) => !view.hides(market.key)) };
         const before = sent.get(event.id)?.values ?? new Map<string, string>();
         const values = new Map<string, string>();
         const delta: LiveDelta = { id: event.id };
@@ -134,14 +180,17 @@ export class OddsService {
           bettable: eventOpen(event, now),
           livePause: livePause(event, now),
           allMarketsSuspended: live && event.markets.length > 0 && event.markets.every((market) => market.liveSuspended),
+          marketPause: live ? pauseSummary(event.markets, now) : null,
         };
         const headerKey = JSON.stringify(header);
         values.set("h", headerKey);
         if (before.get("h") !== headerKey) delta.header = header;
         for (const market of event.markets) {
-          const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null));
-          values.set(`m:${market.id}`, suspended ? "1" : "0");
-          if (before.get(`m:${market.id}`) !== (suspended ? "1" : "0")) (delta.markets ??= []).push([market.id, suspended]);
+          const stale = marketStale(event, market, now, market.selections.some((s) => s.liveOdds !== null));
+          const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || marketPause(market, now) !== null || stale);
+          const value = `${suspended ? 1 : 0}${stale ? 1 : 0}`;
+          values.set(`m:${market.id}`, value);
+          if (before.get(`m:${market.id}`) !== value) (delta.markets ??= []).push([market.id, suspended, stale]);
           for (const selection of market.selections) {
             const quote = selectionQuote({
               event,
@@ -430,10 +479,11 @@ export class OddsService {
     const overrides = ownerId && rows.length > 0 ? await this.prisma.oddsOverride.findMany({ where: { ownerId, selectionId: { in: rows.map((r) => r.id) } }, select: { selectionId: true, odds: true } }) : [];
     const overrideBy = new Map(overrides.map((o) => [o.selectionId, Number(o.odds)]));
     const now = new Date();
+    const limits = rows.some((row) => row.market.event.status === EventStatus.LIVE) ? await this.liveLimits() : null;
     return rows
       .filter((row) => !row.market.event.hidden || actor.role === Role.SUPER_ADMIN)
       .map((row) => {
-        const event = row.market.event;
+        const event = limits ? { ...row.market.event, liveSlowCompetition: this.liveView(row.market.event, limits).slow } : row.market.event;
         const live = event.status === EventStatus.LIVE;
         const quote = selectionQuote({
           event,
@@ -472,10 +522,31 @@ export class OddsService {
     const withOpenMarket = new Set(
       liveIds.length > 0 ? (await this.prisma.market.groupBy({ by: ["eventId"], where: { eventId: { in: liveIds }, liveSuspended: false } })).map((row) => row.eventId) : [],
     );
+    // What's paused on each live match (every market, not only the ones sent), and the live limits of their competitions.
+    const pausedMarkets =
+      liveIds.length > 0
+        ? await this.prisma.market.findMany({
+            where: { eventId: { in: liveIds }, livePausedUntil: { gt: now } },
+            select: { eventId: true, key: true, name: true, sortOrder: true, livePausedAt: true, livePausedUntil: true, liveReopenFrom: true, livePauseReason: true },
+          })
+        : [];
+    const limits = liveIds.length > 0 ? await this.liveLimits() : null;
+    // Cards and corners markets left off live matches in competitions the feed never prices them for live: not counted either.
+    const hiddenCounts = new Map<string, number>();
+    if (limits && (limits.noCards.size > 0 || limits.noCorners.size > 0)) {
+      const limited = events.filter((event) => event.status === EventStatus.LIVE && this.liveView(event, limits).hidesAny);
+      if (limited.length > 0) {
+        const keys = await this.prisma.market.findMany({ where: { eventId: { in: limited.map((event) => event.id) }, OR: ["cards_", "home_cards_", "away_cards_", "corners_", "home_corners_", "away_corners_"].map((prefix) => ({ key: { startsWith: prefix } })) }, select: { eventId: true, key: true } });
+        const views = new Map(limited.map((event) => [event.id, this.liveView(event, limits)]));
+        for (const market of keys) if (views.get(market.eventId)?.hides(market.key)) hiddenCounts.set(market.eventId, (hiddenCounts.get(market.eventId) ?? 0) + 1);
+      }
+    }
 
-    return events.map((event) => {
-      const live = event.status === EventStatus.LIVE;
-      const race = event.sport === "greyhounds";
+    return events.map((row) => {
+      const live = row.status === EventStatus.LIVE;
+      const race = row.sport === "greyhounds";
+      const view = live && limits ? this.liveView(row, limits) : null;
+      const event = view ? { ...row, liveSlowCompetition: view.slow, markets: row.markets.filter((market) => !view.hides(market.key)) } : row;
       return {
       id: event.id,
       sport: event.sport,
@@ -505,8 +576,10 @@ export class OddsService {
       live,
       /** Live, and the bookmaker has every market off the board for now. */
       allMarketsSuspended: live && event._count.markets > 0 && !withOpenMarket.has(event.id),
+      /** Live: the markets paused after something in the match (a goal, a card…), for the match's banner. */
+      marketPause: live ? pauseSummary(pausedMarkets.filter((market) => market.eventId === event.id && !view?.hides(market.key)), now) : null,
       /** Every market the match has; the list view sends only the first. */
-      marketCount: event._count.markets,
+      marketCount: event._count.markets - (hiddenCounts.get(event.id) ?? 0),
       /** Greyhounds: the race's number, grade and distance, and once run, the finishing order with each dog's SP. */
       race: race ? raceDetails(event.race) : undefined,
       raceResult: race ? event.raceResult : undefined,
@@ -534,12 +607,18 @@ export class OddsService {
             suspended: quote.suspended,
           };
         });
+        const stale = marketStale(event, market, now, market.selections.some((s) => s.liveOdds !== null));
+        const paused = live ? marketPause(market, now) : null;
         return {
           id: market.id,
           key: market.key,
           name: market.name,
-          /** Live only: the feed has this market off the board right now (single outcomes can be off on their own). */
-          suspended: live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null)),
+          /** Live only: off the board right now: the feed has it off (single outcomes can be off on their own), or it's paused. */
+          suspended: live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || paused !== null || stale),
+          /** Live only: paused after something in the match (a goal, a card…), and why. */
+          paused,
+          /** Live only: the feed hasn't priced it during play for a while; shown under "Not available during play". */
+          stale,
           selections,
         };
       }),
@@ -617,6 +696,168 @@ export class OddsService {
    * The league picker: what's synced now, the defaults, and every competition
    * the feed has a season in progress for.
    */
+  /**
+   * The competitions with live limits (LiveLimits), worked out at most every
+   * LIVE_LIMITS_TTL_MS: those whose feed is too slow for live betting
+   * (LIVE_COMPETITION_MAX_LAG_MS), and those whose recent live matches never
+   * had a live price for cards, or for corners.
+   */
+  async liveLimits(): Promise<LiveLimits> {
+    if (this.limitsKept && Date.now() - this.limitsKept.at < LIVE_LIMITS_TTL_MS) return this.limitsKept.value;
+    return this.shared("live-limits", async () => {
+      const slow = new Set<string>();
+      if (LIVE_COMPETITION_MAX_LAG_MS > 0) {
+        const lag = await this.feedLagStats(LIVE_LIMIT_DAYS, 0.95).catch(() => null);
+        for (const [competition, group] of Object.entries(lag?.byCompetition ?? {})) {
+          if (group.goals >= LIVE_COMPETITION_MIN_GOALS && group.p * 1000 >= LIVE_COMPETITION_MAX_LAG_MS) slow.add(competition);
+        }
+      }
+      const since = new Date(Date.now() - LIVE_STATS_DAYS * 86_400_000);
+      const rows = await this.prisma.$queryRaw<Array<{ provider: string; league: string; matches: number; cards: boolean; corners: boolean }>>`
+        SELECT e.provider, e.league, COUNT(DISTINCT e.id)::int AS matches,
+          COALESCE(BOOL_OR(p.cards), false) AS cards, COALESCE(BOOL_OR(p.corners), false) AS corners
+        FROM "Event" e
+        LEFT JOIN (
+          SELECT m.event_id, BOOL_OR(m.key ~ '^(home_|away_)?cards_') AS cards, BOOL_OR(m.key ~ '^(home_|away_)?corners_') AS corners
+          FROM markets m JOIN selections s ON s.market_id = m.id JOIN "Event" recent ON recent.id = m.event_id
+          WHERE s.live_odds IS NOT NULL AND m.key ~ '^(home_|away_)?(cards|corners)_' AND recent."startsAt" >= ${since}
+          GROUP BY m.event_id
+        ) p ON p.event_id = e.id
+        WHERE e.sport = 'football' AND e.live_odds_at IS NOT NULL AND e."startsAt" >= ${since} AND e.status IN ('LIVE', 'COMPLETED')
+        GROUP BY e.provider, e.league`.catch((error) => {
+        this.logger.warn(`Competitions without live cards or corners not worked out: ${error instanceof Error ? error.message : String(error)}`);
+        return [];
+      });
+      const noCards = new Set<string>();
+      const noCorners = new Set<string>();
+      for (const row of rows) {
+        if (row.matches < LIVE_STATS_MIN_MATCHES) continue;
+        if (!row.cards) noCards.add(competitionKey(row.provider, row.league));
+        if (!row.corners) noCorners.add(competitionKey(row.provider, row.league));
+      }
+      const value = { slow, noCards, noCorners };
+      const before = this.limitsKept?.value;
+      if (!before || [...slow].join("|") !== [...before.slow].join("|")) {
+        this.logger.log(slow.size > 0 ? `Live betting off (feed too slow, ${LIVE_COMPETITION_MAX_LAG_MS / 1000} s or more at the 95th percentile) in: ${[...slow].join(", ")}` : "Live betting on in every competition: none has a feed too slow for it");
+      }
+      this.limitsKept = { at: Date.now(), value };
+      return value;
+    });
+  }
+
+  /**
+   * Super Admin: how live betting is doing over the last `days` days. The
+   * share of live market-time open (taking bets) per match and per
+   * competition, out of the markets on the board and out of every market;
+   * how long pauses after goals, cards and the like lasted (to the match
+   * result reopening), and how many reopened on fresh prices; the share of
+   * live picks voided for a goal or card the site hadn't shown yet; the
+   * competitions with live limits; and the live polling (the feed plan, how
+   * often each match is read and how far behind the bookmaker).
+   */
+  async liveHealth(days = 1) {
+    const since = new Date(Date.now() - days * 86_400_000);
+    const [matches, pauses, voids, limits] = await Promise.all([
+      this.prisma.event.findMany({
+        where: { startsAt: { gte: since }, liveMarketSec: { gt: 0 } },
+        select: { id: true, name: true, provider: true, league: true, status: true, startsAt: true, liveMarketSec: true, liveShownSec: true, liveOpenSec: true },
+        orderBy: { startsAt: "desc" },
+        take: 500,
+      }),
+      this.prisma.livePause.findMany({ where: { startedAt: { gte: since } }, select: { eventId: true, reason: true, startedAt: true, endsAt: true, fresh: true, event: { select: { provider: true, league: true } } } }),
+      this.prisma.$queryRaw<Array<{ provider: string; league: string; picks: number; voided: number }>>`
+        SELECT e.provider, e.league, COUNT(*)::int AS picks, (COUNT(*) FILTER (WHERE x.void_reason = ANY(${LATE_REASONS}::text[])))::int AS voided
+        FROM (
+          SELECT b.selection_id, b.void_reason FROM bets b WHERE b.live IS NOT NULL AND b.selection_id IS NOT NULL AND b.placed_at >= ${since}
+          UNION ALL
+          SELECT l.selection_id, l.void_reason FROM bet_legs l JOIN bets b ON b.id = l.bet_id WHERE l.live IS NOT NULL AND b.placed_at >= ${since}
+        ) x
+        JOIN selections s ON s.id = x.selection_id JOIN markets m ON m.id = s.market_id JOIN "Event" e ON e.id = m.event_id
+        GROUP BY e.provider, e.league`,
+      this.liveLimits(),
+    ]);
+    const share = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 1000) / 10 : null);
+    const pauseMs = (rows: typeof pauses) => (rows.length === 0 ? null : Math.round(rows.reduce((sum, row) => sum + Math.max(0, row.endsAt.getTime() - row.startedAt.getTime()), 0) / rows.length));
+    // Pauses still running end when they're due; that's the fallback unless fresh prices came.
+    const competitions = new Map<string, { market: number; shown: number; open: number; matches: number; pauses: typeof pauses; picks: number; voided: number }>();
+    const entry = (key: string) => {
+      let row = competitions.get(key);
+      if (!row) competitions.set(key, (row = { market: 0, shown: 0, open: 0, matches: 0, pauses: [], picks: 0, voided: 0 }));
+      return row;
+    };
+    for (const match of matches) {
+      const row = entry(competitionKey(match.provider, match.league));
+      row.market += match.liveMarketSec;
+      row.shown += match.liveShownSec;
+      row.open += match.liveOpenSec;
+      row.matches++;
+    }
+    for (const pause of pauses) entry(competitionKey(pause.event.provider, pause.event.league)).pauses.push(pause);
+    for (const row of voids) Object.assign(entry(competitionKey(row.provider, row.league)), { picks: row.picks, voided: row.voided });
+    const totals = matches.reduce((sum, match) => ({ market: sum.market + match.liveMarketSec, shown: sum.shown + match.liveShownSec, open: sum.open + match.liveOpenSec }), { market: 0, shown: 0, open: 0 });
+    const picks = voids.reduce((sum, row) => sum + row.picks, 0);
+    const voided = voids.reduce((sum, row) => sum + row.voided, 0);
+    const byReason = [...new Set(pauses.map((pause) => pause.reason))].map((reason) => {
+      const rows = pauses.filter((pause) => pause.reason === reason);
+      return { reason, pauses: rows.length, averageMs: pauseMs(rows), fresh: rows.filter((row) => row.fresh).length };
+    });
+    const polling = this.sync.pollingHealth();
+    const names = new Map((await this.prisma.event.findMany({ where: { id: { in: polling.matches.map((m) => m.eventId) } }, select: { id: true, name: true } })).map((e) => [e.id, e.name]));
+    return {
+      days,
+      overall: {
+        openOfShown: share(totals.open, totals.shown),
+        openOfAll: share(totals.open, totals.market),
+        pauses: pauses.length,
+        averagePauseMs: pauseMs(pauses),
+        freshReopens: pauses.filter((pause) => pause.fresh).length,
+        livePicks: picks,
+        voidRate: share(voided, picks),
+      },
+      pausesByReason: byReason,
+      competitions: [...competitions]
+        .map(([competition, row]) => ({
+          competition,
+          matches: row.matches,
+          openOfShown: share(row.open, row.shown),
+          openOfAll: share(row.open, row.market),
+          pauses: row.pauses.length,
+          averagePauseMs: pauseMs(row.pauses),
+          livePicks: row.picks,
+          voidRate: share(row.voided, row.picks),
+          liveOff: limits.slow.has(competition),
+          noLiveCards: limits.noCards.has(competition),
+          noLiveCorners: limits.noCorners.has(competition),
+        }))
+        .sort((a, b) => b.matches - a.matches || a.competition.localeCompare(b.competition)),
+      matches: matches.slice(0, 100).map((match) => ({
+        id: match.id,
+        name: match.name,
+        competition: competitionKey(match.provider, match.league),
+        live: match.status === EventStatus.LIVE,
+        startsAt: match.startsAt,
+        openOfShown: share(match.liveOpenSec, match.liveShownSec),
+        openOfAll: share(match.liveOpenSec, match.liveMarketSec),
+        pauses: pauses.filter((pause) => pause.eventId === match.id).length,
+        averagePauseMs: pauseMs(pauses.filter((pause) => pause.eventId === match.id)),
+      })),
+      liveLimits: { maxLagMs: LIVE_COMPETITION_MAX_LAG_MS, slow: [...limits.slow], noCards: [...limits.noCards], noCorners: [...limits.noCorners] },
+      polling: { ...polling, matches: polling.matches.map((match) => ({ ...match, name: names.get(match.eventId) ?? match.eventId })) },
+    };
+  }
+
+  /** One match's live limits: its competition too slow for live betting, and the cards or corners markets left off it while live. */
+  private liveView(event: { provider: string; league: string; sport?: string }, limits: LiveLimits) {
+    const key = competitionKey(event.provider, event.league);
+    const cards = limits.noCards.has(key);
+    const corners = limits.noCorners.has(key);
+    return {
+      slow: limits.slow.has(key),
+      hidesAny: cards || corners,
+      hides: (marketKey: string) => (cards && CARDS_MARKET.test(marketKey)) || (corners && CORNERS_MARKET.test(marketKey)),
+    };
+  }
+
   /**
    * Super Admin: how many seconds after a goal goes in the site first sees it,
    * over the last `days` days (feed-delay.ts). Only matches whose timeline has
@@ -737,8 +978,11 @@ export class OddsService {
     const ownerMargin = num(owner?.oddsMargin) ?? 0;
     const overrideBy = new Map(overrides.map((row) => [row.selectionId, num(row.odds)]));
     const prices = new Map<string, PlayerPrice>();
+    const limits = selections.some((selection) => selection.market.event.status === EventStatus.LIVE) ? await this.liveLimits() : null;
     for (const selection of selections) {
-      const event = selection.market.event;
+      const view = limits ? this.liveView(selection.market.event, limits) : null;
+      // A competition too slow for live betting, or a cards or corners market it never prices live: not bettable in play.
+      const event = view ? { ...selection.market.event, liveSlowCompetition: view.slow || view.hides(selection.market.key) } : selection.market.event;
       const quote = selectionQuote({
         event,
         market: selection.market,

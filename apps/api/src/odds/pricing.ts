@@ -1,5 +1,7 @@
 import { LIVE_CUTOFF_MINUTE, type LivePause } from "./live-guard";
 
+const envMs = (name: string, fallback: number) => (process.env[name] !== undefined && process.env[name] !== "" && Number(process.env[name]) >= 0 ? Number(process.env[name]) : fallback);
+
 /** Lowest and highest price anyone can set or be shown. */
 export const MIN_ODDS = 1.01;
 export const MAX_ODDS = 1000;
@@ -65,25 +67,53 @@ type LiveEventState = {
   liveStopped: boolean;
   liveOddsAt: Date | null;
   elapsed?: number | null;
-  liveCooldownUntil?: Date | null;
-  liveCooldownReason?: string | null;
+  /** The feed's phase while live ("HT" at half-time). */
+  period?: string | null;
   /** A goal on the match reached the site too long after it went in (Event.liveSlowFeed): no more live bets on it. */
   liveSlowFeed?: boolean;
+  /** Its competition's feed is too slow for live betting (OddsService.liveLimits): pre-match only. */
+  liveSlowCompetition?: boolean;
 };
 
+/** A market's live state: the feed's suspension, a pause after something in the match, and when the feed last priced it. */
+type LiveMarketState = { key?: string; liveSuspended: boolean; livePausedUntil?: Date | null; livePauseReason?: string | null; liveQuotedAt?: Date | null };
+
 /**
- * Why a live match isn't taking bets right now, or null if it is (or isn't
- * live). In order: the bookmaker blocked it, our own pause after a goal or a
- * price jump, the last minutes, or prices that stopped arriving.
+ * A market the feed hasn't priced for this long during play is taken off
+ * the live board (shown under "Not available during play") rather than
+ * left there suspended. LIVE_MARKET_STALE_MS=0 turns it off.
+ */
+export const LIVE_MARKET_STALE_MS = envMs("LIVE_MARKET_STALE_MS", 5 * 60_000);
+
+/** Why a live market is paused right now (a goal, a card…: odds/live-guard.ts eventPause), or null. */
+export function marketPause(market: LiveMarketState, now: Date = new Date()): string | null {
+  return market.livePausedUntil && market.livePausedUntil > now ? market.livePauseReason ?? "goal" : null;
+}
+
+/**
+ * Whether a live market is one the feed isn't pricing during play: no
+ * priced reading of it for LIVE_MARKET_STALE_MS, or, for one never priced
+ * live at all (`everPriced` false), that long since kick-off. Not while the
+ * match is at a break, when the bookmaker may take everything down for a
+ * while.
+ */
+export function marketStale(event: { status: string; startsAt: Date; period?: string | null }, market: LiveMarketState, now: Date = new Date(), everPriced = true): boolean {
+  if (event.status !== "LIVE" || LIVE_MARKET_STALE_MS <= 0 || ["HT", "BT", "P"].includes(event.period ?? "")) return false;
+  const since = market.liveQuotedAt ?? (everPriced ? null : event.startsAt);
+  return since !== null && now.getTime() - since.getTime() > LIVE_MARKET_STALE_MS;
+}
+
+/**
+ * Why a whole live match isn't taking bets right now, or null if it is (or
+ * isn't live). In order: its competition's feed is too slow for live
+ * betting, the bookmaker blocked it (or a goal reached the site too late),
+ * the last minutes, or prices that stopped arriving. A goal, a card or the
+ * bookmaker reopening it pauses single markets instead (marketPause).
  */
 export function livePause(event: LiveEventState, now: Date = new Date()): LivePause | null {
   if (event.status !== "LIVE") return null;
+  if (event.liveSlowCompetition) return "competition";
   if (event.liveStopped || event.liveSlowFeed) return "feed";
-  if (event.liveCooldownUntil && event.liveCooldownUntil > now) {
-    // A red card, a VAR check or a penalty shows as a jump in the prices.
-    if (event.liveCooldownReason === "red" || event.liveCooldownReason === "var") return "swing";
-    return (["goal", "swing", "reopen"].includes(event.liveCooldownReason ?? "") ? event.liveCooldownReason : "feed") as LivePause;
-  }
   if (LIVE_CUTOFF_MINUTE > 0 && (event.elapsed ?? 0) >= LIVE_CUTOFF_MINUTE) return "late";
   if (event.liveOddsAt === null || now.getTime() - event.liveOddsAt.getTime() > LIVE_ODDS_STALE_MS) return "feed";
   return null;
@@ -111,7 +141,7 @@ export function eventOpen(event: LiveEventState, now: Date = new Date()): boolea
  */
 export function selectionQuote(input: {
   event: LiveEventState;
-  market: { liveSuspended: boolean };
+  market: LiveMarketState;
   /** `withdrawn`: the feed stopped pricing this outcome before kick-off (see Selection.withdrawn). */
   selection: { feedOdds: number; liveOdds: number | null; result: string | null; withdrawn?: boolean };
   baseMargin: number;
@@ -131,7 +161,37 @@ export function selectionQuote(input: {
     const withdrawn = input.selection.withdrawn === true;
     return { price, bettable: open && !withdrawn, live, suspended: withdrawn };
   }
-  const suspended = input.market.liveSuspended || input.selection.liveOdds === null;
+  // Paused after a goal or a card, or not priced during play for a while: off the board too.
+  const suspended = input.market.liveSuspended || input.selection.liveOdds === null || marketPause(input.market, input.now) !== null || marketStale(input.event, input.market, input.now, input.selection.liveOdds !== null);
   const price = applyMargin(input.selection.liveOdds ?? input.selection.feedOdds, teamMargin(input.baseMargin, input.ownerMargin));
   return { price, bettable: open && !suspended, live, suspended };
+}
+
+/** What's paused on a live match, for its banner: the latest event's reason, how many markets, the first few, and when they're back. */
+export type MarketPauseSummary = {
+  reason: string;
+  count: number;
+  /** The first few paused markets' names, in board order. */
+  markets: string[];
+  /** When the last of them reopens at the latest. */
+  until: string;
+  /** Fresh prices are in for all of them: `until` is when they reopen, not just the latest they might. */
+  exact: boolean;
+};
+
+export function pauseSummary(
+  markets: Array<{ name: string; sortOrder: number; livePausedAt?: Date | null; livePausedUntil?: Date | null; liveReopenFrom?: Date | null; livePauseReason?: string | null }>,
+  now: Date = new Date(),
+): MarketPauseSummary | null {
+  const paused = markets.filter((market) => market.livePausedUntil && market.livePausedUntil > now).sort((a, b) => a.sortOrder - b.sortOrder);
+  if (paused.length === 0) return null;
+  const latest = paused.reduce((top, market) => ((market.livePausedAt?.getTime() ?? 0) > (top.livePausedAt?.getTime() ?? 0) ? market : top));
+  const until = Math.max(...paused.map((market) => market.livePausedUntil!.getTime()));
+  return {
+    reason: latest.livePauseReason ?? "goal",
+    count: paused.length,
+    markets: paused.slice(0, 3).map((market) => market.name),
+    until: new Date(until).toISOString(),
+    exact: paused.every((market) => market.liveReopenFrom != null && market.livePausedUntil!.getTime() <= market.liveReopenFrom.getTime()),
+  };
 }

@@ -26,13 +26,25 @@ export type RealtimeEvent =
 
 /**
  * What changed on one live match. The header (score, minute, whether it
- * takes bets) comes when any of it changed; `markets` are [market id,
- * suspended] and `prices` [selection id, price, suspended] pairs that changed.
+ * takes bets, what's paused) comes when any of it changed; `markets` are [market id,
+ * suspended, stale] and `prices` [selection id, price, suspended] pairs that changed.
  */
 export type LiveDelta = {
   id: string;
-  header?: { status: string; live: boolean; elapsed: number | null; period: string | null; homeScore: number | null; awayScore: number | null; bettable: boolean; livePause: string | null; allMarketsSuspended: boolean };
-  markets?: Array<[string, boolean]>;
+  header?: {
+    status: string;
+    live: boolean;
+    elapsed: number | null;
+    period: string | null;
+    homeScore: number | null;
+    awayScore: number | null;
+    bettable: boolean;
+    livePause: string | null;
+    allMarketsSuspended: boolean;
+    marketPause: { reason: string; count: number; markets: string[]; until: string; exact: boolean } | null;
+  };
+  /** [market id, suspended, stale]: stale is a market the feed hasn't priced during play for a while. */
+  markets?: Array<[string, boolean, boolean]>;
   prices?: Array<[string, number, boolean]>;
 };
 

@@ -123,9 +123,12 @@ test("a red card that reaches the site during the wait refuses the bet too", asy
   assert.equal(await prisma.bet.count({ where: { selectionId: homeOf(match).id } }), 0);
 });
 
-test("a pause during the wait (the goal's own pause) refuses the bet", async () => {
+test("a pause on the market during the wait (the goal's own pause) refuses the bet", async () => {
   const match = await liveMatch("Paused during the wait");
-  await assert.rejects(placeWhile(match, 200, { liveCooldownUntil: new Date(Date.now() + 60_000), liveCooldownReason: "goal" }), /paused while your bet/);
+  const placing = place(match);
+  await sleep(200);
+  await prisma.market.updateMany({ where: { eventId: match.id }, data: { livePausedAt: new Date(), livePausedUntil: new Date(Date.now() + 60_000), liveReopenFrom: new Date(Date.now() + 15_000), livePauseReason: "goal" } });
+  await assert.rejects(placing, /paused while your bet/);
 });
 
 test("a goal the feed reports only after the wait: the bet goes in, and settlement voids it from the timeline", async () => {

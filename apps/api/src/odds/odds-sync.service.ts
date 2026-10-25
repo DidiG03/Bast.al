@@ -9,8 +9,10 @@ import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdd
 import { feedDelay, goalForScore, goalLag } from "./feed-delay";
 import { savedCrests, savedMarks } from "./crest";
 import { PREMATCH_REFRESH_MS, RICH_PLAN, isDailyLimitError, msUntilReset, pacedInterval, quotaReserve } from "./feed-budget";
-import { GOAL_COOLDOWN_MS, type CooldownReason, bigSwing, cooldownFor, goalPauseOver, laterCooldown, scoreChanged } from "./live-guard";
+import { EVENT_PAUSES, GOAL_COOLDOWN_MS, LIVE_CUTOFF_MINUTE, type CooldownReason, type MarketPause, type MarketPauseReason, bigSwing, cooldownFor, eventPause, freshUntil, hitBy, laterCooldown, mergePause, scoreChanged } from "./live-guard";
+import { marketStale } from "./pricing";
 import { mockFetchJson } from "./mock-feed";
+import { LIVE_HOT_MS, PollingStats, hotMatches, minuteRoom } from "./live-polling";
 
 /**
  * Leagues synced when API_FOOTBALL_LEAGUES isn't set (API-Football ids), picked
@@ -55,6 +57,10 @@ const LOCK_KEY = "bastal:odds-sync";
 /** Live prices and live scores have locks of their own, so a long pre-match sync never holds them up. */
 const LIVE_LOCK_KEY = "bastal:odds-sync:live";
 const SCORES_LOCK_KEY = "bastal:odds-sync:scores";
+/** The priority lane (live-polling.ts) has its own, so it never waits for the whole board's reading. */
+const HOT_LOCK_KEY = "bastal:odds-sync:hot";
+/** How often the polling is summed up in the log (each live match: how often it was read, how old its prices were). */
+const POLLING_LOG_MS = 5 * 60_000;
 /**
  * In-play prices for every live match (one request): every 5 seconds while
  * someone is on the site or looked at live matches lately, every 20 when
@@ -72,7 +78,7 @@ const MATCH_CENTRE_EVERY_MS = 30_000;
  * settlement) may use what's kept in reserve; prices and match centres stop
  * at the reserve.
  */
-const SHARE = { odds: 0.45, scores: 0.25, centres: 0.15 };
+const SHARE = { odds: 0.45, scores: 0.25, centres: 0.15, hot: 0.1 };
 /** While nothing can be afforded or the day's requests are used up, the loops look again this often. */
 const BUDGET_RECHECK_MS = 60_000;
 /** After the feed says the day's requests are used up, nothing is asked for this long; then one request checks. */
@@ -87,6 +93,8 @@ const MATCH_CENTRE_INTEREST_MS = 2 * 60_000;
 /** Before kick-off, the match centre (the team sheets) is fetched from this long before, at most every 10 minutes. */
 const LINEUPS_BEFORE_MS = 90 * 60_000;
 const LINEUPS_EVERY_MS = 10 * 60_000;
+/** A market's last priced reading is written at most this often (Market.liveQuotedAt). */
+const QUOTED_EVERY_MS = 30_000;
 /** Live matches saved at the same time on each reading; each takes one database connection. */
 const LIVE_WRITERS = 6;
 /** A match's score comes from the live odds while they're this fresh; the fixtures list lags behind them. */
@@ -186,6 +194,14 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   /** Requests left on today's API-Football quota, and the plan's daily total, from its last answer. */
   private quotaLeft: number | null = null;
   private quotaLimit: number | null = null;
+  /** The same for the plan's limit a minute. */
+  private minuteLeft: number | null = null;
+  private minuteLimit: number | null = null;
+  /** How often each live match's prices were read, and how far behind the bookmaker (live-polling.ts). */
+  readonly polling = new PollingStats();
+  /** Requests the priority lane made on its last run, and when the polling was last logged. */
+  private lastHotCount = 0;
+  private lastPollingLog = Date.now();
   /** Matches whose stats someone has open, and when they last asked. */
   private readonly centreInterest = new Map<string, number>();
   /** Match centres being fetched for someone right now, so viewers who ask together share one request. */
@@ -201,9 +217,15 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const key = process.env.API_FOOTBALL_KEY?.trim();
     if (key) {
       this.mode = "api-football";
-      this.client = new ApiFootballClient(httpFetchJson(process.env.API_FOOTBALL_HOST?.trim() || "v3.football.api-sports.io", key, (left, limit) => {
+      this.client = new ApiFootballClient(httpFetchJson(process.env.API_FOOTBALL_HOST?.trim() || "v3.football.api-sports.io", key, (left, limit, minute) => {
         this.quotaLeft = left;
+        const planChanged = (limit !== null && limit !== this.quotaLimit) || (minute !== undefined && minute.limit !== null && minute.limit !== this.minuteLimit);
         if (limit !== null) this.quotaLimit = limit;
+        if (minute) {
+          this.minuteLeft = minute.left;
+          if (minute.limit !== null) this.minuteLimit = minute.limit;
+        }
+        if (planChanged) this.logger.log(`API-Football plan: ${this.quotaLimit ?? "unknown"} requests a day, ${this.minuteLimit ?? "unknown"} a minute`);
       }));
     } else if (process.env.ODDS_FEED_MOCK === "true") {
       this.mode = "mock";
@@ -234,6 +256,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     this.timers.push(setInterval(() => void this.scheduled("full"), fullEvery));
     this.loop("live scores", 8_000, () => this.liveScoresRun(), () => this.liveScoresDelay());
     this.loop("live odds", 10_000, () => this.liveOddsRun(), () => this.liveOddsDelay(), (wake) => (this.wakeOdds = wake));
+    this.loop("live odds priority", 12_000, () => this.liveHotRun(), () => this.liveHotDelay());
   }
 
   /**
@@ -306,6 +329,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     return pacedInterval({ wantMs: want, perRun: 1, share: SHARE.odds, left: this.spare(), msLeft: msUntilReset(Date.now()) });
   }
 
+  /** The priority lane wants LIVE_HOT_MS; its share of the day paces it by the requests it actually made last time. */
+  private liveHotDelay(): number {
+    return pacedInterval({ wantMs: LIVE_HOT_MS, perRun: Math.max(1, this.lastHotCount), share: SHARE.hot, left: this.spare(), msLeft: msUntilReset(Date.now()) });
+  }
+
   private liveScoresDelay(): number {
     return pacedInterval({ wantMs: LIVE_SCORES_MS, perRun: 1, share: SHARE.scores, left: this.quotaLeft, msLeft: msUntilReset(Date.now()) });
   }
@@ -317,6 +345,92 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   /** In-play prices for every live match. */
   private async liveOddsRun() {
     await this.withLock(() => this.syncLiveOdds(), LIVE_LOCK_KEY);
+  }
+
+  /** The matches that matter most, read on their own when the board hasn't been read for them lately (live-polling.ts). */
+  private async liveHotRun() {
+    this.lastHotCount = (await this.withLock(() => this.syncHotOdds(), HOT_LOCK_KEY)) ?? 0;
+    if (Date.now() - this.lastPollingLog >= POLLING_LOG_MS) await this.logPolling().catch(() => undefined);
+  }
+
+  /**
+   * Reads on their own (one request each) the live matches waiting for fresh
+   * prices to reopen paused markets and those with the most riding on them in
+   * open bets, when the board hasn't been read for them within LIVE_HOT_MS
+   * (hotMatches), while this minute's requests have room. Returns how many
+   * requests it made.
+   */
+  private async syncHotOdds(): Promise<number> {
+    if (!this.client || this.mode === "off") return 0;
+    const now = new Date();
+    const live = await this.prisma.event.findMany({
+      where: { provider: this.provider(), externalId: { not: null }, status: EventStatus.LIVE },
+      select: { id: true, externalId: true, homeTeam: true, awayTeam: true, name: true },
+    });
+    if (live.length === 0) return 0;
+    const ids = live.map((event) => event.id);
+    const [exposures, waiting] = await Promise.all([this.liveExposure(ids), this.prisma.market.groupBy({ by: ["eventId"], where: { eventId: { in: ids }, livePausedUntil: { gt: now } } })]);
+    const waitingIds = new Set(waiting.map((row) => row.eventId));
+    const picked = hotMatches(
+      live.map((event) => ({ eventId: event.id, exposure: exposures.get(event.id) ?? 0, waiting: waitingIds.has(event.id), lastRead: this.polling.lastRead(event.id) })),
+      now.getTime(),
+    );
+    if (picked.length === 0 || !minuteRoom(this.minuteLeft, this.minuteLimit, picked.length)) return 0;
+    const byId = new Map(live.map((event) => [event.id, event]));
+    const read: string[] = [];
+    for (const { eventId } of picked) {
+      const event = byId.get(eventId)!;
+      const raw = await this.client.liveOddsFor(event.externalId!);
+      // Not priced by the feed right now: the board's reading decides what that means.
+      if (!raw) continue;
+      await this.applyLiveOdds(event.id, parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? "")).catch((error) =>
+        this.logger.warn(`Live odds for event ${event.id} not saved: ${error instanceof Error ? error.message : String(error)}`),
+      );
+      read.push(event.id);
+    }
+    if (read.length > 0) await this.announceLive(read);
+    return picked.length;
+  }
+
+  /** What open bets on each of these matches would pay out (stake times price), singles and combined legs alike. */
+  private async liveExposure(eventIds: string[]): Promise<Map<string, number>> {
+    if (eventIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ event_id: string; exposure: number }>>`
+      SELECT event_id, SUM(exposure)::float AS exposure FROM (
+        SELECT m.event_id, b.stake * COALESCE(b.odds, 1) AS exposure
+        FROM bets b JOIN selections s ON s.id = b.selection_id JOIN markets m ON m.id = s.market_id
+        WHERE b.status = 'OPEN' AND m.event_id = ANY(${eventIds}::text[])
+        UNION ALL
+        SELECT m.event_id, b.stake * COALESCE(b.odds, 1) AS exposure
+        FROM bet_legs l JOIN bets b ON b.id = l.bet_id JOIN selections s ON s.id = l.selection_id JOIN markets m ON m.id = s.market_id
+        WHERE b.status = 'OPEN' AND m.event_id = ANY(${eventIds}::text[])
+      ) AS open_bets GROUP BY event_id`;
+    return new Map(rows.map((row) => [row.event_id, Number(row.exposure)]));
+  }
+
+  /** Sums up the last POLLING_LOG_MS of live polling in the log: each match's reading interval and how far behind the bookmaker it was. */
+  private async logPolling() {
+    this.lastPollingLog = Date.now();
+    const { since, matches } = this.polling.take();
+    if (matches.length === 0) return;
+    const names = new Map((await this.prisma.event.findMany({ where: { id: { in: matches.map((m) => m.eventId) } }, select: { id: true, name: true } })).map((e) => [e.id, e.name]));
+    const seconds = (ms: number | null) => (ms === null ? "unknown" : `${(ms / 1000).toFixed(1)} s`);
+    const plan = `plan ${this.quotaLimit ?? "unknown"} a day / ${this.minuteLimit ?? "unknown"} a minute, ${this.quotaLeft ?? "unknown"} left today`;
+    this.logger.log(`Live polling over the last ${Math.round((Date.now() - since) / 60_000)} min (board every ${seconds(this.liveOddsDelay())}, priority lane every ${seconds(this.liveHotDelay())}, ${plan}):`);
+    for (const match of matches.sort((a, b) => (b.ageMs ?? 0) - (a.ageMs ?? 0))) {
+      this.logger.log(`  ${names.get(match.eventId) ?? match.eventId}: read every ${seconds(match.everyMs)} (${match.reads} readings), prices ${seconds(match.ageMs)} behind the bookmaker on average, ${seconds(match.ageMaxMs)} at most`);
+    }
+  }
+
+  /** The feed plan and how the live polling is going, for the live health page. */
+  pollingHealth() {
+    const current = this.polling.current();
+    return {
+      mode: this.mode,
+      plan: { perDay: this.quotaLimit, leftToday: this.quotaLeft, perMinute: this.minuteLimit, leftThisMinute: this.minuteLeft },
+      intervals: { boardMs: finiteOr(this.liveOddsDelay()), priorityMs: finiteOr(this.liveHotDelay()), scoresMs: finiteOr(this.liveScoresDelay()) },
+      matches: current.length > 0 ? current : this.polling.last(),
+    };
   }
 
   /**
@@ -673,8 +787,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       const period = saved.period === "FT" && fixture.status === EventStatus.LIVE ? "FT" : fixture.period;
       const scoreMoved = !oddsHaveScore && (saved.homeScore !== fixture.homeScore || saved.awayScore !== fixture.awayScore);
       if (saved.status !== fixture.status || saved.elapsed !== fixture.elapsed || saved.period !== period || scoreMoved) changed.push(saved.id);
+      // A goal seen here pauses the goal markets; the others wait for prices made after it.
+      const paused = cooldown && fixture.status === EventStatus.LIVE ? (await this.pauseMarkets(saved.id, { reason: cooldown.reason, pricedSinceEvent: new Set() }, null, new Date())).started : false;
       // A new score or a new pause is a change in the live match that a bet being confirmed must not go through (Event.liveVersion).
-      const stateMoved = scoreMoved || pause.until?.getTime() !== saved.liveCooldownUntil?.getTime();
+      const stateMoved = scoreMoved || paused;
       await this.prisma.event.update({
         where: { provider_externalId: { provider, externalId: fixture.externalId } },
         data: {
@@ -779,9 +895,18 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       else if (live && kinds(centre, "var", "missed_penalty", "penalty") > kinds(was.matchCentre, "var", "missed_penalty", "penalty")) reason = "var";
       const pause = reason && GOAL_COOLDOWN_MS > 0 ? laterCooldown({ until: was!.liveCooldownUntil, reason: was!.liveCooldownReason }, { until: new Date(Date.now() + GOAL_COOLDOWN_MS), reason }) : null;
       if (goalAhead) await this.noteGoal(eventId, was!, { homeScore: mark.home, awayScore: mark.away }, was!.elapsed, "centre", await this.pricesBeforeGoal(eventId, was!, { homeScore: mark.home, awayScore: mark.away }));
+      // The markets it changes pause; the others wait for prices made after it (this read isn't the bookmaker's).
+      if (reason) await this.pauseMarkets(eventId, { reason, pricedSinceEvent: new Set() }, null, new Date());
       await this.prisma.event.update({
         where: { id: eventId },
-        data: { matchCentre: centre as unknown as Prisma.InputJsonValue, matchCentreAt: new Date(), ...(pause ? { liveCooldownUntil: pause.until, liveCooldownReason: pause.reason } : {}), ...(reason ? { liveVersion: { increment: 1 } } : {}) },
+        data: {
+          matchCentre: centre as unknown as Prisma.InputJsonValue,
+          matchCentreAt: new Date(),
+          ...(pause ? { liveCooldownUntil: pause.until, liveCooldownReason: pause.reason } : {}),
+          ...(reason ? { liveVersion: { increment: 1 } } : {}),
+          // A goal its prices don't have yet: paused markets don't reopen on prices without it.
+          ...(was?.status === EventStatus.LIVE && mark.home !== null && mark.away !== null ? { liveScoreAhead: goalAhead ? `${mark.home}:${mark.away}` : null } : {}),
+        },
       });
       if (reason) {
         this.logger.log(`Live betting paused on ${was!.name} (${reason} in the feed's timeline${goalAhead ? `: ${mark.home}–${mark.away} before its prices had it` : ""}) until ${pause?.until?.toISOString() ?? "now"}`);
@@ -1218,46 +1343,144 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async applyLiveOdds(eventId: string, odds: FeedLiveOdds) {
-    this.readings.set(eventId, { at: new Date(), bookmakerUpdate: odds.bookmakerUpdate ?? null, clock: odds.clock ?? null });
+    const now = new Date();
+    const parsedUpdate = odds.bookmakerUpdate ? new Date(odds.bookmakerUpdate) : null;
+    const bookmakerUpdate = parsedUpdate && !Number.isNaN(parsedUpdate.getTime()) ? parsedUpdate : null;
+    this.readings.set(eventId, { at: now, bookmakerUpdate: odds.bookmakerUpdate ?? null, clock: odds.clock ?? null });
+    this.polling.note(eventId, now, bookmakerUpdate);
     // A match not read for an hour is over; the map keeps only the live ones.
     if (this.readings.size > 500) for (const [id, reading] of this.readings) if (Date.now() - reading.at.getTime() > 3_600_000) this.readings.delete(id);
     const before = await this.prisma.event.findUniqueOrThrow({
       where: { id: eventId },
-      select: { homeScore: true, awayScore: true, liveStopped: true, liveCooldownUntil: true, liveCooldownReason: true },
+      select: { homeScore: true, awayScore: true, liveStopped: true, liveSlowFeed: true, liveCooldownUntil: true, liveCooldownReason: true, liveScoreAhead: true, liveOddsAt: true, status: true, startsAt: true, period: true },
     });
     const scored = odds.homeScore !== null && odds.awayScore !== null;
     const after = { homeScore: scored ? odds.homeScore : before.homeScore, awayScore: scored ? odds.awayScore : before.awayScore, stopped: odds.stopped };
     // Read before the new prices are saved: still the ones from before the goal.
     const beforeGoal = scored ? await this.pricesBeforeGoal(eventId, before, after) : null;
-    const swing = await this.upsertLiveMarkets(eventId, odds.markets);
-    const cooldown = cooldownFor({ homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped }, after, swing);
+    const { swing, priced } = await this.upsertLiveMarkets(eventId, odds.markets, now);
+    const saved = { homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped };
+    const cooldown = cooldownFor(saved, after, swing, now);
     if (scored) await this.noteGoal(eventId, before, after, odds.elapsed, "odds", beforeGoal);
     let pause = laterCooldown({ until: before.liveCooldownUntil, reason: before.liveCooldownReason }, cooldown);
-    if (cooldown && pause.until === cooldown.until) this.logger.log(`Live betting paused on event ${eventId} (${cooldown.reason}) until ${cooldown.until.toISOString()}`);
-    // After a goal: reopen once the bookmaker is taking bets again and the minimum has passed.
-    // A price jump, or the bookmaker switching back on, is those prices arriving — not another pause.
-    const now = new Date();
-    const bookmakerUpdate = odds.bookmakerUpdate ? new Date(odds.bookmakerUpdate) : null;
-    const pausesItself = scoreChanged({ homeScore: before.homeScore, awayScore: before.awayScore, stopped: before.liveStopped }, after);
-    if (goalPauseOver(pause, { hasScore: scored, stopped: odds.stopped, pausesItself, bookmakerUpdate: bookmakerUpdate && !Number.isNaN(bookmakerUpdate.getTime()) ? bookmakerUpdate : null }, now)) {
-      this.logger.log(`Live betting reopened on event ${eventId}: the prices were made again after the ${pause.reason === "goal" ? "goal" : pause.reason === "red" ? "red card" : "VAR check"}`);
-      pause = { until: now, reason: null };
-    }
-    // The score, a pause, or the bookmaker blocking or reopening the match: a change a bet being confirmed must not go through (Event.liveVersion).
-    const stateMoved = pausesItself || odds.stopped !== before.liveStopped || pause.until?.getTime() !== before.liveCooldownUntil?.getTime();
+    // A goal the timeline or fixture had first: paused markets wait for prices with it.
+    const ahead = scoreOf(before.liveScoreAhead);
+    const caughtUp = !ahead || (scored && odds.homeScore! + odds.awayScore! >= ahead.home + ahead.away);
+    const goal = scoreChanged(saved, after);
+    const elapsed = odds.elapsed ?? null;
+    const matchOpen = !odds.stopped && !before.liveSlowFeed && !(LIVE_CUTOFF_MINUTE > 0 && (elapsed ?? 0) >= LIVE_CUTOFF_MINUTE);
+    // The event's pause on the markets it changes (the reading brought it, so a market it prices was made after it), and the
+    // paused markets this reading is fresh for reopened.
+    const markets = await this.pauseMarkets(
+      eventId,
+      cooldown ? { reason: cooldown.reason, pricedSinceEvent: priced } : null,
+      { stopped: odds.stopped, scoreKnown: scored && caughtUp, bookmakerUpdate, priced },
+      now,
+      { status: before.status, startsAt: before.startsAt, period: odds.finished ? "FT" : before.period, open: matchOpen },
+    );
+    // The match keeps its latest pause, ending when its main market reopened.
+    if (markets.mainReopen && pause.until && EVENT_PAUSES.has(pause.reason ?? "") && markets.mainReopen < pause.until) pause = { ...pause, until: markets.mainReopen };
+    // The score, a pause starting, or the bookmaker blocking or reopening the match: a change a bet being confirmed must not go through (Event.liveVersion).
+    const stateMoved = goal || odds.stopped !== before.liveStopped || markets.started;
+    // Market-time since the last reading, for the share of it the board was open (capped: a gap means the readings stopped).
+    const seconds = before.liveOddsAt ? Math.min(60, Math.max(0, (now.getTime() - before.liveOddsAt.getTime()) / 1000)) : 0;
     await this.prisma.event.update({
       where: { id: eventId },
       data: {
-        liveOddsAt: new Date(),
+        liveOddsAt: now,
         liveStopped: odds.stopped,
         ...(stateMoved ? { liveVersion: { increment: 1 } } : {}),
         ...(odds.finished ? { period: "FT" } : {}),
         ...(scored ? { homeScore: odds.homeScore, awayScore: odds.awayScore } : {}),
         ...(odds.elapsed !== null ? { elapsed: odds.elapsed } : {}),
+        ...(ahead && caughtUp ? { liveScoreAhead: null } : {}),
         liveCooldownUntil: pause.until,
         liveCooldownReason: pause.reason,
+        ...(seconds > 0 ? { liveMarketSec: { increment: seconds * markets.total }, liveShownSec: { increment: seconds * markets.shown }, liveOpenSec: { increment: seconds * markets.open } } : {}),
       },
     });
+  }
+
+  /**
+   * Puts an event's pause on the markets of a live match it changes
+   * (live-guard.ts eventPause, mergePause), and reopens the paused markets a
+   * new reading is fresh for (freshUntil). `event.pricedSinceEvent`: the
+   * markets a reading made after the event prices, which stay open if the
+   * event doesn't change them. Returns whether a pause began or got longer
+   * (a change a live bet being confirmed must not go through), when the main
+   * market (the match result) reopens early if it does, and with `state`, how
+   * many markets the match has, how many are on the board (not stale) and how
+   * many take bets, for the metrics. Each event's pause is kept (LivePause).
+   */
+  private async pauseMarkets(
+    eventId: string,
+    event: { reason: MarketPauseReason; pricedSinceEvent: ReadonlySet<string> } | null,
+    reading: { stopped: boolean; scoreKnown: boolean; bookmakerUpdate: Date | null; priced: ReadonlySet<string> } | null,
+    now: Date,
+    state?: { status: EventStatus; startsAt: Date; period: string | null; open: boolean },
+  ): Promise<{ started: boolean; mainReopen: Date | null; total: number; shown: number; open: number }> {
+    const markets = await this.prisma.market.findMany({
+      where: { eventId },
+      select: { id: true, key: true, liveSuspended: true, livePausedAt: true, livePausedUntil: true, liveReopenFrom: true, livePauseReason: true, liveMovedAt: true, liveQuotedAt: true },
+    });
+    const main = markets.find((market) => market.key === "match_winner") ?? (event ? markets.find((market) => hitBy(event.reason, market.key)) : undefined);
+    const writes = new Map<string, { pause: MarketPause; ids: string[] }>();
+    let started = false;
+    let paused = 0;
+    let reopened = 0;
+    let mainReopen: Date | null = null;
+    let mainStarted: MarketPause | null = null;
+    const counts = { total: 0, shown: 0, open: 0 };
+    for (const market of markets) {
+      const was: MarketPause = { pausedAt: market.livePausedAt, until: market.livePausedUntil, reopenFrom: market.liveReopenFrom, reason: market.livePauseReason };
+      let pause = was;
+      if (event) {
+        pause = mergePause(was, eventPause({ reason: event.reason, marketKey: market.key, pricedSinceEvent: event.pricedSinceEvent.has(market.key), now }), now);
+        if (pause !== was) {
+          started = true;
+          paused++;
+          if (market === main) mainStarted = pause;
+        }
+      }
+      if (reading) {
+        const until = freshUntil(pause, { stopped: reading.stopped, scoreKnown: reading.scoreKnown, priced: reading.priced.has(market.key), bookmakerUpdate: reading.bookmakerUpdate, movedAt: market.liveMovedAt }, now);
+        if (until) {
+          pause = { ...pause, until };
+          reopened++;
+          if (market === main) mainReopen = until;
+        }
+      }
+      if (pause !== was) {
+        const key = JSON.stringify(pause);
+        const write = writes.get(key) ?? { pause, ids: [] };
+        write.ids.push(market.id);
+        writes.set(key, write);
+      }
+      if (state) {
+        counts.total++;
+        const shown = !marketStale(state, market, now, market.liveMovedAt !== null);
+        if (shown) counts.shown++;
+        if (shown && state.open && !market.liveSuspended && (reading?.priced.has(market.key) ?? true) && !(pause.until && pause.until > now)) counts.open++;
+      }
+    }
+    for (const { pause, ids } of writes.values()) {
+      await this.prisma.market.updateMany({
+        where: { id: { in: ids } },
+        data: { livePausedAt: pause.pausedAt, livePausedUntil: pause.until, liveReopenFrom: pause.reopenFrom, livePauseReason: pause.reason },
+      });
+    }
+    if (event && started) {
+      this.logger.log(`Live markets paused on event ${eventId} (${event.reason}): ${paused} of ${markets.length}${mainStarted ? `, the match result until ${(mainStarted as MarketPause).until?.toISOString()} at the latest` : ""}`);
+    }
+    if (mainStarted) {
+      const { pausedAt, until } = mainStarted as MarketPause;
+      if (pausedAt && until) await this.prisma.livePause.create({ data: { eventId, reason: event!.reason, startedAt: pausedAt, endsAt: until, markets: paused } }).catch(() => undefined);
+    }
+    if (reopened > 0) this.logger.log(`Live markets reopening on event ${eventId}: ${reopened} had fresh prices after the ${main?.livePauseReason ?? "event"}${mainReopen ? `; the match result at ${(mainReopen as Date).toISOString()}` : ""}`);
+    if (mainReopen && main?.livePausedAt) {
+      await this.prisma.livePause.updateMany({ where: { eventId, startedAt: main.livePausedAt }, data: { endsAt: mainReopen, fresh: true } }).catch(() => undefined);
+    }
+    return { started, mainReopen, ...counts };
   }
 
   private provider(): string {
@@ -1383,13 +1606,16 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * mostly the same as the last (taken seconds ago), and writing every price
    * of every live match on every reading took longer than the time between
    * readings, which slowed them all down, a goal's reopening included.
-   * Returns whether the match-result prices jumped (bigSwing).
+   * Each market priced on this reading has it noted (Market.liveQuotedAt),
+   * and each whose prices moved too (liveMovedAt). Returns whether the
+   * match-result prices jumped (bigSwing) and the keys of the markets this
+   * reading prices.
    */
-  private async upsertLiveMarkets(eventId: string, markets: FeedLiveMarket[]): Promise<boolean> {
+  private async upsertLiveMarkets(eventId: string, markets: FeedLiveMarket[], now: Date = new Date()): Promise<{ swing: boolean; priced: Set<string> }> {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.market.findMany({
         where: { eventId },
-        select: { id: true, key: true, liveSuspended: true, selections: { select: { id: true, key: true, liveOdds: true } } },
+        select: { id: true, key: true, liveSuspended: true, liveQuotedAt: true, selections: { select: { id: true, key: true, liveOdds: true } } },
       });
       const byKey = new Map(existing.map((market) => [market.key, market]));
       const priceOf = (odds: number) => (odds > 1 ? odds.toFixed(2) : null);
@@ -1410,10 +1636,14 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       const sent = new Set(markets.map((m) => m.key));
       const suspend = existing.filter((market) => !sent.has(market.key) && !market.liveSuspended).map((market) => market.id);
       const reopen: string[] = [];
+      const quoted: string[] = [];
+      const moved: string[] = [];
+      const pricedMarkets = new Set<string>();
       const prices: Array<{ id: string; price: string | null }> = [];
       const added: Prisma.SelectionCreateManyInput[] = [];
       for (const market of markets) {
         const row = byKey.get(market.key);
+        if (!market.suspended) pricedMarkets.add(market.key);
         if (!row) {
           // A market first seen live has no pre-match price; the live one stands in.
           await tx.market.create({
@@ -1423,6 +1653,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
               name: market.name,
               sortOrder: market.sortOrder,
               liveSuspended: market.suspended,
+              liveMovedAt: now,
+              liveQuotedAt: market.suspended ? null : now,
               selections: {
                 create: market.selections.map((selection) => {
                   const price = priceOf(selection.odds);
@@ -1434,22 +1666,37 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
         if (row.liveSuspended !== market.suspended) (market.suspended ? suspend : reopen).push(row.id);
+        // When it was last priced only matters to the minute (marketStale): not written on every reading.
+        if (!market.suspended && (!row.liveQuotedAt || now.getTime() - row.liveQuotedAt.getTime() > QUOTED_EVERY_MS)) quoted.push(row.id);
         const old = new Map(row.selections.map((selection) => [selection.key, selection]));
+        let movedHere = false;
         for (const selection of market.selections) {
           const price = priceOf(selection.odds);
           const was = old.get(selection.key);
           if (!was) {
             added.push({ marketId: row.id, key: selection.key, name: selection.name, feedOdds: new Prisma.Decimal(price ?? "1.01"), liveOdds: price === null ? null : new Prisma.Decimal(price), sortOrder: selection.sortOrder });
+            if (price !== null) movedHere = true;
           } else if ((was.liveOdds === null ? null : was.liveOdds.toFixed(2)) !== price) {
             prices.push({ id: was.id, price });
+            if (price !== null) movedHere = true;
           }
         }
+        if (movedHere) moved.push(row.id);
         // An outcome the feed no longer prices (0–0 once a goal is in) loses its live price, so it can't be bet on.
         const priced = new Set(market.selections.map((selection) => selection.key));
         for (const was of row.selections) if (!priced.has(was.key) && was.liveOdds !== null) prices.push({ id: was.id, price: null });
       }
-      if (suspend.length) await tx.market.updateMany({ where: { id: { in: suspend } }, data: { liveSuspended: true } });
-      if (reopen.length) await tx.market.updateMany({ where: { id: { in: reopen } }, data: { liveSuspended: false } });
+      // Suspended or back, priced, prices moved: one statement for the match's markets.
+      const touched = [...new Set([...suspend, ...reopen, ...quoted, ...moved])];
+      if (touched.length) {
+        await tx.$executeRaw`
+          UPDATE markets SET
+            live_suspended = CASE WHEN id = ANY(${suspend}::text[]) THEN true WHEN id = ANY(${reopen}::text[]) THEN false ELSE live_suspended END,
+            live_quoted_at = CASE WHEN id = ANY(${quoted}::text[]) THEN ${now} ELSE live_quoted_at END,
+            live_moved_at = CASE WHEN id = ANY(${moved}::text[]) THEN ${now} ELSE live_moved_at END,
+            updated_at = NOW()
+          WHERE id = ANY(${touched}::text[])`;
+      }
       if (added.length) await tx.selection.createMany({ data: added, skipDuplicates: true });
       if (prices.length) {
         // One JSON value rather than arrays: a connection whose first array held only missing prices kept that
@@ -1459,7 +1706,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           FROM json_to_recordset(${JSON.stringify(prices)}::json) AS v(id text, price numeric)
           WHERE s.id = v.id`;
       }
-      return swing;
+      return { swing, priced: pricedMarkets };
     });
   }
 
@@ -1474,6 +1721,15 @@ function parseChoice(value: unknown): CompetitionChoice | null {
   const { leagues, countries } = value as Record<string, unknown>;
   if (!Array.isArray(leagues) || !Array.isArray(countries)) return null;
   return { leagues: leagues.map(Number).filter(Number.isInteger), countries: countries.map(String) };
+}
+
+/** Infinity (nothing affordable) as null, for JSON. */
+const finiteOr = (ms: number) => (Number.isFinite(ms) ? Math.round(ms) : null);
+
+/** A score kept as "2:1" (Event.liveScoreAhead), or null. */
+function scoreOf(value: string | null): { home: number; away: number } | null {
+  const match = value ? /^(\d+):(\d+)$/.exec(value) : null;
+  return match ? { home: Number(match[1]), away: Number(match[2]) } : null;
 }
 
 function listEnv(name: string): string[] | null {

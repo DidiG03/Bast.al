@@ -94,8 +94,12 @@ test("a goal: the new score and the pause go out with the prices", async () => {
   await odds.pushLive([match.id]);
   const [{ events }] = to(`team:${dear.id}`);
   assert.deepEqual([events[0].header.homeScore, events[0].header.awayScore, events[0].header.elapsed], [1, 0, 31]);
-  assert.equal(events[0].header.bettable, false);
-  assert.equal(events[0].header.livePause, "goal");
+  // The goal pauses the goal markets, not the whole match.
+  assert.equal(events[0].header.livePause, null);
+  assert.equal(events[0].header.marketPause.reason, "goal");
+  assert.deepEqual(events[0].header.marketPause.markets, ["Match winner"]);
+  assert.ok(events[0].markets.some(([, suspended]) => suspended), "the match result shows paused");
+  assert.ok(events[0].prices.every(([, , suspended]) => suspended));
 });
 
 test("saving live prices pushes them without being asked", async () => {

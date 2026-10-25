@@ -10,6 +10,8 @@ export type LinedMarket = {
   key: string;
   name: string;
   suspended?: boolean;
+  /** Live: paused after something in the match (a goal, a card…), back shortly. */
+  paused?: string | null;
   selections: OddsSelection[];
 };
 
@@ -81,6 +83,7 @@ export function visibleCountry(country: string | null, flag: string | null): str
 export function MarketHead({
   title,
   suspended,
+  paused,
   open,
   onToggle,
   picked,
@@ -90,6 +93,8 @@ export function MarketHead({
 }: {
   title: string;
   suspended?: boolean;
+  /** Paused for a moment after a goal or a card, rather than off the board. */
+  paused?: boolean;
   open: boolean;
   onToggle: () => void;
   picked: boolean;
@@ -107,7 +112,7 @@ export function MarketHead({
         </svg>
         <span className="odds-market-name">
           {title}
-          {suspended ? <span className="muted"> · {t("Suspended")}</span> : null}
+          {suspended ? <span className="muted"> · {paused ? t("Paused") : t("Suspended")}</span> : null}
         </span>
         {picked && !open ? <span className="odds-market-picked" role="img" aria-label={t("On your slip")} title={t("On your slip")} /> : null}
       </button>
@@ -157,7 +162,7 @@ export function LineFamily<T extends LinedMarket>({
   const title = ts(market.name).replace(/\s*\d+(?:\.\d+)?\s*$/, "").trim();
   return (
     <div className={`odds-market${open ? " is-open" : ""}`}>
-      <MarketHead title={title} suspended={market.suspended} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
+      <MarketHead title={title} suspended={market.suspended} paused={Boolean(market.paused)} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
         <span className="line-stepper">
           <button type="button" disabled={safe === 0} onClick={() => setIndex(safe - 1)} aria-label={t("Lower line")}>
             ‹

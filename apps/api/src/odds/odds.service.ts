@@ -40,13 +40,14 @@ const COUNT_MARKETS = { _count: { select: { markets: true } } } as const;
 const LIVE_SENT_KEPT_MS = 30 * 60_000;
 
 /**
- * Live betting only where the feed keeps up: a competition whose goals reached
- * the site later than LIVE_COMPETITION_MAX_LAG_MS at its 95th percentile
- * (lagStats, over the last LIVE_LIMIT_DAYS days, from at least
- * LIVE_COMPETITION_MIN_GOALS goals) is offered before kick-off only.
- * LIVE_COMPETITION_MAX_LAG_MS=0 turns it off.
+ * Live betting only where a wait can cover the feed: a competition whose goals
+ * reached the site later than LIVE_COMPETITION_MAX_LAG_MS at its 95th
+ * percentile (lagStats, over the last LIVE_LIMIT_DAYS days, from at least
+ * LIVE_COMPETITION_MIN_GOALS goals) is offered before kick-off only. A shorter
+ * delay lengthens the confirmation wait instead. LIVE_COMPETITION_MAX_LAG_MS=0
+ * turns it off.
  */
-const LIVE_COMPETITION_MAX_LAG_MS = process.env.LIVE_COMPETITION_MAX_LAG_MS !== undefined && process.env.LIVE_COMPETITION_MAX_LAG_MS !== "" ? Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) : 15_000;
+const LIVE_COMPETITION_MAX_LAG_MS = process.env.LIVE_COMPETITION_MAX_LAG_MS !== undefined && process.env.LIVE_COMPETITION_MAX_LAG_MS !== "" ? Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) : 30_000;
 const LIVE_COMPETITION_MIN_GOALS = Number(process.env.LIVE_COMPETITION_MIN_GOALS) > 0 ? Number(process.env.LIVE_COMPETITION_MIN_GOALS) : 5;
 const LIVE_LIMIT_DAYS = 3;
 /**

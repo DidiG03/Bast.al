@@ -146,10 +146,11 @@ export class PlaceBetsDto {
   acceptOddsChanges?: boolean;
 
   /**
-   * The Player's choice for a price that moved before the slip went in (before
-   * kick-off only; a live pick is only ever taken at the price sent): "higher"
-   * takes a better price on its own, "never" refuses any move. When set,
-   * acceptOddsChanges is ignored: the prices sent are the ones the Player saw.
+   * The Player's choice for a price that moved before the slip went in: "higher"
+   * takes a better price on its own before kick-off, and in play only a small
+   * move up (not one big enough to be a goal, and never a move down). "never"
+   * refuses any move. When set, acceptOddsChanges is ignored: the prices sent
+   * are the ones the Player saw.
    */
   @IsOptional()
   @IsIn(["never", "higher"])

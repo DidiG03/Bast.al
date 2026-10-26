@@ -1,6 +1,7 @@
 import type { OddsEvent } from "./api";
 import { serverNow } from "./clock";
 import { msg } from "./i18n/core";
+import { holdMinute } from "./live-rules.mjs";
 
 /** Breaks in play, by the feed's phase code: shown instead of the minute. */
 const BREAKS: Record<string, string> = {
@@ -30,7 +31,18 @@ const CLOCK_CATCHUP_MIN = 5;
 const TICKING = new Set(["1H", "2H", "ET"]);
 
 /** A match clock. `elapsed` may be missing on a bet, where the feed never sent a minute. */
-type ClockEvent = { elapsed?: number | null; elapsedAt?: string | null; period?: string | null };
+type ClockEvent = { id?: string; elapsed?: number | null; elapsedAt?: string | null; period?: string | null };
+
+/** The highest minute already shown for a match in this period. A later poll must not step it back. */
+const shownMinute = new Map<string, number>();
+
+function stableMinute(event: ClockEvent, minute: number | null): number | null {
+  if (!event.id || minute === null) return minute;
+  const key = `${event.id}:${event.period ?? ""}`;
+  const next = holdMinute(shownMinute.get(key) ?? null, minute);
+  if (typeof next === "number") shownMinute.set(key, next);
+  return next;
+}
 
 /** The minute to show: the feed's, plus how long since it last moved, while the half is being played. */
 export function liveMinute(event: ClockEvent, now = serverNow()): number | null {
@@ -45,7 +57,7 @@ export function liveMinute(event: ClockEvent, now = serverNow()): number | null 
 export function liveClock(event: ClockEvent, t: T): string {
   const code = event.period ? CLOCK[event.period] : undefined;
   if (code) return code;
-  const minute = liveMinute(event);
+  const minute = stableMinute(event, liveMinute(event));
   return minute === null ? t("Live") : `${minute}'`;
 }
 
@@ -53,7 +65,7 @@ export function liveClock(event: ClockEvent, t: T): string {
 export function livePill(event: ClockEvent, t: T): string {
   const pause = event.period ? BREAKS[event.period] : undefined;
   if (pause) return t(pause);
-  const minute = liveMinute(event);
+  const minute = stableMinute(event, liveMinute(event));
   return minute === null ? t("Live") : t("Live {minute}'", { minute });
 }
 

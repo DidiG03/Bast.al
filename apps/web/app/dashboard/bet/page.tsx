@@ -2,7 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BetLegs } from "../../../components/bet-legs";
 import { LineFamily, MarketHead, bundleLines, marketKind, resultHeads, visibleCountry } from "../../../components/line-market";
@@ -143,13 +143,23 @@ function BetPage() {
   const [slip, setSlip] = useState<SlipItem[]>([]);
   const [slipLoaded, setSlipLoaded] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [sheetClosing, setSheetClosing] = useState(false);
+  const pathname = usePathname();
+  const routeKey = `${pathname}?${params.toString()}`;
+  const routeSeen = useRef(routeKey);
+  function closeSheet() {
+    setSheetOpen(false);
+  }
+  useEffect(() => {
+    if (routeSeen.current === routeKey) return;
+    routeSeen.current = routeKey;
+    setSheetOpen(false);
+  }, [routeKey]);
   useEffect(() => {
     if (!sheetOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSheetClosing(true);
+      if (event.key === "Escape") closeSheet();
     };
     window.addEventListener("keydown", onKey);
     return () => {
@@ -157,18 +167,6 @@ function BetPage() {
       window.removeEventListener("keydown", onKey);
     };
   }, [sheetOpen]);
-  useEffect(() => {
-    if (!sheetClosing) return;
-    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 380;
-    const timer = window.setTimeout(() => {
-      setSheetOpen(false);
-      setSheetClosing(false);
-    }, delay);
-    return () => window.clearTimeout(timer);
-  }, [sheetClosing]);
-  function closeSheet() {
-    setSheetClosing(true);
-  }
   const [mode, setMode] = useState<SlipMode>("singles");
   const [accaStake, setAccaStake] = useState("");
   /** The system's line sizes, as "2,3,4". */
@@ -983,7 +981,7 @@ function BetPage() {
       ) : null}
 
       {sheetOpen ? (
-        <div className={`bet-sheet-layer${sheetClosing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-label={t("Bet slip")}>
+        <div className="bet-sheet-layer" role="dialog" aria-modal="true" aria-label={t("Bet slip")}>
           <button type="button" className="bet-sheet-backdrop" aria-label={t("Close bet slip")} onClick={closeSheet} />
           {/* A tap beside the slip (wide screens) closes it, like the backdrop. */}
           <div className="bet-sheet" onClick={(event) => event.target === event.currentTarget && closeSheet()}>
@@ -1151,12 +1149,19 @@ const MatchCard = memo(function MatchCard({
   const pause = over
     ? { text: breakPause(event) ?? "", tone: " is-finished" }
     : event.live && !event.bettable
-      ? // The last minutes or a slow competition say so; otherwise a break in play explains the pause better than "a moment".
-        { text: event.livePause === "late" || event.livePause === "competition" ? PAUSE_TEXT[event.livePause] : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed, tone: "" }
+      ? {
+          text:
+            event.livePause === "bookmaker" && event.marketPause
+              ? msg("The bookmaker has blocked this match during the pause. They reopen on their own. Our pause still ends on the line below.")
+              : event.livePause === "late" || event.livePause === "competition"
+                ? PAUSE_TEXT[event.livePause]
+                : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed,
+          tone: "",
+        }
       : event.live && event.allMarketsSuspended
         ? { text: PAUSE_TEXT.bookmaker, tone: "" }
         : winnerHeld
-          ? { text: msg("The match winner is paused. The other markets are still open."), tone: "" }
+          ? { text: msg("The bookmaker has paused the match winner. The other markets are still open."), tone: "" }
           : null;
   // The main market paused with nothing of it on the slip: another match to bet on in its place, rather than locked prices.
   const suggest = suggestion && mainHeld && !over && !(inRow && hasPick([inRow])) ? suggestion : undefined;
@@ -1316,7 +1321,8 @@ const MatchCard = memo(function MatchCard({
           <span className="bm-more-spacer" aria-hidden="true" />
         )}
       </div>
-      {pause ? <p className={`bet-paused bm-note${pause.tone}`}>{t(pause.text)}</p> : !over && event.live && event.marketPause ? <PauseBanner pause={event.marketPause} /> : null}
+      {pause ? <p className={`bet-paused bm-note${pause.tone}`}>{t(pause.text)}</p> : null}
+      {!over && event.live && event.marketPause ? <PauseBanner pause={event.marketPause} /> : null}
       {statsOpen ? (
         <div className="bm-stats">
           <MatchStatsPanel eventId={event.id} name={event.name} live={event.live} />
@@ -1793,7 +1799,7 @@ function BetSlip({
               ? t("Your bet builder is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
               : t("Your bet is on. {amount} was taken from your balance.", { amount: formatMoney(result.total) })
           : t("Your {count} bets are on. {amount} was taken from your balance.", { count: result.bets.length, amount: formatMoney(result.total) }),
-        { title: t("Bets placed · tap to see your open bets"), onClick: openBets },
+        { title: t("Bets placed · tap to see your open bets"), onClick: openBets, duration: 8000 },
       );
       if (result.adjusted) toast.info(t("Placed at the latest price."));
       setTakeNewPrice(false);
@@ -1836,6 +1842,7 @@ function BetSlip({
           {receipt.bets.map((bet) => (
             <li key={bet.id}>
               <span>{ts(bet.description)}</span>
+              <span className="muted">{t("Ref {id}", { id: bet.id.slice(-8) })}</span>
               <span className="muted">
                 {bet.sp
                   ? t("{stake} at the starting price (SP)", { stake: formatMoney(bet.stake) })
@@ -2348,6 +2355,8 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
         <div className="bet-card-name">
           <strong>{bet.system ? systemLabel(bet.system, bet.legs.length, t) : bet.kind === "BUILDER" ? t("Bet builder") : t("Accumulator")}</strong>
           <span className="muted">
+            {t("Ref {id}", { id: bet.id.slice(-8) })}
+            {" · "}
             {tn(bet.legs.length, "{count} pick", "{count} picks")}
             {bet.system ? ` · ${tn(bet.system.lines, "{count} bet of {stake}", "{count} bets of {stake}", { stake: formatMoney(bet.system.lineStake) })}` : ""}
           </span>
@@ -2399,7 +2408,7 @@ function BetCard({ bet }: { bet: Bet }) {
       <div className="bet-card-top">
         <div className="bet-card-name">
           <strong>{bet.selection ? pickLabel(bet.selection.name, i18n) : ts(bet.description)}</strong>
-          {bet.selection ? <span className="muted">{ts(bet.selection.market)}</span> : null}
+          <span className="muted">{t("Ref {id}", { id: bet.id.slice(-8) })}{bet.selection ? ` · ${ts(bet.selection.market)}` : ""}</span>
         </div>
         <StatusPill status={bet.status} />
       </div>

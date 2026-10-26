@@ -44,8 +44,8 @@ export type LiveDelta = {
     allMarketsSuspended: boolean;
     marketPause: { reason: string; count: number; markets: string[]; until: string; exact: boolean } | null;
   };
-  /** [market id, suspended, stale]: stale is a market the feed hasn't priced during play for a while. */
-  markets?: Array<[string, boolean, boolean]>;
+  /** [market id, suspended, stale, our pause reason or null]. The reason is the only source of the "Paused" label. */
+  markets?: Array<[string, boolean, boolean, string | null]>;
   prices?: Array<[string, number, boolean]>;
 };
 

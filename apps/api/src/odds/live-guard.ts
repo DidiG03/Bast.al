@@ -172,22 +172,21 @@ export const hitBy = (reason: MarketPauseReason, marketKey: string) => EVENT_HIT
 export type MarketPause = { pausedAt: Date | null; until: Date | null; reopenFrom: Date | null; reason: string | null };
 
 /**
- * The pause an event puts on one market, or null if it stays open.
- * `pricedSinceEvent`: a reading made after the event prices this market
- * (the reading that brought the event, when it carried the event itself).
+ * The pause an event puts on one market, or null if that market stays open.
+ * Only the markets the event can change are paused. `pricedSinceEvent` is
+ * kept for callers that already know which markets this reading priced.
  */
 export function eventPause(input: { reason: MarketPauseReason; marketKey: string; pricedSinceEvent: boolean; now: Date }): MarketPause | null {
   const fallback = fallbackMs(input.reason);
   if (fallback <= 0) return null;
   const now = input.now.getTime();
   const until = new Date(now + fallback);
-  if (hitBy(input.reason, input.marketKey)) {
-    // After a reopen the prices are already fresh: it's a short, fixed pause.
-    const least = input.reason === "reopen" ? fallback : Math.min(GOAL_MIN_PAUSE_MS, fallback);
-    return { pausedAt: input.now, until, reopenFrom: new Date(now + least), reason: input.reason };
-  }
-  if (input.pricedSinceEvent) return null;
-  return { pausedAt: input.now, until, reopenFrom: input.now, reason: input.reason };
+  // A goal or a red card only pauses the markets it can change. Corners stay
+  // open on a red card, and a market this reading doesn't price stays as it
+  // was: pausing it left a row stuck on "Paused" after the banner had gone.
+  if (!hitBy(input.reason, input.marketKey)) return null;
+  const least = input.reason === "reopen" ? fallback : Math.min(GOAL_MIN_PAUSE_MS, fallback);
+  return { pausedAt: input.now, until, reopenFrom: new Date(now + least), reason: input.reason };
 }
 
 /**
@@ -231,8 +230,11 @@ export function freshUntil(
  * Why this reading doesn't reopen a paused market, or null when it does.
  * API-Football's odds `update` time often stays at or before the moment we
  * saved the pause, even on a later poll that carries new prices. A market
- * the event changes therefore reopens when its own prices have moved since
- * the pause, or when that timestamp is later. Either one is enough.
+ * the event changes therefore reopens when its own prices differ from the
+ * ones stored before the pause, or when that timestamp is later. The reading
+ * that starts the pause writes the new prices at the same moment, so a move
+ * at that moment counts. Either one is enough. A poll that doesn't qualify
+ * leaves the 15 s minimum where it is.
  */
 export function freshBlocker(
   pause: MarketPause,
@@ -245,7 +247,7 @@ export function freshBlocker(
   if (!reading.priced) return "market not priced on this reading";
   const pausedAt = pause.pausedAt.getTime();
   const madeAfter = Boolean(reading.bookmakerUpdate && reading.bookmakerUpdate.getTime() > pausedAt);
-  const pricesMoved = Boolean(reading.movedAt && reading.movedAt.getTime() > pausedAt);
+  const pricesMoved = Boolean(reading.movedAt && reading.movedAt.getTime() >= pausedAt);
   const changedByEvent = pause.reopenFrom !== null && pause.reopenFrom.getTime() > pausedAt;
   if (changedByEvent || !reading.bookmakerUpdate) {
     if (!pricesMoved && !madeAfter) return changedByEvent ? "prices haven't moved since the event, and the bookmaker time isn't later" : "no bookmaker time and prices haven't moved";

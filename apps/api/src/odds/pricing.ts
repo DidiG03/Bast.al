@@ -1,4 +1,4 @@
-import { LIVE_CUTOFF_MINUTE, pauseDeadline, type LivePause } from "./live-guard";
+import { LIVE_CUTOFF_MINUTE, marketGroup, pauseDeadline, type LivePause } from "./live-guard";
 
 const envMs = (name: string, fallback: number) => (process.env[name] !== undefined && process.env[name] !== "" && Number(process.env[name]) >= 0 ? Number(process.env[name]) : fallback);
 
@@ -99,6 +99,16 @@ export function marketPause(market: LiveMarketState, now: Date = new Date()): st
  * match is at a break, when the bookmaker may take everything down for a
  * while.
  */
+/**
+ * Corners and cards the feed isn't pricing during play. They go under
+ * "Not available during play" rather than sitting as a dead Suspended row.
+ */
+export function liveSideUnpriced(key: string | undefined, hasLivePrice: boolean): boolean {
+  if (hasLivePrice || !key) return false;
+  const group = marketGroup(key);
+  return group === "corners" || group === "cards";
+}
+
 export function marketStale(event: { status: string; startsAt: Date; period?: string | null }, market: LiveMarketState, now: Date = new Date(), everPriced = true): boolean {
   if (event.status !== "LIVE" || LIVE_MARKET_STALE_MS <= 0 || ["HT", "BT", "P"].includes(event.period ?? "")) return false;
   const since = market.liveQuotedAt ?? (everPriced ? null : event.startsAt);

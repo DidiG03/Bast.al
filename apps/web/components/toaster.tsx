@@ -36,13 +36,40 @@ const ToastContext = createContext<Toaster>({ success: noop, error: noop, warnin
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
-  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const timers = useRef(new Map<number, { timeout: ReturnType<typeof setTimeout>; left: number; started: number }>());
 
   const dismiss = useCallback((id: number) => {
-    clearTimeout(timers.current.get(id));
+    const row = timers.current.get(id);
+    if (row) clearTimeout(row.timeout);
     timers.current.delete(id);
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
+
+  const arm = useCallback(
+    (id: number, ms: number) => {
+      const row = timers.current.get(id);
+      if (row) clearTimeout(row.timeout);
+      const next = { left: ms, started: Date.now(), timeout: setTimeout(() => dismiss(id), ms) };
+      timers.current.set(id, next);
+    },
+    [dismiss],
+  );
+
+  const hold = useCallback((id: number) => {
+    const row = timers.current.get(id);
+    if (!row) return;
+    clearTimeout(row.timeout);
+    row.left = Math.max(row.left - (Date.now() - row.started), 0);
+  }, []);
+
+  const release = useCallback(
+    (id: number) => {
+      const row = timers.current.get(id);
+      if (!row) return;
+      arm(id, Math.max(row.left, 1000));
+    },
+    [arm],
+  );
 
   const push = useCallback(
     (kind: ToastKind, message: string, options: ToastOptions = {}) => {
@@ -52,17 +79,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         // The same message again (a retry, a double click) replaces the old one instead of stacking.
         const others = current.filter((toast) => {
           const same = toast.kind === kind && toast.message === message && toast.title === options.title;
-          if (same) clearTimeout(timers.current.get(toast.id));
+          if (same) {
+            const row = timers.current.get(toast.id);
+            if (row) clearTimeout(row.timeout);
+            timers.current.delete(toast.id);
+          }
           return !same;
         });
         return [...others, { id, kind, message, ...options }].slice(-MAX_VISIBLE);
       });
-      timers.current.set(id, setTimeout(() => dismiss(id), options.duration ?? DURATION[kind]));
+      arm(id, options.duration ?? DURATION[kind]);
     },
-    [dismiss],
+    [arm],
   );
 
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(
+    () => () => {
+      timers.current.forEach((row) => clearTimeout(row.timeout));
+    },
+    [],
+  );
 
   const api = useMemo<Toaster>(
     () => ({
@@ -77,7 +113,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <ToastStack toasts={toasts} onDismiss={dismiss} />
+      <ToastStack toasts={toasts} onDismiss={dismiss} onHold={hold} onRelease={release} />
     </ToastContext.Provider>
   );
 }
@@ -86,13 +122,22 @@ export function useToast(): Toaster {
   return useContext(ToastContext);
 }
 
-function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+function ToastStack({ toasts, onDismiss, onHold, onRelease }: { toasts: Toast[]; onDismiss: (id: number) => void; onHold: (id: number) => void; onRelease: (id: number) => void }) {
   const { t } = useI18n();
   const icon: Record<ToastKind, string> = { success: "✓", error: "!", warning: "!", info: "i" };
   return (
     <div className="toast-stack" aria-live="polite">
       {toasts.map((toast) => (
-        <div key={toast.id} className={`toast toast-${toast.kind}${toast.celebrate ? " toast-celebrate" : ""}${toast.loss ? " toast-loss" : ""}`} role={toast.kind === "error" || toast.kind === "warning" ? "alert" : "status"}>
+        <div
+          key={toast.id}
+          className={`toast toast-${toast.kind}${toast.celebrate ? " toast-celebrate" : ""}${toast.loss ? " toast-loss" : ""}`}
+          role={toast.kind === "error" || toast.kind === "warning" ? "alert" : "status"}
+          onMouseEnter={() => onHold(toast.id)}
+          onMouseLeave={() => onRelease(toast.id)}
+          onTouchStart={() => onHold(toast.id)}
+          onTouchEnd={() => onRelease(toast.id)}
+          onTouchCancel={() => onRelease(toast.id)}
+        >
           <span className="toast-icon" aria-hidden="true">
             {toast.celebrate ? "🏆" : toast.loss ? "✕" : icon[toast.kind]}
           </span>

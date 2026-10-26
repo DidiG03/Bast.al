@@ -72,6 +72,8 @@ export type BalanceEntry = {
   amount: number;
   reason: string;
   createdAt: string;
+  /** The bet this line belongs to, when it is a stake or a settlement. */
+  betId?: string | null;
   /** Who's on the other side of this entry — the counterparty, not necessarily who triggered it. */
   counterparty?: string;
   actor: { id?: string; username: string } | null;

@@ -1,15 +1,16 @@
 import type { OddsEvent } from "./api";
 import type { SlipItem } from "./slip";
+import { rowWord } from "./live-rules.mjs";
 
 /**
  * What changed on one live match, as the API pushes it to a Player's team
  * (`odds.live`): the header when the score, minute or pause changed, and
- * [id, suspended, stale] / [id, price, suspended] for markets and prices that moved.
+ * [id, suspended, stale, our pause reason or null] / [id, price, suspended] for markets and prices that moved.
  */
 export type LiveDelta = {
   id: string;
   header?: Pick<OddsEvent, "status" | "live" | "elapsed" | "elapsedAt" | "period" | "homeScore" | "awayScore" | "bettable" | "livePause" | "allMarketsSuspended" | "marketPause">;
-  markets?: Array<[string, boolean, boolean?]>;
+  markets?: Array<[string, boolean, boolean, string | null]>;
   prices?: Array<[string, number, boolean]>;
 };
 
@@ -24,7 +25,7 @@ export function byMatch(deltas: LiveDelta[]): Map<string, LiveDelta> {
  */
 export function applyDelta(event: OddsEvent, delta: LiveDelta | undefined): OddsEvent {
   if (!delta) return event;
-  const markets = new Map((delta.markets ?? []).map(([id, suspended, stale]) => [id, { suspended, stale: stale ?? false }]));
+  const markets = new Map((delta.markets ?? []).map(([id, suspended, stale, paused]) => [id, { suspended, stale: stale ?? false, paused: paused ?? null }]));
   const prices = new Map((delta.prices ?? []).map(([id, price, suspended]) => [id, { price, suspended }]));
   let changed = false;
   const nextMarkets = event.markets.map((market) => {
@@ -37,8 +38,8 @@ export function applyDelta(event: OddsEvent, delta: LiveDelta | undefined): Odds
       marketChanged = true;
       return { ...selection, price: quote.price, suspended: quote.suspended };
     });
-    // A short pause (a goal, a card) says "Paused". The bookmaker taking a market off says "Suspended".
-    const paused = state?.stale ? null : state?.suspended && delta.header?.marketPause ? delta.header.marketPause.reason : state?.suspended === false ? null : market.paused;
+    // "Paused" only while our pause is on this market. "Suspended" only when the bookmaker's own status says so.
+    const paused = state ? (rowWord(state.paused, state.suspended, state.stale) === "paused" ? state.paused : null) : market.paused;
     if (!marketChanged && paused === market.paused) return market;
     changed = true;
     return { ...market, ...(state !== undefined ? { suspended, stale: state.stale } : {}), paused, selections };

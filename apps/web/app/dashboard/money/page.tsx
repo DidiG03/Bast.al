@@ -146,7 +146,7 @@ export default function MoneyPage() {
                       </span>
                       <span className="money-row-text">
                         <strong>{title}</strong>
-                        <span className="muted">{ts(ledgerText(entry.reason))}</span>
+                        <span className="muted">{ts(ledgerText(entry.reason))}{entry.betId ? ` · ${t("Ref {id}", { id: entry.betId.slice(-8) })}` : ""}</span>
                         {pending || rejected ? <span className="muted">{pending ? t("Waiting for approval") : t("Rejected, no money moved")}</span> : null}
                       </span>
                       <strong className={`money-amount${tone}`}>

@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
-import { bigSwing, cooldownFor, eventPause, freshUntil, laterCooldown, marketGroup, mergePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
-import { applyMargin, eventOpen, livePause, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
+import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCooldown, marketGroup, mergePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
+import { applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 import { hotMatches, minuteRoom } from "../dist/odds/live-polling.js";
 
 test("a margin comes off the feed price and rounds down to the cent", () => {
@@ -269,12 +269,12 @@ test("a goal pauses the goal markets; others stay open only if priced after it",
     assert.equal(pause.until.getTime() - goalAt.getTime(), 90_000, "the fallback");
     assert.equal(pause.reopenFrom.getTime() - goalAt.getTime(), 15_000, "15 s at least");
   }
-  // (c) a cards market the goal's own reading still prices stays open; one it doesn't waits for a reading after the goal
+  // A goal or a red card leaves the markets it doesn't change open, priced or not. Corners stay open on a red card.
   assert.equal(goal("cards_3_5", true), null);
-  const unpriced = goal("cards_3_5", false);
-  assert.equal(unpriced.reopenFrom.getTime(), goalAt.getTime(), "no minimum: it reopens on the next fresh reading");
-  // A red card pauses cards too, not corners priced after it.
-  assert.ok(eventPause({ reason: "red", marketKey: "cards_3_5", pricedSinceEvent: true, now: goalAt }));
+  assert.equal(goal("cards_3_5", false), null, "a goal leaves cards open");
+  assert.equal(goal("corners_9_5", false), null, "a goal leaves corners open");
+  assert.ok(eventPause({ reason: "red", marketKey: "cards_3_5", pricedSinceEvent: false, now: goalAt }));
+  assert.equal(eventPause({ reason: "red", marketKey: "corners_9_5", pricedSinceEvent: false, now: goalAt }), null, "a red card leaves corners open");
   assert.equal(eventPause({ reason: "red", marketKey: "corners_9_5", pricedSinceEvent: true, now: goalAt }), null);
   assert.equal(eventPause({ reason: "swing", marketKey: "goals_2_5", pricedSinceEvent: true, now: goalAt }).until.getTime() - goalAt.getTime(), 30_000);
 });
@@ -291,17 +291,21 @@ test("a paused market reopens on fresh prices after the event, never before 15 s
   assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: at(-2), movedAt: at(10) }, at(10)).getTime(), at(15).getTime(), "this feed's update time stays old; prices that moved still reopen");
   assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: at(-2), movedAt: at(-2) }, at(10)), null, "neither the bookmaker time nor the prices moved");
   assert.equal(freshUntil(pause, { ...fresh, movedAt: at(-30) }, at(10)).getTime(), at(15).getTime(), "a later bookmaker time reopens even before its own prices move");
-  assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: goalAt, movedAt: goalAt }, at(10)), null, "the reading that brought the goal doesn't count");
+  assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: goalAt, movedAt: goalAt }, at(10)).getTime(), at(15).getTime(), "prices written with the goal differ from the ones before it, so it reopens at 15 s");
+  assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: goalAt, movedAt: goalAt }, at(20)).getTime(), at(20).getTime(), "the same prices still qualify after the minimum, before 90 s");
   assert.equal(freshUntil(pause, { ...fresh, scoreKnown: false }, at(10)), null, "the score isn't the latest");
   assert.equal(freshUntil(pause, { ...fresh, stopped: true }, at(10)), null, "blocked");
   assert.equal(freshUntil(pause, { ...fresh, priced: false }, at(10)), null, "not priced");
   assert.equal(freshUntil(pause, fresh, at(95)), null, "already over");
   assert.equal(marketPause({ liveSuspended: false, livePausedUntil: pause.until, livePauseReason: "goal" }, at(89)), "goal");
   assert.equal(marketPause({ liveSuspended: false, livePausedUntil: pause.until, livePauseReason: "goal" }, at(90)), null);
-  // Without the bookmaker's time, a market needs its own prices to move after the event.
-  const corners = eventPause({ reason: "goal", marketKey: "corners_9_5", pricedSinceEvent: false, now: goalAt });
-  assert.equal(freshUntil(corners, { ...fresh, bookmakerUpdate: null, movedAt: at(-1) }, at(6)), null);
-  assert.equal(freshUntil(corners, { ...fresh, bookmakerUpdate: at(5), movedAt: at(-60) }, at(6)).getTime(), at(6).getTime(), "an unrelated market: a fresh reading pricing it is enough");
+  // A goal pause cannot be pushed past 90 s, and a bookmaker block during it is named without ending our pause early.
+  assert.equal(marketPause({ liveSuspended: false, livePausedAt: goalAt, livePausedUntil: at(180), livePauseReason: "goal" }, at(89)), "goal");
+  assert.equal(marketPause({ liveSuspended: false, livePausedAt: goalAt, livePausedUntil: at(180), livePauseReason: "goal" }, at(90)), null, "90 s is the end, even if a later reading wrote a later until");
+  assert.equal(freshBlocker(pause, { ...fresh, stopped: true }, at(20)), "bookmaker blocking the match");
+  assert.equal(marketPause({ liveSuspended: false, livePausedAt: goalAt, livePausedUntil: pause.until, livePauseReason: "goal" }, at(20)), "goal", "our pause is still running while the bookmaker blocks");
+  const priced = { livePausedAt: goalAt, livePausedUntil: at(15), liveReopenFrom: at(15), livePauseReason: "goal", name: "Match winner", sortOrder: 0 };
+  assert.equal(pauseSummary([priced], at(10)).exact, true, "fresh prices: the banner says Back in, not Back within");
 
   // A jump or a reopen during a goal's pause is the market catching up, not a new event.
   // A second goal during the same pause does not stretch it past the first fallback.
@@ -322,6 +326,10 @@ test("a market the feed hasn't priced live for 5 minutes is stale; the banner li
   assert.equal(marketStale(event, { liveSuspended: false, liveQuotedAt: new Date(now.getTime() - 60_000) }, now), false);
   assert.equal(marketStale(event, { liveSuspended: true, liveQuotedAt: null }, now, false), true, "never priced live since kick-off");
   assert.equal(marketStale({ ...event, period: "HT" }, { liveSuspended: true, liveQuotedAt: new Date(now.getTime() - 6 * 60_000) }, now), false, "not at half-time");
+  assert.equal(liveSideUnpriced("corners_9_5", false), true, "corners the feed never prices leave the board");
+  assert.equal(liveSideUnpriced("cards_3_5", false), true);
+  assert.equal(liveSideUnpriced("corners_9_5", true), false);
+  assert.equal(liveSideUnpriced("match_winner", false), false);
   const summary = pauseSummary(
     [
       { name: "Match winner", sortOrder: 0, livePausedAt: now, livePausedUntil: new Date(now.getTime() + 90_000), liveReopenFrom: new Date(now.getTime() + 15_000), livePauseReason: "goal" },
@@ -542,11 +550,12 @@ test("a live bet's match is checked with the feed itself, and a goal found there
   assert.deepEqual(goals[0].beforeGoal, { side: "home", home: 2.1, draw: 3.2, away: 3.6 });
   assert.equal(goals[0].source, "odds");
 
-  // Once the feed stops pricing the match, it's marked stopped.
+  // A response with no odds is not the bookmaker blocking the match. That flag comes only from status.stopped or status.blocked.
   service.verifying.clear();
   answer = null;
+  const written = updates.length;
   await service.verifyLive(["e1"]);
-  assert.equal(updates.at(-1).liveStopped, true);
+  assert.equal(updates.length, written);
 });
 
 test("a live cards bet fetches the match's events right then; bets at the same moment share the request, and a match the feed left out fails", async () => {

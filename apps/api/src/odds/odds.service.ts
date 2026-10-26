@@ -8,7 +8,7 @@ import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
 import { competitionKey, feedDelay, lagGate, lagStats } from "./feed-delay";
 import { LATE_REASONS, timelineOf } from "../bets/late";
-import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
+import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
@@ -188,11 +188,13 @@ export class OddsService {
         values.set("h", headerKey);
         if (before.get("h") !== headerKey) delta.header = header;
         for (const market of event.markets) {
-          const stale = marketStale(event, market, now, market.selections.some((s) => s.liveOdds !== null));
-          const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || marketPause(market, now) !== null || stale);
-          const value = `${suspended ? 1 : 0}${stale ? 1 : 0}`;
+          const hasLivePrice = market.selections.some((s) => s.liveOdds !== null);
+          const pauseReason = live ? marketPause(market, now) : null;
+          const stale = marketStale(event, market, now, hasLivePrice) || (live && pauseReason === null && liveSideUnpriced(market.key, hasLivePrice));
+          const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || pauseReason !== null || stale);
+          const value = `${suspended ? 1 : 0}${stale ? 1 : 0}|${pauseReason ?? ""}`;
           values.set(`m:${market.id}`, value);
-          if (before.get(`m:${market.id}`) !== value) (delta.markets ??= []).push([market.id, suspended, stale]);
+          if (before.get(`m:${market.id}`) !== value) (delta.markets ??= []).push([market.id, suspended, stale, pauseReason]);
           for (const selection of market.selections) {
             const quote = selectionQuote({
               event,
@@ -611,8 +613,9 @@ export class OddsService {
             suspended: quote.suspended,
           };
         });
-        const stale = marketStale(event, market, now, market.selections.some((s) => s.liveOdds !== null));
+        const hasLivePrice = market.selections.some((s) => s.liveOdds !== null);
         const paused = live ? marketPause(market, now) : null;
+        const stale = marketStale(event, market, now, hasLivePrice) || (live && paused === null && liveSideUnpriced(market.key, hasLivePrice));
         return {
           id: market.id,
           key: market.key,

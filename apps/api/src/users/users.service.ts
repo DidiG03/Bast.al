@@ -570,6 +570,7 @@ export class UsersService {
         approvedAt: true,
         reason: true,
         createdAt: true,
+        betId: true,
         fromUserId: true,
         toUserId: true,
         fromUser: { select: { username: true } },

@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SeedLine, Sheet, ShieldIcon } from "./fair-play";
+import { SeedLine, Sheet } from "./fair-play";
 import { LastSpins } from "./casino-last-spins";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
@@ -63,7 +63,7 @@ export function KenoGame() {
   const [recent, setRecent] = useState<KenoRound[]>([]);
   const [seed, setSeed] = useState<DiceSeed | null>(null);
   const [previousSeed, setPreviousSeed] = useState<DiceSeed | null>(null);
-  const [sheet, setSheet] = useState<"rules" | "fair" | null>(null);
+  const [sheet, setSheet] = useState<"rules" | null>(null);
   const [detail, setDetail] = useState<KenoRound | null>(null);
   const [newClientSeed, setNewClientSeed] = useState("");
   const [changingSeed, setChangingSeed] = useState(false);
@@ -363,11 +363,6 @@ export function KenoGame() {
           </div>
           <p className="muted report-subtitle">{t("Pick up to 10 numbers. 20 of the 80 are drawn, and the more of yours come out, the more you win. Played with your balance.")}</p>
         </div>
-        <div className="dice-title-actions">
-          <button type="button" className="secondary" onClick={() => setSheet("fair")}>
-            {t("Provably fair")}
-          </button>
-        </div>
       </div>
 
       {state.closed ? (
@@ -381,9 +376,6 @@ export function KenoGame() {
               ‹
             </Link>
             <span className="slot-title">{t("Keno")}</span>
-            <button type="button" className="slot-fullscreen dice-fair-button" onClick={() => setSheet("fair")} aria-label={t("Provably fair")} title={t("Provably fair")}>
-              <ShieldIcon />
-            </button>
             <button
               type="button"
               className="slot-fullscreen dice-sound"
@@ -646,77 +638,6 @@ export function KenoGame() {
               </div>
             ))}
           </div>
-          <p className="muted" style={{ margin: 0 }}>
-            {t("Every draw is made on our server from seeds you can check: see Provably fair.")}
-          </p>
-        </Sheet>
-      ) : null}
-
-      {sheet === "fair" ? (
-        <Sheet title={t("Provably fair")} onClose={() => setSheet(null)}>
-          <p>
-            {t("Each draw comes from three things: our server seed, your client seed, and a nonce that counts your rounds. Before you play, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing, and you can't work out the draws. When you change seeds, the old server seed is shown, and you can check every draw it made. Keno and Dice use the same seeds.")}
-          </p>
-          <h3 className="dice-sheet-heading">{t("Your seeds now")}</h3>
-          <SeedLine label={t("Server seed (hashed)")} value={seed.serverSeedHash} onCopy={copy} />
-          <SeedLine label={t("Client seed")} value={seed.clientSeed} onCopy={copy} />
-          <SeedLine label={t("Rounds made with these seeds")} value={String(seed.nonce)} />
-          <label className="dice-field dice-seed-edit">
-            <small>{t("New client seed")}</small>
-            <span className="dice-input">
-              <input value={newClientSeed} maxLength={32} onChange={(event) => setNewClientSeed(event.target.value)} aria-label={t("New client seed")} />
-            </span>
-          </label>
-          <button type="button" className="dice-go" disabled={locked || changingSeed} onClick={() => void changeSeed()}>
-            {changingSeed ? t("Changing…") : t("Change seeds")}
-          </button>
-
-          {previousSeed ? (
-            <>
-              <h3 className="dice-sheet-heading">{t("Your last seeds, now shown")}</h3>
-              <SeedLine label={t("Server seed")} value={previousSeed.serverSeed ?? ""} onCopy={copy} />
-              <SeedLine label={t("Server seed (hashed)")} value={previousSeed.serverSeedHash} onCopy={copy} />
-              <SeedLine label={t("Client seed")} value={previousSeed.clientSeed} onCopy={copy} />
-              <SeedLine label={t("Rounds made with these seeds")} value={String(previousSeed.nonce)} />
-            </>
-          ) : null}
-
-          <h3 className="dice-sheet-heading">{t("Check a draw")}</h3>
-          <div className="dice-verify">
-            <label className="dice-field">
-              <small>{t("Server seed")}</small>
-              <span className="dice-input">
-                <input value={verify.serverSeed} onChange={(event) => setVerify({ ...verify, serverSeed: event.target.value.trim() })} aria-label={t("Server seed")} />
-              </span>
-            </label>
-            <label className="dice-field">
-              <small>{t("Client seed")}</small>
-              <span className="dice-input">
-                <input value={verify.clientSeed} onChange={(event) => setVerify({ ...verify, clientSeed: event.target.value.trim() })} aria-label={t("Client seed")} />
-              </span>
-            </label>
-            <label className="dice-field">
-              <small>{t("Nonce")}</small>
-              <span className="dice-input">
-                <input value={verify.nonce} inputMode="numeric" onChange={(event) => setVerify({ ...verify, nonce: event.target.value.trim() })} aria-label={t("Nonce")} />
-              </span>
-            </label>
-          </div>
-          {verified ? (
-            <div className="dice-verify-out">
-              <span>
-                <small>{t("Numbers drawn, in order")}</small>
-                <strong className="keno-verify-numbers">{verified.drawn === null ? "—" : verified.drawn.join(", ")}</strong>
-              </span>
-              <span>
-                <small>{t("Its hash")}</small>
-                <code>{verified.hash}</code>
-              </span>
-            </div>
-          ) : (
-            <p className="muted" style={{ margin: 0 }}>{t("Paste a server seed that has been shown, its client seed and a nonce.")}</p>
-          )}
-          <p className="muted dice-formula">ball i = pot[ ⌊ (HMAC_SHA256(serverSeed, clientSeed + &quot;:&quot; + nonce + &quot;:&quot; + i)[0..3] ÷ 2³²) × numbers left ⌋ ], i = 0…19</p>
         </Sheet>
       ) : null}
 
@@ -747,24 +668,7 @@ export function KenoGame() {
           <SeedLine label={t("Server seed (hashed)")} value={detail.serverSeedHash} onCopy={copy} />
           <SeedLine label={t("Client seed")} value={detail.clientSeed} onCopy={copy} />
           <SeedLine label={t("Nonce")} value={String(detail.nonce)} />
-          {detail.serverSeed ? (
-            <>
-              <SeedLine label={t("Server seed")} value={detail.serverSeed} onCopy={copy} />
-              <button
-                type="button"
-                className="dice-go"
-                onClick={() => {
-                  setVerify({ serverSeed: detail.serverSeed ?? "", clientSeed: detail.clientSeed, nonce: String(detail.nonce) });
-                  setDetail(null);
-                  setSheet("fair");
-                }}
-              >
-                {t("Check this draw")}
-              </button>
-            </>
-          ) : (
-            <p className="muted" style={{ margin: 0 }}>{t("The server seed is shown once you change seeds. Then you can check this draw.")}</p>
-          )}
+          {detail.serverSeed ? <SeedLine label={t("Server seed")} value={detail.serverSeed} onCopy={copy} /> : null}
         </Sheet>
       ) : null}
     </div>

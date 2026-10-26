@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { SeedLine, Sheet, ShieldIcon } from "./fair-play";
+import { SeedLine, Sheet } from "./fair-play";
 import { LastSpins } from "./casino-last-spins";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
@@ -96,7 +96,7 @@ export function CoinFlipGame() {
   const [auto, setAuto] = useState<{ done: number; total: number | null; profit: number } | null>(null);
   /** This visit's flips and profit. */
   const [visit, setVisit] = useState({ flips: 0, profit: 0, wins: 0 });
-  const [sheet, setSheet] = useState<"rules" | "fair" | null>(null);
+  const [sheet, setSheet] = useState<"rules" | null>(null);
   const [detail, setDetail] = useState<CoinFlipRound | null>(null);
   const [newClientSeed, setNewClientSeed] = useState("");
   const [changingSeed, setChangingSeed] = useState(false);
@@ -367,11 +367,6 @@ export function CoinFlipGame() {
           </div>
           <p className="muted report-subtitle">{t("Call heads or tails and flip. Every flip can be checked. Played with your balance.")}</p>
         </div>
-        <div className="dice-title-actions">
-          <button type="button" className="secondary" onClick={() => setSheet("fair")}>
-            {t("Provably fair")}
-          </button>
-        </div>
       </div>
 
       {state.closed ? (
@@ -385,9 +380,6 @@ export function CoinFlipGame() {
               ‹
             </Link>
             <span className="slot-title">{t("Coin Flip")}</span>
-            <button type="button" className="slot-fullscreen dice-fair-button" onClick={() => setSheet("fair")} aria-label={t("Provably fair")} title={t("Provably fair")}>
-              <ShieldIcon />
-            </button>
             <button
               type="button"
               className="slot-fullscreen dice-sound"
@@ -624,77 +616,6 @@ export function CoinFlipGame() {
               max: formatStake(state.tableMax),
             })}
           </p>
-          <p className="muted" style={{ margin: 0 }}>
-            {t("Every flip is made on our server from seeds you can check: see Provably fair.")}
-          </p>
-        </Sheet>
-      ) : null}
-
-      {sheet === "fair" ? (
-        <Sheet title={t("Provably fair")} onClose={() => setSheet(null)}>
-          <p>
-            {t("Each flip comes from three things: our server seed, your client seed, and a nonce that counts your rounds. Before you flip, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing. When you change seeds, the old server seed is shown, and you can check every flip it made. Dice, Keno and Coin Flip share the same seeds.")}
-          </p>
-          <h3 className="dice-sheet-heading">{t("Your seeds now")}</h3>
-          <SeedLine label={t("Server seed (hashed)")} value={seed.serverSeedHash} onCopy={copy} />
-          <SeedLine label={t("Client seed")} value={seed.clientSeed} onCopy={copy} />
-          <SeedLine label={t("Rounds made with these seeds")} value={String(seed.nonce)} />
-          <label className="dice-field dice-seed-edit">
-            <small>{t("New client seed")}</small>
-            <span className="dice-input">
-              <input value={newClientSeed} maxLength={32} onChange={(event) => setNewClientSeed(event.target.value)} aria-label={t("New client seed")} />
-            </span>
-          </label>
-          <button type="button" className="dice-go coin-go" disabled={locked || changingSeed} onClick={() => void changeSeed()}>
-            {changingSeed ? t("Changing…") : t("Change seeds")}
-          </button>
-
-          {previousSeed ? (
-            <>
-              <h3 className="dice-sheet-heading">{t("Your last seeds, now shown")}</h3>
-              <SeedLine label={t("Server seed")} value={previousSeed.serverSeed ?? ""} onCopy={copy} />
-              <SeedLine label={t("Server seed (hashed)")} value={previousSeed.serverSeedHash} onCopy={copy} />
-              <SeedLine label={t("Client seed")} value={previousSeed.clientSeed} onCopy={copy} />
-              <SeedLine label={t("Rounds made with these seeds")} value={String(previousSeed.nonce)} />
-            </>
-          ) : null}
-
-          <h3 className="dice-sheet-heading">{t("Check a flip")}</h3>
-          <div className="dice-verify">
-            <label className="dice-field">
-              <small>{t("Server seed")}</small>
-              <span className="dice-input">
-                <input value={verify.serverSeed} onChange={(event) => setVerify({ ...verify, serverSeed: event.target.value.trim() })} aria-label={t("Server seed")} />
-              </span>
-            </label>
-            <label className="dice-field">
-              <small>{t("Client seed")}</small>
-              <span className="dice-input">
-                <input value={verify.clientSeed} onChange={(event) => setVerify({ ...verify, clientSeed: event.target.value.trim() })} aria-label={t("Client seed")} />
-              </span>
-            </label>
-            <label className="dice-field">
-              <small>{t("Nonce")}</small>
-              <span className="dice-input">
-                <input value={verify.nonce} inputMode="numeric" onChange={(event) => setVerify({ ...verify, nonce: event.target.value.trim() })} aria-label={t("Nonce")} />
-              </span>
-            </label>
-          </div>
-          {verified ? (
-            <div className="dice-verify-out">
-              <span>
-                <small>{t("Result")}</small>
-                <strong>{verified.side === null ? "—" : sideName(verified.side)}</strong>
-              </span>
-              <span>
-                <small>{t("Its hash")}</small>
-                <code>{verified.hash}</code>
-              </span>
-            </div>
-          ) : (
-            <p className="muted" style={{ margin: 0 }}>{t("Paste a server seed that has been shown, its client seed and a nonce.")}</p>
-          )}
-          <p className="muted dice-formula">HMAC_SHA256(serverSeed, clientSeed + &quot;:&quot; + nonce)[0..3] ÷ 2³²: {t("below 0.5 is heads, otherwise tails")}</p>
         </Sheet>
       ) : null}
 
@@ -714,24 +635,7 @@ export function CoinFlipGame() {
           <SeedLine label={t("Server seed (hashed)")} value={detail.serverSeedHash} onCopy={copy} />
           <SeedLine label={t("Client seed")} value={detail.clientSeed} onCopy={copy} />
           <SeedLine label={t("Nonce")} value={String(detail.nonce)} />
-          {detail.serverSeed ? (
-            <>
-              <SeedLine label={t("Server seed")} value={detail.serverSeed} onCopy={copy} />
-              <button
-                type="button"
-                className="dice-go coin-go"
-                onClick={() => {
-                  setVerify({ serverSeed: detail.serverSeed ?? "", clientSeed: detail.clientSeed, nonce: String(detail.nonce) });
-                  setDetail(null);
-                  setSheet("fair");
-                }}
-              >
-                {t("Check this flip")}
-              </button>
-            </>
-          ) : (
-            <p className="muted" style={{ margin: 0 }}>{t("The server seed is shown once you change seeds. Then you can check this flip.")}</p>
-          )}
+          {detail.serverSeed ? <SeedLine label={t("Server seed")} value={detail.serverSeed} onCopy={copy} /> : null}
         </Sheet>
       ) : null}
     </div>

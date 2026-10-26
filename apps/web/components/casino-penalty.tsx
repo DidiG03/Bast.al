@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { HelpTip } from "./help-tip";
+import { LastSpins } from "./casino-last-spins";
 import { PenaltyScene } from "./penalty-scene";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
@@ -280,11 +280,7 @@ export function PenaltyGame() {
         </section>
       )}
 
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {t("Your last rounds")}
-          <HelpTip text="Your newest Penalty rounds. They're also in My money, as one Penalty line for each day." />
-        </h2>
+      <LastSpins title="Your last rounds" help="Your newest Penalty rounds. They're also in My money, as one Penalty line for each day.">
         {recent.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No rounds yet.")}</p>
         ) : (
@@ -302,7 +298,7 @@ export function PenaltyGame() {
             ))}
           </div>
         )}
-      </section>
+      </LastSpins>
 
       {rulesOpen ? (
         <div className="modal-backdrop" onClick={() => setRulesOpen(false)}>

@@ -4,7 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { SeedLine, Sheet, ShieldIcon } from "./fair-play";
-import { HelpTip } from "./help-tip";
+import { LastSpins } from "./casino-last-spins";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
@@ -765,11 +765,7 @@ export function ScratchGame() {
         </section>
       )}
 
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {t("Your last cards")}
-          <HelpTip text="Your newest scratch cards. Tap one to see its seeds and check it. They're also in My money, as one Scratch Cards line for each day." />
-        </h2>
+      <LastSpins title="Your last cards" help="Your newest scratch cards. Tap one to see its seeds and check it. They're also in My money, as one Scratch Cards line for each day.">
         {recent.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No cards yet.")}</p>
         ) : (
@@ -787,7 +783,7 @@ export function ScratchGame() {
             ))}
           </div>
         )}
-      </section>
+      </LastSpins>
 
       {sheet === "rules" ? (
         <Sheet title={t("Pays and rules")} onClose={() => setSheet(null)}>

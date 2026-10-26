@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type CSSPro
 import { Dice3D, FIRST_IMPACT } from "./dice-3d";
 import { newThrow, throwLength, type DiceThrow } from "./dice-tray";
 import { SeedLine, Sheet, ShieldIcon } from "./fair-play";
-import { HelpTip } from "./help-tip";
+import { LastSpins } from "./casino-last-spins";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
@@ -631,11 +631,7 @@ export function DiceGame() {
         </section>
       )}
 
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {t("Your last rolls")}
-          <HelpTip text="Your newest dice rolls. Tap one to see its seeds and check it. They're also in My money, as one Dice line for each day." />
-        </h2>
+      <LastSpins title="Your last rolls" help="Your newest dice rolls. Tap one to see its seeds and check it. They're also in My money, as one Dice line for each day.">
         {recent.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No rolls yet.")}</p>
         ) : (
@@ -654,7 +650,7 @@ export function DiceGame() {
             ))}
           </div>
         )}
-      </section>
+      </LastSpins>
 
       {sheet === "rules" ? (
         <Sheet title={t("Pays and rules")} onClose={() => setSheet(null)}>

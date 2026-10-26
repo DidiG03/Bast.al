@@ -15372,14 +15372,14 @@ html[data-theme="light"] .role-player {
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset;
 }
 
-/* A casino game fills the sheet and stops there. The page itself does not scroll. */
-.role-player.dashboard-shell:has(.casino-page) {
+/* A slot fills the sheet and stops there. The page itself does not scroll. Other games keep their own height, so the board is never squeezed away. */
+.role-player.dashboard-shell:has(.slot-cabinet) {
   height: 100vh;
   overflow: hidden;
 }
 
-.role-player .dashboard-content:has(.casino-page),
-.role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content:has(.casino-page) {
+.role-player .dashboard-content:has(.slot-cabinet),
+.role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content:has(.slot-cabinet) {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 0.9rem);
@@ -15389,11 +15389,11 @@ html[data-theme="light"] .role-player {
   padding-bottom: 0.85rem;
 }
 
-.role-player .dashboard-content:has(.casino-page) .dashboard-topbar {
+.role-player .dashboard-content:has(.slot-cabinet) .dashboard-topbar {
   flex: none;
 }
 
-.role-player .casino-page {
+.role-player .dashboard-content:has(.slot-cabinet) .casino-page {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
@@ -15413,12 +15413,7 @@ html[data-theme="light"] .role-player {
   overflow: auto;
 }
 
-.role-player .casino-page .slot-cabinet,
-.role-player .casino-page .roulette-cabinet,
-.role-player .casino-page .mines-cabinet,
-.role-player .casino-page .penalty-cabinet,
-.role-player .casino-page .plinko-cabinet,
-.role-player .casino-page .dice-cabinet {
+.role-player .casino-page .slot-cabinet {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -15912,8 +15907,8 @@ html[data-theme="light"] .role-player {
     border-right: 1px solid var(--hairline-strong);
   }
 
-  .role-player .dashboard-content:has(.casino-page),
-  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content:has(.casino-page) {
+  .role-player .dashboard-content:has(.slot-cabinet),
+  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content:has(.slot-cabinet) {
     height: 100vh;
     max-height: 100vh;
   }

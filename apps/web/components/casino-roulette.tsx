@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { HelpTip } from "./help-tip";
+import { LastSpins } from "./casino-last-spins";
 import { useI18n, type I18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
@@ -405,11 +405,7 @@ export function RouletteGame() {
         </>
       )}
 
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {t("Your last rounds")}
-          <HelpTip text="Your newest roulette rounds. They're also in My money, as one Roulette line for each day." />
-        </h2>
+      <LastSpins title="Your last rounds" help="Your newest roulette rounds. They're also in My money, as one Roulette line for each day.">
         {recent.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No rounds yet.")}</p>
         ) : (
@@ -436,7 +432,7 @@ export function RouletteGame() {
             ))}
           </div>
         )}
-      </section>
+      </LastSpins>
 
       {rulesOpen && fullScreen === "off" ? <RouletteRules game={state.game} tableMax={state.tableMax} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
     </div>

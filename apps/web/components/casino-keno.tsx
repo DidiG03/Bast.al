@@ -4,7 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SeedLine, Sheet, ShieldIcon } from "./fair-play";
-import { HelpTip } from "./help-tip";
+import { LastSpins } from "./casino-last-spins";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
@@ -603,11 +603,7 @@ export function KenoGame() {
         </section>
       )}
 
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {t("Your last rounds")}
-          <HelpTip text="Your newest Keno rounds. Tap one to see its draw and its seeds, and check it. They're also in My money, as one Keno line for each day." />
-        </h2>
+      <LastSpins title="Your last rounds" help="Your newest Keno rounds. Tap one to see its draw and its seeds, and check it. They're also in My money, as one Keno line for each day.">
         {recent.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No rounds yet.")}</p>
         ) : (
@@ -625,7 +621,7 @@ export function KenoGame() {
             ))}
           </div>
         )}
-      </section>
+      </LastSpins>
 
       {sheet === "rules" ? (
         <Sheet title={t("Pays and rules")} onClose={() => setSheet(null)}>

@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { HelpTip } from "./help-tip";
+import { LastSpins } from "./casino-last-spins";
 import { useI18n, type I18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
@@ -510,11 +510,7 @@ export function BlackjackGame() {
         </>
       )}
 
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {t("Your last hands")}
-          <HelpTip text="Your newest blackjack rounds. They're also in My money, as one Blackjack line for each day." />
-        </h2>
+      <LastSpins title="Your last hands" help="Your newest blackjack rounds. They're also in My money, as one Blackjack line for each day.">
         {state.recent.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No hands yet.")}</p>
         ) : (
@@ -536,7 +532,7 @@ export function BlackjackGame() {
             ))}
           </div>
         )}
-      </section>
+      </LastSpins>
 
       {rulesOpen && fullScreen === "off" ? <BlackjackRules state={state} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
     </div>

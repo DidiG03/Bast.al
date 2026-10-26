@@ -8,6 +8,7 @@ import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
 import { competitionKey, feedDelay, lagGate, lagStats } from "./feed-delay";
 import { LATE_REASONS, timelineOf } from "../bets/late";
+import { countSelectionDead, countStatsStale } from "./count-guard";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
@@ -95,7 +96,7 @@ const FILTER_STATUSES: Record<EventFilter, EventStatus[]> = {
  * see their Owner's prices; nobody outside a team sees them.
  */
 /** A selection's price as one Player's team sees it, and whether it can be bet on now. */
-export type PlayerPrice = { odds: number; bettable: boolean; live: boolean; score: string; sp: boolean; marketKey: string; margin: number };
+export type PlayerPrice = { odds: number; bettable: boolean; live: boolean; score: string; sp: boolean; marketKey: string; margin: number; /** Why a corners or cards pick is closed, when the live count says so. */ closed: string | null };
 
 @Injectable()
 export class OddsService {
@@ -147,7 +148,7 @@ export class OddsService {
               liveReopenFrom: true,
               livePauseReason: true,
               liveQuotedAt: true,
-              selections: { select: { id: true, feedOdds: true, liveOdds: true, result: true, withdrawn: true } },
+              selections: { select: { id: true, key: true, feedOdds: true, liveOdds: true, result: true, withdrawn: true } },
             },
           },
         },
@@ -191,7 +192,8 @@ export class OddsService {
           const hasLivePrice = market.selections.some((s) => s.liveOdds !== null);
           const pauseReason = live ? marketPause(market, now) : null;
           const stale = marketStale(event, market, now, hasLivePrice) || (live && pauseReason === null && liveSideUnpriced(market.key, hasLivePrice));
-          const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || pauseReason !== null || stale);
+          const countHeld = live && countStatsStale(event.matchCentre, event.matchCentreAt, market.key, now);
+          const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || pauseReason !== null || stale || countHeld);
           const value = `${suspended ? 1 : 0}${stale ? 1 : 0}|${pauseReason ?? ""}`;
           values.set(`m:${market.id}`, value);
           if (before.get(`m:${market.id}`) !== value) (delta.markets ??= []).push([market.id, suspended, stale, pauseReason]);
@@ -205,9 +207,10 @@ export class OddsService {
               override: null,
               now,
             });
-            const value = `${quote.price}|${quote.suspended ? 1 : 0}`;
+            const held = quote.suspended || countHeld || countSelectionDead(event.matchCentre, event.matchCentreAt, market.key, selection.key, now);
+            const value = `${quote.price}|${held ? 1 : 0}`;
             values.set(`s:${selection.id}`, value);
-            if (before.get(`s:${selection.id}`) !== value) (delta.prices ??= []).push([selection.id, quote.price, quote.suspended]);
+            if (before.get(`s:${selection.id}`) !== value) (delta.prices ??= []).push([selection.id, quote.price, held]);
           }
         }
         // A finished match is sent once more (its header) and then forgotten.
@@ -595,6 +598,7 @@ export class OddsService {
           const liveOdds = num(selection.liveOdds);
           const override = live ? null : overrideBy.get(selection.id) ?? null;
           const quote = selectionQuote({ event, market, selection: { feedOdds, liveOdds, result: selection.result, withdrawn: selection.withdrawn }, baseMargin, ownerMargin, override, now });
+          const held = quote.suspended || (live && (countStatsStale(event.matchCentre, event.matchCentreAt, market.key, now) || countSelectionDead(event.matchCentre, event.matchCentreAt, market.key, selection.key, now)));
           return {
             id: selection.id,
             key: selection.key,
@@ -610,18 +614,19 @@ export class OddsService {
             custom: override !== null,
             result: selection.result,
             /** Live: the feed isn't pricing this outcome right now. Before kick-off: the feed took it down (see Selection.withdrawn). */
-            suspended: quote.suspended,
+            suspended: held,
           };
         });
         const hasLivePrice = market.selections.some((s) => s.liveOdds !== null);
         const paused = live ? marketPause(market, now) : null;
+        const countHeld = live && countStatsStale(event.matchCentre, event.matchCentreAt, market.key, now);
         const stale = marketStale(event, market, now, hasLivePrice) || (live && paused === null && liveSideUnpriced(market.key, hasLivePrice));
         return {
           id: market.id,
           key: market.key,
           name: market.name,
           /** Live only: off the board right now: the feed has it off (single outcomes can be off on their own), or it's paused. */
-          suspended: live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || paused !== null || stale),
+          suspended: live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || paused !== null || stale || countHeld || selections.every((s) => s.suspended)),
           /** Live only: paused after something in the match (a goal, a card…), and why. */
           paused,
           /** Live only: the feed hasn't priced it during play for a while; shown under "Not available during play". */
@@ -910,11 +915,11 @@ export class OddsService {
   async feedLagStats(days = 3, percentile = 0.95) {
     const rows = await this.prisma.goalSeen.findMany({
       where: { seenAt: { gte: new Date(Date.now() - days * 86_400_000) }, lagMinMs: { not: null } },
-      select: { lagMinMs: true, event: { select: { provider: true, league: true } } },
+      select: { lagMinMs: true, lagMs: true, event: { select: { provider: true, league: true } } },
       orderBy: { seenAt: "desc" },
       take: 5_000,
     });
-    return { percentile, ...lagStats(rows.map((row) => ({ lagMinMs: row.lagMinMs!, provider: row.event.provider, league: row.event.league })), percentile) };
+    return { percentile, ...lagStats(rows.map((row) => ({ lagMinMs: row.lagMinMs!, lagMs: row.lagMs, provider: row.event.provider, league: row.event.league })), percentile) };
   }
 
   async leagues() {
@@ -1016,15 +1021,23 @@ export class OddsService {
         ownerMargin,
         override: overrideBy.get(selection.id) ?? null,
       });
+      const dead = quote.live && countSelectionDead(event.matchCentre, event.matchCentreAt, selection.market.key, selection.key, new Date());
+      const staleCount = quote.live && countStatsStale(event.matchCentre, event.matchCentreAt, selection.market.key, new Date());
+      const closed = dead
+        ? `The line on ${selection.market.name} has already been passed.`
+        : staleCount
+          ? `Corners and cards on ${event.name} are paused until the live statistics catch up.`
+          : null;
       prices.set(selection.id, {
         odds: quote.price,
-        bettable: quote.bettable,
+        bettable: quote.bettable && closed === null,
         live: quote.live,
         score: `${event.homeScore ?? "-"}:${event.awayScore ?? "-"}`,
         // Greyhounds: no price yet; the bet keeps the team's margin and is paid at the SP less it.
         sp: event.sport === "greyhounds",
         marketKey: selection.market.key,
         margin: teamMargin(baseMargin, ownerMargin),
+        closed,
       });
     }
     return prices;

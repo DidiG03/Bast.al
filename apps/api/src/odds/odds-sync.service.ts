@@ -895,38 +895,63 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       marks.set(eventId, mark);
       const was = before.get(eventId);
       const kinds = (value: unknown, ...wanted: string[]) => ((value as { moments?: Array<{ kind: string }> } | null)?.moments ?? []).filter((moment) => wanted.includes(moment.kind)).length;
+      const pairTotal = (pair: [number, number] | null | undefined) => (pair ? pair[0] + pair[1] : null);
+      const rose = (next: [number, number] | null | undefined, prev: [number, number] | null | undefined) => {
+        const after = pairTotal(next);
+        const before = pairTotal(prev);
+        return after !== null && before !== null && after > before;
+      };
       // Only a live match with a centre saved before can have something new.
       const live = was?.status === EventStatus.LIVE && was.matchCentre !== null;
+      const prevCentre = was?.matchCentre as { corners?: [number, number] | null; yellow?: [number, number] | null; red?: [number, number] | null; cornerMarks?: Array<{ home: number; away: number; at: string }> } | null;
       const goalAhead = was?.status === EventStatus.LIVE && was.homeScore !== null && was.awayScore !== null && mark.home !== null && mark.away !== null && mark.home + mark.away > was.homeScore + was.awayScore;
-      let reason: CooldownReason | null = null;
-      if (goalAhead) reason = "ahead";
-      else if (live && kinds(centre, "red") > kinds(was.matchCentre, "red")) reason = "red";
-      else if (live && kinds(centre, "var", "missed_penalty", "penalty") > kinds(was.matchCentre, "var", "missed_penalty", "penalty")) reason = "var";
+      // A goal leaves corners open. A red card pauses goals and cards. A yellow pauses cards. A corner pauses corners.
+      const reasons: CooldownReason[] = [];
+      if (goalAhead) reasons.push("ahead");
+      else if (live) {
+        if (kinds(centre, "red") > kinds(was.matchCentre, "red") || rose(centre.red, prevCentre?.red)) reasons.push("red");
+        if (!reasons.includes("red") && (kinds(centre, "yellow") > kinds(was.matchCentre, "yellow") || rose(centre.yellow, prevCentre?.yellow))) reasons.push("yellow");
+        if (rose(centre.corners, prevCentre?.corners)) reasons.push("corner");
+        if (reasons.length === 0 && kinds(centre, "var", "missed_penalty", "penalty") > kinds(was.matchCentre, "var", "missed_penalty", "penalty")) reasons.push("var");
+      }
       const now = new Date();
       const scoreKey = mark.home !== null && mark.away !== null ? `${mark.home}:${mark.away}` : null;
       const savedKey = was?.homeScore !== null && was?.homeScore !== undefined && was.awayScore !== null && was.awayScore !== undefined ? `${was.homeScore}:${was.awayScore}` : null;
       // The same goal or card is still in the timeline on the next poll. Starting the pause again would move its 90 s end later every time.
       // A higher score is a new goal, so it is not held.
       const further = Boolean(scoreKey && savedKey && scoreKey !== savedKey);
-      const holding = Boolean(reason && !further && was?.liveCooldownUntil && was.liveCooldownUntil > now && (was.liveCooldownReason === reason || (reason === "ahead" && (was.liveCooldownReason === "goal" || was.liveCooldownReason === "ahead"))));
-      if (reason && scoreKey && this.repeatScore(eventId, reason, scoreKey, { reason: was?.liveCooldownReason ?? null, until: was?.liveCooldownUntil ?? null }, savedKey, now)) reason = null;
-      const pause = reason && GOAL_COOLDOWN_MS > 0 && !holding ? laterCooldown({ until: was!.liveCooldownUntil, reason: was!.liveCooldownReason }, { until: new Date(Date.now() + GOAL_COOLDOWN_MS), reason }) : null;
-      // Not noted as a goal until the score on the board changes. A timeline that's briefly ahead (a disallowed goal) must not be stored as the moment we saw it.
-      if (reason && !holding) await this.pauseMarkets(eventId, { reason, pricedSinceEvent: new Set() }, null, new Date());
-      else if (!reason && was?.matchCentre) await this.prisma.market.updateMany({ where: { eventId, livePauseReason: "ahead", livePausedUntil: { gt: new Date() } }, data: { livePausedUntil: new Date() } });
+      const held = (reason: CooldownReason) =>
+        Boolean(!further && was?.liveCooldownUntil && was.liveCooldownUntil > now && (was.liveCooldownReason === reason || (reason === "ahead" && (was.liveCooldownReason === "goal" || was.liveCooldownReason === "ahead"))));
+      const starting = reasons.filter((reason) => {
+        if (held(reason)) return false;
+        if (scoreKey && this.repeatScore(eventId, reason, scoreKey, { reason: was?.liveCooldownReason ?? null, until: was?.liveCooldownUntil ?? null }, savedKey, now)) return false;
+        return true;
+      });
+      let pause: { until: Date | null; reason: string | null } | null = null;
+      for (const reason of starting) {
+        if (GOAL_COOLDOWN_MS <= 0) continue;
+        pause = laterCooldown(pause ?? { until: was!.liveCooldownUntil, reason: was!.liveCooldownReason }, { until: new Date(Date.now() + GOAL_COOLDOWN_MS), reason });
+        await this.pauseMarkets(eventId, { reason, pricedSinceEvent: new Set() }, null, new Date());
+      }
+      if (starting.length === 0 && reasons.length === 0 && was?.matchCentre) await this.prisma.market.updateMany({ where: { eventId, livePauseReason: "ahead", livePausedUntil: { gt: new Date() } }, data: { livePausedUntil: new Date() } });
+      const cornerMarks = [...(prevCentre?.cornerMarks ?? [])];
+      if (rose(centre.corners, prevCentre?.corners) && centre.corners) cornerMarks.push({ home: centre.corners[0], away: centre.corners[1], at: now.toISOString() });
+      const stored = { ...centre, cornerMarks: cornerMarks.slice(-40) };
+      // A corner or a yellow on its own doesn't bump the match version: that would refuse a goals bet already waiting. Those markets are paused, and the count check refuses their bets.
+      const bumpsVersion = starting.some((reason) => reason !== "corner" && reason !== "yellow");
       await this.prisma.event.update({
         where: { id: eventId },
         data: {
-          matchCentre: centre as unknown as Prisma.InputJsonValue,
-          matchCentreAt: new Date(),
+          matchCentre: stored as unknown as Prisma.InputJsonValue,
+          matchCentreAt: now,
           ...(pause ? { liveCooldownUntil: pause.until, liveCooldownReason: pause.reason } : {}),
-          ...(reason && !holding ? { liveVersion: { increment: 1 } } : {}),
+          ...(bumpsVersion ? { liveVersion: { increment: 1 } } : {}),
           // A goal its prices don't have yet: paused markets don't reopen on prices without it.
           ...(was?.status === EventStatus.LIVE && mark.home !== null && mark.away !== null ? { liveScoreAhead: goalAhead ? `${mark.home}:${mark.away}` : null } : {}),
         },
       });
-      if (reason && !holding) {
-        this.logger.log(`Live betting paused on ${was!.name} (${reason} in the feed's timeline${goalAhead ? `: ${mark.home}–${mark.away} before its prices had it` : ""}) until ${pause?.until?.toISOString() ?? "now"}`);
+      if (starting.length > 0) {
+        this.logger.log(`Live betting paused on ${was!.name} (${starting.join(", ")} in the feed's timeline${goalAhead ? `: ${mark.home}–${mark.away} before its prices had it` : ""}) until ${pause?.until?.toISOString() ?? "now"}`);
         paused.push(eventId);
       }
       saved++;
@@ -1720,7 +1745,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
         // When it was last priced only matters to the minute (marketStale): not written on every reading.
-        if (hasPrice && (!row.liveQuotedAt || now.getTime() - row.liveQuotedAt.getTime() > QUOTED_EVERY_MS)) quoted.push(row.id);
+        // A suspended price is not a quote. Five minutes of the bookmaker holding the market then moves it off the board.
+        if (!market.suspended && hasPrice && (!row.liveQuotedAt || now.getTime() - row.liveQuotedAt.getTime() > QUOTED_EVERY_MS)) quoted.push(row.id);
         const old = new Map(row.selections.map((selection) => [selection.key, selection]));
         let movedHere = false;
         for (const selection of market.selections) {
@@ -1735,12 +1761,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           }
         }
         if (movedHere) moved.push(row.id);
-        // Prices that differ from the ones before this pause, or the pause's own end: the feed's suspended flag was the event.
-        const movedSincePause = movedHere || Boolean(row.livePausedAt && row.liveMovedAt && row.liveMovedAt >= row.livePausedAt);
-        const pauseOver = Boolean(row.livePauseReason && row.livePausedUntil && row.livePausedUntil <= now);
-        const cornersOpen = marketGroup(market.key) === "corners" && hasPrice;
-        const release = cornersOpen || (hasPrice && (movedSincePause || pauseOver));
-        const feedOff = market.suspended && !release;
+        // The bookmaker's own flag. A long run of it, with no open quote, moves the market off the board (marketStale).
+        const feedOff = market.suspended;
         if (row.liveSuspended !== feedOff) (feedOff ? suspend : reopen).push(row.id);
         if (row.livePausedUntil && row.livePausedUntil > now) {
           const pairs = market.selections.map((selection) => {

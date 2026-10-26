@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { OddsSelection } from "../lib/api";
 import { useI18n } from "./i18n-provider";
 import { MarketPriceHistory } from "./price-history";
@@ -89,6 +89,7 @@ export function MarketHead({
   picked,
   starred,
   onStar,
+  quiet = false,
   children,
 }: {
   title: string;
@@ -101,6 +102,8 @@ export function MarketHead({
   /** In this account's favourite markets; the star sits at the end of the heading, open or closed. */
   starred: boolean;
   onStar: () => void;
+  /** Already inside "Not available during play": the row doesn't also say Suspended. */
+  quiet?: boolean;
   children?: ReactNode;
 }) {
   const { t } = useI18n();
@@ -112,7 +115,7 @@ export function MarketHead({
         </svg>
         <span className="odds-market-name">
           {title}
-          {suspended ? <span className="muted"> · {paused ? t("Paused") : t("Suspended")}</span> : null}
+          {suspended && !quiet ? <span className="muted"> · {paused ? t("Paused") : t("Suspended")}</span> : null}
         </span>
         {picked && !open ? <span className="odds-market-picked" role="img" aria-label={t("On your slip")} title={t("On your slip")} /> : null}
       </button>
@@ -133,7 +136,25 @@ export function MarketHead({
   );
 }
 
-/** One over/under market: the line steps, the two prices follow it. Open or closed like any other market (MarketHead). */
+/** The bookmaker's most even open line, used once as the line the stepper starts on. */
+function evenest(lines: LinedMarket[]): number | null {
+  let best: { line: number; gap: number } | null = null;
+  for (const market of lines) {
+    const line = lineValue(market.key);
+    const over = market.selections.find((selection) => selection.key === "over");
+    const under = market.selections.find((selection) => selection.key === "under");
+    if (line === null || !over || !under || over.suspended || under.suspended || over.price <= 1 || under.price <= 1) continue;
+    const gap = Math.abs(over.price - under.price);
+    if (!best || gap < best.gap) best = { line, gap };
+  }
+  return best?.line ?? null;
+}
+
+/**
+ * One over/under market: the line steps, the two prices follow it. The step
+ * stays on a line value the bookmaker is pricing. Adding or dropping other
+ * lines does not move it. Open or closed like any other market (MarketHead).
+ */
 export function LineFamily<T extends LinedMarket>({
   lines,
   open,
@@ -141,6 +162,7 @@ export function LineFamily<T extends LinedMarket>({
   picked,
   starred,
   onStar,
+  quiet = false,
   children,
 }: {
   lines: T[];
@@ -150,25 +172,36 @@ export function LineFamily<T extends LinedMarket>({
   picked: boolean;
   starred: boolean;
   onStar: () => void;
+  quiet?: boolean;
   children: (market: T) => ReactNode;
 }) {
   const { t, ts } = useI18n();
+  const [, redraw] = useState(0);
+  const chosen = useRef<number | null>(null);
   const ordered = [...lines].sort((a, b) => (lineValue(a.key) ?? 0) - (lineValue(b.key) ?? 0));
-  const preferred = ordered.findIndex((market) => lineValue(market.key) === 2.5);
-  const [index, setIndex] = useState(preferred >= 0 ? preferred : Math.floor((ordered.length - 1) / 2));
-  const safe = Math.min(index, ordered.length - 1);
-  const market = ordered[safe];
-  const line = lineValue(market.key);
-  const title = ts(market.name).replace(/\s*\d+(?:\.\d+)?\s*$/, "").trim();
+  const priced = ordered.filter((market) => !market.suspended);
+  const pool = priced.length > 0 ? priced : ordered;
+  if (chosen.current === null) chosen.current = evenest(priced.length > 0 ? priced : ordered) ?? lineValue(pool[0]?.key ?? "");
+  const at = Math.max(0, pool.findIndex((market) => lineValue(market.key) === chosen.current));
+  const market = pool[at] ?? pool[0];
+  const line = market ? lineValue(market.key) : null;
+  const title = market ? ts(market.name).replace(/\s*\d+(?:\.\d+)?\s*$/, "").trim() : "";
+  const step = (next: number) => {
+    const value = lineValue(pool[next]?.key ?? "");
+    if (value === null) return;
+    chosen.current = value;
+    redraw((n) => n + 1);
+  };
+  if (!market) return null;
   return (
     <div className={`odds-market${open ? " is-open" : ""}`}>
-      <MarketHead title={title} suspended={market.suspended} paused={Boolean(market.paused)} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
+      <MarketHead title={title} suspended={market.suspended} paused={Boolean(market.paused)} quiet={quiet} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
         <span className="line-stepper">
-          <button type="button" disabled={safe === 0} onClick={() => setIndex(safe - 1)} aria-label={t("Lower line")}>
+          <button type="button" disabled={at === 0} onClick={() => step(at - 1)} aria-label={t("Lower line")}>
             ‹
           </button>
           <span>{line === null ? "" : line.toFixed(1)}</span>
-          <button type="button" disabled={safe === ordered.length - 1} onClick={() => setIndex(safe + 1)} aria-label={t("Higher line")}>
+          <button type="button" disabled={at === pool.length - 1} onClick={() => step(at + 1)} aria-label={t("Higher line")}>
             ›
           </button>
         </span>

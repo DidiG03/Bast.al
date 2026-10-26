@@ -123,6 +123,11 @@ export function takenWithoutAsking(before: number, after: number): boolean {
   return after > before && smallPriceMove(before, after);
 }
 
+/** A live bet is placed only when the bookmaker's price is still the one on the slip. */
+export function sameLivePrice(slip: number, offered: number): boolean {
+  return Math.abs(offered - slip) <= 0.001;
+}
+
 /**
  * Pauses on single markets. Something happening in a live match pauses the
  * markets it changes, not the whole match: a goal the goal markets (result,
@@ -141,7 +146,7 @@ export function takenWithoutAsking(before: number, after: number): boolean {
  * reopen) when fresh prices don't come.
  */
 export type MarketGroup = "goals" | "cards" | "corners";
-export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen" | "ahead";
+export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen" | "ahead" | "corner" | "yellow";
 
 export function marketGroup(key: string): MarketGroup {
   if (/^(home_|away_)?corners_/.test(key)) return "corners";
@@ -155,6 +160,10 @@ export const EVENT_HITS: Record<MarketPauseReason, readonly MarketGroup[]> = {
   // The timeline is ahead of the score on the board. Same markets as a goal, but it isn't called a goal until the score changes.
   ahead: ["goals"],
   red: ["goals", "cards"],
+  /** A corner in the live statistics. Corners markets only; goals and cards stay open. */
+  corner: ["corners"],
+  /** A yellow card. Cards markets only. */
+  yellow: ["cards"],
   var: ["goals", "cards"],
   swing: ["goals", "cards"],
   reopen: ["goals", "cards", "corners"],

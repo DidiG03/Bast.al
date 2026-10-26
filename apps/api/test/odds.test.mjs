@@ -5,7 +5,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
-import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCooldown, marketGroup, mergePause, sameScorePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
+import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCooldown, marketGroup, mergePause, sameLivePrice, sameScorePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
+import { countLineDead, countSelectionDead, countStatsStale } from "../dist/odds/count-guard.js";
+import { lagSample } from "../dist/odds/feed-delay.js";
 import { applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 import { hotMatches, minuteRoom } from "../dist/odds/live-polling.js";
 
@@ -656,6 +658,55 @@ test("after a goal, a paused market reopens once a later reading is fresh for it
   assert.ok((await run(40, { home: 1, away: 0 }, new Date(Date.now() - 60_000).toISOString())).market.livePausedUntil <= new Date(), "prices that moved reopen even when the update time is old");
   assert.ok((await run(40, { home: 1, away: 0 }, new Date().toISOString(), 60)).market.livePausedUntil <= new Date(), "a later update time reopens even when this market's price hasn't moved");
   assert.equal((await run(40, { home: 1, away: 0 }, new Date(Date.now() - 60_000).toISOString(), 60)).market, null, "old update time and prices that haven't moved: stay paused");
+});
+
+test("an over that the live count has already reached is dead, and a stale count holds the market", () => {
+  const now = new Date("2026-10-26T19:40:00Z");
+  const fresh = new Date(now.getTime() - 20_000);
+  const old = new Date(now.getTime() - 90_000);
+  const centre = { corners: [2, 1], yellow: [1, 0], red: [0, 0] };
+  assert.equal(countLineDead("corners_2_5", "over", 3), true, "3 corners already covers over 2.5, which is 3 or more");
+  assert.equal(countLineDead("corners_2_5", "under", 3), true, "under 2.5 is already broken");
+  assert.equal(countLineDead("corners_8_5", "over", 8), false, "8 corners still leaves over 8.5 open");
+  assert.equal(countLineDead("corners_8_5", "under", 9), true);
+  assert.equal(countSelectionDead(centre, fresh, "corners_2_5", "over", now), true);
+  assert.equal(countSelectionDead(centre, fresh, "corners_8_5", "over", now), false);
+  assert.equal(countSelectionDead(centre, fresh, "home_corners_1_5", "over", now), true, "the home side already has 2");
+  assert.equal(countSelectionDead({ yellow: [2, 1], red: [1, 0] }, fresh, "cards_3_5", "over", now), true, "4 cards already covers over 3.5");
+  assert.equal(countStatsStale(centre, old, "corners_9_5", now), true, "statistics older than a minute hold corners");
+  assert.equal(countStatsStale(null, fresh, "cards_2_5", now), true, "no card count holds cards");
+  assert.equal(countStatsStale(centre, fresh, "corners_9_5", now), false);
+  assert.equal(countStatsStale(centre, old, "match_winner", now), false, "goals markets are not held for a corner count");
+});
+
+test("a corner pauses corners only, a yellow pauses cards only, and a red pauses goals and cards", () => {
+  const now = new Date("2026-10-26T19:43:00Z");
+  const pause = (reason, marketKey) => eventPause({ reason, marketKey, pricedSinceEvent: false, now });
+  assert.ok(pause("corner", "corners_9_5"));
+  assert.equal(pause("corner", "match_winner"), null);
+  assert.equal(pause("corner", "cards_3_5"), null);
+  assert.equal(pause("corner", "corners_9_5").until.getTime() - now.getTime(), 90_000);
+  assert.equal(pause("corner", "corners_9_5").reopenFrom.getTime() - now.getTime(), 15_000);
+  assert.ok(pause("yellow", "cards_3_5"));
+  assert.equal(pause("yellow", "corners_9_5"), null);
+  assert.equal(pause("yellow", "match_winner"), null);
+  assert.ok(pause("red", "match_winner"));
+  assert.ok(pause("red", "cards_3_5"));
+  assert.equal(pause("red", "corners_9_5"), null);
+  assert.equal(pause("goal", "corners_9_5"), null, "a goal leaves corners open");
+});
+
+test("a live bet is never taken at a price other than the slip price", () => {
+  assert.equal(sameLivePrice(1.57, 1.61), false, "1.57 on the slip is not 1.61");
+  assert.equal(sameLivePrice(1.91, 2.0), false, "a higher live price is not taken either");
+  assert.equal(sameLivePrice(1.57, 1.57), true);
+  assert.equal(sameLivePrice(2.1, 2.1), true);
+});
+
+test("a goal seen before its minute ended still counts toward its competition's lag", () => {
+  assert.equal(lagSample({ lagMinMs: -10_000, lagMs: 50_000, provider: "api-football", league: "Superliga" }), 50_000);
+  assert.equal(lagSample({ lagMinMs: 40_000, lagMs: 70_000, provider: "api-football", league: "Superliga" }), 40_000, "a usable least-delay stands");
+  assert.equal(lagSample({ lagMinMs: -10_000, lagMs: 20 * 60_000, provider: "api-football", league: "Superliga" }), null, "a mismatched minute stays out");
 });
 
 test("an Owner's own price can't go more than 10% above the feed price", () => {

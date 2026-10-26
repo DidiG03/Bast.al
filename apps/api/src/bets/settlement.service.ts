@@ -14,7 +14,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import { betSelect, betView } from "./bets.service";
 import { GoalRecord, isGoalMarket } from "./goals";
-import { LATE_CHECK_WAIT_MS, LATE_REASONS, LATE_RULE_VERSION, type LateDecision, type LateRecord, type LateTimeline, type SeenScore, lateDecision, liveStateOf, timelineOf } from "./late";
+import { LATE_CHECK_WAIT_MS, LATE_REASONS, LATE_RULE_VERSION, type LateDecision, type LateRecord, type LateTimeline, type SeenScore, cornerMarksOf, lateDecision, liveStateOf, timelineOf } from "./late";
 import { builderOutcome } from "./builder";
 import { systemOutcome } from "./system";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
@@ -389,7 +389,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       if (!state || event.sport !== "football" || event.status !== EventStatus.COMPLETED) return null;
       if (!timeline && !stopWaiting) return "wait";
       // Past the wait without a timeline, a later goal nothing can time voids the bet rather than letting it be paid.
-      return settled(lateDecision({ state, placedAt, marketKey: marketOf.get(selectionId) ?? "", selectionKey: pickOf.get(selectionId), timeline, seen, result }));
+      return settled(lateDecision({ state, placedAt, marketKey: marketOf.get(selectionId) ?? "", selectionKey: pickOf.get(selectionId), timeline, seen, result, cornerMarks: cornerMarksOf(event.matchCentre) }));
     };
     /** Late live bets, told to their Players as voided rather than settled. */
     const late: Change[] = [];
@@ -553,7 +553,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
    * goal counts. Settlement checks again at full time.
    */
   async voidLateOnArrival(eventId: string, timeline: LateTimeline | null): Promise<Change[]> {
-    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, name: true, sport: true, status: true } });
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, name: true, sport: true, status: true, matchCentre: true } });
     if (!event || event.sport !== "football" || event.status !== EventStatus.LIVE) return [];
     const seen = await this.seenScores(eventId);
     this.logger.log(`Late check on arrival for ${event.name}: scores seen ${seen.map((row) => `${row.home}–${row.away} at ${row.seenAt.toISOString()}`).join(", ") || "none"}; ${timeline ? `feed timeline with ${timeline.goals.length} goal(s)` : "no feed timeline"}`);
@@ -573,7 +573,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     for (const bet of bets) {
       const state = liveStateOf(bet.live);
       if (!state) continue;
-      const decision = lateDecision({ state, placedAt: bet.placedAt, marketKey: bet.selection!.market.key, selectionKey: bet.selection!.key, timeline: usable, seen });
+      const decision = lateDecision({ state, placedAt: bet.placedAt, marketKey: bet.selection!.market.key, selectionKey: bet.selection!.key, timeline: usable, seen, cornerMarks: cornerMarksOf(event.matchCentre) });
       // A bet that stands now is only logged: it's checked again, and recorded, at full time with the whole timeline.
       if (!decision.late) {
         await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName: event.name }, decision, "arrival", null, "log");
@@ -588,7 +588,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     for (const leg of legs) {
       const state = liveStateOf(leg.live);
       if (!state) continue;
-      const decision = lateDecision({ state, placedAt: leg.bet.placedAt, marketKey: leg.selection.market.key, selectionKey: leg.selection.key, timeline: usable, seen });
+      const decision = lateDecision({ state, placedAt: leg.bet.placedAt, marketKey: leg.selection.market.key, selectionKey: leg.selection.key, timeline: usable, seen, cornerMarks: cornerMarksOf(event.matchCentre) });
       if (!decision.late) {
         await this.noteLate({ kind: "leg", id: leg.id, betId: leg.betId, playerId: leg.bet.playerId, live: leg.live, eventId, eventName: event.name }, decision, "arrival", null, "log");
         continue;
@@ -676,7 +676,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       .then((rows) => fresh(rows).filter((row) => row.result !== SelectionResult.VOID || !decidedNow(row.live)));
     const eventIds = [...new Set([...bets.map((bet) => bet.selection!.market.eventId), ...legs.map((leg) => leg.selection.market.eventId)])];
     const events = new Map(
-      (await this.prisma.event.findMany({ where: { id: { in: eventIds } }, select: { id: true, name: true, lateCheck: true, resultHome: true, resultAway: true } })).map((event) => [event.id, event]),
+      (await this.prisma.event.findMany({ where: { id: { in: eventIds } }, select: { id: true, name: true, lateCheck: true, resultHome: true, resultAway: true, matchCentre: true } })).map((event) => [event.id, event]),
     );
     const seenBy = new Map<string, SeenScore[]>();
     for (const id of eventIds) seenBy.set(id, await this.seenScores(id));
@@ -685,7 +685,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       const event = events.get(eventId);
       const result = event && event.resultHome !== null && event.resultAway !== null ? { home: event.resultHome, away: event.resultAway } : null;
       // The match is over: a later goal nothing can time voids the bet (settled).
-      return state ? settled(lateDecision({ state, placedAt, marketKey, selectionKey, timeline: timelineOf(event?.lateCheck), seen: seenBy.get(eventId) ?? [], result })) : null;
+      return state ? settled(lateDecision({ state, placedAt, marketKey, selectionKey, timeline: timelineOf(event?.lateCheck), seen: seenBy.get(eventId) ?? [], result, cornerMarks: cornerMarksOf(event?.matchCentre) })) : null;
     };
     const results: Array<{ betId: string; legId?: string; playerId: string; event: string; status: BetStatus | SelectionResult; void: boolean; reinstated?: boolean; reason: string | null; detail: string; balanceChange: number }> = [];
     const voided: Change[] = [];

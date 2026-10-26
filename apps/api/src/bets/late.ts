@@ -45,7 +45,7 @@ export const LATE_ASSUMED_LAG_MS = envMs("LATE_ASSUMED_LAG_MS", 30_000);
 /** How far behind our feed can be: with no usable minute for a goal, it's taken to have gone in this long before we saw it. */
 export const LATE_MAX_FEED_LAG_MS = envMs("LATE_MAX_FEED_LAG_MS", 120_000);
 /** The late rule's version, kept with each decision: a bet decided under an older one is checked again. */
-export const LATE_RULE_VERSION = 4;
+export const LATE_RULE_VERSION = 5;
 
 export type Side = "home" | "away";
 
@@ -59,6 +59,10 @@ export type LiveState = {
   cards: number | null;
   /** Red cards shown so far, or null when not known (older bets, or no timeline). */
   reds?: number | null;
+  /** Corners shown so far, or null when the site had no count. */
+  corners?: number | null;
+  cornersHome?: number | null;
+  cornersAway?: number | null;
   /** How the bet was confirmed, for checking a case afterwards; the late check doesn't read it. */
   audit?: LiveAudit;
   /** The late check's latest decision on it (settlement), for checking a case afterwards. */
@@ -161,6 +165,9 @@ export function liveStateOf(value: unknown): LiveState | null {
     minute: typeof state.minute === "number" ? state.minute : null,
     cards: typeof state.cards === "number" ? state.cards : null,
     reds: typeof state.reds === "number" ? state.reds : null,
+    ...(typeof state.corners === "number" ? { corners: state.corners } : {}),
+    ...(typeof state.cornersHome === "number" ? { cornersHome: state.cornersHome } : {}),
+    ...(typeof state.cornersAway === "number" ? { cornersAway: state.cornersAway } : {}),
     ...(state.audit && typeof state.audit === "object" ? { audit: state.audit } : {}),
   };
 }
@@ -245,7 +252,7 @@ export type LateDecision = { late: boolean; undecided?: boolean; reason: string 
 /** Why a bet whose later goal can't be timed is void. */
 export const UNTIMED_REASON = "couldn't confirm it was placed before a goal the feed reported late";
 /** Every reason the late check voids a bet with, to tell its voids from Super Admin's own. */
-export const LATE_REASONS = ["placed after a goal that hadn't shown yet", "placed after a red card that hadn't shown yet", "placed after a card that hadn't shown yet", UNTIMED_REASON];
+export const LATE_REASONS = ["placed after a goal that hadn't shown yet", "placed after a red card that hadn't shown yet", "placed after a card that hadn't shown yet", "placed after a corner that hadn't shown yet", UNTIMED_REASON];
 
 const iso = (ms: number | null) => (ms === null ? "unknown" : new Date(ms).toISOString());
 const minuteText = (moment: Moment) => (moment.extra ? `${moment.minute}+${moment.extra}'` : `${moment.minute}'`);
@@ -289,6 +296,32 @@ export function redHelps(marketKey: string, selectionKey: string | undefined, si
 }
 
 /** Whether a card for `side` made a cards bet more likely to win: any card helps Over, a team's card helps its own Over; Under never gains. */
+/** One sighting of the corner count, kept on the match centre as it rose. */
+export type CornerMark = { home: number; away: number; at: string };
+
+export function cornerMarksOf(centre: unknown): CornerMark[] {
+  const marks = centre && typeof centre === "object" ? (centre as { cornerMarks?: unknown }).cornerMarks : null;
+  if (!Array.isArray(marks)) return [];
+  return marks.filter((mark): mark is CornerMark => {
+    if (!mark || typeof mark !== "object") return false;
+    const row = mark as Partial<CornerMark>;
+    return typeof row.home === "number" && typeof row.away === "number" && typeof row.at === "string";
+  });
+}
+
+/**
+ * Whether an unseen corner helped this pick. An extra corner helps an Over.
+ * It makes an Under less likely, so that pick stands. A team corner helps
+ * only that side's Over.
+ */
+export function cornerHelps(marketKey: string, selectionKey: string | undefined, side: Side | "either"): boolean {
+  if (selectionKey === undefined) return true;
+  if (/^corners_\d+_5$/.test(marketKey)) return selectionKey === "over";
+  if (/^home_corners_\d+_5$/.test(marketKey)) return selectionKey === "over" && (side === "home" || side === "either");
+  if (/^away_corners_\d+_5$/.test(marketKey)) return selectionKey === "over" && (side === "away" || side === "either");
+  return false;
+}
+
 export function cardHelps(marketKey: string, selectionKey: string | undefined, side: Side): boolean {
   if (selectionKey === undefined) return true;
   if (/^cards_\d+_5$/.test(marketKey)) return selectionKey === "over";
@@ -313,6 +346,8 @@ export function lateDecision(input: {
   timeline: LateTimeline | null;
   seen?: SeenScore[];
   result?: { home: number; away: number } | null;
+  /** Corner counts the site recorded as they rose, with when it recorded each. */
+  cornerMarks?: CornerMark[];
 }): LateDecision {
   const { state, placedAt, marketKey, selectionKey } = input;
   // The match clock the bet recorded gives its half's kick-off in the feed's own clock, the one its minutes count in;
@@ -352,7 +387,22 @@ export function lateDecision(input: {
     }
     return done({ late: false, reason: null, detail: `not voided because ${timeline.cards.length} card(s) in the timeline, ${cards.length} before the bet, and it showed ${state.cards}; ${showed}` });
   }
-  if (isCornersMarket(marketKey)) return done({ late: false, reason: null, detail: "not voided because corners aren't checked" });
+  if (isCornersMarket(marketKey)) {
+    const marks = input.cornerMarks ?? [];
+    if (typeof state.corners !== "number" || marks.length === 0) return done({ late: false, reason: null, detail: `not voided because ${typeof state.corners !== "number" ? "no corners were recorded when it was placed" : "no later corner count was seen"}; ${showed}` });
+    for (const mark of marks) {
+      if (mark.home + mark.away <= state.corners) continue;
+      const seen = Date.parse(mark.at);
+      if (Number.isNaN(seen)) continue;
+      // The feed has no time for each corner, only when the count rose. The corner is taken to have gone in LATE_ASSUMED_LAG_MS before that.
+      const when = seen - LATE_ASSUMED_LAG_MS;
+      if (at < when - LATE_BUFFER_MS) continue;
+      const side: Side | "either" = typeof state.cornersHome === "number" && mark.home > state.cornersHome ? "home" : typeof state.cornersAway === "number" && mark.away > state.cornersAway ? "away" : "either";
+      if (!cornerHelps(marketKey, selectionKey, side)) continue;
+      return done({ late: true, reason: "placed after a corner that hadn't shown yet", detail: `corners ${mark.home}–${mark.away} seen ${iso(seen)}, taken from ${iso(when)}; ${showed} with ${state.corners} corner(s)` });
+    }
+    return done({ late: false, reason: null, detail: `not voided because no corner after its count helped it; ${showed}` });
+  }
 
   if (timeline) {
     const ordered = [...timeline.goals].sort((a, b) => a.minute - b.minute || (a.extra ?? 0) - (b.extra ?? 0));

@@ -207,12 +207,14 @@ export function pauseSummary(
     .sort((a, b) => a.sortOrder - b.sortOrder);
   if (paused.length === 0) return null;
   const latest = paused.reduce((top, market) => ((market.livePausedAt?.getTime() ?? 0) > (top.livePausedAt?.getTime() ?? 0) ? market : top));
-  const until = Math.max(...paused.map((market) => pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now)!));
+  // The banner names the newest pause and the markets that pause covers, so a corner doesn't list the goal markets still waiting.
+  const covered = paused.filter((market) => market.livePauseReason === latest.livePauseReason);
+  const until = Math.max(...covered.map((market) => pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now)!));
   return {
     reason: latest.livePauseReason ?? "goal",
-    count: paused.length,
-    markets: paused.slice(0, 3).map((market) => market.name),
+    count: covered.length,
+    markets: covered.slice(0, 3).map((market) => market.name),
     until: new Date(until).toISOString(),
-    exact: paused.every((market) => market.liveReopenFrom != null && market.livePausedUntil!.getTime() <= market.liveReopenFrom.getTime()),
+    exact: covered.every((market) => market.liveReopenFrom != null && market.livePausedUntil!.getTime() <= market.liveReopenFrom.getTime()),
   };
 }

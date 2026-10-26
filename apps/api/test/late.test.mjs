@@ -263,7 +263,7 @@ test("a finished match that scored after the bet's score, with no timeline and n
   // No goal after its score: nothing to time, it stands.
   assert.equal(lateDecision({ state: state(1, 0, 70), placedAt: secondHalf(25), marketKey: "match_winner", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, undefined);
   // Every decision carries the rule's version, so bets decided under an older one are checked again.
-  assert.equal(decision.version, 4);
+  assert.equal(decision.version, 5);
 });
 
 test("each goal's delay: from the middle of its minute, and the least it can have been (from the end of its minute)", () => {
@@ -369,4 +369,16 @@ test("a red card only voids bets it helped (the other side's), a card only a car
   // No timeline, never seen, the match ended 1–0 from 0–0: a Draw bet couldn't have gained from that goal, an Over bet could.
   assert.equal(lateDecision({ state: state(0, 0, 30), placedAt: firstHalf(30), marketKey: "match_winner", selectionKey: "draw", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, undefined);
   assert.equal(lateDecision({ state: state(0, 0, 30), placedAt: firstHalf(30), marketKey: "goals_0_5", selectionKey: "over", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, true);
+});
+
+test("a corners bet placed after a corner the site hadn't shown is void when that corner helped it", () => {
+  const seen = firstHalf(40, 0);
+  const placed = new Date(seen.getTime() - 10_000);
+  const marks = [{ home: 2, away: 1, at: seen.toISOString() }];
+  const showing = { ...state(0, 0, 40), corners: 2, cornersHome: 1, cornersAway: 1 };
+  assert.equal(lateDecision({ state: showing, placedAt: placed, marketKey: "corners_8_5", selectionKey: "over", timeline: null, cornerMarks: marks }).reason, "placed after a corner that hadn't shown yet");
+  assert.equal(lateDecision({ state: showing, placedAt: placed, marketKey: "corners_8_5", selectionKey: "under", timeline: null, cornerMarks: marks }).late, false);
+  assert.equal(lateDecision({ state: showing, placedAt: new Date(seen.getTime() - 120_000), marketKey: "corners_8_5", selectionKey: "over", timeline: null, cornerMarks: marks }).late, false, "placed well before the corner could have gone in");
+  assert.equal(lateDecision({ state: { ...showing, corners: 3, cornersHome: 2 }, placedAt: placed, marketKey: "corners_8_5", selectionKey: "over", timeline: null, cornerMarks: marks }).late, false, "the site had already shown that count");
+  assert.equal(lateDecision({ state: state(1, 0, 40), placedAt: placed, marketKey: "corners_8_5", selectionKey: "over", timeline: timeline([goal(39, "home")]) }).late, false, "a goal does not void corners");
 });

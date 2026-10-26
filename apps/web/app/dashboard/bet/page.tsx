@@ -1200,13 +1200,13 @@ const MatchCard = memo(function MatchCard({
   };
 
   /** One market, or a family of lines, with its head and (when open) its prices. */
-  const renderEntry = (entry: Entry) => {
+  const renderEntry = (entry: Entry, quiet = false) => {
     const key = entryKey(entry);
     const open = isOpen(entry);
     const starred = isFavourite(entry);
     if ("kind" in entry) {
       return (
-        <LineFamily key={key} lines={entry.lines} open={open} onToggle={() => flip(key)} picked={hasPick(entry.lines)} starred={starred} onStar={() => starMarket(entry)}>
+        <LineFamily key={key} lines={entry.lines} open={open} onToggle={() => flip(key)} picked={hasPick(entry.lines)} starred={starred} onStar={() => starMarket(entry)} quiet={quiet}>
           {(market) => marketOutcomes(market)}
         </LineFamily>
       );
@@ -1214,7 +1214,7 @@ const MatchCard = memo(function MatchCard({
     const scorers = entry.key.startsWith("scorer_");
     return (
       <div key={key} className={`odds-market${open ? " is-open" : ""}`}>
-        <MarketHead title={ts(entry.name)} suspended={entry.suspended} paused={Boolean(entry.paused)} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
+        <MarketHead title={ts(entry.name)} suspended={entry.suspended} paused={Boolean(entry.paused)} quiet={quiet} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
           {scorers ? null : <MarketPriceHistory selections={entry.selections} compact />}
         </MarketHead>
         {open ? marketOutcomes(entry) : null}
@@ -1355,7 +1355,7 @@ const MatchCard = memo(function MatchCard({
           {grouped.map(([label, list]) => (
             <div key={label} className={`odds-market-group${label === FAVOURITES_GROUP ? " is-favourites" : ""}`}>
               {grouped.length > 1 || label === FAVOURITES_GROUP ? <h3 className="odds-market-group-title">{t(label)}</h3> : null}
-              {list.map(renderEntry)}
+              {list.map((entry) => renderEntry(entry))}
             </div>
           ))}
           {offBoard.length > 0 ? (
@@ -1367,7 +1367,7 @@ const MatchCard = memo(function MatchCard({
               {showOffBoard ? (
                 <>
                   <p className="muted odds-market-rule">{t("Our feed hasn't priced these during play for a while. They come back to the list if it does.")}</p>
-                  {offBoard.map(renderEntry)}
+                  {offBoard.map((entry) => renderEntry(entry, true))}
                 </>
               ) : null}
             </div>
@@ -1515,6 +1515,8 @@ const PAUSE_REASON: Record<string, string> = {
   goal: msg("⚽ Goal"),
   ahead: msg("Score not confirmed yet"),
   red: msg("🟥 Red card"),
+  corner: msg("Corner"),
+  yellow: msg("Yellow card"),
   var: msg("VAR check"),
   swing: msg("Big moment in the match"),
   reopen: msg("Betting reopening"),
@@ -2152,7 +2154,7 @@ function BetSlip({
             <label className="bet-price-setting">
               <span className="muted">{t("Accept price changes")}</span>
               <select value={priceChanges} onChange={(e) => setPriceChanges(e.target.value === "never" ? "never" : "higher")}>
-                <option value="higher">{t("Only higher odds")}</option>
+                <option value="higher">{t("Only higher odds, before kick-off")}</option>
                 <option value="never">{t("Never")}</option>
               </select>
             </label>
@@ -2160,7 +2162,7 @@ function BetSlip({
             {info ? <SlipLimits info={info} staking={totalStake} /> : null}
             {hasLive ? (
               <p className="muted bet-slip-live-rule">
-                {t("Live: a bet placed after a goal or a red card that hadn't shown here yet, and that helped it, is void and the stake comes back, even after it has settled. Live corners bets are capped for each match.")}{" "}
+                {t("Live: a bet placed after a goal, a corner or a card that hadn't shown here yet, and that helped it, is void and the stake comes back, even after it has settled. Live corners bets are capped for each match.")}{" "}
                 {t("This slip takes about {seconds} seconds to confirm.", { seconds: liveSeconds ?? (info?.liveWait?.usual ?? 8) + 1 })}
               </p>
             ) : null}

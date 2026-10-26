@@ -11,7 +11,8 @@ import { UsersService } from "../users/users.service";
 import type { MatchCentre } from "../odds/api-football";
 import { RACE_CAP } from "../odds/greyhounds";
 import { competitionKey, lagGate } from "../odds/feed-delay";
-import { takenWithoutAsking, wrongWayAfterGoal } from "../odds/live-guard";
+import { countsFromCentre } from "../odds/count-guard";
+import { sameLivePrice, takenWithoutAsking, wrongWayAfterGoal } from "../odds/live-guard";
 import { type FeedMark, LIVE_CORNERS_DELAY_MS, LIVE_CORNERS_MAX_STAKE, type LiveAudit, type LiveState, isCardsMarket, isCornersMarket, newInFeed } from "./late";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
@@ -223,8 +224,7 @@ export class BetsService {
      */
     const takesMove = (sent: number, now: number) =>
       input.priceChanges === "higher" ? now > sent : input.priceChanges === "never" ? false : Boolean(input.acceptOddsChanges) || takenWithoutAsking(sent, now);
-    /** Live: a small move up, and only when the slip isn't set to refuse every change. A move down, or a large one, is shown first. */
-    const takesLiveTick = (sent: number, now: number) => input.priceChanges !== "never" && takenWithoutAsking(sent, now);
+    /** Live picks are only ever placed at the price on the slip. "Only higher odds" applies before kick-off (takesMove). */
     const changed: string[] = [];
     /** Live picks whose price isn't the one the slip showed: refused whatever the slip says, so the Player sees the new price first. */
     const liveChanged: string[] = [];
@@ -237,20 +237,17 @@ export class BetsService {
       const selection = byId.get(pick.selectionId);
       const quote = quotes.get(pick.selectionId);
       if (!selection || !quote) throw new BadRequestException("One of the bets on your slip no longer exists. Remove it and try again.");
-      const { odds, bettable, live, score, sp, marketKey, margin } = quote;
+      const { odds, bettable, live, score, sp, marketKey, margin, closed } = quote;
       if (!bettable) {
         throw new BadRequestException(
-          live ? `Live bets on ${selection.market.event.name} are paused right now. Try again in a moment.` : `Bets are closed on ${selection.market.event.name}. Remove it from your slip.`,
+          closed ?? (live ? `Live bets on ${selection.market.event.name} are paused right now. Try again in a moment.` : `Bets are closed on ${selection.market.event.name}. Remove it from your slip.`),
         );
       }
       // Before kick-off a tick is taken at the price just found, and a real move is refused unless the Player already chose the
-      // new price. Live, a small move up is taken the same way (the price got better, and not by enough to be a goal). A move
-      // down, or a large one, is shown first: the Player places again at it.
-      if (!sp && Math.abs(odds - pick.odds) > 0.001) {
-        if (live) {
-          if (takesLiveTick(pick.odds, odds)) adjusted = true;
-          else liveChanged.push(`${selection.name} is now ${odds.toFixed(2)}`);
-        } else if (takesMove(pick.odds, odds)) adjusted = true;
+      // new price. Live, the bet is only placed at the exact price on the slip.
+      if (!sp && !sameLivePrice(pick.odds, odds)) {
+        if (live) liveChanged.push(`${selection.name} is now ${odds.toFixed(2)}`);
+        else if (takesMove(pick.odds, odds)) adjusted = true;
         else changed.push(`${selection.name} is now ${odds.toFixed(2)}`);
       }
       return {
@@ -320,8 +317,11 @@ export class BetsService {
       }
       pricedBuilder = { ...quote, stake: new Prisma.Decimal(input.builder.stake.toFixed(2)) };
     }
-    if (liveChanged.length > 0 || changed.length > 0) {
-      throw new ConflictException(`The odds changed: ${[...liveChanged, ...changed].join(", ")}. Check your slip and place it again.`);
+    if (liveChanged.length > 0) {
+      throw new ConflictException(`The odds changed: ${liveChanged.join(", ")}. A live bet has to be at the exact price on your slip. Check your slip and place it again.`);
+    }
+    if (changed.length > 0) {
+      throw new ConflictException(`The odds changed: ${changed.join(", ")}. Check your slip and place it again.`);
     }
     // The corners cap is checked before the wait too, so a slip over it is refused straight away; and again when it's stored.
     const cornerBets = () => [
@@ -331,7 +331,7 @@ export class BetsService {
     ];
     await this.assertLiveCornersRoom(actor.id, cornerBets(), this.prisma);
     // A small move up during the wait is taken. A move down, or a large one, refuses the slip.
-    if (await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id, takesLiveTick)) adjusted = true;
+    if (await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id)) adjusted = true;
 
     const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : []), ...(pricedBuilder ? [pricedBuilder.stake] : []), ...(pricedSystem ? [pricedSystem.stake] : [])];
     const total = stakes.reduce((sum, stake) => sum.add(stake), new Prisma.Decimal(0));
@@ -610,7 +610,6 @@ export class BetsService {
   private async confirmLive(
     picks: Array<{ selectionId: string; eventId: string; live: boolean; score: string; price: Prisma.Decimal | null; label: string; marketKey: string; state: LiveState | null }>,
     playerId: string,
-    takeTick: (sent: number, now: number) => boolean,
   ): Promise<boolean> {
     const live = picks.filter((pick) => pick.live);
     if (live.length === 0) return false;
@@ -673,7 +672,6 @@ export class BetsService {
     }
     // The minute and the cards shown so far, kept on each live pick with its score for the late check (bets/late.ts).
     const events = await this.prisma.event.findMany({ where: { id: { in: liveIds } }, select: { id: true, elapsed: true, matchCentre: true, liveOddsAt: true, liveVersion: true } });
-    let ticked = false;
     const shown = new Map(events.map((event) => [event.id, event]));
     // Goals in the last minutes, with the match-result prices from just before each, for prices that haven't caught up.
     const recentGoals = await this.prisma.goalSeen.findMany({
@@ -685,7 +683,7 @@ export class BetsService {
     );
     for (const pick of live) {
       const now = await this.odds.priceForPlayer(playerId, pick.selectionId);
-      if (!now.bettable) throw refuse(`Live betting on ${pick.label} was paused while your bet was being confirmed. Try again in a moment.`);
+      if (!now.bettable) throw refuse(now.closed ?? `Live betting on ${pick.label} was paused while your bet was being confirmed. Try again in a moment.`);
       if (now.score !== pick.score) throw refuse(`The score changed while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
       const [home, away] = now.score.split(":").map(Number);
       const markBefore = marksAtSubmit?.get(pick.eventId) ?? null;
@@ -716,6 +714,17 @@ export class BetsService {
       const reds = moments ? moments.filter((moment) => moment.kind === "red").length : null;
       // A red card during the wait changes the match as much as a goal.
       if (reds !== null && redsBefore !== undefined && reds > redsBefore) throw refuse(`A red card was shown while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
+      const countOf = (centre: unknown) => countsFromCentre(centre, null);
+      const total = (pair: [number, number] | null) => (pair ? pair[0] + pair[1] : null);
+      const countsBefore = countOf(atSubmit.get(pick.eventId)?.matchCentre);
+      const countsAfter = countOf(event?.matchCentre);
+      if (isCornersMarket(pick.marketKey) && total(countsBefore.corners) !== null && total(countsAfter.corners) !== null && total(countsAfter.corners)! > total(countsBefore.corners)!) {
+        throw refuse(`A corner was taken while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
+      }
+      if (isCardsMarket(pick.marketKey) && total(countsBefore.cards) !== null && total(countsAfter.cards) !== null && total(countsAfter.cards)! > total(countsBefore.cards)!) {
+        throw refuse(`A card was shown while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
+      }
+      const cornerPair = countsAfter.corners;
       const feed = feedPrices.get(pick.selectionId);
       for (const goal of recentGoals.filter((row) => row.eventId === pick.eventId)) {
         const before = goal.beforeGoal as { side?: string; home?: number | null; draw?: number | null; away?: number | null } | null;
@@ -725,12 +734,9 @@ export class BetsService {
           throw refuse(`The odds on ${pick.label} haven't caught up with the last goal yet. Try again in a moment.`);
         }
       }
-      // A small move up during the wait is taken at the new price. A move down, or one big enough to be a goal, is shown first.
-      if (pick.price !== null && Math.abs(now.odds - Number(pick.price)) > 0.001) {
-        if (takeTick(Number(pick.price), now.odds)) {
-          pick.price = new Prisma.Decimal(now.odds.toFixed(2));
-          ticked = true;
-        } else throw refuse(`The odds changed: ${pick.label} is now ${now.odds.toFixed(2)}. Check your slip and place it again.`);
+      // Live: only the price the slip showed. A different one, higher or lower, is shown first.
+      if (pick.price !== null && !sameLivePrice(Number(pick.price), now.odds)) {
+        throw refuse(`The odds changed: ${pick.label} is now ${now.odds.toFixed(2)}. A live bet has to be at the exact price on your slip. Check your slip and place it again.`);
       }
       const reading = this.sync.liveReading(pick.eventId);
       const audit: LiveAudit = {
@@ -753,7 +759,17 @@ export class BetsService {
         versionAtConfirm: event?.liveVersion ?? null,
       };
       pick.state = Number.isInteger(home) && Number.isInteger(away)
-        ? { home, away, minute: event?.elapsed ?? null, cards: moments ? moments.filter((moment) => moment.kind === "yellow" || moment.kind === "red").length : null, reds, audit }
+        ? {
+            home,
+            away,
+            minute: event?.elapsed ?? null,
+            cards: moments ? moments.filter((moment) => moment.kind === "yellow" || moment.kind === "red").length : null,
+            reds,
+            corners: cornerPair ? cornerPair[0] + cornerPair[1] : null,
+            cornersHome: cornerPair?.[0] ?? null,
+            cornersAway: cornerPair?.[1] ?? null,
+            audit,
+          }
         : null;
       // A cards bet without the cards shown so far couldn't be checked after the match, so it isn't taken.
       if (checking && isCardsMarket(pick.marketKey) && pick.state?.cards == null) throw cardsUnknown();
@@ -765,7 +781,7 @@ export class BetsService {
           `feed events ${markBefore ? `${markBefore.events} (last ${markBefore.last ?? "none"})` : "unknown"} then ${markAfter ? `${markAfter.events} (last ${markAfter.last ?? "none"})` : "unknown"}`,
       );
     }
-    return ticked;
+    return false;
   }
 
   /**

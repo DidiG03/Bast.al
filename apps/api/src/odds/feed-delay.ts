@@ -65,7 +65,7 @@ export function goalForScore(timeline: LateTimeline, home: number, away: number)
 export const PLAUSIBLE_LAG_MS = { min: 0, max: 120_000 };
 
 /** One goal's delay (GoalSeen.lagMinMs, the least it can have been) with where its match came from. */
-export type GoalLagRow = { lagMinMs: number; provider: string; league: string };
+export type GoalLagRow = { lagMinMs: number; /** The delay from the middle of the minute, used when the least possible delay is negative. */ lagMs?: number | null; provider: string; league: string };
 /** The delay on goals for one group of matches: how many goals, and the share (`percentile`) that arrived within `p`, seconds. */
 export type LagGroup = { goals: number; p: number; median: number };
 
@@ -79,20 +79,35 @@ export type LagGroup = { goals: number; p: number; median: number };
  * and over many goals its high end (`percentile`, 0.95 by default) comes
  * close to the real one.
  */
+/**
+ * The figure a goal contributes. Normally the least it can have been.
+ * When that is negative (the site saw the goal before its minute ended) the
+ * delay from the middle of the minute is used instead, if that is plausible,
+ * so a feed that is about 40–50 s behind is still counted for its competition.
+ */
+export function lagSample(row: GoalLagRow): number | null {
+  if (row.lagMinMs >= PLAUSIBLE_LAG_MS.min && row.lagMinMs <= PLAUSIBLE_LAG_MS.max) return row.lagMinMs;
+  if (row.lagMinMs < PLAUSIBLE_LAG_MS.min && typeof row.lagMs === "number" && row.lagMs >= PLAUSIBLE_LAG_MS.min && row.lagMs <= PLAUSIBLE_LAG_MS.max) return row.lagMs;
+  return null;
+}
+
 export function lagStats(rows: GoalLagRow[], percentile = 0.95): { all: LagGroup | null; byProvider: Record<string, LagGroup>; byCompetition: Record<string, LagGroup>; ignored: number } {
-  const kept = rows.filter((row) => row.lagMinMs >= PLAUSIBLE_LAG_MS.min && row.lagMinMs <= PLAUSIBLE_LAG_MS.max);
+  const kept = rows.flatMap((row) => {
+    const sample = lagSample(row);
+    return sample === null ? [] : [{ ...row, sample }];
+  });
   const group = (values: number[]): LagGroup | null => {
     if (values.length === 0) return null;
     const sorted = [...values].sort((a, b) => a - b);
     const at = (share: number) => Math.round(Math.max(0, sorted[Math.min(sorted.length - 1, Math.floor(share * sorted.length))]) / 1000);
     return { goals: sorted.length, p: at(percentile), median: at(0.5) };
   };
-  const by = (key: (row: GoalLagRow) => string) => {
+  const by = (key: (row: GoalLagRow & { sample: number }) => string) => {
     const groups = new Map<string, number[]>();
-    for (const row of kept) groups.set(key(row), [...(groups.get(key(row)) ?? []), row.lagMinMs]);
+    for (const row of kept) groups.set(key(row), [...(groups.get(key(row)) ?? []), row.sample]);
     return Object.fromEntries([...groups].map(([name, values]) => [name, group(values)!]));
   };
-  return { all: group(kept.map((row) => row.lagMinMs)), byProvider: by((row) => row.provider), byCompetition: by((row) => competitionKey(row.provider, row.league)), ignored: rows.length - kept.length };
+  return { all: group(kept.map((row) => row.sample)), byProvider: by((row) => row.provider), byCompetition: by((row) => competitionKey(row.provider, row.league)), ignored: rows.length - kept.length };
 }
 
 /**

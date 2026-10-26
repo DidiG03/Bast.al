@@ -186,12 +186,16 @@ export function ScratchGame() {
     pending.current = null;
     if (answer) {
       const { round } = answer;
-      setBalance(answer.balance);
       setSeed(answer.seed);
       setRecent((rows) => (rows.some((row) => row.id === round.id) ? rows : [round, ...rows].slice(0, 20)));
       void (async () => {
         const token = await getToken();
-        if (token) await apiFetch("/casino/scratch/shown", token, { method: "POST", body: JSON.stringify({ id: round.id }) }).catch(() => undefined);
+        if (!token) return;
+        const paid = await apiFetch<{ balance: number }>("/casino/scratch/shown", token, { method: "POST", body: JSON.stringify({ id: round.id }) }).catch(() => null);
+        if (paid) {
+          balanceRef.current = paid.balance;
+          setBalance(paid.balance);
+        }
       })();
       setVisit((current) => ({ cards: current.cards + 1, wins: current.wins + (round.multiplier > 0 ? 1 : 0), profit: Math.round((current.profit + round.win - round.bet) * 100) / 100 }));
       slotSound.scratchResult(round.multiplier);
@@ -314,7 +318,8 @@ export function ScratchGame() {
       return null;
     }
     // The price leaves straight away; the win arrives once the card is scratched.
-    setBalance(Math.round((balanceRef.current - response.round.bet) * 100) / 100);
+    balanceRef.current = response.balance;
+    setBalance(response.balance);
     pending.current = response;
     cardRef.current = response.round;
     settledRef.current = false;

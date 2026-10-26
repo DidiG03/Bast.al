@@ -1,9 +1,9 @@
-// Scratch Cards, end to end against a real Postgres: cards moving Shtatat.al
-// credit when bought, the day's "Scratch Cards" ledger line, the settlement
-// journal, the seed pair it shares with Dice, the stake limits, the
-// switches, the Casino page, the audit log and a repeated request. Like the
-// other integration tests it empties tables, so it only runs against a
-// database whose name ends in "_test".
+// Scratch Cards, end to end against a real Postgres: the price leaves when a
+// card is bought and the prize is paid when it is scratched, each as its own
+// ledger line, plus the settlement journal, the seed pair it shares with
+// Dice, the stake limits, the switches, the Casino page, the audit log and a
+// repeated request. Like the other integration tests it empties tables, so it
+// only runs against a database whose name ends in "_test".
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createRequire } from "node:module";
@@ -24,7 +24,7 @@ const { UsersService } = require("../dist/users/users.service.js");
 const { HierarchyService } = require("../dist/users/hierarchy.service.js");
 const { AuditService } = require("../dist/audit/audit.service.js");
 const { IdempotencyInterceptor } = require("../dist/idempotency/idempotency.interceptor.js");
-const { dayKey, startOfDay } = require("../dist/time.js");
+const { startOfDay } = require("../dist/time.js");
 
 const database = new URL(process.env.DATABASE_URL ?? "postgresql://x/none").pathname.slice(1);
 if (!database.endsWith("_test")) {
@@ -55,7 +55,7 @@ async function ledgerTotal(account) {
   const rows = await prisma.balanceTransaction.findMany({ where: { OR: [{ toUserId: account.id }, { fromUserId: account.id }], status: "APPROVED" } });
   return Math.round(rows.reduce((sum, row) => sum + (row.toUserId === account.id ? Number(row.amount) : -Number(row.amount)), 0) * 100) / 100;
 }
-const todaysLine = (account) => prisma.balanceTransaction.findUnique({ where: { id: `scratch_${account.id}_${dayKey(new Date())}` } });
+const scratchLines = (account) => prisma.balanceTransaction.findMany({ where: { toUserId: account.id, type: "CASINO", reason: { startsWith: "Scratch Cards:" } }, orderBy: { createdAt: "asc" } });
 const activeSeed = (account) => prisma.diceSeed.findFirstOrThrow({ where: { playerId: account.id, active: true } });
 /** Moves the Player's seed pair on to the next nonce whose card passes `test`, worked out from the seeds the way anyone can once they're shown. */
 async function skipTo(account, test) {
@@ -95,19 +95,32 @@ test("closed with the Casino's switches; the state gives the prizes and a seed p
   assert.equal(JSON.stringify(state).includes(secret.serverSeed), false, "the secret never leaves the server");
 });
 
-test("a card is paid when it's bought: a win pays its prize, a blank loses the price; both show in the ledger and the journal", async () => {
+test("buying a card takes the price, and scratching it pays the prize: one ledger line each", async () => {
   const bell = await skipTo(sami, (card) => card.symbol === "BELL");
   const win = await scratch.buy(sami, 250);
   assert.deepEqual([win.round.cells, win.round.symbol, win.round.multiplier, win.round.win], [bell.cells, "BELL", 5, 1250]);
-  assert.equal(win.balance, 11000);
+  assert.equal(win.balance, 9750, "the 250 price has left, and the prize has not been paid");
+  assert.equal((await scratch.state(sami)).open.id, win.round.id);
+  const revealed = await scratch.markShown(sami, win.round.id);
+  assert.equal(revealed.balance, 11000);
 
   await skipTo(sami, (card) => card.symbol === null);
   const blank = await scratch.buy(sami, 1000);
   assert.deepEqual([blank.round.symbol, blank.round.multiplier, blank.round.win], [null, 0, 0]);
+  assert.equal(await balanceOf(sami), 10000, "the 1,000 price has left");
+  await scratch.markShown(sami, blank.round.id);
   assert.equal(await balanceOf(sami), 10000);
 
-  const line = await todaysLine(sami);
-  assert.deepEqual([line.type, line.reason, Number(line.amount)], ["CASINO", "Scratch Cards: 2 cards", 0]);
+  const lines = await scratchLines(sami);
+  assert.deepEqual(
+    lines.map((line) => [line.reason, Number(line.amount)]),
+    [
+      ["Scratch Cards: bought a card", -250],
+      ["Scratch Cards: card won", 1250],
+      ["Scratch Cards: bought a card", -1000],
+      ["Scratch Cards: no win", 0],
+    ],
+  );
   const journal = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpinId: win.round.id } });
   assert.deepEqual([journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId], [0, 250, 1250, owner.id, manager.id]);
   assert.equal(await ledgerTotal(sami), 10000, "the ledger adds up to the balance");
@@ -127,6 +140,7 @@ test("Scratch Cards and Dice share the seed pair: changing it reveals the server
   }
   const fresh = await scratch.buy(sami, 100);
   assert.deepEqual([fresh.round.clientSeed, fresh.round.nonce, fresh.round.serverSeed], ["samis-seed", 0, null]);
+  await scratch.markShown(sami, fresh.round.id);
 });
 
 test("a bad price, the max stake, the Player's Casino switch, the daily loss limit and a low balance stop a card, and nothing moves", async () => {
@@ -160,6 +174,7 @@ test("a big win goes in the audit log", async () => {
   assert.deepEqual([result.round.symbol, result.round.multiplier, result.round.win], ["DIAMOND", 100, 5000]);
   const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "casino.big_win" } });
   assert.deepEqual([log.metadata.game, log.metadata.symbol, log.metadata.multiplier], ["scratch", "DIAMOND", 100]);
+  await scratch.markShown(sami, result.round.id);
 });
 
 test("Scratch Cards profit counts in commissions; the Casino page, Continue playing and the Player's activity show it as its own game", async () => {
@@ -201,7 +216,9 @@ test("the same card bought twice is bought once", async () => {
   const again = await send();
   assert.equal(again.round.id, first.round.id);
   assert.equal((await activeSeed(sami)).nonce, nonce + 1, "one nonce used");
-  assert.equal(await balanceOf(sami), Math.round((before - 100 + first.round.win) * 100) / 100);
+  assert.equal(await balanceOf(sami), Math.round((before - 100) * 100) / 100, "the price is taken once, and the prize waits until the card is scratched");
+  const paid = await scratch.markShown(sami, first.round.id);
+  assert.equal(paid.balance, Math.round((before - 100 + first.round.win) * 100) / 100);
   assert.equal(await ledgerTotal(sami), await balanceOf(sami));
 });
 

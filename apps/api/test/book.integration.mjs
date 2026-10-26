@@ -171,7 +171,7 @@ test("the round ends when the free spins run out, and its total can go to double
   const row = await prisma.casinoSpin.findFirstOrThrow({ where: { playerId: cara.id, kind: "GAMBLE" } });
   assert.equal(row.gamble.game, "book");
   const line = await todaysLine(cara);
-  assert.equal(line.reason, `Book of Ra: 2 spins, ${await prisma.casinoSpin.count({ where: { playerId: cara.id, kind: "BOOK", free: true } })} free spins`);
+  assert.equal(line.reason, `Book of Ra: 2 spins, ${await prisma.casinoSpin.count({ where: { playerId: cara.id, kind: "BOOK", free: true } })} free spins, 1 double or nothing`);
   assert.equal(await ledgerTotal(cara), await balanceOf(cara), "the ledger adds up to the balance");
 });
 

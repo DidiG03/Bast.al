@@ -7,6 +7,7 @@ import { LastSpins } from "./casino-last-spins";
 import { useI18n, type I18n } from "./i18n-provider";
 import { LoadingSpinner, PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
+import { useDismiss } from "./use-dismiss";
 import { useRealtime } from "./realtime-provider";
 import { SlotReels, type ReelWin, type SlotReelsHandle } from "./slot-reels";
 import { slotSound } from "./slot-sounds";
@@ -208,6 +209,7 @@ export function SlotGame() {
   const [reelsReady, setReelsReady] = useState(false);
   const [plainGrid, setPlainGrid] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  useDismiss(() => setRulesOpen(false));
   /** Double or nothing: the win open to it, the last card drawn, and whether a guess is on its way. */
   const [gamble, setGamble] = useState<CasinoGamble | null>(null);
   const [card, setCard] = useState<{ suit: CardSuit; won: boolean; win: number } | null>(null);

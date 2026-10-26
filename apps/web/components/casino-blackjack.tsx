@@ -7,6 +7,7 @@ import { LastSpins } from "./casino-last-spins";
 import { useI18n, type I18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
+import { useDismiss } from "./use-dismiss";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -64,6 +65,7 @@ export function BlackjackGame() {
   /** The dealer looking at the face-down card, and once they have. */
   const [peek, setPeek] = useState<"peeking" | "peeked" | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  useDismiss(() => setRulesOpen(false));
   const [soundOn, setSoundOn] = useState(true);
   useEffect(() => setSoundOn(slotSound.on), []);
 

@@ -1,14 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, Role } from "@prisma/client";
+import { BalanceTransactionType, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { assertOnTeam } from "../bets/team";
 import { BettingLimitsService } from "../commissions/betting-limits.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
-import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
-import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
+import { casinoClosedReason, maxStakeOf } from "./access";
 import { activeSeed, lockedActiveSeed, previousSeed, revealedSeeds, seedView } from "./fair-seeds";
 import { BETS, CELLS, GAME_NAME, MAX_MULTIPLIER, PRIZES, SYMBOLS, cardFor, payoutRate, winCents, winChance, type ScratchSymbol } from "./scratch";
 
@@ -17,12 +16,9 @@ const RECENT = 20;
 /** A card paying this many times its price or more goes in the audit log. */
 const BIG_WIN = 100;
 
-/** Scratch Cards have their own line per Player per day in their balance ledger. */
-const ledgerLineId = (playerId: string, at: Date) => `scratch_${playerId}_${dayKey(at)}`;
-
 const roundSelect = { id: true, bet: true, win: true, scratch: true, createdAt: true } satisfies Prisma.CasinoSpinSelect;
 
-type Stored = { cells: ScratchSymbol[]; symbol: ScratchSymbol | null; multiplier: number; seedId: string; serverSeedHash: string; clientSeed: string; nonce: number; shown?: boolean };
+type Stored = { cells: ScratchSymbol[]; symbol: ScratchSymbol | null; multiplier: number; seedId: string; serverSeedHash: string; clientSeed: string; nonce: number; shown?: boolean; /** The win is still waiting to be paid. Older cards were paid in full when bought. */ held?: boolean };
 
 function roundView(round: Prisma.CasinoSpinGetPayload<{ select: typeof roundSelect }>, revealed: Map<string, string>) {
   const stored = round.scratch as Stored;
@@ -129,8 +125,8 @@ export class ScratchService {
       const card = cardFor(seed.serverSeed, seed.clientSeed, seed.nonce);
       const stake = new Prisma.Decimal(stakeCents).div(100);
       const win = new Prisma.Decimal(winCents(stakeCents, card.multiplier)).div(100);
-      const net = win.sub(stake);
-      const moved = await tx.user.updateMany({ where: { id: actor.id, balance: { gte: stake } }, data: { balance: { increment: net } } });
+      // The stake leaves now. The prize is paid when the card is scratched, so a reload still shows the stake as taken.
+      const moved = await tx.user.updateMany({ where: { id: actor.id, balance: { gte: stake } }, data: { balance: { decrement: stake } } });
       if (moved.count === 0) throw new BadRequestException("Your balance is too low for this card. Lower the price, or ask your Manager for a top-up.");
       const nextSeed = await tx.diceSeed.update({ where: { id: seed.id }, data: { nonce: { increment: 1 } } });
 
@@ -149,43 +145,53 @@ export class ScratchService {
           grid: card.cells,
           stops: [],
           lines: {},
-          scratch: { ...card, seedId: seed.id, serverSeedHash: seed.serverSeedHash, clientSeed: seed.clientSeed, nonce: seed.nonce, shown: false } satisfies Stored,
+          scratch: { ...card, seedId: seed.id, serverSeedHash: seed.serverSeedHash, clientSeed: seed.clientSeed, nonce: seed.nonce, shown: false, held: true } satisfies Stored,
           createdAt: now,
         },
         select: roundSelect,
       });
       // Counts in the team's results and commission like a settled bet (0 bets, the stake and the win).
       await tx.settlementEntry.create({
-        data: { casinoSpinId: round.id, playerId: actor.id, ownerId: team.ownerId, managerId: team.managerId, ownerRate: team.ownerRate, managerRate: team.managerRate, bets: 0, stake, payout: win, createdAt: now },
+        data: { casinoSpinId: round.id, playerId: actor.id, ownerId: team.ownerId, managerId: team.managerId, ownerRate: team.ownerRate, managerRate: team.managerRate, bets: 0, stake, payout: new Prisma.Decimal(0), createdAt: now },
       });
-      await this.addToLedger(tx, actor.id, net, now);
+      await tx.balanceTransaction.create({
+        data: { id: `scratchbuy_${round.id}`, toUserId: actor.id, actorId: actor.id, type: BalanceTransactionType.CASINO, amount: stake.neg(), reason: "Scratch Cards: bought a card", createdAt: now },
+      });
       const balance = (await tx.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } })).balance;
-      return { round, card, net, balance, seed: nextSeed };
+      return { round, card, stake, balance, seed: nextSeed };
     });
 
     await this.realtime.publishBalances([actor.id]);
-    if (result.net.isNegative()) await this.users.alertLowBalance(actor.id, Number(result.net.abs()));
+    await this.users.alertLowBalance(actor.id, Number(result.stake));
     if (result.card.multiplier >= BIG_WIN) {
       await this.audit.log({ actorId: actor.id, action: "casino.big_win", targetId: actor.id, ipAddress, metadata: { spinId: result.round.id, game: "scratch", symbol: result.card.symbol, multiplier: result.card.multiplier, win: Number(result.round.win) } });
     }
     return { round: roundView(result.round, new Map()), balance: Number(result.balance), seed: seedView(result.seed) };
   }
 
-  /** The card was scratched. The money already moved when it was bought; this only stops a reload from laying it out again. */
+  /** The card was scratched. A card whose prize is still held pays it now, as its own ledger line. */
   async markShown(actor: Actor, id: string) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
-    const round = await this.prisma.casinoSpin.findFirst({ where: { id, playerId: actor.id, kind: "SCRATCH" }, select: { scratch: true } });
-    if (!round) throw new NotFoundException("That card isn't yours");
-    const stored = round.scratch as Stored;
-    if (stored.shown !== false) return { ok: true };
-    await this.prisma.casinoSpin.update({ where: { id }, data: { scratch: { ...stored, shown: true } } });
-    return { ok: true };
+    const paid = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
+      const round = await tx.casinoSpin.findFirst({ where: { id, playerId: actor.id, kind: "SCRATCH" }, select: { scratch: true, win: true } });
+      if (!round) throw new NotFoundException("That card isn't yours");
+      const stored = round.scratch as Stored;
+      if (stored.shown !== false) return false;
+      if (stored.held) {
+        const win = round.win;
+        if (win.greaterThan(0)) await tx.user.update({ where: { id: actor.id }, data: { balance: { increment: win } } });
+        await tx.balanceTransaction.create({
+          data: { id: `scratchwin_${id}`, toUserId: actor.id, actorId: actor.id, type: BalanceTransactionType.CASINO, amount: win, reason: win.greaterThan(0) ? "Scratch Cards: card won" : "Scratch Cards: no win", createdAt: new Date() },
+        });
+        await tx.settlementEntry.updateMany({ where: { casinoSpinId: id }, data: { payout: win } });
+      }
+      await tx.casinoSpin.update({ where: { id }, data: { scratch: { ...stored, shown: true, held: false } } });
+      return stored.held === true;
+    });
+    const balance = Number((await this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } })).balance);
+    if (paid) await this.realtime.publishBalances([actor.id]);
+    return { ok: true, balance };
   }
 
-  /** Adds a card to the day's single "Scratch Cards" line in the Player's ledger. */
-  private async addToLedger(tx: Prisma.TransactionClient, playerId: string, net: Prisma.Decimal, now: Date) {
-    const cards = await tx.casinoSpin.count({ where: { playerId, kind: "SCRATCH", createdAt: { gte: startOfDay(now) } } });
-    const reason = cards === 1 ? "Scratch Cards: 1 card" : `Scratch Cards: ${cards} cards`;
-    await addToDailyLine(tx, ledgerLineId(playerId, now), playerId, net, reason, now);
   }
-}

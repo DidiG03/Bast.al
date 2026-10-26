@@ -11,6 +11,7 @@ import { GamblePanel, countUpTime, overview, useCountUp } from "./casino-slot";
 import { useI18n, type I18n } from "./i18n-provider";
 import { LoadingSpinner, PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
+import { useDismiss } from "./use-dismiss";
 import { useRealtime } from "./realtime-provider";
 import { SlotReels, type ReelWin, type SlotReelsHandle } from "./slot-reels";
 import { slotSound } from "./slot-sounds";
@@ -226,6 +227,7 @@ export function BookGame() {
   const [reelsReady, setReelsReady] = useState(false);
   const [plainGrid, setPlainGrid] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  useDismiss(() => setRulesOpen(false));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [gamble, setGamble] = useState<CasinoGamble | null>(null);
   /** The cards drawn at double or nothing this visit, newest first, for the gamble screen's "previous cards". */

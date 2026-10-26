@@ -8,6 +8,7 @@ import { PenaltyScene } from "./penalty-scene";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
+import { useDismiss } from "./use-dismiss";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -39,6 +40,7 @@ export function PenaltyGame() {
   const [recent, setRecent] = useState<PenaltyState["recent"]>([]);
   const [busy, setBusy] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  useDismiss(() => setRulesOpen(false));
   const [soundOn, setSoundOn] = useState(true);
   const [fresh, setFresh] = useState(false);
   const [call, setCall] = useState<"goal" | "save" | null>(null);

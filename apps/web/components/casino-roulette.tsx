@@ -7,6 +7,7 @@ import { LastSpins } from "./casino-last-spins";
 import { useI18n, type I18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
+import { useDismiss } from "./use-dismiss";
 import { useRealtime } from "./realtime-provider";
 import { RouletteWheel, type RouletteWheelHandle } from "./roulette-wheel";
 import { slotSound } from "./slot-sounds";
@@ -104,6 +105,7 @@ export function RouletteGame() {
   const [recent, setRecent] = useState<RouletteRound[]>([]);
   const [hint, setHint] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  useDismiss(() => setRulesOpen(false));
   const [soundOn, setSoundOn] = useState(true);
   useEffect(() => setSoundOn(slotSound.on), []);
 
@@ -275,7 +277,7 @@ export function RouletteGame() {
       <div className="page-title-row">
         <div>
           <div className="game-title-line">
-            <h1 style={{ margin: 0 }}>{state.game.name}</h1>
+            <h1 style={{ margin: 0 }}>{t("Roulette")}</h1>
             <button type="button" className="game-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")}>
               ?
             </button>
@@ -294,10 +296,10 @@ export function RouletteGame() {
           <div className="slot-rotate roulette-rotate" role="status">
             <RotatePhoneIcon />
             <strong>{t("Turn your phone sideways to play")}</strong>
-            <span className="muted">{t("{name} plays with the phone held sideways. Turn it and the game opens.", { name: state.game.name })}</span>
+            <span className="muted">{t("{name} plays with the phone held sideways. Turn it and the game opens.", { name: t("Roulette") })}</span>
           </div>
 
-          <section ref={cabinet} className={`roulette-cabinet${fullScreen !== "off" ? " is-full" : ""}`} aria-label={state.game.name}>
+          <section ref={cabinet} className={`roulette-cabinet${fullScreen !== "off" ? " is-full" : ""}`} aria-label={t("Roulette")}>
             <header className="slot-marquee roulette-marquee">
               <Link className="slot-exit" href="/dashboard/casino" aria-label={t("Leave the game")}>
                 ‹

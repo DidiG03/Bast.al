@@ -6550,17 +6550,28 @@ button.is-blocked {
 }
 
 @media (orientation: portrait) and (max-width: 600px) {
+  /* The games stay playable upright: the controls wrap under the reels. */
   .slot-rotate {
-    display: grid;
-  }
-
-  .slot-cabinet {
     display: none;
   }
 
-  /* Turned upright while in full screen: keep the game showing rather than a blank screen. */
-  .slot-cabinet.is-full {
+  .slot-cabinet,
+  .roulette-cabinet,
+  .blackjack-cabinet {
     display: flex;
+  }
+
+  .blackjack-cabinet {
+    --card-w: clamp(2.5rem, 15vw, 3.3rem);
+  }
+
+  .blackjack-player {
+    --card-w: clamp(2.8rem, 17vw, 3.7rem);
+  }
+
+  .blackjack-cards {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }
 
@@ -7802,14 +7813,11 @@ button.is-blocked {
 
 @media (orientation: portrait) and (max-width: 600px) {
   .roulette-rotate {
-    display: grid;
-  }
-
-  .roulette-cabinet {
     display: none;
   }
 
-  .roulette-cabinet.is-full {
+  .roulette-cabinet,
+  .blackjack-cabinet {
     display: flex;
   }
 }
@@ -8147,19 +8155,21 @@ button.is-blocked {
 
 .blackjack-cards {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 0.35rem 0;
   min-height: calc(var(--card-w) * 1.4);
 }
 
 /* Cards fan out a little, as dealt by hand. */
 .blackjack-cards > .playing-card + .playing-card {
-  margin-left: calc(var(--card-w) * -0.12);
+  margin-left: 0.4rem;
 }
 
-.blackjack-cards > .playing-card:nth-child(2) { rotate: 3deg; }
-.blackjack-cards > .playing-card:nth-child(3) { rotate: -2deg; translate: 0 2px; }
-.blackjack-cards > .playing-card:nth-child(4) { rotate: 4deg; }
-.blackjack-cards > .playing-card:nth-child(5) { rotate: -3deg; translate: 0 3px; }
+.blackjack-cards > .playing-card:nth-child(2) { rotate: 2deg; }
+.blackjack-cards > .playing-card:nth-child(3) { rotate: -1.5deg; }
+.blackjack-cards > .playing-card:nth-child(4) { rotate: 2.5deg; }
+.blackjack-cards > .playing-card:nth-child(5) { rotate: -2deg; }
 
 /* The table's print, curving with the rail. */
 .blackjack-print {
@@ -9026,9 +9036,9 @@ button.is-blocked {
     margin: -0.65rem 0 -1.35rem;
   }
 
-  /* A slightly tighter fan, so a bigger card still clears the chips and the move buttons. */
+  /* A small gap, so each card's rank and suit stay visible on a phone. */
   .blackjack-cards > .playing-card + .playing-card {
-    margin-left: calc(var(--card-w) * -0.5);
+    margin-left: 0.28rem;
   }
 
   .blackjack-player {
@@ -11906,7 +11916,9 @@ button.is-blocked {
 }
 
 .plinko-auto {
-  padding: 0.7rem 1rem;
+  flex: none;
+  padding: 0.7rem 0.85rem;
+  white-space: nowrap;
 }
 
 .plinko-paytable {
@@ -12497,13 +12509,14 @@ button.is-blocked {
 }
 
 .dice-tabs button {
-  min-height: 0;
-  padding: 0.5rem;
+  min-height: 44px;
+  padding: 0.5rem 0.35rem;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: #b8c4d6;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .dice-tabs button.is-on {
@@ -13930,15 +13943,21 @@ button.is-blocked {
   }
 }
 
-/* A phone: "Gërvisht & Fito" is long, so the title takes the left edge too and comes down a size. */
+/* A phone: the title sits between the exit and the sound, rules and full-screen buttons. */
 @media (max-width: 560px) {
-  .scratch-cabinet:not(.is-full) .scratch-marquee {
-    padding-left: 1rem;
+  .mines-marquee,
+  .penalty-marquee,
+  .scratch-marquee {
+    padding-right: 7.6rem;
+    padding-left: 2.6rem;
   }
 
+  .mines-marquee .slot-title,
+  .penalty-marquee .slot-title,
   .scratch-marquee .slot-title {
     max-width: 100%;
-    font-size: 1.1rem;
+    font-size: clamp(0.82rem, 3.4vw, 1.15rem);
+    letter-spacing: 0;
   }
 }
 
@@ -16492,6 +16511,60 @@ html[data-theme="light"] .role-player .bet-status-lost {
 @media (max-width: 400px) {
   .role-player .dashboard-topbar .topbar-brand > span:last-child {
     display: none;
+  }
+
+  .role-player .dashboard-topbar {
+    gap: 0.25rem;
+  }
+
+  .role-player .topbar-casino {
+    display: none;
+  }
+
+  .role-player .player-balance-chip {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 0;
+    padding-inline: 0.4rem;
+    overflow: hidden;
+    font-size: 0.72rem;
+  }
+
+  .role-player .player-balance-chip-amounts {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .role-player .topbar-actions {
+    flex: none;
+    gap: 0;
+  }
+
+  .role-player .topbar-actions .language-toggle,
+  .role-player .topbar-actions .theme-toggle,
+  .role-player .dashboard-topbar .notification-trigger {
+    display: grid;
+    flex: none;
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+
+  .mines-marquee,
+  .penalty-marquee,
+  .scratch-marquee {
+    padding-right: 7.6rem;
+    padding-left: 0.55rem;
+  }
+
+  .mines-marquee .slot-title,
+  .penalty-marquee .slot-title,
+  .scratch-marquee .slot-title {
+    justify-self: start;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: clamp(0.95rem, 4.4vw, 1.25rem);
+    text-overflow: ellipsis;
   }
 }
 

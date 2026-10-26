@@ -384,7 +384,7 @@ export class CasinoService {
       await tx.settlementEntry.create({
         data: { casinoSpinId: spin.id, playerId: actor.id, ownerId: team.ownerId, managerId: team.managerId, ownerRate: team.ownerRate, managerRate: team.managerRate, bets: 0, stake, payout: win, createdAt: now },
       });
-      await this.addToLedger(tx, actor.id, net, now);
+      await this.addToLedger(tx, actor.id, net, now, open.game === "book" ? "book" : "slot");
       const balance = (await tx.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } })).balance;
       return { spin, suit, won, win, net, balance, next };
     });
@@ -413,12 +413,26 @@ export class CasinoService {
     return { gamble: null };
   }
 
-  /** Adds a spin or guess to the day's single "Casino" line in the Player's ledger. */
-  private async addToLedger(tx: Prisma.TransactionClient, playerId: string, net: Prisma.Decimal, now: Date) {
+  /** Adds a spin or guess to that game's line for the day. A Book of Ra gamble is not a Sizzling Hot one. */
+  private async addToLedger(tx: Prisma.TransactionClient, playerId: string, net: Prisma.Decimal, now: Date, game: "slot" | "book" = "slot") {
     const since = startOfDay(now);
+    const bookGuess = { path: ["game"], equals: "book" } as const;
+    if (game === "book") {
+      const [paid, free, guesses] = await Promise.all([
+        tx.casinoSpin.count({ where: { playerId, kind: "BOOK", free: false, createdAt: { gte: since } } }),
+        tx.casinoSpin.count({ where: { playerId, kind: "BOOK", free: true, createdAt: { gte: since } } }),
+        tx.casinoSpin.count({ where: { playerId, kind: "GAMBLE", createdAt: { gte: since }, gamble: bookGuess } }),
+      ]);
+      if (paid + free + guesses === 0 && !net.isZero()) ledgerLog.error(`Book of Ra moved ${net.toFixed(2)} for player ${playerId} with no spin or gamble recorded`);
+      const parts = [`Book of Ra: ${paid === 1 ? "1 spin" : `${paid} spins`}`];
+      if (free) parts.push(free === 1 ? "1 free spin" : `${free} free spins`);
+      if (guesses) parts.push(guesses === 1 ? "1 double or nothing" : `${guesses} double or nothing`);
+      await addToDailyLine(tx, `book_${playerId}_${dayKey(now)}`, playerId, net, parts.join(", "), now);
+      return;
+    }
     const [spins, guesses] = await Promise.all([
       tx.casinoSpin.count({ where: { playerId, kind: "SPIN", createdAt: { gte: since } } }),
-      tx.casinoSpin.count({ where: { playerId, kind: "GAMBLE", createdAt: { gte: since } } }),
+      tx.casinoSpin.count({ where: { playerId, kind: "GAMBLE", createdAt: { gte: since }, NOT: { gamble: bookGuess } } }),
     ]);
     if (spins + guesses === 0 && !net.isZero()) {
       ledgerLog.error(`Sizzling Hot moved ${net.toFixed(2)} for player ${playerId} with no spin or gamble recorded`);

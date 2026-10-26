@@ -105,10 +105,9 @@ export function DiceGame() {
     // Keep the stake if it's still one of the bets within the Player's max stake; otherwise the biggest that is.
     const allowed = next.game.bets.filter((value) => value <= next.tableMax);
     setStake((current) => (allowed.includes(current) ? current : (allowed.filter((value) => value <= current).pop() ?? allowed[0] ?? next.game.bets[0])));
+    setResult(null);
     if (next.recent[0]) {
-      const last = next.recent[0];
-      const roll = Math.round(last.roll * 100);
-      setResult({ roll, won: last.won, win: last.win, multiplier: last.multiplier });
+      const roll = Math.round(next.recent[0].roll * 100);
       setShown(roll);
       throwKey.current += 1;
       setDice(newThrow(roll, throwKey.current, 0, 0));

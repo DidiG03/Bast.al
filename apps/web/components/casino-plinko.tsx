@@ -7,6 +7,7 @@ import { LastSpins } from "./casino-last-spins";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
+import { useDismiss } from "./use-dismiss";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
@@ -67,6 +68,7 @@ export function PlinkoGame() {
   const [bet, setBet] = useState(0);
   const [recent, setRecent] = useState<PlinkoBall[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
+  useDismiss(() => setRulesOpen(false));
   const [soundOn, setSoundOn] = useState(true);
   const [auto, setAuto] = useState(false);
   const [lastWin, setLastWin] = useState<PlinkoBall | null>(null);

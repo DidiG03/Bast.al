@@ -268,11 +268,12 @@ export class BookService {
   /** Adds a spin to the day's single "Book of Ra" line in the Player's ledger. */
   private async addToLedger(tx: Prisma.TransactionClient, playerId: string, net: Prisma.Decimal, now: Date) {
     const since = startOfDay(now);
-    const [paid, free] = await Promise.all([
+    const [paid, free, guesses] = await Promise.all([
       tx.casinoSpin.count({ where: { playerId, kind: "BOOK", free: false, createdAt: { gte: since } } }),
       tx.casinoSpin.count({ where: { playerId, kind: "BOOK", free: true, createdAt: { gte: since } } }),
+      tx.casinoSpin.count({ where: { playerId, kind: "GAMBLE", createdAt: { gte: since }, gamble: { path: ["game"], equals: "book" } } }),
     ]);
-    const reason = [`${GAME_NAME}: ${paid === 1 ? "1 spin" : `${paid} spins`}`, ...(free ? [free === 1 ? "1 free spin" : `${free} free spins`] : [])].join(", ");
+    const reason = [`${GAME_NAME}: ${paid === 1 ? "1 spin" : `${paid} spins`}`, ...(free ? [free === 1 ? "1 free spin" : `${free} free spins`] : []), ...(guesses ? [guesses === 1 ? "1 double or nothing" : `${guesses} double or nothing`] : [])].join(", ");
     await addToDailyLine(tx, ledgerLineId(playerId, now), playerId, net, reason, now);
   }
 }

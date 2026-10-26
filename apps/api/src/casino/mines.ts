@@ -9,10 +9,10 @@
  * (the tiles left, over the safe tiles left, at each step) times 85%,
  * floored to the cent. That 15% is the house edge: before the cents are
  * floored, cashing out after any number of tiles pays back 85% on average.
- * With only one mine the fair price of the first safe tile is barely over
- * 1, so 85% of it would pay less than the stake. The first safe tile is
- * therefore held at 1.01×, whichever mine count was picked. Later tiles
- * keep the 15% edge. A round pays at most 5,000 times the bet.
+ * With few mines the fair price of the early safe tiles is only just over
+ * 1, so 85% of it would pay less than the stake (one mine, two tiles, is
+ * 0.92×). Every cash-out after a safe tile is held at 1.01× at least,
+ * whichever mine count was picked. A round pays at most 5,000 times the bet.
  */
 
 export const GAME_NAME = "Mines";
@@ -23,10 +23,10 @@ export const TILES = 25;
 export const MINE_COUNTS = [1, 3, 5, 10, 15, 20, 24] as const;
 /** What a round can cost, in dollars. The same chips as the fruit slot. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
-/** The house's edge on every cash-out: 15%, so a round pays back 85% on average, except the first safe tile, which is held at 1.01×. */
+/** The house's edge: 15%, so a round pays back 85% on average, except where that would pay 1.00× or less. Those cash-outs are held at 1.01×. */
 export const HOUSE_EDGE = 0.15;
-/** The first safe tile never pays at 1.00× or below, in hundredths (101 is 1.01×). */
-const FIRST_TILE_MIN = 101n;
+/** No cash-out after a safe tile pays at 1.00× or below, in hundredths (101 is 1.01×). */
+const MIN_PAYOUT = 101n;
 /** What a round pays back on average, in percent of the stake, before cents are floored. */
 export const PAYOUT_RATE = 85;
 /** The most a round pays, in times the bet. */
@@ -80,7 +80,8 @@ export function multiplierHundredths(mines: number, opened: number): number {
     num *= BigInt(TILES - step);
     den *= BigInt(safe - step);
   }
-  const hundredths = opened === 1 && num / den < FIRST_TILE_MIN ? FIRST_TILE_MIN : num / den;
+  const raw = num / den;
+  const hundredths = raw < MIN_PAYOUT ? MIN_PAYOUT : raw;
   const cap = BigInt(MAX_WIN) * 100n;
   return Number(hundredths > cap ? cap : hundredths);
 }

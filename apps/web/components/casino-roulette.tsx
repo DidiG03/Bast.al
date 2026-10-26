@@ -233,10 +233,9 @@ export function RouletteGame() {
       const body = JSON.stringify({ bets: Object.entries(table).map(([spot, amount]) => ({ spot, amount })) });
       const result = await apiFetch<RouletteResult>(path, token, { method: "POST", body, idempotencyKey: idempotency.keyFor(path, body) });
       idempotency.done();
-      // The stake leaves the balance as the ball goes; the win arrives when it lands.
-      setBalance(result.balance - result.win);
-      await wheelRef.current?.spin(result.stop);
+      // The server balance, stake and win included, before the wheel finishes, so the next spin isn't priced on a stale figure.
       setBalance(result.balance);
+      await wheelRef.current?.spin(result.stop);
       setLastBets(table);
       setSettled(result);
       setHistory((list) => [{ number: result.number, label: result.label, color: result.color }, ...list].slice(0, 16));
@@ -303,7 +302,7 @@ export function RouletteGame() {
               <Link className="slot-exit" href="/dashboard/casino" aria-label={t("Leave the game")}>
                 ‹
               </Link>
-              <span className="slot-title">{state.game.name}</span>
+              <span className="slot-title">{t("Roulette")}</span>
               <button type="button" className="slot-fullscreen roulette-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")} title={t("Pays and rules")}>
                 ?
               </button>

@@ -1374,6 +1374,8 @@ export type ScratchCard = {
 export type ScratchState = {
   closed: string | null;
   balance: number;
+  /** A card bought and not yet scratched. Null once it has been revealed. */
+  open?: ScratchCard | null;
   /** The most one card can cost: the Player's max stake, or the top price without one. */
   tableMax: number;
   recent: ScratchCard[];

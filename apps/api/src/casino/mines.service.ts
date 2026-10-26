@@ -201,7 +201,11 @@ export class MinesService implements OnModuleInit, OnModuleDestroy {
     await tx.user.update({ where: { id: playerId }, data: { balance: { increment: amount } } });
     const lineId = ledgerLineId(playerId, now);
     const line = await tx.balanceTransaction.findUnique({ where: { id: lineId }, select: { amount: true } });
-    if (!line) return;
+    if (!line) {
+      this.logger.warn(`Mines refunded ${amount} to ${playerId} with no ledger line; writing one`);
+      await this.addToLedger(tx, playerId, cents, now, false);
+      return;
+    }
     const next = line.amount.add(amount);
     const played = await tx.casinoSpin.count({ where: { playerId, kind: "MINES", createdAt: { gte: startOfDay(now) } } });
     if (next.isZero() && played === 0) await tx.balanceTransaction.delete({ where: { id: lineId } });

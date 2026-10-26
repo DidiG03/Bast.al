@@ -130,6 +130,7 @@ export const betting: Record<string, string> = {
   "{pick} was taken off your slip: that market has closed for good.": "{pick} u hoq nga kuponi: ai treg u mbyll përfundimisht.",
   "{count} picks were taken off your slip: their markets have closed for good.": "{count} zgjedhje u hoqën nga kuponi: tregjet e tyre u mbyllën përfundimisht.",
   "Bet reinstated": "Bast i rikthyer",
+  "Bet reinstated, stake taken back": "Bast i rikthyer, shuma u hoq nga balanca",
   "{amount} pending": "{amount} në pritje",
   "Accumulator voided": "Basti i kombinuar u anulua",
   "Bet builder voided": "Basti i përbërë u anulua",

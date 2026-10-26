@@ -193,12 +193,11 @@ export function DiceGame() {
       }
       const { round } = response;
       const roll = Math.round(round.roll * 100);
-      // The stake leaves straight away; the win arrives as the roll lands.
-      setBalance(Math.round((balanceRef.current - round.bet) * 100) / 100);
+      balanceRef.current = response.balance;
+      setBalance(response.balance);
       setResult({ roll, won: round.won, win: round.win, multiplier: round.multiplier });
       await landOn(roll, reducedMotion.current ? null : fast ? AUTO_THROW : THROW);
       slotSound.diceResult(round.won, round.multiplier);
-      setBalance(response.balance);
       setSeed(response.seed);
       setRecent((rows) => [round, ...rows].slice(0, 20));
       setVisit((current) => ({ rolls: current.rolls + 1, wins: current.wins + (round.won ? 1 : 0), profit: Math.round((current.profit + round.win - round.bet) * 100) / 100 }));
@@ -456,7 +455,7 @@ export function DiceGame() {
                   {!result
                     ? t("Set your target and roll.")
                     : result.won
-                      ? t("Won {amount} at {multiplier}×", { amount: formatMoney(result.win), multiplier: result.multiplier.toFixed(4) })
+                      ? t("Won {amount} at {multiplier}×", { amount: formatMoney(result.win), multiplier: result.multiplier.toFixed(2) })
                       : t("No win this time")}
                 </span>
               </div>
@@ -633,7 +632,7 @@ export function DiceGame() {
                 <div>
                   <strong className={row.won ? "is-good" : "is-bad"}>{row.roll.toFixed(2)}</strong>
                   <span className="muted">
-                    {date(row.createdAt, TIME)} · {row.direction === "UNDER" ? t("under {target}", { target: row.target.toFixed(2) }) : t("over {target}", { target: row.target.toFixed(2) })} · {row.multiplier.toFixed(4)}× ·{" "}
+                    {date(row.createdAt, TIME)} · {row.direction === "UNDER" ? t("under {target}", { target: row.target.toFixed(2) }) : t("over {target}", { target: row.target.toFixed(2) })} · {row.multiplier.toFixed(2)}× ·{" "}
                     {t("{amount} stake", { amount: formatMoney(row.bet) })}
                   </span>
                 </div>

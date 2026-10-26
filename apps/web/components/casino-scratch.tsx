@@ -188,11 +188,15 @@ export function ScratchGame() {
       const { round } = answer;
       setBalance(answer.balance);
       setSeed(answer.seed);
-      setRecent((rows) => [round, ...rows].slice(0, 20));
+      setRecent((rows) => (rows.some((row) => row.id === round.id) ? rows : [round, ...rows].slice(0, 20)));
+      void (async () => {
+        const token = await getToken();
+        if (token) await apiFetch("/casino/scratch/shown", token, { method: "POST", body: JSON.stringify({ id: round.id }) }).catch(() => undefined);
+      })();
       setVisit((current) => ({ cards: current.cards + 1, wins: current.wins + (round.multiplier > 0 ? 1 : 0), profit: Math.round((current.profit + round.win - round.bet) * 100) / 100 }));
       slotSound.scratchResult(round.multiplier);
     }
-  }, []);
+  }, [getToken]);
 
   /** Shows one box: clears its foil, and settles the card once it's the last. */
   const revealCell = useCallback(
@@ -235,9 +239,21 @@ export function ScratchGame() {
     const allowed = next.game.bets.filter((value) => value <= next.tableMax);
     setStake((current) => (allowed.includes(current) ? current : (allowed.filter((value) => value <= current).pop() ?? allowed[0] ?? next.game.bets[0])));
     // The last card shows scratched; with none yet, a covered card waits.
-    cardRef.current = next.recent[0] ?? null;
-    setCard(cardRef.current);
-    revealedRef.current = cardRef.current ? allShown() : noneShown();
+    if (next.open) {
+      cardRef.current = next.open;
+      setCard(next.open);
+      revealedRef.current = noneShown();
+      settledRef.current = false;
+      setSettled(false);
+      pending.current = { round: next.open, balance: next.balance, seed: next.seed };
+    } else {
+      cardRef.current = null;
+      setCard(null);
+      revealedRef.current = noneShown();
+      settledRef.current = true;
+      setSettled(true);
+      pending.current = null;
+    }
     setRevealed(revealedRef.current);
   }, [getToken, t]);
 

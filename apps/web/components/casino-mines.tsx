@@ -187,7 +187,7 @@ export function MinesGame() {
 
   const message = (() => {
     if (!round || (round.phase !== "PLAY" && round.opened === 0 && recent.length === 0)) return t("Pick the mines, then start.");
-    if (round.phase === "PLAY" && round.opened === 0) return t("Tap a tile. A gem raises the multiplier.");
+    if (round.phase === "PLAY" && round.opened === 0) return t("Tap a tile. A coin raises the multiplier.");
     if (round.phase === "PLAY") return t("Next tile {multiplier}×. Cash out {amount}.", { multiplier: round.nextMultiplier?.toFixed(2) ?? round.multiplier.toFixed(2), amount: formatMoney(round.cashout) });
     if (round.phase === "LOST") return t("Mine! The stake is lost.");
     if (round.capped) return t("That's the most a round pays: {amount}.", { amount: formatMoney(round.cashout) });
@@ -205,7 +205,7 @@ export function MinesGame() {
               ?
             </button>
           </div>
-          <p className="muted report-subtitle">{t("Open the gems, cash out before a mine. Played with your balance.")}</p>
+          <p className="muted report-subtitle">{t("Open the coins, cash out before a mine. Played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to start a round or cash out.")}</p>
         </div>
       </div>
@@ -323,7 +323,7 @@ export function MinesGame() {
                 <div>
                   <strong>{tn(row.mines, "{count} mine", "{count} mines")}</strong>
                   <span className="muted">
-                    {date(row.createdAt, TIME)} · {tn(row.opened, "{count} gem", "{count} gems")} · {row.phase === "LOST" ? t("Mine") : `${row.multiplier.toFixed(2)}×`}
+                    {date(row.createdAt, TIME)} · {tn(row.opened, "{count} coin", "{count} coins")} · {row.phase === "LOST" ? t("Mine") : `${row.multiplier.toFixed(2)}×`}
                   </span>
                 </div>
                 <strong className={row.phase === "LOST" ? "is-bad" : undefined}>{row.phase === "LOST" ? formatMoney(0) : formatMoney(row.cashout)}</strong>
@@ -343,10 +343,10 @@ export function MinesGame() {
               </button>
             </div>
             <p>
-              {t("A 5 by 5 field hides the number of mines you pick. Tap a tile: a gem raises what the round pays, a mine loses the stake. Cash out after the first gem, or keep going. The round ends on its own if you clear every gem, or if it reaches {times} times the stake.", { times: state.game.maxWin.toLocaleString() })}
+              {t("A 5 by 5 field hides the number of mines you pick. Tap a tile: a coin raises what the round pays, a mine loses the stake. Cash out after the first coin, or keep going. The round ends on its own if you clear every coin, or if it reaches {times} times the stake.", { times: state.game.maxWin.toLocaleString() })}
             </p>
             <p>
-              {t("Each gem pays a little less than the fair chance of having reached it. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.", {
+              {t("The house keeps 15%. The first coin always pays at least 1.01× the stake; later coins pay 85% of the fair chance of having reached them. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.", {
                 min: formatMoney(state.game.bets[0]),
                 max: formatMoney(state.game.bets[state.game.bets.length - 1]),
               })}
@@ -359,7 +359,7 @@ export function MinesGame() {
 }
 
 function tileName(tile: MinesTile, t: (text: string) => string) {
-  if (tile === "gem") return t("Gem");
+  if (tile === "gem") return t("Coin");
   if (tile === "mine") return t("Mine");
   if (tile === "hit") return t("The mine you hit");
   return t("Hidden");

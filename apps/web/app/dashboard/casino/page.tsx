@@ -77,7 +77,10 @@ function CasinoLobby() {
     <div className="stack">
       <div>
         <h1 style={{ margin: 0 }}>{t("Casino")}</h1>
-        <p className="muted report-subtitle">{t("Pick a game. Every game plays with your balance, {amount} right now.", { amount: formatMoney(state.balance) })}</p>
+        <p className="muted" style={{ margin: "0.35rem 0 0" }}>
+          {t("Play for fun. Your max stake and daily loss limit apply here too. Take a break if a session runs long.")}{" "}
+          <Link href="/dashboard/security">{t("My account")}</Link>
+        </p>
       </div>
       {casinoClosed || games?.length === 0 ? (
         <div className="card">
@@ -153,7 +156,7 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Mines")}</strong>
-                <span>{t("A field of 25 tiles hides the mines you choose. Every gem raises the payout. Cash out before one blows.")}</span>
+                <span>{t("A field of 25 tiles hides the mines you choose. Every coin raises the payout. Cash out before one blows.")}</span>
               </span>
             </Link>
           ) : null}

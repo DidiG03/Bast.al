@@ -1847,7 +1847,7 @@ function BetSlip({
 
   if (receipt && items.length === 0) {
     return (
-      <div className="card stack bet-slip">
+      <div className="card stack bet-slip is-receipt">
         <div className="bet-slip-header">
           <h2>{t("Bets placed")}<HelpTip text="Your bets went through. The money was taken from your balance. You can follow them in Open bets." /></h2>
           <button type="button" className="secondary bet-slip-close" onClick={onClose} aria-label={t("Close bet slip")}>

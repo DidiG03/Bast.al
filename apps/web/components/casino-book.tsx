@@ -570,7 +570,7 @@ export function BookGame() {
 
           <section
             ref={cabinet}
-            className={`slot-cabinet is-book${playingFree ? " is-free" : ""}${fullScreen !== "off" ? " is-full" : ""}`}
+            className={`slot-cabinet is-book${playingFree ? " is-free" : ""}${gambleOpen ? " is-gamble" : ""}${fullScreen !== "off" ? " is-full" : ""}`}
             aria-label={state.game.name}
           >
             <header className="slot-marquee book-marquee">
@@ -765,7 +765,12 @@ export function BookGame() {
                     className="book-ring is-bet"
                     aria-expanded={betMenu}
                     aria-label={`${t("Change the bet")}: ${formatStake(playingFree ? feature.bet : bet)}`}
-                    onClick={() => setBetMenu((open) => !open)}
+                    onClick={() => {
+                      const choices = allowedBets.filter((value) => value <= balance);
+                      const list = choices.length > 0 ? choices : allowedBets;
+                      const index = list.indexOf(bet);
+                      chooseBet(list[(index + 1) % list.length] ?? bet);
+                    }}
                     disabled={spinning || auto !== null || playingFree}
                   >
                     <small>{t("Total bet")}</small>

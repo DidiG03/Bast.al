@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
@@ -22,7 +22,7 @@ const ledgerLineId = (playerId: string, at: Date) => `scratch_${playerId}_${dayK
 
 const roundSelect = { id: true, bet: true, win: true, scratch: true, createdAt: true } satisfies Prisma.CasinoSpinSelect;
 
-type Stored = { cells: ScratchSymbol[]; symbol: ScratchSymbol | null; multiplier: number; seedId: string; serverSeedHash: string; clientSeed: string; nonce: number };
+type Stored = { cells: ScratchSymbol[]; symbol: ScratchSymbol | null; multiplier: number; seedId: string; serverSeedHash: string; clientSeed: string; nonce: number; shown?: boolean };
 
 function roundView(round: Prisma.CasinoSpinGetPayload<{ select: typeof roundSelect }>, revealed: Map<string, string>) {
   const stored = round.scratch as Stored;
@@ -87,6 +87,8 @@ export class ScratchService {
       balance: Number(player.balance),
       tableMax,
       recent: recent.map((round) => roundView(round, revealed)),
+      /** A card bought and not yet scratched. Reloading brings it back; the stake stays taken. */
+      open: recent[0] && (recent[0].scratch as Stored | null)?.shown === false ? roundView(recent[0], revealed) : null,
       seed: seedView(seed),
       /** The last seed pair the Player changed, its server seed shown. */
       previousSeed: previous ? seedView(previous) : null,
@@ -147,7 +149,7 @@ export class ScratchService {
           grid: card.cells,
           stops: [],
           lines: {},
-          scratch: { ...card, seedId: seed.id, serverSeedHash: seed.serverSeedHash, clientSeed: seed.clientSeed, nonce: seed.nonce } satisfies Stored,
+          scratch: { ...card, seedId: seed.id, serverSeedHash: seed.serverSeedHash, clientSeed: seed.clientSeed, nonce: seed.nonce, shown: false } satisfies Stored,
           createdAt: now,
         },
         select: roundSelect,
@@ -167,6 +169,17 @@ export class ScratchService {
       await this.audit.log({ actorId: actor.id, action: "casino.big_win", targetId: actor.id, ipAddress, metadata: { spinId: result.round.id, game: "scratch", symbol: result.card.symbol, multiplier: result.card.multiplier, win: Number(result.round.win) } });
     }
     return { round: roundView(result.round, new Map()), balance: Number(result.balance), seed: seedView(result.seed) };
+  }
+
+  /** The card was scratched. The money already moved when it was bought; this only stops a reload from laying it out again. */
+  async markShown(actor: Actor, id: string) {
+    if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
+    const round = await this.prisma.casinoSpin.findFirst({ where: { id, playerId: actor.id, kind: "SCRATCH" }, select: { scratch: true } });
+    if (!round) throw new NotFoundException("That card isn't yours");
+    const stored = round.scratch as Stored;
+    if (stored.shown !== false) return { ok: true };
+    await this.prisma.casinoSpin.update({ where: { id }, data: { scratch: { ...stored, shown: true } } });
+    return { ok: true };
   }
 
   /** Adds a card to the day's single "Scratch Cards" line in the Player's ledger. */

@@ -31,7 +31,7 @@ const RISK_NAMES: Record<PlinkoRisk, string> = { LOW: msg("Low"), MEDIUM: msg("M
 
 /** A bucket's colour: gold in the middle, red at the edges. */
 const bucketHue = (bucket: number, rows: number) => 46 - (Math.abs(bucket - rows / 2) / (rows / 2)) * 56;
-const times = (multiplier: number) => (multiplier >= 100 ? String(multiplier) : `${multiplier}×`);
+const times = (multiplier: number) => `${multiplier}×`;
 
 /** The board's layout for a canvas `width` wide: peg spacing, rows, and where everything sits. */
 function layout(width: number, rows: number) {

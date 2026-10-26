@@ -35,12 +35,13 @@ test("mines are a shuffle of distinct tiles", () => {
   assert.deepEqual(placeMines(3, draws(0, 0, 0)), placeMines(3, draws(0, 0, 0)));
 });
 
-test("the first safe tile with 3 mines pays 0.96, and 24 mines pays 21.25", () => {
-  assert.equal(multiplierHundredths(3, 1), 96);
-  assert.equal(payoutCents(100, 3, 1), 96);
+test("the first safe tile always pays more than 1×, and 24 mines pays 21.25", () => {
+  for (const mines of MINE_COUNTS) assert.ok(multiplierHundredths(mines, 1) > 100, `${mines} mines`);
+  assert.equal(multiplierHundredths(1, 1), 101, "one mine: 85% of 25/24 is under 1, so it is held at 1.01");
+  assert.equal(multiplierHundredths(3, 1), 101);
+  assert.equal(payoutCents(5_000, 1, 1), 5_050, "50 ALL becomes 50.50");
   assert.equal(multiplierHundredths(24, 1), 2125);
   assert.equal(payoutCents(100, 24, 1), 2125);
-  assert.equal(payoutCents(50, 3, 1), 48);
 });
 
 test("the multiplier only rises, and it stops at 5,000 times the bet", () => {
@@ -58,6 +59,8 @@ test("cashing out after any number of tiles pays back 85% before the cents are f
   for (const mines of [1, 3, 10]) {
     const safe = TILES - mines;
     for (let opened = 1; opened <= Math.min(safe, 4); opened++) {
+      // The first tile is held at 1.01× when 85% of the fair price would be under 1, so that one step can pay back more than 85%.
+      if (opened === 1 && multiplierHundredths(mines, 1) === 101) continue;
       const paid = payoutCents(10_000, mines, opened);
       const back = ways(TILES, opened, safe) * paid;
       const target = 0.85 * 10_000;

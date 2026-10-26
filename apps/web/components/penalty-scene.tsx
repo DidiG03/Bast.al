@@ -138,6 +138,7 @@ const FLASHES: Array<[number, number, number]> = [
 const CROWD = ["#c8102e", "#f2f2f2", "#1d3f8f", "#ffd34d", "#2a2a2a", "#e98b6d", "#8a5a44", "#d8d8d8", "#6b1020", "#3a6fd8"];
 
 const Stadium = memo(function Stadium() {
+  const { t } = useI18n();
   // Seat rows in two tiers, each a row of heads in shuffled colours (made once, the same every time).
   const rows: Array<{ y: number; r: number; gap: number; offset: number; colors: string[] }> = [];
   let seed = 7;
@@ -253,7 +254,7 @@ const Stadium = memo(function Stadium() {
 
       {/* Ad boards along the goal line. */}
       <rect y="290" width="1000" height="34" fill="url(#pk-board)" />
-      {["SHTATAT.AL", "LIVE BETTING", "SHTATAT.AL", "CASINO", "SHTATAT.AL", "PENALTY"].map((word, i) => (
+      {[ "SHTATAT.AL", t("Live betting"), "SHTATAT.AL", t("Casino"), "SHTATAT.AL", t("Penalty") ].map((word, i) => (
         <g key={i}>
           <rect x={4 + i * 166.5} y="293" width="160" height="27" rx="2" fill={i % 2 ? "#0f2a5c" : "#132a14"} />
           <text x={84 + i * 166.5} y="312.5" textAnchor="middle" fontSize="15" fontWeight="900" fontFamily="system-ui, sans-serif" fill={i % 2 ? "#9fd0ff" : "#c6ff6a"} letterSpacing="1.5">

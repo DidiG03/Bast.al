@@ -3857,6 +3857,48 @@ button.odds-selection:hover,
   background: var(--bg);
 }
 
+/* The receipt after a bet is placed: a bottom drawer as tall as its bets. The list scrolls once it would leave the screen. */
+.bet-sheet:has(.bet-slip.is-receipt) {
+  justify-content: flex-end;
+  background: transparent;
+  pointer-events: none;
+}
+
+.bet-sheet .bet-slip.is-receipt,
+.role-player .bet-sheet .card.bet-slip.is-receipt {
+  flex: 0 1 auto;
+  height: auto;
+  max-height: calc(100dvh - 0.75rem);
+  pointer-events: auto;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--bg-elevated);
+  box-shadow: 0 -16px 48px rgb(0 0 0 / 40%);
+}
+
+.bet-sheet .bet-slip.is-receipt .bet-slip-header {
+  flex: none;
+  margin: 0;
+  padding: 1.15rem 0 0.15rem;
+  background: transparent;
+}
+
+.bet-sheet .bet-slip.is-receipt .bet-slip-header::before {
+  top: 0.4rem;
+}
+
+.bet-slip.is-receipt .bet-receipt {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.bet-slip.is-receipt .bet-slip-actions {
+  flex: none;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 .bet-slip-body {
   flex: 1;
   min-height: 0;
@@ -6611,11 +6653,24 @@ button.is-blocked {
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 720px) {
   .slot-controls {
     gap: 0.2rem;
-    padding: 0.25rem 0.35rem;
+    padding: 0.25rem 0.55rem;
+  }
+
+  .slot-cabinet:not(.is-book) .slot-message span,
+  .slot-cabinet:not(.is-book) .slot-message small {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  .slot-start {
+    margin-right: 0.15rem;
   }
 
   .slot-btn {
     min-width: 2.9rem;
+    min-height: 44px;
     padding: 0.2rem 0.3rem;
     font-size: 0.7rem;
   }
@@ -6858,7 +6913,8 @@ button.is-blocked {
 .gamble-amounts dd {
   margin: 0;
   color: var(--slot-gold);
-  font-size: clamp(0.9rem, 2.6vw, 1.35rem);
+  font-size: clamp(0.72rem, 2vw, 1.15rem);
+  overflow: visible;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
@@ -6920,8 +6976,8 @@ button.is-blocked {
 
 .gamble-card {
   position: relative;
-  height: min(100%, 13rem);
-  min-height: 5rem;
+  height: min(100%, 9.5rem);
+  min-height: 4.5rem;
   aspect-ratio: 5 / 7;
   border: 3px solid #f4efe2;
   border-radius: clamp(8px, 1.6vw, 14px);
@@ -7086,16 +7142,17 @@ button.is-blocked {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  min-height: clamp(2.4rem, 7vw, 3.1rem);
-  padding: 0 clamp(0.6rem, 2vw, 1.2rem);
+  min-height: 44px;
+  padding: 0.35rem clamp(0.45rem, 2vw, 1.2rem);
   border: 2px solid var(--slot-gold);
   border-radius: 10px;
   color: #fff;
   font-size: clamp(0.78rem, 2.2vw, 1.05rem);
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.1;
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25), 0 3px 0 rgba(0, 0, 0, 0.45);
   cursor: pointer;
 }
@@ -8096,7 +8153,7 @@ button.is-blocked {
 
 /* Cards fan out a little, as dealt by hand. */
 .blackjack-cards > .playing-card + .playing-card {
-  margin-left: calc(var(--card-w) * -0.4);
+  margin-left: calc(var(--card-w) * -0.12);
 }
 
 .blackjack-cards > .playing-card:nth-child(2) { rotate: 3deg; }
@@ -10031,6 +10088,15 @@ button.is-blocked {
 }
 
 /* START and TOTAL BET: two rings in a row under the controls. Over the right-hand numbers they hid the line badges and the last reel. */
+.slot-cabinet.is-book.is-gamble .book-hall {
+  position: relative;
+  z-index: 6;
+}
+
+.slot-cabinet.is-book.is-gamble .book-rings {
+  pointer-events: none;
+}
+
 .book-rings {
   --book-ring: clamp(4.5rem, 11vw, 6.5rem);
   position: relative;

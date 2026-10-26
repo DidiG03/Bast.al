@@ -136,12 +136,12 @@ export function CoinFlipGame() {
     setStake((current) => (allowed.includes(current) ? current : (allowed.filter((value) => value <= current).pop() ?? allowed[0] ?? next.game.bets[0])));
     if (next.recent[0]) {
       const last = next.recent[0];
-      setResult(last);
       setCall(last.call);
       const resting = last.side === "TAILS" ? 180 : 0;
       angleRef.current = resting;
       setAngle(resting);
     }
+    setResult(null);
   }, [getToken, t]);
 
   useEffect(() => {

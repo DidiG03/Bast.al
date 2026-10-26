@@ -75,7 +75,7 @@ export function BlackjackGame() {
     setBalance(next.balance);
     setRound(next.round);
     setRevealed(next.round?.phase === "DONE" ? next.round.dealer.length : 1);
-    setBet((current) => current || Math.min(next.game.chips[0], next.tableMax));
+    setBet((current) => (current > 0 ? current : 0));
   }, [getToken, t]);
 
   useEffect(() => {
@@ -621,7 +621,7 @@ function ChipStack({ amount, large = false }: { amount: number; large?: boolean 
 /** A big table button: a coloured tile with an icon, its name underneath. */
 function MoveButton({ kind, icon, label, keys, disabled, onClick }: { kind: "hit" | "stand" | "double" | "split" | "clear"; icon: string; label: string; keys: string; disabled: boolean; onClick(): void }) {
   return (
-    <button type="button" className={`blackjack-move is-${kind}`} data-key={keys} disabled={disabled} onClick={onClick}>
+    <button type="button" className={`blackjack-move is-${kind}`} data-key={keys} disabled={disabled} onClick={onClick} aria-label={label}>
       <span className="blackjack-move-tile" aria-hidden="true">
         {icon}
       </span>

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { randomInt } from "crypto";
 import { CasinoPlayKind, Prisma, Role } from "@prisma/client";
 import type { RandomNumberGenerating } from "pokie";
@@ -37,6 +37,7 @@ import {
 } from "./game";
 
 const RECENT = 10;
+const ledgerLog = new Logger("CasinoLedger");
 
 const money = (value: Prisma.Decimal | number) => `${Number(value).toFixed(2)} ALL`;
 
@@ -419,7 +420,10 @@ export class CasinoService {
       tx.casinoSpin.count({ where: { playerId, kind: "SPIN", createdAt: { gte: since } } }),
       tx.casinoSpin.count({ where: { playerId, kind: "GAMBLE", createdAt: { gte: since } } }),
     ]);
-    const reason = [spins === 1 ? "Casino: 1 spin" : `Casino: ${spins} spins`, ...(guesses ? [guesses === 1 ? "1 double or nothing" : `${guesses} double or nothing`] : [])].join(", ");
+    if (spins + guesses === 0 && !net.isZero()) {
+      ledgerLog.error(`Sizzling Hot moved ${net.toFixed(2)} for player ${playerId} with no spin or gamble recorded`);
+    }
+    const reason = [spins === 1 ? "Sizzling Hot: 1 spin" : `Sizzling Hot: ${spins} spins`, ...(guesses ? [guesses === 1 ? "1 double or nothing" : `${guesses} double or nothing`] : [])].join(", ");
     await addToDailyLine(tx, ledgerLineId(playerId, now), playerId, net, reason, now);
   }
 

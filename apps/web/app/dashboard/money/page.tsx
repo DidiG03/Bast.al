@@ -189,10 +189,10 @@ function describe(entry: BalanceEntry, t: (text: string, vars?: Record<string, s
     case "BET_SETTLEMENT":
       // A void (refunded or winnings taken back) and a void undone have their own names; older voids said "refunded".
       if (/^Bet (voided|refunded):/.test(entry.reason)) return { icon: "⊘", title: t("Bet voided") };
-      if (/^Bet reinstated:/.test(entry.reason)) return { icon: "↺", title: t("Bet reinstated") };
+      if (/^Bet reinstated:/.test(entry.reason)) return { icon: "↺", title: entry.amount < 0 ? t("Bet reinstated, stake taken back") : t("Bet reinstated") };
       return entry.amount >= 0 ? { icon: "🏆", title: t("Money from a bet") } : { icon: "↺", title: t("Bet corrected") };
     case "CASINO":
-      return { icon: "🎰", title: t("Casino") };
+      return { icon: "🎰", title: t(entry.reason.split(":")[0] || "Casino") };
     default:
       return { icon: "✎", title: t("Correction") };
   }

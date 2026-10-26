@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiProperty, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { Role } from "@prisma/client";
@@ -526,6 +526,15 @@ export class CasinoController {
   @Idempotent()
   scratchBuy(@CurrentActor() actor: Actor, @Body() body: ScratchBuyDto, @Req() req: AuthenticatedRequest) {
     return this.scratch.buy(actor, body.bet, clientIp(req));
+  }
+
+  /** Marks a bought card as scratched, so a reload doesn't lay the same card out again. The stake is not returned. */
+  @Post("scratch/shown")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  scratchShown(@CurrentActor() actor: Actor, @Body() body: { id?: string }) {
+    if (!body?.id) throw new BadRequestException("Which card?");
+    return this.scratch.markShown(actor, body.id);
   }
 
   /** Changes the Player's seed pair (shared with Dice, Keno and Coin Flip), showing the old server seed so its cards can be checked. */

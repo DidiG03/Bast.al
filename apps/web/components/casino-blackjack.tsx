@@ -306,14 +306,15 @@ export function BlackjackGame() {
       </Link>
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{t("Blackjack")}</h1>
+          <div className="game-title-line">
+            <h1 style={{ margin: 0 }}>{t("Blackjack")}</h1>
+            <button type="button" className="game-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")}>
+              ?
+            </button>
+          </div>
           <p className="muted report-subtitle">{t("Beat the dealer to 21, played with your balance.")}</p>
           <p className="game-keys-hint">{t("Keys: Space deals, H hits, S stands, D doubles, P splits, Y and N answer insurance.")}</p>
         </div>
-        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
-          <span className="game-rules-icon" aria-hidden="true">?</span>
-          {t("Pays and rules")}
-        </button>
       </div>
 
       {state.closed && !inPlay ? (

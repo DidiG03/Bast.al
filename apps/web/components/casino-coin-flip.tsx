@@ -362,16 +362,17 @@ export function CoinFlipGame() {
       </Link>
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{t("Coin Flip")}</h1>
+          <div className="game-title-line">
+            <h1 style={{ margin: 0 }}>{t("Coin Flip")}</h1>
+            <button type="button" className="game-rules-button" onClick={() => setSheet("rules")} aria-label={t("Pays and rules")}>
+              ?
+            </button>
+          </div>
           <p className="muted report-subtitle">{t("Call heads or tails and flip. Every flip can be checked. Played with your balance.")}</p>
         </div>
         <div className="dice-title-actions">
           <button type="button" className="secondary" onClick={() => setSheet("fair")}>
             {t("Provably fair")}
-          </button>
-          <button type="button" className="secondary game-rules-button" onClick={() => setSheet("rules")}>
-            <span className="game-rules-icon" aria-hidden="true">?</span>
-            {t("Pays and rules")}
           </button>
         </div>
       </div>

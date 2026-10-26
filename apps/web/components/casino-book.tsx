@@ -6,8 +6,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { bookSymbolImage, drawBookSymbol, loadBookArt, prepareBookImages } from "./book-symbols";
 import { BookMarquee } from "./book-marquee";
 import { BookColumn, BookTempleDefs, BookWall, ReelBackdrop, useHallLayout } from "./book-temple";
+import { LastSpins } from "./casino-last-spins";
 import { GamblePanel, countUpTime, overview, useCountUp } from "./casino-slot";
-import { HelpTip } from "./help-tip";
 import { useI18n, type I18n } from "./i18n-provider";
 import { LoadingSpinner, PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
@@ -548,14 +548,15 @@ export function BookGame() {
       </Link>
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{state.game.name}</h1>
+          <div className="game-title-line">
+            <h1 style={{ margin: 0 }}>{state.game.name}</h1>
+            <button type="button" className="game-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")}>
+              ?
+            </button>
+          </div>
           <p className="muted report-subtitle">{t("5 reels, 10 lines, and the book that opens free spins. Played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to spin, and again to stop the reels.")}</p>
         </div>
-        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
-          <span className="game-rules-icon" aria-hidden="true">?</span>
-          {t("Pays and rules")}
-        </button>
       </div>
 
       {state.closed && !feature && !finishingFree ? (
@@ -830,11 +831,7 @@ export function BookGame() {
         </>
       )}
 
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {t("Your last spins")}
-          <HelpTip text="Your newest Book of Ra spins, free ones included. They're also in My money, as one Book of Ra line for each day." />
-        </h2>
+      <LastSpins help="Your newest Book of Ra spins, free ones included. They're also in My money, as one Book of Ra line for each day.">
         {recent.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
             {t("No spins yet.")}
@@ -861,7 +858,7 @@ export function BookGame() {
             ))}
           </div>
         )}
-      </section>
+      </LastSpins>
 
       {rulesOpen && fullScreen === "off" ? (
         <Rules game={state.game} bet={playingFree ? feature.bet : bet} onClose={() => setRulesOpen(false)} i18n={i18n} />

@@ -185,14 +185,15 @@ export function PenaltyGame() {
       </Link>
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{t("Penalty")}</h1>
+          <div className="game-title-line">
+            <h1 style={{ margin: 0 }}>{t("Penalty")}</h1>
+            <button type="button" className="game-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")}>
+              ?
+            </button>
+          </div>
           <p className="muted report-subtitle">{t("Take the penalties, cash out before the keeper saves one. Played with your balance.")}</p>
           <p className="game-keys-hint">{t("Keys: Space starts a round or cashes out, and ← ↑ → shoot left, centre and right.")}</p>
         </div>
-        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
-          <span className="game-rules-icon" aria-hidden="true">?</span>
-          {t("Pays and rules")}
-        </button>
       </div>
 
       {state.closed && !playing ? (

@@ -202,14 +202,15 @@ export function MinesGame() {
       </Link>
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{t("Mines")}</h1>
+          <div className="game-title-line">
+            <h1 style={{ margin: 0 }}>{t("Mines")}</h1>
+            <button type="button" className="game-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")}>
+              ?
+            </button>
+          </div>
           <p className="muted report-subtitle">{t("Open the gems, cash out before a mine. Played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to start a round or cash out.")}</p>
         </div>
-        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
-          <span className="game-rules-icon" aria-hidden="true">?</span>
-          {t("Pays and rules")}
-        </button>
       </div>
 
       {state.closed && !playing ? (

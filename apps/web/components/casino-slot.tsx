@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { HelpTip } from "./help-tip";
+import { LastSpins } from "./casino-last-spins";
 import { useI18n, type I18n } from "./i18n-provider";
 import { LoadingSpinner, PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
@@ -478,14 +478,15 @@ export function SlotGame() {
       </Link>
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{state.game.name}</h1>
+          <div className="game-title-line">
+            <h1 style={{ margin: 0 }}>{state.game.name}</h1>
+            <button type="button" className="game-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")}>
+              ?
+            </button>
+          </div>
           <p className="muted report-subtitle">{t("5 reels, 5 or 10 lines, played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to spin, and again to stop the reels.")}</p>
         </div>
-        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
-          <span className="game-rules-icon" aria-hidden="true">?</span>
-          {t("Pays and rules")}
-        </button>
       </div>
 
       {state.closed && !finishing ? (
@@ -645,11 +646,7 @@ export function SlotGame() {
         </>
       )}
 
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {t("Your last spins")}
-          <HelpTip text="Your newest spins and double-or-nothing guesses. They're also in My money, as one Casino line for each day." />
-        </h2>
+      <LastSpins help="Your newest spins and double-or-nothing guesses. They're also in My money, as one Casino line for each day.">
         {recent.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>{t("No spins yet.")}</p>
         ) : (
@@ -678,7 +675,7 @@ export function SlotGame() {
             ))}
           </div>
         )}
-      </section>
+      </LastSpins>
 
       {rulesOpen && fullScreen === "off" ? <Rules game={state.game} bet={playingFree ? freeSpins.bet : bet} lines={lines} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
     </div>

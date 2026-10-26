@@ -526,16 +526,17 @@ export function ScratchGame() {
       </Link>
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{t("Scratch Cards")}</h1>
+          <div className="game-title-line">
+            <h1 style={{ margin: 0 }}>{t("Scratch Cards")}</h1>
+            <button type="button" className="game-rules-button" onClick={() => setSheet("rules")} aria-label={t("Pays and rules")}>
+              ?
+            </button>
+          </div>
           <p className="muted report-subtitle">{t("Buy a card and scratch it. Three of a kind wins. Every card can be checked. Played with your balance.")}</p>
         </div>
         <div className="dice-title-actions">
           <button type="button" className="secondary" onClick={() => setSheet("fair")}>
             {t("Provably fair")}
-          </button>
-          <button type="button" className="secondary game-rules-button" onClick={() => setSheet("rules")}>
-            <span className="game-rules-icon" aria-hidden="true">?</span>
-            {t("Pays and rules")}
           </button>
         </div>
       </div>

@@ -10132,6 +10132,95 @@ button.is-blocked {
   background: rgba(246, 210, 30, 0.2);
 }
 
+/*
+ * A phone: the stake and the spin sit in the control bar, not on a row of
+ * their own. That row was as tall as the reels and left them a small square
+ * in the middle of the wall.
+ */
+@media (max-width: 760px), (orientation: landscape) and (max-height: 520px) {
+  .slot-cabinet.is-book .book-hall {
+    --book-marker-wide: 1.35rem;
+    --book-column: calc(var(--book-marker-wide) + 0.65rem);
+  }
+
+  /* Taller stage, so the reels grow out to the line numbers instead of sitting as a narrow strip. */
+  .slot-cabinet.is-book.is-full .slot-stage > * {
+    --reels-wide: min(calc(100cqw - 3.2rem), calc((100cqh - 6px) * 680 / 384));
+  }
+
+  .slot-cabinet.is-book .book-rings {
+    --book-ring: 2.95rem;
+    position: absolute;
+    right: 0.25rem;
+    bottom: 0.22rem;
+    z-index: 4;
+    gap: 0.3rem;
+    padding: 0;
+  }
+
+  .slot-cabinet.is-book .book-ring-spot.is-bet {
+    width: 3.7rem;
+    height: 2.55rem;
+  }
+
+  .slot-cabinet.is-book .book-ring.is-start {
+    font-size: 0.68rem;
+  }
+
+  .slot-cabinet.is-book .book-ring.is-bet {
+    border-radius: 9px;
+  }
+
+  .slot-cabinet.is-book .book-ring.is-bet small {
+    font-size: 0.48rem;
+  }
+
+  .slot-cabinet.is-book .book-ring.is-bet b {
+    font-size: 0.78rem;
+  }
+
+  .slot-cabinet.is-book .slot-controls {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.25rem;
+    width: 100%;
+    padding: 0.22rem 7.3rem 0.25rem 0.25rem;
+  }
+
+  .slot-cabinet.is-book .slot-message {
+    flex: 1 1 auto;
+    flex-basis: auto;
+    order: 0;
+    min-width: 0;
+    padding: 0.1rem 0.3rem;
+  }
+
+  .slot-cabinet.is-book .slot-message span {
+    font-size: 0.62rem;
+  }
+
+  .slot-cabinet.is-book .slot-message small {
+    font-size: 0.58rem;
+  }
+
+  .slot-cabinet.is-book .slot-btn {
+    flex: none;
+    min-width: 0;
+    min-height: 2.55rem;
+    padding: 0.15rem 0.3rem;
+    font-size: 0.62rem;
+  }
+
+  .slot-cabinet.is-book .slot-sound {
+    min-width: 2.2rem;
+    font-size: 0.95rem;
+  }
+
+  .slot-cabinet.is-book .book-marquee {
+    height: 3.1rem;
+  }
+}
+
 .slot-cabinet.is-book .slot-start {
   min-width: 6.5rem;
   border-color: #33c45e;
@@ -16114,7 +16203,8 @@ html[data-theme="light"] .role-player .bet-status-lost {
   }
 
   .slot-fullscreen::after,
-  .help-tip-button::after {
+  .help-tip-button::after,
+  .game-rules-button::after {
     content: "";
     position: absolute;
     inset: -0.45rem;
@@ -16203,26 +16293,42 @@ html[data-theme="light"] .role-player .bet-status-lost {
   opacity: 0.6;
 }
 
-/* "Pays and rules" above each game: the same "?" mark as the round button inside the cabinet, so the two read as one control. */
-.role-player button.game-rules-button {
-  display: inline-flex;
+/* "?" beside each game's name. Opens the same pays-and-rules modal as the old wide pill. */
+.game-title-line {
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
-  justify-self: start;
-  min-height: 2.5rem;
-  padding: 0.35rem 0.9rem 0.35rem 0.45rem;
+  gap: 0.55rem;
+  min-width: 0;
 }
 
-.game-rules-icon {
+.game-title-line > h1 {
+  min-width: 0;
+}
+
+.role-player .casino-page button.game-rules-button {
+  position: relative;
   display: inline-grid;
   place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border: 1.5px solid currentColor;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  min-height: 0;
+  margin: 0.1rem 0 0;
+  padding: 0;
+  border: 1.5px solid color-mix(in srgb, var(--text) 32%, var(--border));
   border-radius: 50%;
-  font-size: 0.85rem;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.95rem;
   font-weight: 800;
   line-height: 1;
+}
+
+.role-player .casino-page button.game-rules-button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
 }
 
 /* A visible ring for whatever the keyboard is on, everywhere on the Player pages. */
@@ -16318,4 +16424,105 @@ html[data-theme="light"] .role-player .bet-status-lost {
   font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+/* "Your last spins": the heading opens the list. The "?" stays its own control, in the gap the chevron leaves. */
+.casino-spins-heading {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto minmax(1.25rem, 1fr);
+  align-items: center;
+  column-gap: 0.4rem;
+  margin: 0;
+}
+
+.casino-spins-heading button.casino-spins-toggle,
+.role-player .casino-spins-heading button.casino-spins-toggle {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* The button covers the "?" column too. Ignore hits there so they reach the tip; the title, the gap and the chevron opt back in. */
+  pointer-events: none;
+}
+
+.casino-spins-heading button.casino-spins-toggle:hover,
+.casino-spins-heading button.casino-spins-toggle:active {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  transform: none;
+}
+
+.casino-spins-label,
+.casino-spins-gap,
+.casino-spins-chevron {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.casino-spins-label {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.casino-spins-gap {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: stretch;
+}
+
+.casino-spins-chevron {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--muted);
+  transition: transform 150ms ease;
+}
+
+.casino-spins-heading button.casino-spins-toggle:hover .casino-spins-chevron,
+.casino-spins-heading button.casino-spins-toggle:focus-visible .casino-spins-chevron {
+  color: var(--text);
+}
+
+.casino-spins-toggle[aria-expanded="true"] .casino-spins-chevron {
+  transform: rotate(90deg);
+}
+
+.casino-spins-heading > .help-tip {
+  grid-column: 2;
+  grid-row: 1;
+  z-index: 1;
+  margin-left: 0;
+}
+
+.casino-spins-panel[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .casino-spins-chevron {
+    transition: none;
+  }
 }

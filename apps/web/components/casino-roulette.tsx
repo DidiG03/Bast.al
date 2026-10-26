@@ -278,14 +278,15 @@ export function RouletteGame() {
       </Link>
       <div className="page-title-row">
         <div>
-          <h1 style={{ margin: 0 }}>{state.game.name}</h1>
+          <div className="game-title-line">
+            <h1 style={{ margin: 0 }}>{state.game.name}</h1>
+            <button type="button" className="game-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")}>
+              ?
+            </button>
+          </div>
           <p className="muted report-subtitle">{t("European roulette with a single 0, played with your balance.")}</p>
           <p className="game-keys-hint">{t("Press Space to spin.")}</p>
         </div>
-        <button type="button" className="secondary game-rules-button" onClick={() => setRulesOpen(true)}>
-          <span className="game-rules-icon" aria-hidden="true">?</span>
-          {t("Pays and rules")}
-        </button>
       </div>
 
       {state.closed ? (

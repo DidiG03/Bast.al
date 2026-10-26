@@ -181,16 +181,12 @@ test("a card that shows up in the feed during the wait refuses a cards bet", asy
   }
 });
 
-test("a live corners bet waits longer than others, and a Player's live corners stakes on one match are capped", async () => {
+test("a live corners bet uses the same confirmation delay, and a Player's live corners stakes on one match are capped", async () => {
   const match = await liveMatch("Corners");
-  let started = Date.now();
-  await place(sel(match, "match_winner", "home"));
-  const usual = Date.now() - started;
-  started = Date.now();
+  const winner = await place(sel(match, "match_winner", "home"));
   const first = await place(sel(match, "corners_9_5", "over"), 100);
-  assert.ok(Date.now() - started >= 1500, "the corners wait");
-  assert.ok(usual < 1500, "the usual wait is shorter");
-  assert.equal((await reload(first.id)).live.audit.delayMs, 1500);
+  const winnerDelay = (await reload(winner.id)).live.audit.delayMs;
+  assert.equal((await reload(first.id)).live.audit.delayMs, winnerDelay, "corners wait as long as the rest of the match, not a flat extra");
   // 100 of the 150 allowed is on already: another 100 is refused, 50 goes in.
   await assert.rejects(place(sel(match, "corners_9_5", "under"), 100), /limited to 150 ALL a match. You can stake 50.00 ALL more/);
   await place(sel(match, "corners_9_5", "under"), 50);

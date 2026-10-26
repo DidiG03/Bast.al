@@ -1598,6 +1598,8 @@ function BetSlip({
   const idempotency = useIdempotencyKey();
   const topUp = useTopUpRequest();
   const [placing, setPlacing] = useState(false);
+  // Set in the same turn as the click, so a second tap during the countdown cannot start another bet.
+  const placingRef = useRef(false);
   /** Set when a place was refused because the price moved, so the retry takes that new price. */
   const [takeNewPrice, setTakeNewPrice] = useState(false);
   const toast = useToast();
@@ -1755,7 +1757,7 @@ function BetSlip({
 
   async function place(formEvent: FormEvent) {
     formEvent.preventDefault();
-    if (placing || items.length === 0) return;
+    if (placingRef.current || items.length === 0) return;
     // Why the slip can't go yet pops up when they try, instead of sitting in the slip.
     if (blocker) {
       // Too little money: a tap on the message asks their Manager or Owner for more.
@@ -1764,9 +1766,11 @@ function BetSlip({
       return;
     }
     // Before the first wait, so a second tap meanwhile finds the slip already going and does nothing.
+    placingRef.current = true;
     setPlacing(true);
     const token = await getToken();
     if (!token) {
+      placingRef.current = false;
       setPlacing(false);
       return;
     }
@@ -1836,6 +1840,7 @@ function BetSlip({
         }
       }
     } finally {
+      placingRef.current = false;
       setPlacing(false);
     }
   }

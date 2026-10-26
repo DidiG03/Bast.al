@@ -13,7 +13,8 @@ import { RACE_CAP } from "../odds/greyhounds";
 import { competitionKey, lagGate } from "../odds/feed-delay";
 import { countsFromCentre } from "../odds/count-guard";
 import { sameLivePrice, takenWithoutAsking, wrongWayAfterGoal } from "../odds/live-guard";
-import { type FeedMark, LIVE_CORNERS_DELAY_MS, LIVE_CORNERS_MAX_STAKE, type LiveAudit, type LiveState, isCardsMarket, isCornersMarket, newInFeed } from "./late";
+import { confirmationDelay, liveConfirmConfig } from "./live-delay";
+import { type FeedMark, LIVE_CORNERS_MAX_STAKE, type LiveAudit, type LiveState, isCardsMarket, isCornersMarket, newInFeed } from "./late";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
 import { combinedOdds, payoutFor } from "./grading";
 import { MIN_STAKE } from "./bets.dto";
@@ -27,9 +28,8 @@ const EVENTFUL_MS = 90_000;
 const SLOW_FEED_MS = 10_000;
 /** How long the checks with the feed at the end of a live slip's wait may take before the slip is refused. */
 const LIVE_CHECK_TIMEOUT_MS = Number(process.env.LIVE_CHECK_TIMEOUT_MS) || 5_000;
-/** The live wait is at least the feed's recent delay on goals (this share of goals within it) plus this margin (liveWait). */
+/** The live wait uses the feed's recent delay on goals at this share of goals (liveWait). */
 const LIVE_LAG_PERCENTILE = Number(process.env.LIVE_LAG_PERCENTILE) > 0 && Number(process.env.LIVE_LAG_PERCENTILE) < 1 ? Number(process.env.LIVE_LAG_PERCENTILE) : 0.95;
-const LIVE_LAG_MARGIN_MS = Number(process.env.LIVE_LAG_MARGIN_MS ?? 2_000);
 /** The feed's delay on goals is measured over this many days, from at least this many goals (for one competition, or for all), at most this often. */
 const LAG_DAYS = 3;
 const LAG_MIN_GOALS = 10;
@@ -330,7 +330,7 @@ export class BetsService {
       ...(pricedSystem ? [{ stake: pricedSystem.stake, picks: pricedSystem.legs }] : []),
     ];
     await this.assertLiveCornersRoom(actor.id, cornerBets(), this.prisma);
-    // A small move up during the wait is taken. A move down, or a large one, refuses the slip.
+    // The wait, then the checks. A change during it refuses the slip before anything is stored.
     if (await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id)) adjusted = true;
 
     const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : []), ...(pricedBuilder ? [pricedBuilder.stake] : []), ...(pricedSystem ? [pricedSystem.stake] : [])];
@@ -579,10 +579,9 @@ export class BetsService {
 
   /**
    * Live picks wait before they're accepted, so nobody can bet on a goal they've
-   * seen before the feed has. The wait (liveWait) is LIVE_BET_DELAY_MS (8
-   * seconds by default), or LIVE_BET_EVENTFUL_DELAY_MS (12) when the match is
-   * busy (see eventfulReason), or longer when the feed has lately been further
-   * behind the ground than that; a corners pick waits LIVE_CORNERS_DELAY_MS.
+   * seen before the feed has. The wait is that competition's measured goal lag
+   * plus LIVE_LAG_MARGIN_MS (3 s), never under LIVE_BET_DELAY_MS (8 s) and
+   * never over LIVE_BET_MAX_DELAY_MS (20 s). See live-delay.ts.
    *
    * When the slip comes in, each live football match is read straight from the
    * feed (its fixture and timeline, FeedMark), and again at the end of the wait
@@ -622,10 +621,15 @@ export class BetsService {
     const atSubmit = new Map(
       (await this.prisma.event.findMany({ where: { id: { in: liveIds } }, select: { id: true, name: true, provider: true, league: true, liveOddsAt: true, liveCooldownUntil: true, matchCentre: true, liveVersion: true } })).map((event) => [event.id, event]),
     );
-    const { delay, longerBecause, waits } = await this.waitFor(atSubmit, live.some((pick) => isCornersMarket(pick.marketKey)), submittedAt);
-    // A competition whose feed is further behind than the longest wait: a wait wouldn't cover it, so no live bets.
+    const { delay, longerBecause, waits } = await this.waitFor(atSubmit, submittedAt);
+    this.logger.log(
+      `Live bet delay for player ${playerId}: ${delay} ms on ${[...atSubmit.values()].map((event) => event.league).join(", ") || "no competition"} ` +
+        `(measured lag ${waits.lagMs === null ? "none" : `${waits.lagMs} ms`}, margin ${waits.marginMs} ms, min ${waits.minMs} ms, max ${waits.mostMs} ms)` +
+        (longerBecause ? `; noted ${longerBecause}` : ""),
+    );
+    // A competition whose own lag is at least the longest wait: a wait wouldn't cover it, so no live bets.
     if (waits.tooSlow) {
-      this.logger.warn(`Live slip refused for player ${playerId}: the feed for ${waits.tooSlow} is too far behind (${waits.feedLagMs} ms with the margin, ${waits.mostMs} ms the longest wait)`);
+      this.logger.warn(`Live slip refused for player ${playerId}: the feed for ${waits.tooSlow} is too far behind (${waits.lagMs ?? "unknown"} ms measured, ${waits.mostMs} ms the longest wait)`);
       throw new ConflictException(`Live betting on ${waits.tooSlow} is paused: our feed for it is running too far behind. Try a match from another competition.`);
     }
     const askedOdds = new Map(live.map((pick) => [pick, pick.price === null ? null : Number(pick.price)]));
@@ -683,16 +687,16 @@ export class BetsService {
     );
     for (const pick of live) {
       const now = await this.odds.priceForPlayer(playerId, pick.selectionId);
-      if (!now.bettable) throw refuse(now.closed ?? `Live betting on ${pick.label} was paused while your bet was being confirmed. Try again in a moment.`);
-      if (now.score !== pick.score) throw refuse(`The score changed while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
+      if (!now.bettable) throw refuse(now.closed ?? `Live betting on ${pick.label} was paused while your bet was being confirmed. It was not placed, and your stake was not taken.`);
+      if (now.score !== pick.score) throw refuse(`The score changed while your bet on ${pick.label} was being confirmed. It was not placed, and your stake was not taken.`);
       const [home, away] = now.score.split(":").map(Number);
       const markBefore = marksAtSubmit?.get(pick.eventId) ?? null;
       const markAfter = (marksAtConfirm as Map<string, FeedMark> | null)?.get(pick.eventId) ?? null;
       // The feed's fixture can have a goal its prices don't yet.
       if (markAfter && markAfter.home !== null && markAfter.away !== null && (markAfter.home > home || markAfter.away > away)) {
-        throw refuse(`The score changed while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
+        throw refuse(`The score changed while your bet on ${pick.label} was being confirmed. It was not placed, and your stake was not taken.`);
       }
-      const happened = markBefore && markAfter ? newInFeed(markBefore, markAfter, isCardsMarket(pick.marketKey)) : null;
+      const happened = markBefore && markAfter ? newInFeed(markBefore, markAfter, true) : null;
       if (happened) {
         const what = {
           "a goal": `The score changed while your bet on ${pick.label} was being confirmed.`,
@@ -701,7 +705,7 @@ export class BetsService {
           "a penalty": `There was a penalty while your bet on ${pick.label} was being confirmed.`,
           "a card": `A card was shown while your bet on ${pick.label} was being confirmed.`,
         }[happened];
-        throw refuse(`${what} Check the new odds and try again.`);
+        throw refuse(`${what} It was not placed, and your stake was not taken.`);
       }
       const event = shown.get(pick.eventId);
       // Anything the site saw change in the match during the wait (a score, a pause, the bookmaker blocking or reopening it).
@@ -718,11 +722,11 @@ export class BetsService {
       const total = (pair: [number, number] | null) => (pair ? pair[0] + pair[1] : null);
       const countsBefore = countOf(atSubmit.get(pick.eventId)?.matchCentre);
       const countsAfter = countOf(event?.matchCentre);
-      if (isCornersMarket(pick.marketKey) && total(countsBefore.corners) !== null && total(countsAfter.corners) !== null && total(countsAfter.corners)! > total(countsBefore.corners)!) {
-        throw refuse(`A corner was taken while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
+      if (total(countsBefore.corners) !== null && total(countsAfter.corners) !== null && total(countsAfter.corners)! > total(countsBefore.corners)!) {
+        throw refuse(`A corner was taken while your bet on ${pick.label} was being confirmed. It was not placed, and your stake was not taken.`);
       }
-      if (isCardsMarket(pick.marketKey) && total(countsBefore.cards) !== null && total(countsAfter.cards) !== null && total(countsAfter.cards)! > total(countsBefore.cards)!) {
-        throw refuse(`A card was shown while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
+      if (total(countsBefore.cards) !== null && total(countsAfter.cards) !== null && total(countsAfter.cards)! > total(countsBefore.cards)!) {
+        throw refuse(`A card was shown while your bet on ${pick.label} was being confirmed. It was not placed, and your stake was not taken.`);
       }
       const cornerPair = countsAfter.corners;
       const feed = feedPrices.get(pick.selectionId);
@@ -736,7 +740,7 @@ export class BetsService {
       }
       // Live: only the price the slip showed. A different one, higher or lower, is shown first.
       if (pick.price !== null && !sameLivePrice(Number(pick.price), now.odds)) {
-        throw refuse(`The odds changed: ${pick.label} is now ${now.odds.toFixed(2)}. A live bet has to be at the exact price on your slip. Check your slip and place it again.`);
+        throw refuse(`The odds changed: ${pick.label} is now ${now.odds.toFixed(2)}. A live bet has to be at the exact price on your slip. It was not placed, and your stake was not taken.`);
       }
       const reading = this.sync.liveReading(pick.eventId);
       const audit: LiveAudit = {
@@ -776,7 +780,7 @@ export class BetsService {
       // One line per live pick, for checking a case afterwards (the bet keeps the same in live.audit).
       this.logger.log(
         `Live pick confirmed for player ${playerId}: ${pick.label} [${pick.marketKey}] at ${now.score} (fixture ${audit.scoreFromFixture ?? "unknown"}, clock ${audit.clock ?? "unknown"}), asked ${audit.askedOdds ?? "SP"} got ${pick.price === null ? "SP" : Number(pick.price).toFixed(2)}, ` +
-          `submitted ${audit.submittedAt}, confirmed ${audit.confirmedAt}, waited ${delay} ms${longerBecause ? ` (${longerBecause})` : ""}, checks ${checkMs ?? "skipped"} ms, ` +
+          `submitted ${audit.submittedAt}, confirmed ${audit.confirmedAt}, waited ${delay} ms (lag ${waits.lagMs === null ? "unmeasured" : `${waits.lagMs} ms`} + ${waits.marginMs} ms, clamped ${waits.minMs}–${waits.mostMs} ms)${longerBecause ? ` (${longerBecause})` : ""}, checks ${checkMs ?? "skipped"} ms, ` +
           `feed read ${audit.feedAtSubmit ?? "never"} then ${audit.feedAtConfirm ?? "never"}, bookmaker update ${audit.bookmakerUpdate ?? "unknown"}, ` +
           `feed events ${markBefore ? `${markBefore.events} (last ${markBefore.last ?? "none"})` : "unknown"} then ${markAfter ? `${markAfter.events} (last ${markAfter.last ?? "none"})` : "unknown"}`,
       );
@@ -785,18 +789,17 @@ export class BetsService {
   }
 
   /**
-   * The wait a live slip on these matches gets (confirmLive): busy matches
-   * wait longer (eventfulReason), a corners pick longer still.
+   * The wait a live slip on these matches gets (confirmLive): the slowest
+   * competition's measured lag plus the margin, inside the min and max.
+   * A recent goal is noted (longerBecause) and does not add to the wait.
    */
   private async waitFor(
     events: Map<string, { id: string; provider: string; league: string; liveOddsAt: Date | null; liveCooldownUntil: Date | null }>,
-    corners: boolean,
     now: Date,
   ) {
     const longerBecause = await this.eventfulReason([...events.keys()], events, now);
     const waits = await this.liveWait([...events.values()]);
-    const usual = longerBecause ? waits.busyMs : waits.usualMs;
-    return { delay: corners ? Math.max(usual, waits.cornersMs) : usual, longerBecause, waits };
+    return { delay: waits.usualMs, longerBecause, waits };
   }
 
   /**
@@ -818,26 +821,22 @@ export class BetsService {
         select: { id: true, provider: true, league: true, liveOddsAt: true, liveCooldownUntil: true },
       })).map((event) => [event.id, event]),
     );
-    const { delay, longerBecause, waits } = await this.waitFor(events, live.some(([, quote]) => isCornersMarket(quote.marketKey)), new Date());
+    const { delay, longerBecause, waits } = await this.waitFor(events, new Date());
     return { live: true, waitMs: delay, checkMs: waits.checkMs, longerBecause };
   }
 
   /**
-   * How long live picks wait (see confirmLive): the usual wait, the wait on a
-   * busy match, the wait with a corners pick, and how long the checks with the
-   * feed at the end may take on top. The wait is at least the feed's delay on
-   * goals (its LIVE_LAG_PERCENTILE, 95th by default, over the last LAG_DAYS
-   * days: lagStats) plus LIVE_LAG_MARGIN_MS, for each match's competition when
-   * it has LAG_MIN_GOALS_COMPETITION goals measured, otherwise for the whole
-   * feed when that has LAG_MIN_GOALS, up to LIVE_BET_MAX_DELAY_MS.
-   * A competition is refused (`tooSlow`) only from its own goals, and only
-   * when that delay is longer than the longest wait (30 s), the same line the
-   * board uses to mark it pre-match only. A shorter delay lengthens the wait
-   * instead of closing the competition. A slow average across every league
-   * does not close one that hasn't been measured, and when every measured
-   * competition is over the line the figures are treated as broken and
-   * nothing is refused.
-   * LIVE_BET_ADAPTIVE_DELAY=off keeps the waits fixed.
+   * How long live picks wait (see confirmLive). The wait is the measured goal
+   * lag for each match's competition (its 95th percentile over the last
+   * LAG_DAYS days) plus the margin, never under the minimum and never over
+   * the maximum (live-delay.ts). A competition is refused (`tooSlow`) only
+   * from its own goals, and only when that lag is at least the maximum: the
+   * same line the board uses to mark it pre-match only. A shorter lag
+   * lengthens the wait instead. With too few goals of its own, the whole
+   * feed's lag is used for the wait and the competition stays open. When
+   * every measured competition is over the line the figures are treated as
+   * broken and nothing is refused. LIVE_BET_ADAPTIVE_DELAY=off keeps the
+   * wait at the minimum.
    */
   async liveWait(events: Array<{ name?: string; provider: string; league: string }> = []): Promise<{
     usualMs: number;
@@ -845,30 +844,42 @@ export class BetsService {
     cornersMs: number;
     checkMs: number;
     mostMs: number;
+    minMs: number;
+    marginMs: number;
+    /** The measured lag the wait was built from, before the margin. Null when nothing is measured. */
+    lagMs: number | null;
     feedLagMs: number | null;
     tooSlow: string | null;
   }> {
-    const base = Number(process.env.LIVE_BET_DELAY_MS ?? 8_000);
-    const eventful = Math.max(base, Number(process.env.LIVE_BET_EVENTFUL_DELAY_MS ?? 12_000));
-    const most = Math.max(eventful, Number(process.env.LIVE_BET_MAX_DELAY_MS ?? 30_000));
+    const config = liveConfirmConfig();
     const stats = await this.feedLag();
-    const maxLagMs = process.env.LIVE_COMPETITION_MAX_LAG_MS === "0" ? 0 : Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) > 0 ? Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) : 30_000;
+    const maxLagMs = process.env.LIVE_COMPETITION_MAX_LAG_MS === "0" ? 0 : Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) > 0 ? Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) : config.maxMs;
     const gate = lagGate(stats, { maxLagMs, minGoals: LAG_MIN_GOALS_COMPETITION });
-    /** The delay to cover for one match's competition (ms), margin included, or null when not enough is measured or the figures are broken. */
-    const needed = (event: { provider: string; league: string }) => {
+    /** That competition's measured lag in ms, or the whole feed's, or null when neither is known. */
+    const measured = (event: { provider: string; league: string }) => {
       if (!stats || gate.broken) return null;
       const own = stats.byCompetition[competitionKey(event.provider, event.league)];
       const group = own && own.goals >= LAG_MIN_GOALS_COMPETITION ? own : stats.all && stats.all.goals >= LAG_MIN_GOALS ? stats.all : null;
-      return group ? group.p * 1000 + LIVE_LAG_MARGIN_MS : null;
+      return group ? group.p * 1000 : null;
     };
     const asked = events.length > 0 ? events : [{ provider: "", league: "" }];
-    const lags = asked.map((event) => ({ event, ms: needed(event) }));
+    const lags = asked.map((event) => ({ event, ms: measured(event) }));
     const slowest = lags.reduce<(typeof lags)[number] | null>((top, row) => (row.ms !== null && (top === null || row.ms > (top.ms ?? 0)) ? row : top), null);
-    const feedLagMs = slowest?.ms ?? null;
+    const lagMs = slowest?.ms ?? null;
+    const usualMs = confirmationDelay(lagMs, config);
     const tooSlow = events.find((event) => gate.slow.includes(competitionKey(event.provider, event.league)))?.league ?? null;
-    const usualMs = Math.min(most, Math.max(base, feedLagMs ?? 0));
-    const busyMs = Math.min(most, Math.max(eventful, usualMs + (eventful - base)));
-    return { usualMs, busyMs, cornersMs: Math.max(busyMs, LIVE_CORNERS_DELAY_MS), checkMs: LIVE_CHECK_TIMEOUT_MS + 1_000, mostMs: most, feedLagMs, tooSlow };
+    return {
+      usualMs,
+      busyMs: usualMs,
+      cornersMs: usualMs,
+      checkMs: LIVE_CHECK_TIMEOUT_MS + 1_000,
+      mostMs: config.maxMs,
+      minMs: config.minMs,
+      marginMs: config.marginMs,
+      lagMs,
+      feedLagMs: lagMs === null ? null : lagMs + config.marginMs,
+      tooSlow,
+    };
   }
 
   /** The feed's delay on goals lately (lagStats), worked out at most every LAG_REFRESH_MS; null with LIVE_BET_ADAPTIVE_DELAY=off. */

@@ -16434,6 +16434,7 @@ html[data-theme="light"] .role-player .bet-status-lost {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
+  color: inherit;
   font-variant-numeric: tabular-nums;
 }
 

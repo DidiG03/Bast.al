@@ -117,7 +117,7 @@ test("a live pick is only ever taken at the price on the slip, whatever the sett
   assert.equal(await prisma.bet.count({ where: { selectionId: homeOf(event).id } }), 0);
 });
 
-test("how long a slip would wait: nothing for pre-match picks; the usual wait for a live one, longer on a busy match", async () => {
+test("how long a slip would wait: nothing for pre-match picks; the minimum for a live one, and a recent goal does not add to it", async () => {
   const pre = await match("Pre wait");
   assert.deepEqual(await bets.plannedWait(actor, [homeOf(pre).id]), { live: false, waitMs: 0, checkMs: 0, longerBecause: null });
   const quiet = await match("Quiet wait", liveExtra());
@@ -128,7 +128,7 @@ test("how long a slip would wait: nothing for pre-match picks; the usual wait fo
   const busy = await match("Busy wait", liveExtra());
   await prisma.goalSeen.create({ data: { eventId: busy.id, homeScore: 1, awayScore: 0, source: "odds" } });
   const longer = await bets.plannedWait(actor, [homeOf(busy).id, homeOf(pre).id]);
-  assert.equal(longer.waitMs, 600);
+  assert.equal(longer.waitMs, 300, "a recent goal is noted and does not lengthen the wait");
   assert.equal(longer.longerBecause, "a goal in the last minutes");
 });
 

@@ -228,14 +228,14 @@ test("every live bet keeps how it was confirmed: when, at what price, and how fr
   assert.ok(live.audit.feedAtSubmit && live.audit.feedAtConfirm);
 });
 
-test("the wait is longer on a match that just had a goal", async () => {
+test("a recent goal is noted and does not lengthen the confirmation wait", async () => {
   const match = await liveMatch("Busy match", { homeScore: 1 });
   await prisma.goalSeen.create({ data: { eventId: match.id, homeScore: 1, awayScore: 0, elapsed: 29, source: "odds" } });
   const started = Date.now();
   const placed = await place(match);
-  assert.ok(Date.now() - started >= 1200, "it waited the longer delay");
+  assert.ok(Date.now() - started >= 600, "it waited the competition's delay");
   const { live } = await prisma.bet.findUniqueOrThrow({ where: { id: placed.bets[0].id } });
-  assert.equal(live.audit.delayMs, 1200);
+  assert.equal(live.audit.delayMs, 600);
   assert.equal(live.audit.longerBecause, "a goal in the last minutes");
 });
 

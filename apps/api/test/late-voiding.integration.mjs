@@ -380,9 +380,9 @@ test("a competition whose feed has been too far behind takes no live bets, and t
     }
     bets.lag = null;
     await assert.rejects(place(slow), /Live betting on Slow League is paused: our feed for it is running too far behind/);
-    // Quick League: 95% of goals within 6 s, plus the 2 s margin: an 8 s wait (this test's usual one is 0.6 s).
+    // Quick League: 95% of goals within 6 s, plus the 3 s margin: a 9 s wait (this test's minimum is 0.6 s).
     const waits = await bets.liveWait([{ provider: "api-football", league: "Quick League" }]);
-    assert.equal(waits.usualMs, 8_000);
+    assert.equal(waits.usualMs, 9_000);
     assert.equal(waits.tooSlow, null);
     // A goal on this match that certainly reached the site 45 s late: no more live bets on it.
     await sync["stopSlowMatch"](quick.id, quick.name, 45_000);

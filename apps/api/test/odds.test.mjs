@@ -8,6 +8,7 @@ import { mockFetchJson } from "../dist/odds/mock-feed.js";
 import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCooldown, marketGroup, mergePause, sameLivePrice, sameScorePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
 import { countLineDead, countSelectionDead, countStatsStale } from "../dist/odds/count-guard.js";
 import { lagSample } from "../dist/odds/feed-delay.js";
+import { confirmationDelay } from "../dist/bets/live-delay.js";
 import { applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 import { hotMatches, minuteRoom } from "../dist/odds/live-polling.js";
 
@@ -694,6 +695,15 @@ test("a corner pauses corners only, a yellow pauses cards only, and a red pauses
   assert.ok(pause("red", "cards_3_5"));
   assert.equal(pause("red", "corners_9_5"), null);
   assert.equal(pause("goal", "corners_9_5"), null, "a goal leaves corners open");
+});
+
+test("a live confirmation wait is the competition's lag plus 3 s, between 8 s and 20 s", () => {
+  const config = { marginMs: 3_000, minMs: 8_000, maxMs: 20_000 };
+  assert.equal(confirmationDelay(null, config), 8_000, "nothing measured yet: the minimum");
+  assert.equal(confirmationDelay(4_000, config), 8_000, "4 s of lag plus 3 s is still under the minimum");
+  assert.equal(confirmationDelay(12_000, config), 15_000);
+  assert.equal(confirmationDelay(18_000, config), 20_000, "18 s plus the margin stops at the maximum");
+  assert.equal(confirmationDelay(40_000, config), 20_000);
 });
 
 test("a live bet is never taken at a price other than the slip price", () => {

@@ -8,6 +8,7 @@ import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
 import { competitionKey, feedDelay, lagGate, lagStats } from "./feed-delay";
 import { LATE_REASONS, timelineOf } from "../bets/late";
+import { liveConfirmConfig } from "../bets/live-delay";
 import { countSelectionDead, countStatsStale } from "./count-guard";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
@@ -46,9 +47,15 @@ const LIVE_SENT_KEPT_MS = 30 * 60_000;
  * percentile (lagStats, over the last LIVE_LIMIT_DAYS days, from at least
  * LIVE_COMPETITION_MIN_GOALS goals) is offered before kick-off only. A shorter
  * delay lengthens the confirmation wait instead. LIVE_COMPETITION_MAX_LAG_MS=0
- * turns it off.
+ * turns it off. Unset, the ceiling is the confirmation wait's maximum (20 s).
  */
-const LIVE_COMPETITION_MAX_LAG_MS = process.env.LIVE_COMPETITION_MAX_LAG_MS !== undefined && process.env.LIVE_COMPETITION_MAX_LAG_MS !== "" ? Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) : 30_000;
+function competitionMaxLagMs(): number {
+  const set = process.env.LIVE_COMPETITION_MAX_LAG_MS;
+  if (set === "0") return 0;
+  if (set !== undefined && set !== "" && Number(set) > 0) return Number(set);
+  // The same ceiling as the confirmation wait (live-delay.ts), 20 s unless LIVE_BET_MAX_DELAY_MS says otherwise.
+  return liveConfirmConfig().maxMs;
+}
 const LIVE_COMPETITION_MIN_GOALS = Number(process.env.LIVE_COMPETITION_MIN_GOALS) > 0 ? Number(process.env.LIVE_COMPETITION_MIN_GOALS) : 5;
 const LIVE_LIMIT_DAYS = 3;
 /**
@@ -711,22 +718,22 @@ export class OddsService {
   /**
    * The competitions with live limits (LiveLimits), worked out at most every
    * LIVE_LIMITS_TTL_MS: those whose feed is too slow for live betting
-   * (LIVE_COMPETITION_MAX_LAG_MS), and those whose recent live matches never
+   * (competitionMaxLagMs()), and those whose recent live matches never
    * had a live price for cards, or for corners.
    */
   async liveLimits(): Promise<LiveLimits> {
     if (this.limitsKept && Date.now() - this.limitsKept.at < LIVE_LIMITS_TTL_MS) return this.limitsKept.value;
     return this.shared("live-limits", async () => {
       const slow = new Set<string>();
-      if (LIVE_COMPETITION_MAX_LAG_MS > 0) {
+      if (competitionMaxLagMs() > 0) {
         const lag = await this.feedLagStats(LIVE_LIMIT_DAYS, 0.95).catch(() => null);
-        const gate = lagGate(lag, { maxLagMs: LIVE_COMPETITION_MAX_LAG_MS, minGoals: LIVE_COMPETITION_MIN_GOALS });
+        const gate = lagGate(lag, { maxLagMs: competitionMaxLagMs(), minGoals: LIVE_COMPETITION_MIN_GOALS });
         if (gate.broken) {
           const samples = Object.entries(lag?.byCompetition ?? {})
             .filter(([, group]) => group.goals >= LIVE_COMPETITION_MIN_GOALS)
             .map(([name, group]) => `${name} ${group.p}s (${group.goals} goals)`)
             .join("; ");
-          this.logger.error(`Live lag stats look broken: every measured competition is at or over ${LIVE_COMPETITION_MAX_LAG_MS / 1000}s. Live betting stays open instead of closing all of it. Samples: ${samples || "none"}`);
+          this.logger.error(`Live lag stats look broken: every measured competition is at or over ${competitionMaxLagMs() / 1000}s. Live betting stays open instead of closing all of it. Samples: ${samples || "none"}`);
         } else for (const competition of gate.slow) slow.add(competition);
       }
       const since = new Date(Date.now() - LIVE_STATS_DAYS * 86_400_000);
@@ -755,7 +762,7 @@ export class OddsService {
       const value = { slow, noCards, noCorners };
       const before = this.limitsKept?.value;
       if (!before || [...slow].join("|") !== [...before.slow].join("|")) {
-        this.logger.log(slow.size > 0 ? `Live betting off (feed too slow, ${LIVE_COMPETITION_MAX_LAG_MS / 1000} s or more at the 95th percentile) in: ${[...slow].join(", ")}` : "Live betting on in every competition: none has a feed too slow for it");
+        this.logger.log(slow.size > 0 ? `Live betting off (feed too slow, ${competitionMaxLagMs() / 1000} s or more at the 95th percentile) in: ${[...slow].join(", ")}` : "Live betting on in every competition: none has a feed too slow for it");
       }
       this.limitsKept = { at: Date.now(), value };
       return value;
@@ -819,7 +826,7 @@ export class OddsService {
       return { reason, pauses: rows.length, averageMs: pauseMs(rows), fresh: rows.filter((row) => row.fresh).length };
     });
     const lag = await this.feedLagStats(days, 0.95).catch(() => null);
-    const gate = lagGate(lag, { maxLagMs: LIVE_COMPETITION_MAX_LAG_MS, minGoals: LIVE_COMPETITION_MIN_GOALS });
+    const gate = lagGate(lag, { maxLagMs: competitionMaxLagMs(), minGoals: LIVE_COMPETITION_MIN_GOALS });
     const polling = this.sync.pollingHealth();
     const names = new Map((await this.prisma.event.findMany({ where: { id: { in: polling.matches.map((m) => m.eventId) } }, select: { id: true, name: true } })).map((e) => [e.id, e.name]));
     return {
@@ -860,7 +867,7 @@ export class OddsService {
         pauses: pauses.filter((pause) => pause.eventId === match.id).length,
         averagePauseMs: pauseMs(pauses.filter((pause) => pause.eventId === match.id)),
       })),
-      liveLimits: { maxLagMs: LIVE_COMPETITION_MAX_LAG_MS, slow: [...limits.slow], noCards: [...limits.noCards], noCorners: [...limits.noCorners] },
+      liveLimits: { maxLagMs: competitionMaxLagMs(), slow: [...limits.slow], noCards: [...limits.noCards], noCorners: [...limits.noCorners] },
       lag: {
         broken: gate.broken,
         ignored: lag?.ignored ?? 0,

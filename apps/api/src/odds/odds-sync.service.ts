@@ -104,7 +104,7 @@ const LIVE_SCORE_SOURCE_MS = 60_000;
  * went in (GoalSeen.lagMinMs) takes no more live bets: no wait a Player
  * would sit through covers that feed. LIVE_SLOW_MATCH_MS=0 turns it off.
  */
-const LIVE_SLOW_MATCH_MS = process.env.LIVE_SLOW_MATCH_MS === "0" ? Infinity : Number(process.env.LIVE_SLOW_MATCH_MS) || 30_000;
+const LIVE_SLOW_MATCH_MS = process.env.LIVE_SLOW_MATCH_MS === "0" ? Infinity : Number(process.env.LIVE_SLOW_MATCH_MS) || 20_000;
 /** Bets placed on the same match within this long share one check with the feed. */
 const VERIFY_SHARE_MS = 2_000;
 /** Markets settled from match statistics rather than the score. */

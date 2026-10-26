@@ -29,8 +29,11 @@ const CLOCK: Record<string, string> = { HT: "HT", FT: "FT", BT: "BT", SUSP: "INT
 const CLOCK_CATCHUP_MIN = 5;
 const TICKING = new Set(["1H", "2H", "ET"]);
 
+/** A match clock. `elapsed` may be missing on a bet, where the feed never sent a minute. */
+type ClockEvent = { elapsed?: number | null; elapsedAt?: string | null; period?: string | null };
+
 /** The minute to show: the feed's, plus how long since it last moved, while the half is being played. */
-export function liveMinute(event: Pick<OddsEvent, "elapsed" | "elapsedAt" | "period">, now = serverNow()): number | null {
+export function liveMinute(event: ClockEvent, now = serverNow()): number | null {
   if (event.elapsed === null || event.elapsed === undefined) return null;
   const at = event.elapsedAt ? Date.parse(event.elapsedAt) : NaN;
   if (!Number.isFinite(at) || (event.period && !TICKING.has(event.period))) return event.elapsed;
@@ -39,7 +42,7 @@ export function liveMinute(event: Pick<OddsEvent, "elapsed" | "elapsedAt" | "per
 }
 
 /** The clock on a match row: "67'", "HT", "FT". */
-export function liveClock(event: Pick<OddsEvent, "elapsed" | "elapsedAt" | "period">, t: T): string {
+export function liveClock(event: ClockEvent, t: T): string {
   const code = event.period ? CLOCK[event.period] : undefined;
   if (code) return code;
   const minute = liveMinute(event);
@@ -47,7 +50,7 @@ export function liveClock(event: Pick<OddsEvent, "elapsed" | "elapsedAt" | "peri
 }
 
 /** A live match's pill: "Half-time" during the break, otherwise "Live 67'". */
-export function livePill(event: Pick<OddsEvent, "elapsed" | "elapsedAt" | "period">, t: T): string {
+export function livePill(event: ClockEvent, t: T): string {
   const pause = event.period ? BREAKS[event.period] : undefined;
   if (pause) return t(pause);
   const minute = liveMinute(event);

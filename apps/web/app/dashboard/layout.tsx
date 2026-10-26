@@ -15,6 +15,7 @@ import { getMe } from "../../lib/api-server";
 import { LanguageToggle } from "../../components/language-toggle";
 import { getT } from "../../lib/i18n/server";
 import { BrandMark } from "../../components/brand-mark";
+import { CasinoNavBack } from "../../components/casino-nav-back";
 
 export default async function DashboardLayout({
   children,
@@ -81,6 +82,7 @@ export default async function DashboardLayout({
         <DashboardSidebar role={me.role} username={me.username} initialCollapsed={initialCollapsed} casinoOpen={me.casinoOpen ?? false} />
         <main className="dashboard-content">
           <header className="dashboard-topbar">
+            <CasinoNavBack />
             <Link href="/dashboard" className="topbar-brand">
               <BrandMark />
               <span>Shtatat.al</span>

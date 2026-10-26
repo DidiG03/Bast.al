@@ -273,9 +273,6 @@ export function RouletteGame() {
 
   return (
     <div className="stack casino-page">
-      <Link className="casino-back" href="/dashboard/casino">
-        ‹ {t("Casino")}
-      </Link>
       <div className="page-title-row">
         <div>
           <div className="game-title-line">

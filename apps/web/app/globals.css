@@ -7244,14 +7244,15 @@ button.is-blocked {
 /* ============================================================
    Casino: the lobby, and roulette
    ============================================================ */
-.casino-back {
-  align-self: flex-start;
+.topbar-casino {
+  margin-right: auto;
   color: var(--muted);
   font-weight: 700;
   text-decoration: none;
+  white-space: nowrap;
 }
 
-.casino-back:hover {
+.topbar-casino:hover {
   color: var(--text);
 }
 

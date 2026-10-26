@@ -694,28 +694,38 @@ const normalize = (value: string | number) =>
     .replace(/\s+/g, "")
     .replace(/&/g, "/");
 
-function livePrice(value?: LiveValue): number {
+/** The number the bookmaker sent, including one it has marked suspended. A missing or unusable number is 0. */
+function liveOdd(value?: LiveValue): number {
   const odds = Number(value?.odd);
-  return value && !value.suspended && Number.isFinite(odds) && odds > 1 ? odds : 0;
+  return Number.isFinite(odds) && odds > 1 ? odds : 0;
+}
+
+/**
+ * Whether this outcome is off the board. A suspended outcome still carries
+ * its number (liveOdd), so a pause can see that the price moved. An outcome
+ * with no number is off too.
+ */
+function outcomeHeld(value?: LiveValue): boolean {
+  return !value || value.suspended === true || liveOdd(value) === 0;
 }
 
 function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: string): FeedLiveMarket[] {
   const base = (MARKET_INDEX.get(spec.order)?.index ?? MARKETS.length) * 10;
   if (spec.kind === "fixed") {
-    const selections = spec.values.map(([aliases, key, name], sortOrder) => ({
-      key,
-      name: name(home, away),
-      odds: livePrice(values.find((v) => aliases.includes(normalize(v.value)))),
-      sortOrder,
-    }));
+    const selections = spec.values.map(([aliases, key, name], sortOrder) => {
+      const found = values.find((v) => aliases.includes(normalize(v.value)));
+      return { key, name: name(home, away), odds: liveOdd(found), held: outcomeHeld(found), sortOrder };
+    });
     const priced = selections.filter((s) => s.odds > 0).length;
     // A two- or three-way market is off the board if any outcome is; a partial one while none is priced.
-    const suspended = spec.partial ? priced === 0 : priced < selections.length;
-    return [{ key: spec.key, name: spec.name(home, away), sortOrder: base, selections: spec.partial ? selections.filter((s) => s.odds > 0) : selections, suspended }];
+    // The number is kept either way, so a pause can tell a new price from the one before the event.
+    const suspended = spec.partial ? priced === 0 : selections.some((selection) => selection.held);
+    const published = selections.map((selection) => ({ key: selection.key, name: selection.name, odds: selection.odds, sortOrder: selection.sortOrder }));
+    return [{ key: spec.key, name: spec.name(home, away), sortOrder: base, selections: spec.partial ? published.filter((s) => s.odds > 0) : published, suspended }];
   }
   if (spec.kind === "scores") {
     const selections = values
-      .map((v) => ({ match: /^(\d+)[:-](\d+)$/.exec(normalize(v.value)), odds: livePrice(v) }))
+      .map((v) => ({ match: /^(\d+)[:-](\d+)$/.exec(normalize(v.value)), odds: v.suspended ? 0 : liveOdd(v) }))
       .filter((v): v is { match: RegExpExecArray; odds: number } => v.match !== null && v.odds > 0)
       .sort((a, b) => Number(a.match[1]) - Number(b.match[1]) || Number(a.match[2]) - Number(b.match[2]))
       .map((v, sortOrder) => ({ key: `${v.match[1]}-${v.match[2]}`, name: `${v.match[1]}–${v.match[2]}`, odds: v.odds, sortOrder }));
@@ -773,15 +783,15 @@ function liveLines(values: LiveValue[], prefix: string, name: (line: string) => 
   return [...byLine]
     .map(([line, { over, under }]) => {
       const selections = [
-        { key: "over", name: `Over ${line}`, odds: livePrice(over), sortOrder: 0 },
-        { key: "under", name: `Under ${line}`, odds: livePrice(under), sortOrder: 1 },
+        { key: "over", name: `Over ${line}`, odds: liveOdd(over), sortOrder: 0 },
+        { key: "under", name: `Under ${line}`, odds: liveOdd(under), sortOrder: 1 },
       ];
       return {
         key: `${prefix}_${line.replace(".", "_")}`,
         name: name(line),
         sortOrder: base + Math.min(9, Math.floor(Number(line))),
         selections,
-        suspended: selections.some((selection) => selection.odds === 0),
+        suspended: outcomeHeld(over) || outcomeHeld(under),
       };
     })
     .filter((market) => market.selections.some((selection) => selection.odds > 0))

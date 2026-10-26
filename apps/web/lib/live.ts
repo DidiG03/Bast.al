@@ -27,7 +27,7 @@ type T = (text: string, vars?: Record<string, string | number>) => string;
 const CLOCK: Record<string, string> = { HT: "HT", FT: "FT", BT: "BT", SUSP: "INT", INT: "INT", ET: "ET", P: "PEN" };
 
 /** Minutes to add to the feed's last minute while play is going, and no more than this: a stuck update must not run the clock on. */
-const CLOCK_CATCHUP_MIN = 5;
+const CLOCK_CATCHUP_MIN = 1;
 const TICKING = new Set(["1H", "2H", "ET"]);
 
 /** A match clock. `elapsed` may be missing on a bet, where the feed never sent a minute. */

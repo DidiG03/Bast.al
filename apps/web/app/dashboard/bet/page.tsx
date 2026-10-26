@@ -213,7 +213,14 @@ function BetPage() {
           })
           .catch(() => undefined);
       }
-      const [live, upcoming] = await Promise.all([livePromise, only === "live" && lists.current.upcoming ? lists.current.upcoming : list("upcoming")]);
+      const [fetchedLive, upcoming] = await Promise.all([livePromise, only === "live" && lists.current.upcoming ? lists.current.upcoming : list("upcoming")]);
+      // A list that was already loading can come back without a pause the push just showed. The pause stays until it ends.
+      const previous = new Map((lists.current.live ?? []).map((event) => [event.id, event]));
+      const live = fetchedLive.map((event) => {
+        const old = previous.get(event.id);
+        if (event.marketPause || !old?.marketPause || Date.parse(old.marketPause.until) <= Date.now()) return event;
+        return { ...event, marketPause: old.marketPause };
+      });
       // Nothing changed (the API said so), or the Player switched sport meanwhile: the page keeps what it has.
       if ((live === lists.current.live && upcoming === lists.current.upcoming) || sportRef.current !== sport) return;
       lists.current = { live, upcoming };
@@ -1145,7 +1152,8 @@ const MatchCard = memo(function MatchCard({
   const toggleLabel = expanded ? t("Fewer markets") : tn(more, "{count} more market", "{count} more markets");
   const scored = (event.live || over) && event.homeScore !== null && event.awayScore !== null;
   const mainHeld = Boolean(playing && inRow && (inRow.suspended || inRow.selections.every((selection) => selection.suspended)));
-  const winnerHeld = playing && event.bettable && !event.allMarketsSuspended && !event.marketPause && Boolean(inRow && inRow.key === "match_winner" && mainHeld && more > 0);
+  const rowOpen = (market: OddsEvent["markets"][number]) => !market.suspended && !market.stale && market.selections.some((selection) => !selection.suspended);
+  const winnerHeld = playing && event.bettable && !event.marketPause && Boolean(inRow && inRow.key === "match_winner" && mainHeld && event.markets.some((market) => market.id !== inRow.id && rowOpen(market)));
   const pause = over
     ? { text: breakPause(event) ?? "", tone: " is-finished" }
     : event.live && !event.bettable
@@ -1528,6 +1536,7 @@ function PauseBanner({ pause }: { pause: MarketPause }) {
     return () => window.clearInterval(timer);
   }, []);
   const seconds = now === null ? null : Math.max(0, Math.ceil((until - now) / 1000));
+  if (now !== null && now >= until) return null;
   const names = pause.markets.map((name) => ts(name)).join(", ");
   const others = pause.count - pause.markets.length;
   const markets = others > 0 ? tn(others, "{markets} and {count} more", "{markets} and {count} more", { markets: names }) : names;

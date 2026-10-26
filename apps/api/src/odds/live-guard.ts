@@ -65,6 +65,18 @@ export function cooldownFor(before: LiveReading, after: LiveReading, swing: bool
   return null;
 }
 
+/**
+ * The same goal must not start another pause. `key` is the score ("2:1").
+ * A new score is a new goal and does start one. A red card or a VAR check
+ * is not a score, so it is never this.
+ */
+export function sameScorePause(active: { reason: string | null; until: Date | null } | null, nextReason: string, previousKey: string | null, nextKey: string, now: Date): boolean {
+  if (nextReason !== "goal" && nextReason !== "ahead") return false;
+  if (!active?.until || active.until <= now) return false;
+  if (active.reason !== "goal" && active.reason !== "ahead") return false;
+  return previousKey === nextKey;
+}
+
 /** Keeps the later of two pauses, so a short one never cuts a longer one short. */
 export function laterCooldown(current: { until: Date | null; reason: string | null }, next: { until: Date; reason: CooldownReason } | null): { until: Date | null; reason: string | null } {
   if (!next) return current;

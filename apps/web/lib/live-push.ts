@@ -38,8 +38,11 @@ export function applyDelta(event: OddsEvent, delta: LiveDelta | undefined): Odds
       marketChanged = true;
       return { ...selection, price: quote.price, suspended: quote.suspended };
     });
-    // "Paused" only while our pause is on this market. "Suspended" only when the bookmaker's own status says so.
-    const paused = state ? (rowWord(state.paused, state.suspended, state.stale) === "paused" ? state.paused : null) : market.paused;
+    // "Paused" only while our pause is on this market. A poll that drops the reason while the match pause is still running does not flip the row to "Suspended".
+    const headerPause = delta.header && "marketPause" in delta.header ? delta.header.marketPause : event.marketPause;
+    const pauseRunning = Boolean(headerPause && Date.parse(headerPause.until) > Date.now());
+    let paused = state ? (rowWord(state.paused, state.suspended, state.stale) === "paused" ? state.paused : null) : market.paused;
+    if (state && !state.paused && state.suspended && pauseRunning && market.paused) paused = market.paused;
     if (!marketChanged && paused === market.paused) return market;
     changed = true;
     return { ...market, ...(state !== undefined ? { suspended, stale: state.stale } : {}), paused, selections };

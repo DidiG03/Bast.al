@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
-import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCooldown, marketGroup, mergePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
+import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCooldown, marketGroup, mergePause, sameScorePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
 import { applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 import { hotMatches, minuteRoom } from "../dist/odds/live-polling.js";
 
@@ -106,6 +106,7 @@ test("live odds map onto our markets, and a suspended outcome suspends its marke
   assert.equal(low.suspended, true, "no Under 1.5 price");
   assert.equal(goals.suspended, true, "Under 2.5 is suspended");
   assert.equal(goals.selections[0].odds, 2.1, "each line keeps its own price");
+  assert.equal(goals.selections[1].odds, 1.7, "a suspended price is kept, so a pause can see that it moved");
   assert.equal(parseLiveOdds(liveRaw({ status: { stopped: false, blocked: true } }), "A", "B").stopped, true);
 });
 
@@ -159,10 +160,11 @@ test("a real /odds/live answer maps onto our markets", () => {
   assert.equal(stopped.stopped, true);
   assert.deepEqual(
     stopped.markets.map((m) => m.key),
-    ["match_winner", "double_chance", "draw_no_bet", "odd_even", "h2_btts"],
+    ["match_winner", "double_chance", "goals_2_5", "goals_3_5", "draw_no_bet", "home_goals_1_5", "odd_even", "h2_btts", "corners_3_5"],
   );
-  // Everything in this answer is suspended: fixed markets come back off the board; lines and correct score, with nothing priced, are left out, which suspends them.
+  // Everything in this answer is suspended, and the prices are kept so a pause can see a move. A suspended scoreline is still left out.
   assert.ok(stopped.markets.every((m) => m.suspended));
+  assert.ok(stopped.markets.find((m) => m.key === "goals_2_5").selections.every((s) => s.odds > 1));
 
   const open = parseLiveOdds(response[1], "Chile", "Switzerland");
   const byKey = Object.fromEntries(open.markets.map((m) => [m.key, m]));
@@ -339,6 +341,27 @@ test("a market the feed hasn't priced live for 5 minutes is stale; the banner li
     now,
   );
   assert.deepEqual(summary, { reason: "goal", count: 2, markets: ["Match winner", "Total goals 2.5"], until: new Date(now.getTime() + 90_000).toISOString(), exact: false });
+});
+
+test("the same goal does not start another pause, and the banner ends with the last market", () => {
+  const start = new Date("2026-01-01T12:00:00Z");
+  const later = new Date(start.getTime() + 47_000);
+  const active = { reason: "goal", until: new Date(start.getTime() + 90_000) };
+  assert.equal(sameScorePause(active, "goal", "1:0", "1:0", later), true, "the same score 47 s later");
+  assert.equal(sameScorePause(active, "ahead", "1:0", "1:0", later), true, "the timeline repeating that score");
+  assert.equal(sameScorePause(active, "goal", "1:0", "2:0", later), false, "a new goal");
+  assert.equal(sameScorePause(active, "red", "1:0", "1:0", later), false, "a red card is its own pause");
+  assert.equal(sameScorePause({ reason: "goal", until: new Date(start.getTime() + 10_000) }, "goal", "1:0", "1:0", later), false, "after the pause has ended");
+
+  const now = new Date("2026-01-01T12:00:10Z");
+  const opened = { name: "Match winner", sortOrder: 0, livePausedAt: start, livePausedUntil: new Date(now.getTime() - 1_000), liveReopenFrom: new Date(start.getTime() + 15_000), livePauseReason: "goal" };
+  assert.equal(pauseSummary([opened], now), null, "every market reopened: the banner ends");
+  const waiting = { name: "Both teams to score", sortOrder: 2, livePausedAt: start, livePausedUntil: new Date(start.getTime() + 15_000), liveReopenFrom: new Date(start.getTime() + 15_000), livePauseReason: "goal" };
+  const summary = pauseSummary([opened, waiting], now);
+  assert.equal(summary.count, 1);
+  assert.equal(summary.markets[0], "Both teams to score");
+  assert.equal(summary.exact, true, "fresh prices: Back in, not Back within");
+  assert.equal(summary.until, waiting.livePausedUntil.toISOString());
 });
 
 test("matches waiting for fresh prices and the most exposed are read on their own, within the minute's limit", () => {

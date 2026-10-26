@@ -15372,6 +15372,97 @@ html[data-theme="light"] .role-player {
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset;
 }
 
+/* A casino game fills the sheet. The sheet is the page, so it stays within the window and the window does not scroll. */
+@media (min-width: 761px) {
+  .role-player .dashboard-shell:has(.casino-page) {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .role-player .dashboard-content:has(.casino-page),
+  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content:has(.casino-page) {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 0.9rem);
+    height: calc(100dvh - 0.9rem);
+    max-height: calc(100vh - 0.9rem);
+    max-height: calc(100dvh - 0.9rem);
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 0.85rem;
+  }
+
+  .role-player .dashboard-content:has(.casino-page) .dashboard-topbar {
+    flex: none;
+    margin-bottom: 0.65rem;
+  }
+
+  .role-player .casino-page {
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 0.65rem;
+    overflow: hidden;
+  }
+
+  .role-player .casino-page > .page-title-row,
+  .role-player .casino-page > .card {
+    flex: none;
+  }
+
+  .role-player .casino-page .casino-spins-panel {
+    max-height: min(14rem, 28vh);
+    overflow: auto;
+  }
+
+  .role-player .casino-page > :not(.page-title-row):not(.card) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .role-player .casino-page .slot-cabinet {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .role-player .casino-page .slot-cabinet .slot-marquee,
+  .role-player .casino-page .slot-cabinet .book-marquee,
+  .role-player .casino-page .slot-cabinet .slot-controls,
+  .role-player .casino-page .slot-cabinet .book-rings {
+    flex: none;
+  }
+
+  .role-player .casino-page .slot-cabinet .book-hall {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .role-player .casino-page .slot-cabinet .slot-stage {
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    container-type: size;
+  }
+
+  .role-player .casino-page .slot-cabinet .slot-stage > * {
+    --reels-wide: min(calc(100cqw - 4.8rem), calc((100cqh - 10px) * 680 / 384));
+  }
+
+  .role-player .casino-page .slot-cabinet .casino-window {
+    flex: none;
+    width: var(--reels-wide);
+    max-width: none;
+    height: calc(var(--reels-wide) * 384 / 680 + 10px);
+  }
+
+  .role-player .casino-page .slot-cabinet .slot-markers,
+  .role-player .casino-page .slot-stage > .book-markers {
+    height: calc(var(--reels-wide) * 384 / 680 + 10px);
+  }
+}
+
 .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content {
   margin-left: var(--sidebar-collapsed);
 }

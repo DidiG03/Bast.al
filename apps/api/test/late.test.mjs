@@ -238,7 +238,7 @@ test("the feed's delay: each goal taken in the middle of its minute, from its ha
   assert.deepEqual(feedDelay([]), { goals: 0, average: null, median: null, p90: null, slowest: null, bySource: {}, recent: [] });
 });
 
-const { goalLag, goalForScore, lagStats } = require("../dist/odds/feed-delay.js");
+const { goalLag, goalForScore, lagStats, lagGate } = require("../dist/odds/feed-delay.js");
 
 test("a timeline without kick-off times takes them from the match clock the bet recorded as it was confirmed", () => {
   // The feed's timeline: a goal in the 67th minute, no kick-off times. The bet was confirmed with the feed's clock
@@ -288,6 +288,16 @@ test("the feed's delay by competition goes by the least each goal's delay can ha
   assert.deepEqual(stats.byCompetition["api-football · Championship"], { goals: 5, p: 45, median: 45 });
   assert.equal(stats.byProvider["api-football"].goals, 25);
   assert.equal(lagStats([]).all, null);
+  // A goal matched to the wrong minute (hours out) is dropped, so it can't close every competition.
+  const poisoned = lagStats([...rows, { lagMinMs: 20 * 60_000, provider: "api-football", league: "Eredivisie" }]);
+  assert.equal(poisoned.ignored, 1);
+  assert.equal(poisoned.byCompetition["api-football · Eredivisie"].p, 20);
+  const gated = lagGate(stats, { maxLagMs: 30_000, minGoals: 5 });
+  assert.deepEqual(gated.slow, ["api-football · Championship"]);
+  assert.equal(gated.broken, false);
+  const allSlow = lagGate({ byCompetition: { A: { goals: 5, p: 40, median: 40 }, B: { goals: 6, p: 50, median: 20 } } }, { maxLagMs: 15_000, minGoals: 5 });
+  assert.equal(allSlow.broken, true);
+  assert.deepEqual(allSlow.slow, []);
 });
 
 const { goalsHelp, redHelps, cardHelps } = require("../dist/bets/late.js");

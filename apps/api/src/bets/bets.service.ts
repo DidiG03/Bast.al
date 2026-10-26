@@ -10,7 +10,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
 import type { MatchCentre } from "../odds/api-football";
 import { RACE_CAP } from "../odds/greyhounds";
-import { competitionKey } from "../odds/feed-delay";
+import { competitionKey, lagGate } from "../odds/feed-delay";
 import { takenWithoutAsking, wrongWayAfterGoal } from "../odds/live-guard";
 import { type FeedMark, LIVE_CORNERS_DELAY_MS, LIVE_CORNERS_MAX_STAKE, type LiveAudit, type LiveState, isCardsMarket, isCornersMarket, newInFeed } from "./late";
 import { MAX_BUILDER_ODDS, priceBuilder } from "./builder";
@@ -804,9 +804,13 @@ export class BetsService {
    * goals (its LIVE_LAG_PERCENTILE, 95th by default, over the last LAG_DAYS
    * days: lagStats) plus LIVE_LAG_MARGIN_MS, for each match's competition when
    * it has LAG_MIN_GOALS_COMPETITION goals measured, otherwise for the whole
-   * feed when that has LAG_MIN_GOALS, up to LIVE_BET_MAX_DELAY_MS. When that's
-   * more than the longest wait, `tooSlow` names the competition and the slip
-   * is refused. LIVE_BET_ADAPTIVE_DELAY=off keeps the waits fixed.
+   * feed when that has LAG_MIN_GOALS, up to LIVE_BET_MAX_DELAY_MS.
+   * A competition is refused (`tooSlow`) only from its own goals, and only
+   * past LIVE_COMPETITION_MAX_LAG_MS, the same line the board uses to mark it
+   * pre-match only. A slow average across every league does not close one
+   * that hasn't been measured, and when every measured competition is over
+   * the line the figures are treated as broken and nothing is refused.
+   * LIVE_BET_ADAPTIVE_DELAY=off keeps the waits fixed.
    */
   async liveWait(events: Array<{ name?: string; provider: string; league: string }> = []): Promise<{
     usualMs: number;
@@ -821,9 +825,11 @@ export class BetsService {
     const eventful = Math.max(base, Number(process.env.LIVE_BET_EVENTFUL_DELAY_MS ?? 12_000));
     const most = Math.max(eventful, Number(process.env.LIVE_BET_MAX_DELAY_MS ?? 30_000));
     const stats = await this.feedLag();
-    /** The delay to cover for one match's competition (ms), margin included, or null when not enough is measured. */
+    const maxLagMs = process.env.LIVE_COMPETITION_MAX_LAG_MS === "0" ? 0 : Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) > 0 ? Number(process.env.LIVE_COMPETITION_MAX_LAG_MS) : 15_000;
+    const gate = lagGate(stats, { maxLagMs, minGoals: LAG_MIN_GOALS_COMPETITION });
+    /** The delay to cover for one match's competition (ms), margin included, or null when not enough is measured or the figures are broken. */
     const needed = (event: { provider: string; league: string }) => {
-      if (!stats) return null;
+      if (!stats || gate.broken) return null;
       const own = stats.byCompetition[competitionKey(event.provider, event.league)];
       const group = own && own.goals >= LAG_MIN_GOALS_COMPETITION ? own : stats.all && stats.all.goals >= LAG_MIN_GOALS ? stats.all : null;
       return group ? group.p * 1000 + LIVE_LAG_MARGIN_MS : null;
@@ -832,7 +838,7 @@ export class BetsService {
     const lags = asked.map((event) => ({ event, ms: needed(event) }));
     const slowest = lags.reduce<(typeof lags)[number] | null>((top, row) => (row.ms !== null && (top === null || row.ms > (top.ms ?? 0)) ? row : top), null);
     const feedLagMs = slowest?.ms ?? null;
-    const tooSlow = slowest && feedLagMs !== null && feedLagMs > most && events.length > 0 ? slowest.event.league : null;
+    const tooSlow = events.find((event) => gate.slow.includes(competitionKey(event.provider, event.league)))?.league ?? null;
     const usualMs = Math.min(most, Math.max(base, feedLagMs ?? 0));
     const busyMs = Math.min(most, Math.max(eventful, usualMs + (eventful - base)));
     return { usualMs, busyMs, cornersMs: Math.max(busyMs, LIVE_CORNERS_DELAY_MS), checkMs: LIVE_CHECK_TIMEOUT_MS + 1_000, mostMs: most, feedLagMs, tooSlow };

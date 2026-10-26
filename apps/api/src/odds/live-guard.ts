@@ -35,7 +35,7 @@ export const LIVE_CUTOFF_MINUTE = ms("LIVE_CUTOFF_MINUTE", 89);
  * slow for live betting. A goal or a card pauses single markets instead
  * (Market.livePauseReason).
  */
-export type LivePause = "late" | "feed" | "competition";
+export type LivePause = "late" | "feed" | "competition" | "bookmaker";
 /**
  * The latest pause on a match (Event.liveCooldownReason, until its end):
  * a goal, a jump in the prices, the bookmaker reopening it, or a red card, a
@@ -45,7 +45,7 @@ export type LivePause = "late" | "feed" | "competition";
  */
 export type CooldownReason = MarketPauseReason;
 /** Pauses for something that happened in the match: they last until the prices are made again after it (eventPauseOver). */
-export const EVENT_PAUSES: ReadonlySet<string> = new Set(["goal", "red", "var"]);
+export const EVENT_PAUSES: ReadonlySet<string> = new Set(["goal", "red", "var", "ahead"]);
 
 export type LiveReading = { homeScore: number | null; awayScore: number | null; stopped: boolean };
 
@@ -129,7 +129,7 @@ export function takenWithoutAsking(before: number, after: number): boolean {
  * reopen) when fresh prices don't come.
  */
 export type MarketGroup = "goals" | "cards" | "corners";
-export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen";
+export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen" | "ahead";
 
 export function marketGroup(key: string): MarketGroup {
   if (/^(home_|away_)?corners_/.test(key)) return "corners";
@@ -140,6 +140,8 @@ export function marketGroup(key: string): MarketGroup {
 /** The markets each kind of event changes. */
 export const EVENT_HITS: Record<MarketPauseReason, readonly MarketGroup[]> = {
   goal: ["goals"],
+  // The timeline is ahead of the score on the board. Same markets as a goal, but it isn't called a goal until the score changes.
+  ahead: ["goals"],
   red: ["goals", "cards"],
   var: ["goals", "cards"],
   swing: ["goals", "cards"],
@@ -149,6 +151,19 @@ export const EVENT_HITS: Record<MarketPauseReason, readonly MarketGroup[]> = {
 /** The longest each kind of event pauses a market when fresh prices don't come. */
 export function fallbackMs(reason: MarketPauseReason): number {
   return reason === "swing" ? SWING_COOLDOWN_MS : reason === "reopen" ? REOPEN_COOLDOWN_MS : GOAL_COOLDOWN_MS;
+}
+
+/**
+ * When a pause actually ends: the time it was given, and never later than
+ * its fallback after it started. A second reading of the same event must not
+ * keep markets closed past that.
+ */
+export function pauseDeadline(pause: { pausedAt?: Date | null; until?: Date | null; reason?: string | null }, now: Date = new Date()): number | null {
+  if (!pause.until || pause.until <= now) return null;
+  const reason = pause.reason as MarketPauseReason | null;
+  const cap = pause.pausedAt && reason && reason in EVENT_HITS ? pause.pausedAt.getTime() + fallbackMs(reason) : pause.until.getTime();
+  const end = Math.min(pause.until.getTime(), cap);
+  return end > now.getTime() ? end : null;
 }
 
 export const hitBy = (reason: MarketPauseReason, marketKey: string) => EVENT_HITS[reason].includes(marketGroup(marketKey));
@@ -189,19 +204,17 @@ export function mergePause(current: MarketPause, next: MarketPause | null, now: 
   if (!active) return next;
   if (EVENT_PAUSES.has(current.reason ?? "") && (next.reason === "swing" || next.reason === "reopen")) return current;
   const later = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : a ?? b);
-  return { pausedAt: next.pausedAt, until: later(current.until, next.until), reopenFrom: later(current.reopenFrom, next.reopenFrom), reason: next.reason };
+  // A new event starts its own window, and that window cannot run past its own fallback.
+  const cap = next.pausedAt ? new Date(next.pausedAt.getTime() + fallbackMs(next.reason as MarketPauseReason)) : next.until;
+  const until = later(current.until, next.until);
+  return { pausedAt: next.pausedAt, until: until && cap && until > cap ? cap : until, reopenFrom: later(current.reopenFrom, next.reopenFrom), reason: next.reason };
 }
 
 /**
  * When a paused market can reopen, given a new reading of its match, or null
- * if this reading doesn't let it. The reading has to be fresh for it: the
- * bookmaker isn't blocking the match, the reading's score is the latest the
- * site knows (`scoreKnown`), it prices the market, and the bookmaker made it
- * after the site saw the event (its update time, when the feed sends one).
- * A market the event changes also needs its own prices to have moved since
- * then (`movedAt`): prices from before the event aren't made for it, however
- * they look. Without the bookmaker's time, any market needs that. The
- * market then reopens at its earliest (`reopenFrom`), or now if that's past.
+ * if this reading doesn't let it. See freshBlocker for what "fresh" means
+ * with this feed. The market then reopens at its earliest (`reopenFrom`),
+ * or now if that's past.
  */
 export function freshUntil(
   pause: MarketPause,
@@ -209,11 +222,33 @@ export function freshUntil(
   now: Date,
 ): Date | null {
   if (!pause.until || pause.until <= now || !pause.pausedAt) return null;
-  if (reading.stopped || !reading.scoreKnown || !reading.priced) return null;
-  const pausedAt = pause.pausedAt.getTime();
-  if (reading.bookmakerUpdate && reading.bookmakerUpdate.getTime() <= pausedAt) return null;
-  const changedByEvent = pause.reopenFrom !== null && pause.reopenFrom.getTime() > pausedAt;
-  if ((changedByEvent || !reading.bookmakerUpdate) && !(reading.movedAt && reading.movedAt.getTime() > pausedAt)) return null;
+  if (freshBlocker(pause, reading, now)) return null;
   const until = new Date(Math.max(pause.reopenFrom?.getTime() ?? now.getTime(), now.getTime()));
   return until < pause.until ? until : null;
+}
+
+/**
+ * Why this reading doesn't reopen a paused market, or null when it does.
+ * API-Football's odds `update` time often stays at or before the moment we
+ * saved the pause, even on a later poll that carries new prices. A market
+ * the event changes therefore reopens when its own prices have moved since
+ * the pause, or when that timestamp is later. Either one is enough.
+ */
+export function freshBlocker(
+  pause: MarketPause,
+  reading: { stopped: boolean; scoreKnown: boolean; priced: boolean; bookmakerUpdate: Date | null; movedAt: Date | null },
+  now: Date,
+): string | null {
+  if (!pause.until || pause.until <= now || !pause.pausedAt) return "pause already over";
+  if (reading.stopped) return "bookmaker blocking the match";
+  if (!reading.scoreKnown) return "score isn't the latest";
+  if (!reading.priced) return "market not priced on this reading";
+  const pausedAt = pause.pausedAt.getTime();
+  const madeAfter = Boolean(reading.bookmakerUpdate && reading.bookmakerUpdate.getTime() > pausedAt);
+  const pricesMoved = Boolean(reading.movedAt && reading.movedAt.getTime() > pausedAt);
+  const changedByEvent = pause.reopenFrom !== null && pause.reopenFrom.getTime() > pausedAt;
+  if (changedByEvent || !reading.bookmakerUpdate) {
+    if (!pricesMoved && !madeAfter) return changedByEvent ? "prices haven't moved since the event, and the bookmaker time isn't later" : "no bookmaker time and prices haven't moved";
+  }
+  return null;
 }

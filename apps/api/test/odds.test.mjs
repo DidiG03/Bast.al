@@ -222,7 +222,8 @@ test("a whole live match pauses only for the feed, a slow competition and the la
   assert.equal(eventOpen({ ...base, liveSlowCompetition: true }, now), false, "pre-match only where the feed is too slow");
   assert.equal(livePause({ ...base, elapsed: 89 }, now), "late");
   assert.equal(livePause({ ...base, elapsed: 88 }, now), null);
-  assert.equal(livePause({ ...base, liveStopped: true }, now), "feed");
+  assert.equal(livePause({ ...base, liveStopped: true }, now), "bookmaker");
+  assert.equal(livePause({ ...base, liveOddsAt: null, elapsed: 0, startsAt: new Date(now.getTime() - 30_000) }, now), "bookmaker", "kick-off, no prices yet");
   assert.equal(livePause({ ...base, status: "UPCOMING" }, now), null, "only live matches pause");
 
   const reading = (homeScore, awayScore, stopped = false) => ({ homeScore, awayScore, stopped });
@@ -287,9 +288,10 @@ test("a paused market reopens on fresh prices after the event, never before 15 s
   assert.equal(freshUntil(pause, fresh, at(10)).getTime(), at(15).getTime());
   assert.equal(freshUntil(pause, fresh, at(20)).getTime(), at(20).getTime(), "fresh prices later: now");
   // (b) no fresh prices: the fallback stands
-  assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: at(-2) }, at(10)), null, "the bookmaker made them before the goal");
-  assert.equal(freshUntil(pause, { ...fresh, movedAt: at(-30) }, at(10)), null, "its own prices haven't moved since");
-  assert.equal(freshUntil(pause, { ...fresh, movedAt: goalAt }, at(10)), null, "the reading that brought the goal doesn't count");
+  assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: at(-2), movedAt: at(10) }, at(10)).getTime(), at(15).getTime(), "this feed's update time stays old; prices that moved still reopen");
+  assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: at(-2), movedAt: at(-2) }, at(10)), null, "neither the bookmaker time nor the prices moved");
+  assert.equal(freshUntil(pause, { ...fresh, movedAt: at(-30) }, at(10)).getTime(), at(15).getTime(), "a later bookmaker time reopens even before its own prices move");
+  assert.equal(freshUntil(pause, { ...fresh, bookmakerUpdate: goalAt, movedAt: goalAt }, at(10)), null, "the reading that brought the goal doesn't count");
   assert.equal(freshUntil(pause, { ...fresh, scoreKnown: false }, at(10)), null, "the score isn't the latest");
   assert.equal(freshUntil(pause, { ...fresh, stopped: true }, at(10)), null, "blocked");
   assert.equal(freshUntil(pause, { ...fresh, priced: false }, at(10)), null, "not priced");
@@ -301,12 +303,15 @@ test("a paused market reopens on fresh prices after the event, never before 15 s
   assert.equal(freshUntil(corners, { ...fresh, bookmakerUpdate: null, movedAt: at(-1) }, at(6)), null);
   assert.equal(freshUntil(corners, { ...fresh, bookmakerUpdate: at(5), movedAt: at(-60) }, at(6)).getTime(), at(6).getTime(), "an unrelated market: a fresh reading pricing it is enough");
 
-  // A jump or a reopen during a goal's pause is the market catching up, not a new event; a second goal restarts the wait.
+  // A jump or a reopen during a goal's pause is the market catching up, not a new event.
+  // A second goal during the same pause does not stretch it past the first fallback.
   assert.equal(mergePause(pause, eventPause({ reason: "swing", marketKey: "match_winner", pricedSinceEvent: true, now: at(8) }), at(8)), pause);
   const second = mergePause(pause, eventPause({ reason: "goal", marketKey: "match_winner", pricedSinceEvent: true, now: at(40) }), at(40));
   assert.equal(second.pausedAt.getTime(), at(40).getTime());
   assert.equal(second.reopenFrom.getTime(), at(55).getTime());
-  assert.equal(second.until.getTime(), at(130).getTime());
+  assert.equal(second.until.getTime(), at(130).getTime(), "a second goal starts its own 90 s, not longer");
+  assert.equal(marketPause({ liveSuspended: false, livePausedAt: goalAt, livePausedUntil: at(130), livePauseReason: "goal" }, at(91)), null, "past the fallback from when it started, even if the stored end is later");
+  assert.equal(marketPause({ liveSuspended: false, livePausedAt: goalAt, livePausedUntil: at(90), livePauseReason: "goal" }, at(89)), "goal");
 });
 
 test("a market the feed hasn't priced live for 5 minutes is stale; the banner lists what's paused", () => {
@@ -615,9 +620,10 @@ test("after a goal, a paused market reopens once a later reading is fresh for it
   const another = await run(40, { home: 2, away: 0 });
   assert.ok(another.market.livePausedAt > another.goalAt, "another goal starts a new pause");
   assert.ok(another.market.livePausedUntil.getTime() > Date.now() + 80_000);
-  // Prices the bookmaker made before the goal aren't made for it, whatever score they carry; nor are prices that haven't moved since.
-  assert.equal((await run(40, { home: 1, away: 0 }, new Date(Date.now() - 60_000).toISOString())).market, null);
-  assert.equal((await run(40, { home: 1, away: 0 }, undefined, 60)).market, null);
+  // API-Football often keeps an old update time after it has sent new prices, or a new time before a market's own price moves. Either one reopens.
+  assert.ok((await run(40, { home: 1, away: 0 }, new Date(Date.now() - 60_000).toISOString())).market.livePausedUntil <= new Date(), "prices that moved reopen even when the update time is old");
+  assert.ok((await run(40, { home: 1, away: 0 }, new Date().toISOString(), 60)).market.livePausedUntil <= new Date(), "a later update time reopens even when this market's price hasn't moved");
+  assert.equal((await run(40, { home: 1, away: 0 }, new Date(Date.now() - 60_000).toISOString(), 60)).market, null, "old update time and prices that haven't moved: stay paused");
 });
 
 test("an Owner's own price can't go more than 10% above the feed price", () => {

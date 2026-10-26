@@ -314,6 +314,8 @@ model Event {
   awayScore          Int?             @map("away_score")
   /// Minutes played, while live.
   elapsed            Int?
+  /// When `elapsed` last changed. The clock on the page moves on from here between polls.
+  elapsedAt          DateTime?        @map("elapsed_at")
   /// The feed's phase while live: "1H", "HT" (half-time), "2H", "ET", "BT" (break before extra time), "P", "SUSP", "INT".
   period             String?
   /// When the feed first reported the match finished; it stays on the live list for a few minutes after, marked "Full time".

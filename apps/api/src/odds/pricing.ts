@@ -1,4 +1,4 @@
-import { LIVE_CUTOFF_MINUTE, type LivePause } from "./live-guard";
+import { LIVE_CUTOFF_MINUTE, pauseDeadline, type LivePause } from "./live-guard";
 
 const envMs = (name: string, fallback: number) => (process.env[name] !== undefined && process.env[name] !== "" && Number(process.env[name]) >= 0 ? Number(process.env[name]) : fallback);
 
@@ -76,7 +76,7 @@ type LiveEventState = {
 };
 
 /** A market's live state: the feed's suspension, a pause after something in the match, and when the feed last priced it. */
-type LiveMarketState = { key?: string; liveSuspended: boolean; livePausedUntil?: Date | null; livePauseReason?: string | null; liveQuotedAt?: Date | null };
+type LiveMarketState = { key?: string; liveSuspended: boolean; livePausedAt?: Date | null; livePausedUntil?: Date | null; livePauseReason?: string | null; liveQuotedAt?: Date | null };
 
 /**
  * A market the feed hasn't priced for this long during play is taken off
@@ -87,7 +87,9 @@ export const LIVE_MARKET_STALE_MS = envMs("LIVE_MARKET_STALE_MS", 5 * 60_000);
 
 /** Why a live market is paused right now (a goal, a card…: odds/live-guard.ts eventPause), or null. */
 export function marketPause(market: LiveMarketState, now: Date = new Date()): string | null {
-  return market.livePausedUntil && market.livePausedUntil > now ? market.livePauseReason ?? "goal" : null;
+  // The fallback after the pause started is a hard stop, even if a later reading pushed livePausedUntil past it.
+  const end = pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now);
+  return end === null ? null : market.livePauseReason ?? "goal";
 }
 
 /**
@@ -113,9 +115,16 @@ export function marketStale(event: { status: string; startsAt: Date; period?: st
 export function livePause(event: LiveEventState, now: Date = new Date()): LivePause | null {
   if (event.status !== "LIVE") return null;
   if (event.liveSlowCompetition) return "competition";
-  if (event.liveStopped || event.liveSlowFeed) return "feed";
+  // The bookmaker blocking the match, or not having priced it in the opening minutes. Not "a moment".
+  if (event.liveStopped) return "bookmaker";
+  if (event.liveSlowFeed) return "feed";
   if (LIVE_CUTOFF_MINUTE > 0 && (event.elapsed ?? 0) >= LIVE_CUTOFF_MINUTE) return "late";
-  if (event.liveOddsAt === null || now.getTime() - event.liveOddsAt.getTime() > LIVE_ODDS_STALE_MS) return "feed";
+  if (event.liveOddsAt === null) {
+    const sinceKick = now.getTime() - event.startsAt.getTime();
+    if (sinceKick < 3 * 60_000 || (event.elapsed ?? 99) <= 2) return "bookmaker";
+    return "feed";
+  }
+  if (now.getTime() - event.liveOddsAt.getTime() > LIVE_ODDS_STALE_MS) return "feed";
   return null;
 }
 
@@ -183,10 +192,12 @@ export function pauseSummary(
   markets: Array<{ name: string; sortOrder: number; livePausedAt?: Date | null; livePausedUntil?: Date | null; liveReopenFrom?: Date | null; livePauseReason?: string | null }>,
   now: Date = new Date(),
 ): MarketPauseSummary | null {
-  const paused = markets.filter((market) => market.livePausedUntil && market.livePausedUntil > now).sort((a, b) => a.sortOrder - b.sortOrder);
+  const paused = markets
+    .filter((market) => pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now) !== null)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
   if (paused.length === 0) return null;
   const latest = paused.reduce((top, market) => ((market.livePausedAt?.getTime() ?? 0) > (top.livePausedAt?.getTime() ?? 0) ? market : top));
-  const until = Math.max(...paused.map((market) => market.livePausedUntil!.getTime()));
+  const until = Math.max(...paused.map((market) => pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now)!));
   return {
     reason: latest.livePauseReason ?? "goal",
     count: paused.length,

@@ -55,6 +55,15 @@ export function goalForScore(timeline: LateTimeline, home: number, away: number)
   return goal;
 }
 
+/**
+ * A measured minimum delay outside this is a goal matched to the wrong minute
+ * (a kick-off time the feed got wrong, a VAR goal put back), not a feed that
+ * slow. It is left out of the figures that gate live betting. 120 s is past
+ * any wait a live bet sits through, so a real delay that long still shows up
+ * as the feed being too slow once enough goals are inside the window.
+ */
+export const PLAUSIBLE_LAG_MS = { min: 0, max: 120_000 };
+
 /** One goal's delay (GoalSeen.lagMinMs, the least it can have been) with where its match came from. */
 export type GoalLagRow = { lagMinMs: number; provider: string; league: string };
 /** The delay on goals for one group of matches: how many goals, and the share (`percentile`) that arrived within `p`, seconds. */
@@ -70,7 +79,8 @@ export type LagGroup = { goals: number; p: number; median: number };
  * and over many goals its high end (`percentile`, 0.95 by default) comes
  * close to the real one.
  */
-export function lagStats(rows: GoalLagRow[], percentile = 0.95): { all: LagGroup | null; byProvider: Record<string, LagGroup>; byCompetition: Record<string, LagGroup> } {
+export function lagStats(rows: GoalLagRow[], percentile = 0.95): { all: LagGroup | null; byProvider: Record<string, LagGroup>; byCompetition: Record<string, LagGroup>; ignored: number } {
+  const kept = rows.filter((row) => row.lagMinMs >= PLAUSIBLE_LAG_MS.min && row.lagMinMs <= PLAUSIBLE_LAG_MS.max);
   const group = (values: number[]): LagGroup | null => {
     if (values.length === 0) return null;
     const sorted = [...values].sort((a, b) => a - b);
@@ -79,10 +89,26 @@ export function lagStats(rows: GoalLagRow[], percentile = 0.95): { all: LagGroup
   };
   const by = (key: (row: GoalLagRow) => string) => {
     const groups = new Map<string, number[]>();
-    for (const row of rows) groups.set(key(row), [...(groups.get(key(row)) ?? []), row.lagMinMs]);
+    for (const row of kept) groups.set(key(row), [...(groups.get(key(row)) ?? []), row.lagMinMs]);
     return Object.fromEntries([...groups].map(([name, values]) => [name, group(values)!]));
   };
-  return { all: group(rows.map((row) => row.lagMinMs)), byProvider: by((row) => row.provider), byCompetition: by((row) => competitionKey(row.provider, row.league)) };
+  return { all: group(kept.map((row) => row.lagMinMs)), byProvider: by((row) => row.provider), byCompetition: by((row) => competitionKey(row.provider, row.league)), ignored: rows.length - kept.length };
+}
+
+/**
+ * Which competitions are too slow for live betting, from lagStats. Only a
+ * competition's own goals count (at least `minGoals`): a slow average across
+ * every league must not close one that hasn't been measured. When every
+ * measured competition is over `maxLagMs`, the figures are treated as broken
+ * (a bad kick-off time, a clock) and nothing is closed; the caller alerts
+ * instead. `maxLagMs` of 0 turns the gate off.
+ */
+export function lagGate(stats: { byCompetition: Record<string, LagGroup> } | null, opts: { maxLagMs: number; minGoals: number }): { slow: string[]; broken: boolean; measured: number } {
+  if (!stats || opts.maxLagMs <= 0) return { slow: [], broken: false, measured: 0 };
+  const measured = Object.entries(stats.byCompetition).filter(([, group]) => group.goals >= opts.minGoals);
+  const slow = measured.filter(([, group]) => group.p * 1000 >= opts.maxLagMs).map(([name]) => name);
+  const broken = measured.length >= 2 && slow.length === measured.length;
+  return { slow: broken ? [] : slow, broken, measured: measured.length };
 }
 
 /** How a competition is named in lagStats. */

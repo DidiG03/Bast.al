@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, type BetEvent, type LineupPlayer, type MatchCentreData, type MatchCentreResponse, type MatchMoment, type TeamLineup } from "../lib/api";
 import { msg } from "../lib/i18n/core";
+import { liveMinute } from "../lib/live";
 import { usePolling } from "../lib/use-polling";
 import { useI18n } from "./i18n-provider";
 import { LoadingSpinner } from "./loading-spinner";
@@ -250,7 +251,8 @@ export function MatchCentre({ event, compact = false }: { event: BetEvent; compa
   if (!hasAnything(centre)) return null;
   const [homeName, awayName] = teamNames(event.name, t);
   const live = event.status === "LIVE";
-  const minute = live ? (event.period === "HT" ? t("Half time") : event.elapsed !== null && event.elapsed !== undefined ? `${event.elapsed}'` : t("Live")) : event.status === "COMPLETED" ? t("Full time") : "";
+  const shownMinute = liveMinute(event);
+  const minute = live ? (event.period === "HT" ? t("Half time") : shownMinute !== null ? `${shownMinute}'` : t("Live")) : event.status === "COMPLETED" ? t("Full time") : "";
   const reds = centre.red ? centre.red[0] + centre.red[1] : 0;
   return (
     <details className={`match-centre${compact ? " is-compact" : ""}`} open={live && !compact}>

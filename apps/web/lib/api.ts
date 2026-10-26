@@ -485,6 +485,8 @@ export type OddsEvent = {
   startsAt: string;
   status: "UPCOMING" | "LIVE" | "COMPLETED" | "POSTPONED" | "CANCELLED";
   elapsed: number | null;
+  /** When `elapsed` last changed, so the clock can move on between polls. */
+  elapsedAt?: string | null;
   /** While live, the feed's phase: "FT" once it's over (also for a match that just finished), "HT" at half-time, "BT" before extra time, "SUSP"/"INT" when interrupted. */
   period?: string | null;
   homeScore: number | null;
@@ -495,7 +497,7 @@ export type OddsEvent = {
   /** Before kick-off, or live with fresh in-play prices. */
   bettable: boolean;
   /** Live only: why the whole match isn't taking bets right now, if it isn't ("competition": its feed is too slow for live betting). */
-  livePause?: "late" | "feed" | "competition" | null;
+  livePause?: "late" | "feed" | "competition" | "bookmaker" | null;
   /** Live only: markets paused after something in the match (a goal, a card…), for the banner. */
   marketPause?: MarketPause | null;
   /** In play. Prices are the feed's live prices less the team margin. */
@@ -600,6 +602,7 @@ export type MatchCentreResponse = {
   id: string;
   status: OddsEvent["status"];
   elapsed: number | null;
+  elapsedAt?: string | null;
   period: string | null;
   homeScore: number | null;
   awayScore: number | null;
@@ -618,6 +621,7 @@ export type BetEvent = {
   result: { home: number; away: number } | null;
   /** While live: the minute and the phase ("HT", "2H"). */
   elapsed?: number | null;
+  elapsedAt?: string | null;
   period?: string | null;
   /** Football with a bet on it, live or just over: its timeline and numbers. */
   centre?: MatchCentreData | null;

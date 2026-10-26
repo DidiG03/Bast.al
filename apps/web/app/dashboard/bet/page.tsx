@@ -1489,7 +1489,7 @@ function finishedNow(event: OddsEvent): boolean {
 const PAUSE_TEXT: Record<string, string> = {
   late: msg("Live betting has closed for the last minutes of this match."),
   competition: msg("Pre-match only: our feed for this competition is too slow for live betting."),
-  feed: msg("Live betting is paused for a moment."),
+  feed: msg("Live betting is paused until this match's prices come back."),
   bookmaker: msg("The bookmaker has paused bets on this match. They reopen on their own."),
 };
 
@@ -1499,6 +1499,7 @@ type Suggestion = { id: string; name: string; live: boolean };
 /** What paused the markets, in the banner. */
 const PAUSE_REASON: Record<string, string> = {
   goal: msg("⚽ Goal"),
+  ahead: msg("Score not confirmed yet"),
   red: msg("🟥 Red card"),
   var: msg("VAR check"),
   swing: msg("Big moment in the match"),

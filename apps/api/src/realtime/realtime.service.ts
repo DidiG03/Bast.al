@@ -35,6 +35,7 @@ export type LiveDelta = {
     status: string;
     live: boolean;
     elapsed: number | null;
+    elapsedAt: string | null;
     period: string | null;
     homeScore: number | null;
     awayScore: number | null;

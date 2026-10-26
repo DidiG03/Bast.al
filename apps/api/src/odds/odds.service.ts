@@ -6,7 +6,7 @@ import { PrismaService } from "../prisma.service";
 import { type LiveDelta, RealtimeService, STAFF_TOPIC, teamTopic } from "../realtime/realtime.service";
 import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
-import { competitionKey, feedDelay, lagStats } from "./feed-delay";
+import { competitionKey, feedDelay, lagGate, lagStats } from "./feed-delay";
 import { LATE_REASONS, timelineOf } from "../bets/late";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
@@ -174,6 +174,7 @@ export class OddsService {
           status: event.status,
           live,
           elapsed: event.elapsed,
+          elapsedAt: event.elapsedAt?.toISOString() ?? null,
           period: live ? event.period : event.status === EventStatus.COMPLETED ? "FT" : null,
           homeScore: event.homeScore,
           awayScore: event.awayScore,
@@ -410,7 +411,7 @@ export class OddsService {
    */
   async matchCentre(actor: Actor, id: string) {
     const event = await this.kept(`centre:${id}`, 2_000, async () => {
-      const select = { id: true, sport: true, provider: true, externalId: true, hidden: true, status: true, startsAt: true, finishedAt: true, elapsed: true, period: true, homeScore: true, awayScore: true, matchCentre: true, matchCentreAt: true } as const;
+      const select = { id: true, sport: true, provider: true, externalId: true, hidden: true, status: true, startsAt: true, finishedAt: true, elapsed: true, elapsedAt: true, period: true, homeScore: true, awayScore: true, matchCentre: true, matchCentreAt: true } as const;
       const saved = await this.prisma.event.findUnique({ where: { id }, select });
       // A hidden match isn't fetched for anyone.
       if (!saved || saved.hidden || !(await this.sync.refreshMatchCentre(saved))) return saved;
@@ -421,6 +422,7 @@ export class OddsService {
       id: event.id,
       status: event.status,
       elapsed: event.elapsed,
+      elapsedAt: event.elapsedAt?.toISOString() ?? null,
       period: event.status === EventStatus.LIVE ? event.period : event.status === EventStatus.COMPLETED ? "FT" : null,
       homeScore: event.homeScore,
       awayScore: event.awayScore,
@@ -562,6 +564,7 @@ export class OddsService {
       startsAt: event.startsAt,
       status: event.status,
       elapsed: event.elapsed,
+      elapsedAt: event.elapsedAt?.toISOString() ?? null,
       /** While live: the feed's phase, e.g. "HT" at half-time. */
       period: event.status === EventStatus.LIVE ? event.period : event.status === EventStatus.COMPLETED ? "FT" : null,
       homeScore: event.homeScore,
@@ -708,9 +711,14 @@ export class OddsService {
       const slow = new Set<string>();
       if (LIVE_COMPETITION_MAX_LAG_MS > 0) {
         const lag = await this.feedLagStats(LIVE_LIMIT_DAYS, 0.95).catch(() => null);
-        for (const [competition, group] of Object.entries(lag?.byCompetition ?? {})) {
-          if (group.goals >= LIVE_COMPETITION_MIN_GOALS && group.p * 1000 >= LIVE_COMPETITION_MAX_LAG_MS) slow.add(competition);
-        }
+        const gate = lagGate(lag, { maxLagMs: LIVE_COMPETITION_MAX_LAG_MS, minGoals: LIVE_COMPETITION_MIN_GOALS });
+        if (gate.broken) {
+          const samples = Object.entries(lag?.byCompetition ?? {})
+            .filter(([, group]) => group.goals >= LIVE_COMPETITION_MIN_GOALS)
+            .map(([name, group]) => `${name} ${group.p}s (${group.goals} goals)`)
+            .join("; ");
+          this.logger.error(`Live lag stats look broken: every measured competition is at or over ${LIVE_COMPETITION_MAX_LAG_MS / 1000}s. Live betting stays open instead of closing all of it. Samples: ${samples || "none"}`);
+        } else for (const competition of gate.slow) slow.add(competition);
       }
       const since = new Date(Date.now() - LIVE_STATS_DAYS * 86_400_000);
       const rows = await this.prisma.$queryRaw<Array<{ provider: string; league: string; matches: number; cards: boolean; corners: boolean }>>`
@@ -801,6 +809,8 @@ export class OddsService {
       const rows = pauses.filter((pause) => pause.reason === reason);
       return { reason, pauses: rows.length, averageMs: pauseMs(rows), fresh: rows.filter((row) => row.fresh).length };
     });
+    const lag = await this.feedLagStats(days, 0.95).catch(() => null);
+    const gate = lagGate(lag, { maxLagMs: LIVE_COMPETITION_MAX_LAG_MS, minGoals: LIVE_COMPETITION_MIN_GOALS });
     const polling = this.sync.pollingHealth();
     const names = new Map((await this.prisma.event.findMany({ where: { id: { in: polling.matches.map((m) => m.eventId) } }, select: { id: true, name: true } })).map((e) => [e.id, e.name]));
     return {
@@ -842,6 +852,17 @@ export class OddsService {
         averagePauseMs: pauseMs(pauses.filter((pause) => pause.eventId === match.id)),
       })),
       liveLimits: { maxLagMs: LIVE_COMPETITION_MAX_LAG_MS, slow: [...limits.slow], noCards: [...limits.noCards], noCorners: [...limits.noCorners] },
+      lag: {
+        broken: gate.broken,
+        ignored: lag?.ignored ?? 0,
+        competitions: Object.entries(lag?.byCompetition ?? {}).map(([competition, group]) => ({
+          competition,
+          goals: group.goals,
+          p95: group.p,
+          median: group.median,
+          gated: limits.slow.has(competition),
+        })),
+      },
       polling: { ...polling, matches: polling.matches.map((match) => ({ ...match, name: names.get(match.eventId) ?? match.eventId })) },
     };
   }

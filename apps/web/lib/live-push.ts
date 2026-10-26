@@ -8,7 +8,7 @@ import type { SlipItem } from "./slip";
  */
 export type LiveDelta = {
   id: string;
-  header?: Pick<OddsEvent, "status" | "live" | "elapsed" | "period" | "homeScore" | "awayScore" | "bettable" | "livePause" | "allMarketsSuspended" | "marketPause">;
+  header?: Pick<OddsEvent, "status" | "live" | "elapsed" | "elapsedAt" | "period" | "homeScore" | "awayScore" | "bettable" | "livePause" | "allMarketsSuspended" | "marketPause">;
   markets?: Array<[string, boolean, boolean?]>;
   prices?: Array<[string, number, boolean]>;
 };
@@ -37,9 +37,11 @@ export function applyDelta(event: OddsEvent, delta: LiveDelta | undefined): Odds
       marketChanged = true;
       return { ...selection, price: quote.price, suspended: quote.suspended };
     });
-    if (!marketChanged) return market;
+    // A short pause (a goal, a card) says "Paused". The bookmaker taking a market off says "Suspended".
+    const paused = state?.stale ? null : state?.suspended && delta.header?.marketPause ? delta.header.marketPause.reason : state?.suspended === false ? null : market.paused;
+    if (!marketChanged && paused === market.paused) return market;
     changed = true;
-    return { ...market, ...(state !== undefined ? { suspended, stale: state.stale } : {}), selections };
+    return { ...market, ...(state !== undefined ? { suspended, stale: state.stale } : {}), paused, selections };
   });
   if (!changed && !delta.header) return event;
   return { ...event, ...(delta.header ?? {}), markets: changed ? nextMarkets : event.markets };

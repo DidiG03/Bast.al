@@ -15,6 +15,7 @@ export type LiveHealthData = {
   competitions: Array<{ competition: string; matches: number; openOfShown: Share; openOfAll: Share; pauses: number; averagePauseMs: number | null; livePicks: number; voidRate: Share; liveOff: boolean; noLiveCards: boolean; noLiveCorners: boolean }>;
   matches: Array<{ id: string; name: string; competition: string; live: boolean; openOfShown: Share; openOfAll: Share; pauses: number; averagePauseMs: number | null }>;
   liveLimits: { maxLagMs: number; slow: string[]; noCards: string[]; noCorners: string[] };
+  lag?: { broken: boolean; ignored: number; competitions: Array<{ competition: string; goals: number; p95: number; median: number; gated: boolean }> };
   polling: {
     plan: { perDay: number | null; leftToday: number | null; perMinute: number | null; leftThisMinute: number | null };
     intervals: { boardMs: number | null; priorityMs: number | null; scoresMs: number | null };
@@ -102,6 +103,13 @@ export function LiveHealthView({ data, days, onDays }: { data: LiveHealthData; d
           <span className="muted">{t("Busy matches every {seconds}", { seconds: seconds(polling.intervals.priorityMs) })}</span>
         </div>
       </div>
+      {data.lag?.broken ? <p className="bm-note">{t("Feed delay figures look wrong, so live betting was not closed. Check the samples below.")}</p> : null}
+      {data.lag && data.lag.competitions.length > 0 ? (
+        <p className="muted live-health-reasons">
+          {data.lag.competitions.map((row) => `${row.competition.replace(/^[^·]+· /, "")}: ${t("{seconds} at the 95th ({goals} goals)", { seconds: seconds(row.p95 * 1000), goals: row.goals })}${row.gated ? ` · ${t("Pre-match only")}` : ""}`).join(" · ")}
+          {data.lag.ignored > 0 ? ` · ${t("{count} delay samples ignored", { count: data.lag.ignored })}` : ""}
+        </p>
+      ) : null}
       {data.pausesByReason.length > 0 ? (
         <p className="muted live-health-reasons">
           {data.pausesByReason.map((row) => t("{reason}: {count}, {seconds} on average", { reason: t(REASON[row.reason] ?? row.reason), count: row.pauses, seconds: seconds(row.averageMs) })).join(" · ")}

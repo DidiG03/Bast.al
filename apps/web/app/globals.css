@@ -5385,6 +5385,49 @@ button.is-blocked {
   overflow-wrap: anywhere;
 }
 
+.money-rounds-toggle {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: -0.15rem;
+  padding: 0.15rem 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.money-rounds {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.15rem 0 0;
+  padding: 0.45rem 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
+.money-round {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.2rem 0.75rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+}
+
+.money-round .money-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.money-round .money-amount small {
+  margin-right: 0.2rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
 .money-icon {
   display: inline-grid;
   place-items: center;
@@ -6550,28 +6593,16 @@ button.is-blocked {
 }
 
 @media (orientation: portrait) and (max-width: 600px) {
-  /* The games stay playable upright: the controls wrap under the reels. */
-  .slot-rotate {
-    display: none;
+  /* These four games are built for landscape. Upright, only the turn-sideways screen shows. */
+  .slot-rotate,
+  .roulette-rotate {
+    display: grid;
   }
 
   .slot-cabinet,
   .roulette-cabinet,
   .blackjack-cabinet {
-    display: flex;
-  }
-
-  .blackjack-cabinet {
-    --card-w: clamp(2.5rem, 15vw, 3.3rem);
-  }
-
-  .blackjack-player {
-    --card-w: clamp(2.8rem, 17vw, 3.7rem);
-  }
-
-  .blackjack-cards {
-    flex-wrap: wrap;
-    justify-content: center;
+    display: none;
   }
 }
 
@@ -7813,12 +7844,12 @@ button.is-blocked {
 
 @media (orientation: portrait) and (max-width: 600px) {
   .roulette-rotate {
-    display: none;
+    display: grid;
   }
 
   .roulette-cabinet,
   .blackjack-cabinet {
-    display: flex;
+    display: none;
   }
 }
 
@@ -11919,6 +11950,50 @@ button.is-blocked {
   flex: none;
   padding: 0.7rem 0.85rem;
   white-space: nowrap;
+  touch-action: manipulation;
+}
+
+.plinko-auto.is-on {
+  position: relative;
+  z-index: 3;
+  min-width: 6.5rem;
+  min-height: 48px;
+}
+
+.plinko-auto-limits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 0.75rem;
+}
+
+.plinko-auto-limits label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #c5d0e0;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.plinko-auto-limits select {
+  min-height: 44px;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+
+.plinko-actions:has(.plinko-auto.is-on) {
+  position: sticky;
+  bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  z-index: 4;
+  padding: 0.35rem;
+  border-radius: 12px;
+  background: #1a2433;
 }
 
 .plinko-paytable {

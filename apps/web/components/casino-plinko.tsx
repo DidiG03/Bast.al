@@ -25,6 +25,10 @@ const STEP_MS = 170;
 const STEP_MS_REDUCED = 35;
 /** Time between balls on autoplay. */
 const AUTO_MS = 380;
+/** How many balls an auto run drops, unless Stop is pressed sooner. */
+const AUTO_BALLS = [10, 25, 50] as const;
+/** Auto stops once the stakes sent outrun the wins by this many stakes. */
+const AUTO_LOSS = [5, 10, 25] as const;
 /** The quickest balls can follow each other, however fast Space is pressed: 5 a second, inside the API's limit of 360 a minute. */
 const MIN_GAP_MS = 200;
 
@@ -71,6 +75,16 @@ export function PlinkoGame() {
   useDismiss(() => setRulesOpen(false));
   const [soundOn, setSoundOn] = useState(true);
   const [auto, setAuto] = useState(false);
+  const [autoBalls, setAutoBalls] = useState<(typeof AUTO_BALLS)[number]>(25);
+  const [lossMultiple, setLossMultiple] = useState<(typeof AUTO_LOSS)[number]>(10);
+  const [autoLeftShown, setAutoLeftShown] = useState(0);
+  const autoOn = useRef(false);
+  const autoLeft = useRef(0);
+  const autoLossCap = useRef(0);
+  const autoStaked = useRef(0);
+  const autoWon = useRef(0);
+  const autoTimer = useRef<number | null>(null);
+  const stopStamp = useRef(0);
   const [lastWin, setLastWin] = useState<PlinkoBall | null>(null);
   /** Buckets that just caught a ball, with a count so the same bucket lights again on the next one. */
   const [lit, setLit] = useState<Record<number, number>>({});
@@ -236,8 +250,32 @@ export function PlinkoGame() {
   const falling = inPlay.balls > 0;
   const canDrop = !!state && !state.closed && bet > 0 && bet <= state.tableMax && bet <= balance + 1e-9 && inPlay.balls < MAX_IN_FLIGHT;
 
+  const stopAuto = useCallback(() => {
+    autoOn.current = false;
+    if (autoTimer.current !== null) {
+      window.clearInterval(autoTimer.current);
+      autoTimer.current = null;
+    }
+    setAuto(false);
+  }, []);
+
+  const startAuto = useCallback(() => {
+    autoOn.current = true;
+    autoLeft.current = autoBalls;
+    autoLossCap.current = Math.round(bet * lossMultiple * 100) / 100;
+    autoStaked.current = 0;
+    autoWon.current = 0;
+    setAutoLeftShown(autoBalls);
+    setAuto(true);
+  }, [autoBalls, bet, lossMultiple]);
+
   const lastDrop = useRef(0);
-  const drop = useCallback(async () => {
+  const drop = useCallback(async (fromAuto = false) => {
+    if (fromAuto && !autoOn.current) return false;
+    if (fromAuto && (autoLeft.current <= 0 || autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9)) {
+      stopAuto();
+      return false;
+    }
     if (!state || !canDrop) return false;
     const now = performance.now();
     // Too soon after the last ball: this press is skipped, not refused, so autoplay carries on.
@@ -245,6 +283,12 @@ export function PlinkoGame() {
     lastDrop.current = now;
     slotSound.unlock();
     const stake = bet;
+    if (fromAuto) {
+      autoLeft.current -= 1;
+      autoStaked.current = Math.round((autoStaked.current + stake) * 100) / 100;
+      setAutoLeftShown(autoLeft.current);
+      if (autoLeft.current <= 0 || autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9) stopAuto();
+    }
     setInPlay((current) => ({ balls: current.balls + 1, stakes: current.stakes + stake }));
     const release = () => setInPlay((current) => ({ balls: current.balls - 1, stakes: Math.round((current.stakes - stake) * 100) / 100 }));
     let result: PlinkoDropResult;
@@ -258,6 +302,10 @@ export function PlinkoGame() {
       return false;
     }
     answered.current += 1;
+    if (fromAuto) {
+      autoWon.current = Math.round((autoWon.current + result.round.win) * 100) / 100;
+      if (autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9) stopAuto();
+    }
     const order = answered.current;
     const ball = result.round;
     ballId.current += 1;
@@ -284,7 +332,7 @@ export function PlinkoGame() {
     });
     redraw();
     return true;
-  }, [state, canDrop, bet, rows, risk, getToken, t, toast, ts, redraw]);
+  }, [state, canDrop, bet, rows, risk, getToken, t, toast, ts, redraw, stopAuto]);
 
   // Autoplay: a ball every AUTO_MS until it's switched off or a ball can't be dropped.
   const dropRef = useRef(drop);
@@ -295,23 +343,23 @@ export function PlinkoGame() {
   inPlayRef.current = inPlay.balls;
   useEffect(() => {
     if (!auto) return;
-    let stopped = false;
     const timer = window.setInterval(() => {
-      if (stopped) return;
+      if (!autoOn.current) return;
       if (!canDropRef.current) {
         // Wait while balls are still falling (their wins may yet cover the next); stop once none are and it still can't drop.
-        if (inPlayRef.current === 0) setAuto(false);
+        if (inPlayRef.current === 0) stopAuto();
         return;
       }
-      void dropRef.current().then((ok) => {
-        if (!ok) setAuto(false);
+      void dropRef.current(true).then((ok) => {
+        if (!ok && autoOn.current) stopAuto();
       });
     }, AUTO_MS);
+    autoTimer.current = timer;
     return () => {
-      stopped = true;
       window.clearInterval(timer);
+      if (autoTimer.current === timer) autoTimer.current = null;
     };
-  }, [auto]);
+  }, [auto, stopAuto]);
 
   // On a computer, Space drops a ball (held down, it drops one, not a stream). Not while typing, with the rules open, or on autoplay.
   const autoRef = useRef(auto);
@@ -471,12 +519,50 @@ export function PlinkoGame() {
                   </button>
                 ))}
               </div>
+              <div className="plinko-auto-limits">
+                <label>
+                  <span>{t("Auto balls")}</span>
+                  <select value={autoBalls} disabled={auto} onChange={(event) => setAutoBalls(Number(event.target.value) as (typeof AUTO_BALLS)[number])}>
+                    {AUTO_BALLS.map((count) => (
+                      <option key={count} value={count}>
+                        {t("{count} balls", { count })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>{t("Stop after losing")}</span>
+                  <select value={lossMultiple} disabled={auto} onChange={(event) => setLossMultiple(Number(event.target.value) as (typeof AUTO_LOSS)[number])}>
+                    {AUTO_LOSS.map((times) => (
+                      <option key={times} value={times}>
+                        {t("{times}× the stake", { times })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <div className="plinko-actions">
                 <button type="button" className="mines-go" disabled={auto || !canDrop} onClick={() => void drop()}>
                   {t("Drop a ball {amount}", { amount: formatStake(bet) })}
                 </button>
-                <button type="button" className={`mines-pick plinko-auto${auto ? " is-on" : ""}`} aria-pressed={auto} disabled={!auto && !canDrop} onClick={() => setAuto(!auto)}>
-                  {auto ? t("Stop") : t("Auto")}
+                <button
+                  type="button"
+                  className={`mines-pick plinko-auto${auto ? " is-on" : ""}`}
+                  aria-pressed={auto}
+                  disabled={!auto && !canDrop}
+                  onPointerDown={(event) => {
+                    if (!autoOn.current) return;
+                    event.preventDefault();
+                    stopStamp.current = performance.now();
+                    stopAuto();
+                  }}
+                  onClick={() => {
+                    if (performance.now() - stopStamp.current < 700) return;
+                    if (autoOn.current) stopAuto();
+                    else startAuto();
+                  }}
+                >
+                  {auto ? `${t("Stop")} · ${autoLeftShown}` : t("Auto")}
                 </button>
               </div>
               <p className="plinko-hint">{t("Press Space to drop a ball.")}</p>

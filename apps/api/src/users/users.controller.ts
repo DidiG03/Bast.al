@@ -201,6 +201,14 @@ export class UsersController {
     return this.users.balanceLedger(actor, id, { before, limit: limit ? Number(limit) || undefined : undefined });
   }
 
+  @Get(":id/balance/ledger/rounds")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  casinoLineRounds(@CurrentActor() actor: Actor, @Param("id") id: string, @Query("line") line?: string) {
+    return this.users.casinoLineRounds(actor, id, line ?? "");
+  }
+
   @Post(":id/delegate")
   @ApiBearerAuth()
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)

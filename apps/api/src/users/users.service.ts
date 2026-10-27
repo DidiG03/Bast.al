@@ -12,6 +12,7 @@ import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/pe
 import { FieldEncryptionService } from "../crypto/field-encryption.service";
 import { PrismaService } from "../prisma.service";
 import { playableGames } from "../casino/access";
+import { addDays, startOfDay } from "../time";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { AdjustBalanceDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -584,6 +585,53 @@ export class UsersService {
       amount: entry.toUserId === id ? Number(entry.amount) : -Number(entry.amount),
       counterparty: entry.toUserId === id ? entry.fromUser?.username ?? noCounterparty(entry.type) : entry.toUser.username,
     }));
+  }
+
+  /**
+   * The rounds behind one casino day's line, so My money can show each stake and what it paid.
+   * `lineId` is that line's id, `{game}_{playerId}_{day}`.
+   */
+  async casinoLineRounds(actor: Actor, id: string, lineId: string) {
+    const match = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch)_(.+)_(\d{4}-\d{2}-\d{2})$/.exec(lineId ?? "");
+    if (!match || match[2] !== id) throw new NotFoundException("That line isn't on this account");
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
+    if (!target) throw new NotFoundException("User not found");
+    if (target.role === Role.SUPER_ADMIN) throw new BadRequestException("Super Admin accounts do not hold a balance");
+    if (!(await this.hierarchy.canActOn(actor, id))) throw new ForbiddenException("Target is outside your hierarchy subtree");
+    const entry = await this.prisma.balanceTransaction.findUnique({ where: { id: lineId }, select: { toUserId: true, type: true } });
+    if (!entry || entry.toUserId !== id || entry.type !== BalanceTransactionType.CASINO) throw new NotFoundException("That line isn't on this account");
+
+    const prefix = match[1];
+    const start = startOfDay(new Date(`${match[3]}T12:00:00Z`));
+    const end = addDays(start, 1);
+    const bookGuess = { path: ["game"], equals: "book" } as const;
+    const where: Prisma.CasinoSpinWhereInput = { playerId: id, createdAt: { gte: start, lt: end } };
+    if (prefix === "casino") where.OR = [{ kind: "SPIN" }, { kind: "GAMBLE", NOT: { gamble: bookGuess } }];
+    else if (prefix === "book") where.OR = [{ kind: "BOOK" }, { kind: "GAMBLE", gamble: bookGuess }];
+    else {
+      const kind = { blackjack: "BLACKJACK", roulette: "ROULETTE", mines: "MINES", penalty: "PENALTY", plinko: "PLINKO", dice: "DICE", keno: "KENO", coinflip: "COIN_FLIP", scratch: "SCRATCH" } as const;
+      const played = kind[prefix as keyof typeof kind];
+      if (!played) throw new NotFoundException("That line isn't on this account");
+      where.kind = played;
+    }
+    const take = 400;
+    const rows = await this.prisma.casinoSpin.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: take + 1,
+      select: { id: true, kind: true, free: true, stake: true, win: true, createdAt: true },
+    });
+    const more = rows.length > take;
+    return {
+      more,
+      rounds: rows.slice(0, take).map((row) => ({
+        id: row.id,
+        at: row.createdAt.toISOString(),
+        stake: Number(row.stake),
+        win: Number(row.win),
+        label: row.kind === "GAMBLE" ? "Double or nothing" : row.free ? "Free spin" : "Round",
+      })),
+    };
   }
 
   /** Give credit to a direct child: Owner→Manager, Owner→Player, or Manager→Player. Super Admin→Owner prints (no source deduction). */

@@ -14,6 +14,10 @@ import { formatMoney } from "../../../lib/format";
 
 const PAGE = 30;
 type Filter = "all" | "topups" | "bets" | "casino";
+/** A day's casino line: `{game}_{playerId}_{day}`. Scratch's buy and result lines are already one card each. */
+const CASINO_DAY = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch)_.+_\d{4}-\d{2}-\d{2}$/;
+
+type CasinoRound = { id: string; at: string; stake: number; win: number; label: string };
 
 const DAY: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
@@ -153,6 +157,7 @@ export default function MoneyPage() {
                         {entry.amount >= 0 ? "+" : "−"}
                         {formatMoney(Math.abs(entry.amount))}
                       </strong>
+                      {entry.type === "CASINO" && CASINO_DAY.test(entry.id) ? <CasinoRounds userId={me.id} lineId={entry.id} lineAmount={entry.amount} /> : null}
                     </li>
                   );
                 })}
@@ -168,6 +173,62 @@ export default function MoneyPage() {
         ) : null}
       </section>
     </div>
+  );
+}
+
+/** The stake and the result of every round inside one casino day's line. */
+function CasinoRounds({ userId, lineId, lineAmount }: { userId: string; lineId: string; lineAmount: number }) {
+  const { getToken } = useAuth();
+  const { t, ts, date } = useI18n();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [rounds, setRounds] = useState<CasinoRound[] | null>(null);
+  const [more, setMore] = useState(false);
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (!next || rounds) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const page = await apiFetch<{ rounds: CasinoRound[]; more: boolean }>(`/users/${userId}/balance/ledger/rounds?line=${encodeURIComponent(lineId)}`, token);
+      setRounds(page.rounds);
+      setMore(page.more);
+    } catch (err) {
+      toast.error(err instanceof Error ? ts(err.message) : t("Couldn't load these rounds"));
+      setOpen(false);
+    }
+  }
+
+  const net = (rounds ?? []).reduce((sum, round) => sum + round.win - round.stake, 0);
+  const inPlay = rounds !== null && Math.round((lineAmount - net) * 100) !== 0;
+
+  return (
+    <>
+      <button type="button" className="money-rounds-toggle" aria-expanded={open} onClick={() => void toggle()}>
+        {open ? t("Hide the rounds") : t("Each round")}
+      </button>
+      {open && rounds ? (
+        <ul className="money-rounds">
+          {more ? <li className="muted">{t("Showing the latest {count} rounds.", { count: rounds.length })}</li> : null}
+          {inPlay ? <li className="muted">{t("A round still in play is included in the total.")}</li> : null}
+          {rounds.map((round) => (
+            <li key={round.id} className="money-round">
+              <span>
+                <time dateTime={round.at}>{date(round.at, TIME)}</time> {t(round.label)}
+              </span>
+              <span className="money-amount is-stake">
+                <small>{t("Stake")}</small> −{formatMoney(round.stake)}
+              </span>
+              <span className={`money-amount${round.win > 0 ? " is-in" : ""}`}>
+                <small>{t("Result")}</small> +{formatMoney(round.win)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
   );
 }
 

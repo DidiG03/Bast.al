@@ -950,7 +950,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       let pause: { until: Date | null; reason: string | null } | null = null;
       for (const reason of starting) {
         if (GOAL_COOLDOWN_MS <= 0) continue;
-        pause = laterCooldown(pause ?? { until: was!.liveCooldownUntil, reason: was!.liveCooldownReason }, { until: new Date(Date.now() + GOAL_COOLDOWN_MS), reason });
+        // A corner or a yellow pauses its own markets only (Total corners, Total cards): it isn't a pause on the match,
+        // which would make every live slip on it wait longer.
+        if (reason !== "corner" && reason !== "yellow") pause = laterCooldown(pause ?? { until: was!.liveCooldownUntil, reason: was!.liveCooldownReason }, { until: new Date(Date.now() + GOAL_COOLDOWN_MS), reason });
         await this.pauseMarkets(eventId, { reason, pricedSinceEvent: new Set() }, null, new Date());
       }
       if (starting.length === 0 && reasons.length === 0 && was?.matchCentre) await this.prisma.market.updateMany({ where: { eventId, livePauseReason: "ahead", livePausedUntil: { gt: new Date() } }, data: { livePausedUntil: new Date() } });
@@ -1729,9 +1731,15 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         : false;
 
       // Markets the feed stopped sending are suspended. Corners are not: a red card
-      // often drops them from one reading, and that was closing them.
+      // often drops them from one reading, and that was closing them. A line the
+      // feed moved on from is, though: when it sends another line of the same
+      // market (Total corners 12.5 in place of 11.5), the old one is no longer
+      // offered and its last price is out of date. It reopens if it's sent again.
       const sent = new Set(markets.map((m) => m.key));
-      const suspend = existing.filter((market) => !sent.has(market.key) && !market.liveSuspended && marketGroup(market.key) !== "corners").map((market) => market.id);
+      const lineFamily = (key: string) => /^(.*_)\d+_5$/.exec(key)?.[1] ?? null;
+      const sentFamilies = new Set(markets.map((m) => lineFamily(m.key)).filter((family): family is string => family !== null));
+      const movedOn = (key: string) => sentFamilies.has(lineFamily(key) ?? "");
+      const suspend = existing.filter((market) => !sent.has(market.key) && !market.liveSuspended && (marketGroup(market.key) !== "corners" || movedOn(market.key))).map((market) => market.id);
       const reopen: string[] = [];
       const quoted: string[] = [];
       const moved: string[] = [];

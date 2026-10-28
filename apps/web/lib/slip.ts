@@ -13,6 +13,10 @@ export type SlipItem = {
   closed?: boolean;
   /** A live pick whose market is suspended or whose prices went stale for now. */
   paused?: boolean;
+  /** Why it's paused and when it's back, if known (SelectionQuote.pause). */
+  pause?: { reason: string; until: string | null } | null;
+  /** The feed no longer offers this line; this one, the same side of the line it offers now, can take its place. */
+  replacement?: { id: string; market: string; name: string; price: number } | null;
   live?: boolean;
   /** Greyhounds: paid at the starting price (or forecast dividend); `odds` is 0. Singles only. */
   sp?: boolean;

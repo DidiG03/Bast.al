@@ -287,13 +287,16 @@ function BetPage() {
     setSlip((items) =>
       items.filter((item) => !goneIds.has(item.selectionId)).map((item) => {
         const quote = byId.get(item.selectionId);
-        if (!quote || !quote.open) return { ...item, closed: true, paused: false };
+        if (!quote || !quote.open) return { ...item, closed: true, paused: false, pause: null, replacement: null };
         const paused = !quote.bettable;
         // A race pick has no price to follow; it closes a minute before the start.
         if (quote.sp) return { ...item, closed: !quote.bettable, paused: false, sp: true };
-        if (quote.price === item.odds) return { ...item, closed: false, paused, live: quote.live };
+        // Why it's paused, and the line that took its place if the feed moved on from it.
+        const state = { pause: paused ? quote.pause ?? null : null, replacement: paused ? quote.replacement ?? null : null };
+        if (quote.price === item.odds) return { ...item, closed: false, paused, live: quote.live, ...state };
+        // Back on: the new price shows against the one it was added at, and the slip asks before placing at it.
         const previous = item.previousOdds ?? item.odds;
-        return { ...item, closed: false, paused, live: quote.live, odds: quote.price, previousOdds: previous === quote.price ? undefined : previous };
+        return { ...item, closed: false, paused, live: quote.live, odds: quote.price, previousOdds: previous === quote.price ? undefined : previous, ...state };
       }),
     );
   }, [getToken, toast, t]);
@@ -520,6 +523,9 @@ function BetPage() {
   usePolling(() => void refreshAll("live").catch(() => undefined), 30_000, tab === "matches" && listed && hasLive);
   // Races have no prices to follow, but a race pick on the slip closes a minute before the start.
   usePolling(() => void refreshSlip().catch(() => undefined), 30_000, tab === "matches" && sport === "greyhounds" && slip.some((item) => item.sp));
+  // A paused live pick is checked again every few seconds, so it comes back on its own when its market reopens
+  // (at its new price, for the Player to accept) or offers the line that replaced it.
+  usePolling(() => void refreshSlip().catch(() => undefined), SLIP_PAUSED_RECHECK_MS, slip.some((item) => item.live && item.paused && !item.closed));
 
   // A match closes for bets at kick-off: the list is asked again right then, not at the next minute.
   useEffect(() => {
@@ -1514,6 +1520,9 @@ function finishedNow(event: OddsEvent): boolean {
 }
 
 /** Why a live match isn't taking bets, in words a Player understands. */
+/** How often a paused live pick on the slip is checked again. */
+const SLIP_PAUSED_RECHECK_MS = 5_000;
+
 const PAUSE_TEXT: Record<string, string> = {
   late: msg("Live betting has closed for the last minutes of this match."),
   competition: msg("Pre-match only: our feed for this competition is too slow for live betting."),
@@ -1532,8 +1541,8 @@ const PAUSE_REASON: Record<string, string> = {
   goal: msg("⚽ Goal"),
   ahead: msg("Score not confirmed yet"),
   red: msg("🟥 Red card"),
-  corner: msg("Corner"),
-  yellow: msg("Yellow card"),
+  corner: msg("Corner just taken"),
+  yellow: msg("Card just shown"),
   var: msg("VAR check"),
   swing: msg("Big moment in the match"),
   reopen: msg("Betting reopening"),
@@ -1567,6 +1576,39 @@ function PauseBanner({ pause }: { pause: MarketPause }) {
       {seconds === null ? null : (
         <span className="bm-pause-time">{seconds === 0 ? t("Back any moment.") : pause.exact ? t("Back in {seconds} s.", { seconds }) : t("Back within {seconds} s.", { seconds })}</span>
       )}
+    </p>
+  );
+}
+
+/**
+ * Why a live pick on the slip is paused, in the same words as the match's
+ * banner, with a countdown when the end is known ("Corner just taken ·
+ * Back within 42 s."). It comes back on its own: the slip checks it again.
+ */
+function SlipPauseNote({ pause }: { pause: { reason: string; until: string | null } | null }) {
+  const { t } = useI18n();
+  const until = pause?.until ? Date.parse(pause.until) : null;
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    if (until === null) return;
+    setNow(serverNow());
+    const timer = window.setInterval(() => setNow(serverNow()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [until]);
+  const reason = pause?.reason ?? "";
+  const why = reason.startsWith("match:")
+    ? t(PAUSE_TEXT[reason.slice("match:".length)] ?? PAUSE_TEXT.feed)
+    : reason === "count"
+      ? t("Waiting for the latest corners and cards count.")
+      : reason === "suspended" || reason === ""
+        ? t("The bookmaker has this market on hold.")
+        : t(PAUSE_REASON[reason] ?? PAUSE_REASON.swing);
+  const seconds = until !== null && now !== null ? Math.max(0, Math.ceil((until - now) / 1000)) : null;
+  return (
+    <p className="bet-slip-flag" role="status">
+      {t("Paused")} · {why}
+      {why.endsWith(".") ? " " : ". "}
+      {seconds === null ? t("It comes back on its own.") : seconds === 0 ? t("Back any moment.") : t("Back within {seconds} s.", { seconds })}
     </p>
   );
 }
@@ -1753,7 +1795,16 @@ function BetSlip({
   let blocker: string | null = null;
   if (info?.blocked) blocker = ts(info.blocked);
   else if (closed.length > 0) blocker = closed.length === 1 ? t("Remove the match that has closed to continue.") : t("Remove the matches that have closed to continue.");
-  else if (paused.length > 0) blocker = paused.length === 1 ? t("Live betting is paused on {match}. Wait a moment or remove it.", { match: paused[0].eventName }) : t("Live betting is paused on some of your picks. Wait a moment or remove them.");
+  // A paused pick is named for what's paused: its market (Total corners after a corner), or the whole match only when it is.
+  else if (paused.length > 0)
+    blocker =
+      paused.length > 1
+        ? t("Some of your picks are paused. They come back on their own, or remove them.")
+        : paused[0].replacement
+          ? t("{pick}: this line is no longer available. Switch to the current line or remove it.", { pick: pickLabel(paused[0].name, i18n) })
+          : paused[0].pause?.reason.startsWith("match:")
+            ? t("Live betting is paused on {match}. It comes back on its own, or remove it.", { match: paused[0].eventName })
+            : t("{pick} is paused. It comes back on its own, or remove it.", { pick: pickLabel(paused[0].name, i18n) });
   else if (builder && quote?.error) blocker = quote.error;
   else if (builder && !quote) blocker = t("Working out the bet builder's price. One moment.");
   else if (acca && hasSp) blocker = t("Greyhound picks can only be single bets. Switch to Singles or remove them.");
@@ -2028,7 +2079,32 @@ function BetSlip({
                       </span>
                     )}
                   </div>
-                  {item.closed ? <p className="bet-slip-flag">{t("Remove it to continue.")}</p> : item.paused ? <p className="bet-slip-flag">{t("Paused. Wait a moment or remove it.")}</p> : null}
+                  {item.closed ? (
+                    <p className="bet-slip-flag">{t("Remove it to continue.")}</p>
+                  ) : item.paused && item.replacement ? (
+                    <div className="bet-slip-flag bet-slip-replace">
+                      <p>{t("This line is no longer available.")}</p>
+                      <button
+                        type="button"
+                        className="secondary is-small"
+                        // The new line and its price, as shown on the button: the Player sees what they're switching to.
+                        onClick={() =>
+                          onChange((list) =>
+                            // Already on the slip: the old line just goes.
+                            list.some((other) => other.selectionId === item.replacement!.id) ? list.filter((other) => other.selectionId !== item.selectionId) : list.map((other) =>
+                              other.selectionId === item.selectionId
+                                ? { ...other, selectionId: item.replacement!.id, market: item.replacement!.market, name: item.replacement!.name, odds: item.replacement!.price, previousOdds: undefined, paused: false, pause: null, replacement: null, addedAt: Date.now() }
+                                : other,
+                            ),
+                          )
+                        }
+                      >
+                        {t("Switch to {pick} at {odds}", { pick: `${pickLabel(item.replacement.name, i18n)} · ${ts(item.replacement.market)}`, odds: item.replacement.price.toFixed(2) })}
+                      </button>
+                    </div>
+                  ) : item.paused ? (
+                    <SlipPauseNote pause={item.pause ?? null} />
+                  ) : null}
                 </li>
               );
             })}

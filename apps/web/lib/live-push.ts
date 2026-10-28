@@ -106,7 +106,9 @@ export function applyToSlip(items: SlipItem[], deltas: Map<string, LiveDelta>, b
     else if (quote && bettable === true) paused = quote.suspended;
     // The match reopened, or its state isn't on the list, with no word on this pick: ask.
     else if (delta.header || (quote && bettable === undefined)) recheck = true;
-    if (paused !== item.paused) updated = { ...updated, paused };
+    // Still paused: the slip asks why and until when (and whether another line took its place).
+    if (paused) recheck = true;
+    if (paused !== item.paused) updated = { ...updated, paused, ...(paused ? {} : { pause: null, replacement: null }) };
     if (updated !== item) changed = true;
     return updated;
   });

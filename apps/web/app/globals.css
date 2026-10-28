@@ -16968,3 +16968,19 @@ html[data-theme="light"] .role-player .bet-status-lost {
     justify-self: end;
   }
 }
+
+/* A live line the feed moved on from: say so, and offer the line it offers now. */
+.bet-slip-replace {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.bet-slip-replace p {
+  margin: 0;
+}
+
+.bet-slip-replace button {
+  justify-self: start;
+  white-space: normal;
+  text-align: left;
+}

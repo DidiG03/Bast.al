@@ -204,7 +204,7 @@ export type MarketPauseSummary = {
 };
 
 export function pauseSummary(
-  markets: Array<{ name: string; sortOrder: number; livePausedAt?: Date | null; livePausedUntil?: Date | null; liveReopenFrom?: Date | null; livePauseReason?: string | null }>,
+  markets: Array<{ key?: string; name: string; sortOrder: number; livePausedAt?: Date | null; livePausedUntil?: Date | null; liveReopenFrom?: Date | null; livePauseReason?: string | null }>,
   now: Date = new Date(),
 ): MarketPauseSummary | null {
   const paused = markets
@@ -215,10 +215,12 @@ export function pauseSummary(
   // The banner names the newest pause and the markets that pause covers, so a corner doesn't list the goal markets still waiting.
   const covered = paused.filter((market) => market.livePauseReason === latest.livePauseReason);
   const until = Math.max(...covered.map((market) => pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now)!));
+  // The lines of one market are named once: "Total corners", not "Total corners 10.5, Total corners 11.5 and 2 more".
+  const names = [...new Set(covered.map((market) => (market.key && /_\d+_5$/.test(market.key) ? market.name.replace(/\s+\d+(\.\d+)?$/, "") : market.name)))];
   return {
     reason: latest.livePauseReason ?? "goal",
-    count: covered.length,
-    markets: covered.slice(0, 3).map((market) => market.name),
+    count: names.length,
+    markets: names.slice(0, 3),
     until: new Date(until).toISOString(),
     exact: covered.every((market) => market.liveReopenFrom != null && market.livePausedUntil!.getTime() <= market.liveReopenFrom.getTime()),
   };

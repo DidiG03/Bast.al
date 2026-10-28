@@ -570,7 +570,18 @@ export type SelectionQuote = {
   final?: boolean;
   /** Greyhounds: paid at the starting price; `price` is 0. */
   sp?: boolean;
+  /**
+   * Live and not taking bets: why (a market pause such as "goal" or "corner"; "match:feed" and the other
+   * whole-match reasons; "count" while the corners or cards count is old; "suspended" when the bookmaker holds
+   * it), and when it's back if that's known.
+   */
+  pause?: { reason: string; until: string | null } | null;
+  /** Live: the feed moved this over/under line on (11.5 to 12.5); the same side of the line it offers now. */
+  replacement?: SlipReplacement | null;
 };
+
+/** The line a live over/under pick can switch to when the feed has moved on from its own. */
+export type SlipReplacement = { id: string; market: string; name: string; price: number };
 
 export type OddsSettings = {
   baseMargin: number;

@@ -11,6 +11,7 @@ import { competitionKey, feedDelay, lagGate, lagStats } from "./feed-delay";
 import { LATE_REASONS, timelineOf } from "../bets/late";
 import { liveConfirmConfig } from "../bets/live-delay";
 import { countAvailability, countSelectionDead, countStatsStale, isCountFamily } from "./count-guard";
+import { pauseDeadline } from "./live-guard";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
@@ -69,6 +70,39 @@ function liveCountHidden(
 ): boolean {
   if (event.status !== EventStatus.LIVE || !isCountFamily(market.key) || marketPause({ ...market, liveSuspended: false }, now) !== null) return false;
   return liveSideUnpriced(market.key, market.selections.some((selection) => selection.liveOdds !== null)) || countAvailability(event, market.key, now) === "none";
+}
+
+/** An over/under line market ("corners_11_5"): its family ("corners_") and line (11.5); null for any other market. */
+function lineFamily(key: string): string | null {
+  const match = /^(.*_)(\d+)_5$/.exec(key);
+  return match ? match[1] : null;
+}
+function lineOf(key: string): number | null {
+  const match = /_(\d+)_5$/.exec(key);
+  return match ? Number(`${match[1]}.5`) : null;
+}
+
+/**
+ * Why a live pick isn't taking bets right now, for the slip: the market's
+ * own pause (a goal, a corner, a card…) with when it ends, the whole match's
+ * (the feed, the bookmaker, the last minutes), the count it waits for, or
+ * the bookmaker holding that market.
+ */
+function livePickPause(
+  event: Parameters<typeof livePause>[0],
+  market: { liveSuspended: boolean; livePausedAt?: Date | null; livePausedUntil?: Date | null; livePauseReason?: string | null },
+  now: Date,
+  waitingForCount: boolean,
+): { reason: string; until: string | null } {
+  const paused = marketPause(market, now);
+  if (paused) {
+    const end = pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now);
+    return { reason: paused, until: end === null ? null : new Date(end).toISOString() };
+  }
+  const whole = livePause(event, now);
+  if (whole) return { reason: `match:${whole}`, until: null };
+  if (waitingForCount) return { reason: "count", until: null };
+  return { reason: "suspended", until: null };
 }
 
 /** A live match's prices sent to a team are forgotten this long after its last update (it finished, or stopped being sent). */
@@ -570,6 +604,7 @@ export class OddsService {
     const overrideBy = new Map(overrides.map((o) => [o.selectionId, Number(o.odds)]));
     const now = new Date();
     const limits = rows.some((row) => row.market.event.status === EventStatus.LIVE) ? await this.liveLimits() : null;
+    const lineReplacement = await this.lineReplacements(rows, baseMargin, ownerMargin, now);
     return rows
       .filter((row) => !row.market.event.hidden || actor.role === Role.SUPER_ADMIN)
       .map((row) => {
@@ -589,8 +624,62 @@ export class OddsService {
         // (in sports bet on only before the start) the start passed. A football match past kick-off may still go live.
         const over = event.status === EventStatus.COMPLETED || event.status === EventStatus.CANCELLED || event.status === EventStatus.POSTPONED;
         const final = !live && (over || row.result !== null || row.withdrawn || (event.sport !== "football" && !open && event.startsAt <= now));
-        return { id: row.id, eventId: event.id, price: quote.price, bettable: quote.bettable, suspended: quote.suspended, live, open, final, sp: event.sport === "greyhounds" };
+        // The same checks as the live board (pushLive): a corners or cards pick waits for a fresh count, and one already decided isn't offered.
+        const count = live ? countAvailability(event, row.market.key, now) : "ok";
+        const decided = live && countSelectionDead(event.matchCentre, event.matchCentreAt, row.market.key, row.key, now);
+        const bettable = quote.bettable && count === "ok" && !decided;
+        // A line paused for a moment (a goal, a corner) comes back as it is; only one no longer offered is replaced.
+        const replacement = live && !bettable && row.market.liveSuspended && marketPause(row.market, now) === null ? lineReplacement.get(row.id) ?? null : null;
+        return {
+          id: row.id,
+          eventId: event.id,
+          price: quote.price,
+          bettable,
+          suspended: quote.suspended || (live && (count !== "ok" || decided)),
+          live,
+          open,
+          final,
+          sp: event.sport === "greyhounds",
+          /** Live and not taking bets: why, and when it's back if that's known (a pause after a goal, a corner…). */
+          pause: live && !bettable ? livePickPause(event, row.market, now, count !== "ok") : null,
+          /** Live: this line isn't offered now, but the feed prices another line of the same market: the slip offers it instead. */
+          replacement,
+        };
       });
+  }
+
+  /**
+   * For live over/under line picks the feed has stopped offering (Total
+   * corners 11.5 after it moved to 12.5): the same side of the line it
+   * offers now in that market, if one is open. By the pick's id.
+   */
+  private async lineReplacements(rows: Array<{ id: string; key: string; market: { key: string; eventId: string; liveSuspended: boolean; event: { status: EventStatus } } }>, baseMargin: number, ownerMargin: number, now: Date) {
+    const found = new Map<string, { id: string; market: string; name: string; price: number }>();
+    const wanted = rows.filter((row) => row.market.event.status === EventStatus.LIVE && lineFamily(row.market.key) !== null);
+    if (wanted.length === 0) return found;
+    const siblings = await this.prisma.market.findMany({
+      where: { eventId: { in: [...new Set(wanted.map((row) => row.market.eventId))] }, OR: [...new Set(wanted.map((row) => lineFamily(row.market.key)!))].map((family) => ({ key: { startsWith: family } })) },
+      include: { selections: true, event: true },
+      orderBy: { sortOrder: "asc" },
+    });
+    for (const row of wanted) {
+      const family = lineFamily(row.market.key)!;
+      const line = lineOf(row.market.key)!;
+      // The nearest line the feed prices and takes bets on now, the same side (over or under).
+      const options = siblings
+        .filter((market) => market.eventId === row.market.eventId && market.key !== row.market.key && lineFamily(market.key) === family)
+        .map((market) => {
+          const selection = market.selections.find((candidate) => candidate.key === row.key);
+          if (!selection) return null;
+          const quote = selectionQuote({ event: market.event, market, selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn }, baseMargin, ownerMargin, override: null, now });
+          if (!quote.bettable || countAvailability(market.event, market.key, now) !== "ok" || countSelectionDead(market.event.matchCentre, market.event.matchCentreAt, market.key, selection.key, now)) return null;
+          return { id: selection.id, market: market.name, name: selection.name, price: quote.price, distance: Math.abs(lineOf(market.key)! - line) };
+        })
+        .filter((option): option is NonNullable<typeof option> => option !== null)
+        .sort((a, b) => a.distance - b.distance);
+      if (options[0]) found.set(row.id, { id: options[0].id, market: options[0].market, name: options[0].name, price: options[0].price });
+    }
+    return found;
   }
 
   private async priced(actor: Actor, events: PricedEvent[], ownerIdParam: string | undefined, now: Date) {

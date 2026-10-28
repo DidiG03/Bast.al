@@ -130,7 +130,18 @@ function Person() {
 
   function exportLedger() {
     if (!ledger) return;
-    const rows = [[t("Date"), t("Type"), t("Amount"), t("Reason"), t("By")], ...ledger.map((entry) => [new Date(entry.createdAt).toISOString(), t(transactionLabel(entry.type)), entry.amount.toFixed(2), ts(entry.reason), ts(entry.counterparty ?? entry.actor?.username ?? "System")])];
+    const rows = [
+      [t("Date"), t("Type"), t("Status"), t("Amount"), t("Balance after"), t("Reason"), t("By")],
+      ...ledger.map((entry) => [
+        new Date(entry.createdAt).toISOString(),
+        t(transactionLabel(entry.type)),
+        entry.status && LEDGER_STATUS[entry.status] ? t(LEDGER_STATUS[entry.status]) : t("Done"),
+        (entry.effect ?? entry.amount).toFixed(2),
+        entry.balanceAfter?.toFixed(2) ?? "",
+        ts(entry.reason),
+        ts(entry.counterparty ?? entry.actor?.username ?? "System"),
+      ]),
+    ];
     const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -329,7 +340,7 @@ function Person() {
         ) : (
           <div className="ledger-list">
             {ledger.map((entry) => (
-              <div className="ledger-row" key={entry.id}>
+              <div className={`ledger-row${entry.status && entry.status !== "APPROVED" ? " is-void" : ""}`} key={entry.id}>
                 <div>
                   <strong>
                     {t(transactionLabel(entry.type))}
@@ -339,7 +350,15 @@ function Person() {
                   <Link className="row-detail-link" href={`/dashboard/finance/transaction/${entry.id}`}>{t("View receipt")}</Link>
                 </div>
                 <div>
-                  <strong className={entry.amount < 0 ? "ledger-negative" : "ledger-positive"}>{entry.amount < 0 ? "-" : "+"}{formatMoney(Math.abs(entry.amount))}</strong>
+                  {entry.status && entry.status !== "APPROVED" ? (
+                    // Rejected or still waiting: no money moved, so it's shown struck through and adds nothing.
+                    <strong className="ledger-no-effect" title={t("No money moved")}>
+                      <s>{entry.amount < 0 ? "-" : "+"}{formatMoney(Math.abs(entry.amount))}</s>
+                    </strong>
+                  ) : (
+                    <strong className={entry.amount < 0 ? "ledger-negative" : "ledger-positive"}>{entry.amount < 0 ? "-" : "+"}{formatMoney(Math.abs(entry.amount))}</strong>
+                  )}
+                  {entry.balanceAfter !== undefined ? <span className="muted ledger-after">{t("Balance {amount}", { amount: formatMoney(entry.balanceAfter) })}</span> : null}
                   <time className="muted" dateTime={entry.createdAt}>{date(entry.createdAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time>
                 </div>
                 {entry.status === "PENDING" && me.role !== "MANAGER" ? (

@@ -47,9 +47,13 @@ export function translatePlural(lang: Lang, count: number, one: string, other: s
 
 const translateSq = createServerTranslator(sq);
 
+/** "100000.00 ALL" in a message written before the API separated thousands, as "100,000.00 ALL", like every other amount. */
+const separateThousands = (text: string) => text.replace(/(\d{4,})\.(\d{2}) ALL/g, (_, whole: string, cents: string) => `${Number(whole).toLocaleString("en-US")}.${cents} ALL`);
+
 export function translateServer(lang: Lang, text: string | null | undefined): string {
   if (!text) return text ?? "";
-  return lang === "en" ? text : translateSq(text);
+  const plain = separateThousands(text);
+  return lang === "en" ? plain : translateSq(plain);
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();

@@ -16,6 +16,7 @@ export class NotificationsService {
   ) {}
 
   async list(actor: Actor, includeArchived = false) {
+    await this.archiveSettledApprovals(actor.id);
     const [items, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
         where: { userId: actor.id, ...(includeArchived ? {} : { archivedAt: null }) },
@@ -112,6 +113,38 @@ export class NotificationsService {
     } catch (error) {
       this.logger.error(`Failed to create notification (userId=${input.userId}, type=${input.type}): ${String(error)}`);
       return null;
+    }
+  }
+
+  /**
+   * An "Approval needed" alert stays only while its transfer is waiting:
+   * once it's approved or rejected (by anyone, or cancelled when a Player
+   * moved team) the alert is marked read and archived, for everyone it was
+   * sent to, so the bell and Latest updates agree with "Needs your
+   * attention". `transactionIds`: the transfers just settled; without it,
+   * the alerts of `userId` are checked against their transfers (catching any
+   * settled before this ran).
+   */
+  async archiveSettledApprovals(userId?: string, transactionIds?: string[]) {
+    try {
+      const open = await this.prisma.notification.findMany({
+        where: { type: NotificationType.APPROVAL_REQUESTED, archivedAt: null, ...(userId ? { userId } : {}), ...(transactionIds ? { OR: transactionIds.map((id) => ({ metadata: { path: ["transactionId"], equals: id } })) } : {}) },
+        select: { id: true, userId: true, metadata: true },
+      });
+      if (open.length === 0) return;
+      const idOf = (metadata: unknown) => ((metadata as { transactionId?: unknown } | null)?.transactionId as string | undefined) ?? null;
+      const ids = [...new Set(open.map((row) => idOf(row.metadata)).filter((id): id is string => id !== null))];
+      const waiting = new Set(
+        (await this.prisma.balanceTransaction.findMany({ where: { id: { in: ids }, status: "PENDING" }, select: { id: true } })).map((row) => row.id),
+      );
+      const settled = open.filter((row) => !waiting.has(idOf(row.metadata) ?? ""));
+      if (settled.length === 0) return;
+      const now = new Date();
+      await this.prisma.notification.updateMany({ where: { id: { in: settled.map((row) => row.id) } }, data: { archivedAt: now } });
+      await this.prisma.notification.updateMany({ where: { id: { in: settled.map((row) => row.id) }, readAt: null }, data: { readAt: now } });
+      for (const user of new Set(settled.map((row) => row.userId))) await this.realtime.publish(user, { type: "notifications.changed" });
+    } catch (error) {
+      this.logger.warn(`Settled approval alerts not archived: ${String(error)}`);
     }
   }
 

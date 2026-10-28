@@ -120,11 +120,11 @@ test("illegal bets, the table limit, the daily loss limit and a low balance stop
   const balance = await balanceOf(rita);
   await assert.rejects(roulette.spin(rita, [{ spot: "00", amount: 100 }]), /no "00" on the table/);
   await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 30 }]), /chips/);
-  await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 2000 }, { spot: "BLACK", amount: 1000 }]), /most you can have on the table in one spin is 2500\.00 ALL/);
+  await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 2000 }, { spot: "BLACK", amount: 1000 }]), /most you can have on the table in one spin is 2,500\.00 ALL/);
 
   await prisma.bettingLimit.create({ data: { playerId: rita.id, ownerMaxStake: 2000 } });
   assert.equal((await roulette.state(rita)).tableMax, 2000);
-  await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 1000 }, { spot: "BLACK", amount: 1050 }]), /2000\.00 ALL/);
+  await assert.rejects(roulette.spin(rita, [{ spot: "RED", amount: 1000 }, { spot: "BLACK", amount: 1050 }]), /2,000\.00 ALL/);
   await prisma.bettingLimit.update({ where: { playerId: rita.id }, data: { ownerMaxStake: 15000 } });
   assert.equal((await roulette.state(rita)).tableMax, 15000, "a higher max stake raises the table limit");
 
@@ -161,7 +161,7 @@ test("roulette profit counts in commissions, and the Casino page shows each game
   const page = await casino.admin(owner, fromDay, to);
   assert.deepEqual(page.players.map((row) => [row.username, row.spins, row.roulette.spins, row.net]), [[rita.username, 0, 3, net]]);
   assert.deepEqual(page.games.roulette, { spins: 3, staked: Math.round(staked * 100) / 100, won: Math.round(won * 100) / 100, payoutRate: Math.round((won / staked) * 1000) / 10 });
-  assert.deepEqual(page.games.slot, { spins: 0, staked: 0, won: 0, payoutRate: null });
+  assert.deepEqual(page.games.slot, { spins: 0, freeSpins: 0, staked: 0, won: 0, payoutRate: null });
 });
 
 test("the same round sent twice plays once", async () => {

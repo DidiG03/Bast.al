@@ -31,10 +31,15 @@ import { ManagerCapacityDto } from "./dto/manager-capacity.dto";
 import { CommissionRateDto } from "./dto/commission.dto";
 import { BulkActionDto, TeamSettingsDto } from "./dto/team.dto";
 import { Idempotent } from "../idempotency/idempotency.interceptor";
-import { DataResetService } from "./data-reset.service";
+import { DataResetService, RESET_PHRASE } from "./data-reset.service";
 import { UsersService } from "./users.service";
 
 class DataResetDto {
+  @ApiProperty({ description: `The phrase ${RESET_PHRASE}, typed to confirm` })
+  @IsString()
+  @MaxLength(64)
+  phrase!: string;
+
   @ApiProperty({ description: "Super Admin's own username, typed to confirm" })
   @IsString()
   @MaxLength(64)

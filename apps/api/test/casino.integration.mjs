@@ -292,7 +292,9 @@ test("casino profit counts in commissions, and the Casino page shows it per Play
   const from = startOfDay(new Date()).toISOString();
   const to = new Date(Date.now() + 60_000).toISOString();
   const spins = await prisma.casinoSpin.findMany({ where: { playerId: cara.id } });
-  const spinCount = spins.filter((spin) => spin.kind === "SPIN").length;
+  // Paid spins count as rounds; free spins are counted on their own (and double or nothing in the money only).
+  const spinCount = spins.filter((spin) => spin.kind === "SPIN" && !spin.free).length;
+  const freeCount = spins.filter((spin) => spin.kind === "SPIN" && spin.free).length;
   const staked = spins.reduce((sum, spin) => sum + Number(spin.stake), 0);
   const won = spins.reduce((sum, spin) => sum + Number(spin.win), 0);
   const net = Math.round((staked - won) * 100) / 100;
@@ -306,7 +308,8 @@ test("casino profit counts in commissions, and the Casino page shows it per Play
 
   const page = await casino.admin(owner, from, to);
   assert.deepEqual(page.players.map((row) => [row.username, row.spins, row.net]), [[cara.username, spinCount, net]]);
-  assert.equal(page.totals.spins, spinCount, "guesses count in the money, not as spins");
+  assert.equal(page.totals.spins, spinCount, "guesses and free spins count in the money, not as spins");
+  assert.equal(page.games.slot.freeSpins, freeCount);
   assert.deepEqual(page.teams, [{ ownerId: owner.id, username: owner.username, open: true, gamesOff: [] }]);
   assert.equal((await casino.admin(manager, from, to)).teamOpen, true);
   const all = await casino.admin(sa, from, to);
@@ -351,7 +354,7 @@ test("spins count as money history, and the data reset clears them", async () =>
   const clerk = { api: { users: { verifyPassword: async () => ({ verified: true }) } }, deleteUserStrict: async () => undefined };
   const reset = new DataResetService(prisma, clerk, audit, { get: () => undefined });
   const spins = await prisma.casinoSpin.count();
-  const done = await reset.reset(sa, { username: sa.username, password: "right" });
+  const done = await reset.reset(sa, { phrase: "DELETE ALL TEST DATA", username: sa.username, password: "right" });
   assert.equal(done.casinoSpins, spins);
   assert.equal(await prisma.casinoSpin.count(), 0);
   assert.equal(await prisma.casinoFreeSpins.count(), 0);

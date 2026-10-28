@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BOOK_COVER, bookSymbolImage } from "../../../components/book-symbols";
 import { HelpTip } from "../../../components/help-tip";
+import { useConfirm } from "../../../components/confirm-dialog";
 import { useI18n } from "../../../components/i18n-provider";
 import { PageLoading } from "../../../components/loading-spinner";
 import { PenaltyScene } from "../../../components/penalty-scene";
@@ -647,6 +648,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
   const [range, setRange] = useState<Range>("this-week");
   const [data, setData] = useState<CasinoAdmin | null>(null);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(async () => {
     const token = await getToken();
@@ -662,6 +664,14 @@ function CasinoOverview({ me }: { me: MeResponse }) {
   }, [range]);
 
   async function setOpen(open: boolean, ownerId?: string) {
+    const team = ownerId ? data?.teams.find((row) => row.ownerId === ownerId)?.username : null;
+    const sure = await confirm({
+      title: open ? (team ? t("Open the Casino for {name}'s team?", { name: team }) : t("Open the Casino for the whole site?")) : team ? t("Close the Casino for {name}'s team?", { name: team }) : t("Close the Casino for the whole site?"),
+      message: open ? t("Players can start new rounds straight away.") : t("Players can't start new rounds. Rounds already started can still be finished."),
+      confirmLabel: open ? t("Open the Casino") : t("Close the Casino"),
+      danger: !open,
+    });
+    if (!sure) return;
     setSwitching(ownerId ?? "site");
     try {
       const token = await getToken();
@@ -677,6 +687,13 @@ function CasinoOverview({ me }: { me: MeResponse }) {
   }
 
   async function setGame(game: CasinoGame, open: boolean) {
+    const sure = await confirm({
+      title: open ? t("Turn {game} on?", { game: gameName(game) }) : t("Turn {game} off?", { game: gameName(game) }),
+      message: me.role === "SUPER_ADMIN" ? t("This applies to the whole site.") : t("This applies to your team."),
+      confirmLabel: open ? t("Turn on") : t("Turn off"),
+      danger: !open,
+    });
+    if (!sure) return;
     setSwitching(game);
     try {
       const token = await getToken();
@@ -706,6 +723,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
 
   return (
     <div className="stack">
+      {confirmDialog}
       <div>
         <h1 style={{ margin: 0 }}>{t("Casino")}</h1>
         <p className="muted report-subtitle">{subtitle}</p>
@@ -796,7 +814,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
         <div className="report-list">
           {(
             [
-              ["slot", t("Fruit slot"), tn(data.games.slot.spins, "{count} spin", "{count} spins")],
+              ["slot", "Sizzling Hot", `${tn(data.games.slot.spins, "{count} spin", "{count} spins")}${data.games.slot.freeSpins ? ` · ${tn(data.games.slot.freeSpins, "{count} free spin", "{count} free spins")}` : ""}`],
               ["roulette", t("Roulette"), tn(data.games.roulette.spins, "{count} round", "{count} rounds")],
               ["blackjack", t("Blackjack"), tn(data.games.blackjack.spins, "{count} hand", "{count} hands")],
               ["book", "Book of Ra", `${tn(data.games.book.spins, "{count} spin", "{count} spins")} · ${tn(data.games.book.freeSpins, "{count} free spin", "{count} free spins")}`],

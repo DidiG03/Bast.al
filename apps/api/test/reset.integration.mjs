@@ -77,16 +77,17 @@ test("the preview says what would go", async () => {
 });
 
 test("the wrong username or password deletes nothing", async () => {
-  await assert.rejects(reset.reset(sa, { username: "someone", password: "right" }), /Type your own username/);
-  await assert.rejects(reset.reset(sa, { username: sa.username, password: "wrong" }), /password isn't right/);
-  await assert.rejects(reset.reset(owner, { username: owner.username, password: "right" }), /Only Super Admin/);
+  await assert.rejects(reset.reset(sa, { phrase: "delete it", username: sa.username, password: "right" }), /Type DELETE ALL TEST DATA to confirm/);
+  await assert.rejects(reset.reset(sa, { phrase: "DELETE ALL TEST DATA", username: "someone", password: "right" }), /Type your own username/);
+  await assert.rejects(reset.reset(sa, { phrase: "DELETE ALL TEST DATA", username: sa.username, password: "wrong" }), /password isn't right/);
+  await assert.rejects(reset.reset(owner, { phrase: "DELETE ALL TEST DATA", username: owner.username, password: "right" }), /Only Super Admin/);
   assert.equal(await prisma.user.count(), 4);
   assert.deepEqual(clerkState.deleted, []);
 });
 
 test("if Clerk fails part way, the database isn't touched, and trying again finishes", async () => {
   clerkState.down.add(player.clerkId);
-  await assert.rejects(reset.reset(sa, { username: sa.username, password: "right" }), /1 of 3 sign-ins couldn't be deleted in Clerk, so nothing else was deleted yet/);
+  await assert.rejects(reset.reset(sa, { phrase: "DELETE ALL TEST DATA", username: sa.username, password: "right" }), /1 of 3 sign-ins couldn't be deleted in Clerk, so nothing else was deleted yet/);
   assert.equal(await prisma.user.count(), 4, "every account is still there");
   assert.equal(await prisma.bet.count(), 1);
   assert.deepEqual(clerkState.deleted.sort(), [owner.clerkId, manager.clerkId].sort());
@@ -94,7 +95,7 @@ test("if Clerk fails part way, the database isn't touched, and trying again fini
   // Clerk is back. The two deleted before now answer "not found", which counts as done.
   clerkState.down.clear();
   clerkState.gone.add(owner.clerkId).add(manager.clerkId);
-  const done = await reset.reset(sa, { username: ` ${sa.username.toUpperCase()} `, password: "right" });
+  const done = await reset.reset(sa, { phrase: "DELETE ALL TEST DATA", username: ` ${sa.username.toUpperCase()} `, password: "right" });
   assert.deepEqual(done, { accounts: 3, bets: 1, casinoSpins: 0, ledgerEntries: 2, commissionPayouts: 1, signIns: 3 });
   assert.ok(clerkState.deleted.includes(player.clerkId));
 });
@@ -125,7 +126,7 @@ test("only Super Admin, the settings and the matches are left", async () => {
 test("DATA_RESET=off turns it off", async () => {
   settings.DATA_RESET = "off";
   assert.equal((await reset.preview(sa)).enabled, false);
-  await assert.rejects(reset.reset(sa, { username: sa.username, password: "right" }), /turned off on this server/);
+  await assert.rejects(reset.reset(sa, { phrase: "DELETE ALL TEST DATA", username: sa.username, password: "right" }), /turned off on this server/);
 });
 
 test("teardown", async () => {

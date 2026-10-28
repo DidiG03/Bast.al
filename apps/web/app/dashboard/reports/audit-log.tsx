@@ -12,14 +12,16 @@ import { HelpTip } from "../../../components/help-tip";
 import { useToast } from "../../../components/toaster";
 import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
-import { endOfDateInput, fromDateInput } from "../../../lib/time";
+import { dayTextToInput, endOfDateInput, fromDateInput } from "../../../lib/time";
+import { auditDetails, auditLabel, auditParties } from "../../../lib/audit";
 
 const roles = ["", "SUPER_ADMIN", "OWNER", "MANAGER", "PLAYER"] as const;
 const ROLE_NAMES: Record<string, string> = { "": msg("All roles"), SUPER_ADMIN: msg("Super Admin"), OWNER: msg("Owner"), MANAGER: msg("Manager"), PLAYER: msg("Player") };
 
 export function AuditLog() {
   const { getToken } = useAuth();
-  const { t, ts, date } = useI18n();
+  const i18n = useI18n();
+  const { t, ts, date } = i18n;
   const dateLabel = (value: string) => date(value, { dateStyle: "medium", timeStyle: "short" });
   const [me, setMe] = useState<MeResponse | null>(null);
   const [result, setResult] = useState<AuditResponse | null>(null);
@@ -49,8 +51,12 @@ export function AuditLog() {
       if (target.trim()) params.set("target", target.trim());
       if (action.trim()) params.set("action", action.trim());
       if (role) params.set("role", role);
-      if (from) params.set("from", fromDateInput(from)?.toISOString() ?? "");
-      if (to) params.set("to", endOfDateInput(to)?.toISOString() ?? "");
+      // Dates are typed day/month/year; one that isn't a date is left out, and said so.
+      const fromDay = from.trim() ? dayTextToInput(from) : null;
+      const toDay = to.trim() ? dayTextToInput(to) : null;
+      if ((from.trim() && !fromDay) || (to.trim() && !toDay)) toast.warning(t("Type dates as dd/mm/yyyy, for example 26/10/2026."));
+      if (fromDay) params.set("from", fromDateInput(fromDay)?.toISOString() ?? "");
+      if (toDay) params.set("to", endOfDateInput(toDay)?.toISOString() ?? "");
       setResult(
         await apiFetch<AuditResponse>(
           `/users/audit?${params.toString()}`,
@@ -123,17 +129,23 @@ export function AuditLog() {
         <label>
           {t("From")}
           <input
-            type="date"
+            type="text"
+            inputMode="numeric"
+            placeholder={t("dd/mm/yyyy")}
             value={from}
             onChange={(event) => setFrom(event.target.value)}
+            aria-invalid={from.trim() !== "" && !dayTextToInput(from)}
           />
         </label>
         <label>
           {t("To")}
           <input
-            type="date"
+            type="text"
+            inputMode="numeric"
+            placeholder={t("dd/mm/yyyy")}
             value={to}
             onChange={(event) => setTo(event.target.value)}
+            aria-invalid={to.trim() !== "" && !dayTextToInput(to)}
           />
         </label>
         <div className="audit-filter-actions">
@@ -176,11 +188,9 @@ export function AuditLog() {
             result.items.map((entry) => (
               <article className="audit-row" key={entry.id}>
                 <div>
-                  <strong>{ts(entry.action.replaceAll(".", " "))}</strong>
-                  <span className="muted">
-                    {entry.actor?.username ?? t("System")}
-                    {entry.target ? ` → ${entry.target.username}` : ""}
-                  </span>
+                  <strong>{auditLabel(entry.action, i18n)}</strong>
+                  <span className="muted">{auditParties(entry, i18n)}</span>
+                  {auditDetails(entry, i18n) ? <span className="audit-detail">{auditDetails(entry, i18n)}</span> : null}
                 </div>
                 <div>
                   <time className="muted" dateTime={entry.createdAt}>

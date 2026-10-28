@@ -155,7 +155,7 @@ test("Plinko profit counts in commissions, and the Casino page shows it as its o
   const page = await casino.admin(owner, fromDay, to);
   assert.deepEqual(page.players.map((row) => [row.username, row.spins, row.plinko.balls, row.net]), [[pia.username, 0, 3, net]]);
   assert.deepEqual(page.games.plinko, { spins: 3, staked: Math.round(staked * 100) / 100, won: Math.round(won * 100) / 100, payoutRate: Math.round((won / staked) * 1000) / 10 });
-  assert.deepEqual(page.games.slot, { spins: 0, staked: 0, won: 0, payoutRate: null });
+  assert.deepEqual(page.games.slot, { spins: 0, freeSpins: 0, staked: 0, won: 0, payoutRate: null });
 });
 
 test("the same ball sent twice drops once", async () => {

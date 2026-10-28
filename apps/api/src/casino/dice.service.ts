@@ -34,6 +34,7 @@ import {
   wins,
   type Direction,
 } from "./dice";
+import { formatAll } from "../money";
 
 /** Rolls in the Player's recent list. */
 const RECENT = 20;
@@ -139,7 +140,7 @@ export class DiceService {
     const invalid = invalidTarget(target, direction);
     if (invalid) throw new BadRequestException(invalid);
     const tableMax = await this.tableMax(actor.id);
-    if (stakeCents > Math.round(tableMax * 100)) throw new BadRequestException(`The most a roll can cost you is ${tableMax.toFixed(2)} ALL`);
+    if (stakeCents > Math.round(tableMax * 100)) throw new BadRequestException(`The most a roll can cost you is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);
     const winning = winningNumbers(target, direction);
 

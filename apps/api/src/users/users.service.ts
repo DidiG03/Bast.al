@@ -18,9 +18,11 @@ import { AdjustBalanceDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/bal
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { HierarchyService } from "./hierarchy.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { type ResultsScope, periodResults } from "../commissions/results";
 import { RealtimeService } from "../realtime/realtime.service";
 import { AuditQueryDto } from "./dto/audit-query.dto";
 import { MoneyQueryDto, type MoneyKind } from "./dto/money-query.dto";
+import { formatAll } from "../money";
 
 /** Fields safe to return to clients — never includes email/password/ciphertext. */
 const publicUserSelect = {
@@ -159,8 +161,9 @@ export class UsersService {
   async securityOverview(actor: Actor) {
     const [sessions, activity, loginHistory] = await Promise.all([
       this.clerk.api.sessions.getSessionList({ userId: actor.clerkId }),
+      // Warnings only: refused sign-ins and requests the security check stopped. Every successful sign-in is in the history.
       this.prisma.auditLog.findMany({
-        where: { OR: [{ actorId: actor.id }, { targetId: actor.id }], action: { in: ["auth.success", "auth.failure"] } },
+        where: { OR: [{ actorId: actor.id }, { targetId: actor.id }], action: { in: ["auth.failure", "auth.refused", "security.integrity_failure"] } },
         orderBy: { createdAt: "desc" },
         take: 30,
         select: { id: true, action: true, ipAddress: true, metadata: true, createdAt: true },
@@ -186,7 +189,7 @@ export class UsersService {
         ipAddress: bySession.get(session.id)?.ipAddress ?? null,
         location: bySession.get(session.id)?.location ?? null,
       })),
-      activity,
+      activity: [...activity, ...newPlaces(loginHistory)].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 30),
       loginHistory,
     };
   }
@@ -551,13 +554,22 @@ export class UsersService {
   /** Every credit this account has received or given — the full history behind its current balance. */
   /** Newest first. Pass `limit` (and `before`, the last entry's createdAt) to read it a page at a time. */
   async balanceLedger(actor: Actor, id: string, page: { before?: string; limit?: number } = {}) {
-    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, balance: true } });
     if (!target) throw new NotFoundException("User not found");
     if (target.role === Role.SUPER_ADMIN) throw new BadRequestException("Super Admin accounts do not hold a balance");
     if (!(await this.hierarchy.canActOn(actor, id))) {
       throw new ForbiddenException("Target is outside your hierarchy subtree");
     }
     const before = page.before ? new Date(page.before) : null;
+    // What the approved moves newer than this page changed: the balance just after its newest entry is the current one less that.
+    const newer = before && !Number.isNaN(before.getTime()) ? { createdAt: { gte: before } } : null;
+    const [inNewer, outNewer] = newer
+      ? await Promise.all([
+          this.prisma.balanceTransaction.aggregate({ where: { toUserId: id, status: BalanceTransactionStatus.APPROVED, ...newer }, _sum: { amount: true } }),
+          this.prisma.balanceTransaction.aggregate({ where: { fromUserId: id, status: BalanceTransactionStatus.APPROVED, ...newer }, _sum: { amount: true } }),
+        ])
+      : [null, null];
+    let balanceAfter = Number(target.balance) - Number(inNewer?._sum.amount ?? 0) + Number(outNewer?._sum.amount ?? 0);
     const take = page.limit ? Math.min(Math.max(Math.floor(page.limit), 1), 100) : undefined;
     const entries = await this.prisma.balanceTransaction.findMany({
       where: { OR: [{ toUserId: id }, { fromUserId: id }], ...(before && !Number.isNaN(before.getTime()) ? { createdAt: { lt: before } } : {}) },
@@ -579,12 +591,15 @@ export class UsersService {
         actor: { select: { username: true } },
       },
     });
-    return entries.map((entry) => ({
-      ...entry,
+    return entries.map((entry) => {
       // Signed from this account's point of view: received = positive, given away = negative.
-      amount: entry.toUserId === id ? Number(entry.amount) : -Number(entry.amount),
-      counterparty: entry.toUserId === id ? entry.fromUser?.username ?? noCounterparty(entry.type) : entry.toUser.username,
-    }));
+      const amount = entry.toUserId === id ? Number(entry.amount) : -Number(entry.amount);
+      // A transfer rejected or still waiting moved no money: shown, but it changes nothing.
+      const effect = entry.status === BalanceTransactionStatus.APPROVED ? amount : 0;
+      const row = { ...entry, amount, effect, balanceAfter: Math.round(balanceAfter * 100) / 100, counterparty: entry.toUserId === id ? entry.fromUser?.username ?? noCounterparty(entry.type) : entry.toUser.username };
+      balanceAfter -= effect;
+      return row;
+    });
   }
 
   /**
@@ -674,7 +689,7 @@ export class UsersService {
           userId: actor.parentId,
           type: NotificationType.APPROVAL_REQUESTED,
           title: "Approval needed",
-          message: `${actor.username} wants to delegate ${dto.amount.toFixed(2)} ALL to ${target.username}.`,
+          message: `${actor.username} wants to delegate ${formatAll(dto.amount)} to ${target.username}.`,
           deepLink: "/dashboard/finance",
           metadata: { transactionId: pending.id, amount: dto.amount },
         });
@@ -739,7 +754,7 @@ export class UsersService {
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
       title: "Credit received",
-      message: `You received ${dto.amount.toFixed(2)} ALL from ${actor.username}.`,
+      message: `You received ${formatAll(dto.amount)} from ${actor.username}.`,
       deepLink: "/dashboard/finance",
       metadata: { amount: dto.amount, actorId: actor.id },
     });
@@ -787,7 +802,7 @@ export class UsersService {
       userId: id,
       type: NotificationType.FUNDS_RECEIVED,
       title: "Balance adjusted",
-      message: `An administrative adjustment of ${dto.amount.toFixed(2)} ALL was applied to your balance.`,
+      message: `An administrative adjustment of ${formatAll(dto.amount)} was applied to your balance.`,
       deepLink: "/dashboard/finance",
       metadata: { amount: dto.amount, actorId: actor.id },
     });
@@ -828,6 +843,7 @@ export class UsersService {
         return tx.balanceTransaction.findUniqueOrThrow({ where: { id: transactionId }, select: { id: true, status: true } });
       });
       await this.audit.log({ actorId: actor.id, action: "user.balance_rejected", targetId: transaction.toUserId, ipAddress, metadata: { transactionId } });
+      await this.notifications.archiveSettledApprovals(undefined, [transactionId]);
       return rejected;
     }
 
@@ -877,9 +893,10 @@ export class UsersService {
       return tx.balanceTransaction.findUniqueOrThrow({ where: { id: transactionId }, select: { id: true, status: true, amount: true } });
     });
     await this.audit.log({ actorId: actor.id, action: "user.balance_approved", targetId: transaction.toUserId, ipAddress, metadata: { transactionId } });
+    await this.notifications.archiveSettledApprovals(undefined, [transactionId]);
     await this.realtime.publishBalances([transaction.toUserId, transaction.fromUserId]);
     if (transaction.fromUserId) await this.alertLowBalance(transaction.fromUserId, amount);
-    await this.notifications.create({ userId: transaction.toUserId, type: NotificationType.FUNDS_RECEIVED, title: "Transaction approved", message: `A ${Number(transaction.amount).toFixed(2)} ALL transaction was approved.`, deepLink: `/dashboard/finance/transaction/${transactionId}`, metadata: { transactionId } });
+    await this.notifications.create({ userId: transaction.toUserId, type: NotificationType.FUNDS_RECEIVED, title: "Transaction approved", message: `A ${formatAll(Number(transaction.amount))} transaction was approved.`, deepLink: `/dashboard/finance/transaction/${transactionId}`, metadata: { transactionId } });
     return { ...result, amount: Number(result.amount) };
   }
 
@@ -975,7 +992,7 @@ export class UsersService {
       userId: id,
       type: NotificationType.FUNDS_RECLAIMED,
       title: "Credit reclaimed",
-      message: `${actor.username} reclaimed ${dto.amount.toFixed(2)} ALL from your balance.`,
+      message: `${actor.username} reclaimed ${formatAll(dto.amount)} from your balance.`,
       deepLink: "/dashboard",
       metadata: { amount: dto.amount, actorId: actor.id },
     });
@@ -1078,7 +1095,17 @@ export class UsersService {
         ])
       : Promise.resolve(null);
 
-    const [items, total, groups, received, takenFromYou, holdings, personTotals] = await Promise.all([
+    // Credit counted once, where it leaves the viewer: Super Admin's own credit (printed, or from their balance), or what this
+    // Owner or Manager sent from their balance. A transfer further down the team moves credit already counted, so it's kept apart.
+    const fromViewer: Prisma.BalanceTransactionWhereInput = actor.role === Role.SUPER_ADMIN ? { OR: [{ fromUserId: null }, { fromUserId: actor.id }] } : { fromUserId: actor.id };
+    const ownSums = Promise.all([
+      sumOf({ type: BalanceTransactionType.DELEGATION, status: approved, ...fromViewer }),
+      sumOf({ type: BalanceTransactionType.RECLAIM, status: approved, toUserId: actor.id }),
+      sumOf({ type: BalanceTransactionType.DELEGATION, status: approved, fromUserId: { not: null }, NOT: { fromUserId: actor.id } }),
+    ]);
+    const results = periodResults(this.prisma, await this.resultsScope(actor, query.person), { from: query.from ? new Date(query.from) : null, to: query.to ? new Date(query.to) : null });
+
+    const [items, total, groups, received, takenFromYou, holdings, personTotals, [givenByYou, takenBackByYou, withinTeam], periodTotals] = await Promise.all([
       this.prisma.balanceTransaction.findMany({
         where,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -1110,6 +1137,8 @@ export class UsersService {
         _count: { _all: true },
       }),
       personSums,
+      ownSums,
+      results,
     ]);
 
     const bucket = (type: BalanceTransactionType, status: BalanceTransactionStatus = approved) => {
@@ -1117,12 +1146,10 @@ export class UsersService {
       return { amount: Number(row?._sum.amount ?? 0), count: row?._count._all ?? 0 };
     };
     const pendingRows = groups.filter((group) => group.status === BalanceTransactionStatus.PENDING);
-    const delegated = bucket(BalanceTransactionType.DELEGATION);
-    const reclaimed = bucket(BalanceTransactionType.RECLAIM);
     const receivedAmount = Number(received?._sum.amount ?? 0);
     const takenFromYouAmount = Number(takenFromYou?._sum.amount ?? 0);
-    const given = delegated.amount - receivedAmount;
-    const takenBack = reclaimed.amount - takenFromYouAmount;
+    const given = Number(givenByYou._sum.amount ?? 0);
+    const takenBack = Number(takenBackByYou._sum.amount ?? 0);
     const me = actor.role === Role.SUPER_ADMIN ? null : await this.prisma.user.findUnique({ where: { id: actor.id }, select: { balance: true } });
 
     return {
@@ -1132,21 +1159,21 @@ export class UsersService {
       pages: Math.max(1, Math.ceil(total / limit)),
       summary: {
         given,
-        givenCount: delegated.count - (received?._count._all ?? 0),
+        givenCount: givenByYou._count._all,
         takenBack,
-        takenBackCount: reclaimed.count - (takenFromYou?._count._all ?? 0),
+        takenBackCount: takenBackByYou._count._all,
         net: given - takenBack,
+        /** Credit passed on further down the team (an Owner to a Manager, a Manager to a Player): already counted in `given`. */
+        withinTeam: Number(withinTeam._sum.amount ?? 0),
+        withinTeamCount: withinTeam._count._all,
         received: receivedAmount,
         takenFromYou: takenFromYouAmount,
         corrections: bucket(BalanceTransactionType.ADJUSTMENT).amount,
         pendingCount: pendingRows.reduce((sum, row) => sum + row._count._all, 0),
         pendingAmount: pendingRows.reduce((sum, row) => sum + Number(row._sum.amount ?? 0), 0),
         rejectedCount: groups.filter((group) => group.status === BalanceTransactionStatus.REJECTED).reduce((sum, row) => sum + row._count._all, 0),
-        // Stakes are stored as negative amounts; shown here as what was staked.
-        staked: -bucket(BalanceTransactionType.BET_STAKE).amount,
-        betCount: bucket(BalanceTransactionType.BET_STAKE).count,
-        paidOut: bucket(BalanceTransactionType.BET_SETTLEMENT).amount,
-        casinoNet: bucket(BalanceTransactionType.CASINO).amount,
+        /** Settled sports and casino results in the period, counted the same way as on Overview and Commissions (results.ts). */
+        results: periodTotals,
         yourBalance: me ? Number(me.balance) : null,
         teamBalance: Number(holdings._sum.balance ?? 0),
         teamAccounts: holdings._count._all,
@@ -1163,6 +1190,19 @@ export class UsersService {
       },
       items: items.map((entry) => ({ ...entry, amount: Number(entry.amount) })),
     };
+  }
+
+  /**
+   * Whose settled results the Finance page counts: the viewer's team, or the
+   * person picked (a Player's own, an Owner's or Manager's team).
+   */
+  private async resultsScope(actor: Actor, person?: string): Promise<ResultsScope> {
+    const target = person ? await this.prisma.user.findUnique({ where: { id: person }, select: { id: true, role: true } }) : null;
+    const who = target ?? { id: actor.id, role: actor.role };
+    if (who.role === Role.PLAYER) return { playerId: who.id };
+    if (who.role === Role.OWNER) return { ownerId: who.id };
+    if (who.role === Role.MANAGER) return { managerId: who.id };
+    return null;
   }
 
   /**
@@ -1381,7 +1421,7 @@ export class UsersService {
       metadata: { fromManagerId: previousManager?.id ?? null, toManagerId: manager.id, returnedBalance: returned },
     });
     if (returned > 0) await this.realtime.publishBalances([id, previousManager?.id ?? null]);
-    const back = returned > 0 && previousManager ? ` Your ${returned.toFixed(2)} ALL balance went back to ${previousManager.username}.` : "";
+    const back = returned > 0 && previousManager ? ` Your ${formatAll(returned)} balance went back to ${previousManager.username}.` : "";
     await this.notifications.create({
       userId: id,
       type: NotificationType.ACCOUNT_REASSIGNED,
@@ -1395,7 +1435,7 @@ export class UsersService {
         userId: previousManager.id,
         type: NotificationType.ACCOUNT_REASSIGNED,
         title: "Player reassigned",
-        message: returned > 0 ? `${player.username} was moved to another manager. Their ${returned.toFixed(2)} ALL balance came back to you.` : `${player.username} was moved to another manager.`,
+        message: returned > 0 ? `${player.username} was moved to another manager. Their ${formatAll(returned)} balance came back to you.` : `${player.username} was moved to another manager.`,
         deepLink: `/dashboard/users?userId=${id}`,
         metadata: { userId: id, managerId: manager.id, returnedBalance: returned },
       });
@@ -1601,7 +1641,7 @@ export class UsersService {
       userId: id,
       type: NotificationType.ACCOUNT_UPDATED,
       title: "Approval limit updated",
-      message: `Transfers up to ${effective.toFixed(2)} ALL now go through without approval.`,
+      message: `Transfers up to ${formatAll(effective)} now go through without approval.`,
       deepLink: "/dashboard/users",
       metadata: { actorId: actor.id, limit },
     });
@@ -1631,7 +1671,7 @@ export class UsersService {
         userId: recipient,
         type: NotificationType.LOW_BALANCE,
         title: "Low balance",
-        message: `${account.username}'s balance dropped to ${balance.toFixed(2)} ALL, below the ${threshold.toFixed(2)} ALL alert.`,
+        message: `${account.username}'s balance dropped to ${formatAll(balance)}, below the ${formatAll(threshold)} alert.`,
         deepLink: "/dashboard/users",
         metadata: { accountId: account.id, balance, threshold },
       });
@@ -1648,7 +1688,7 @@ export class UsersService {
     const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, balance: true, parentId: true } });
     if (!account || !account.balance.isNegative()) return;
     const owner = await this.ownerAbove(account.parentId);
-    const balance = `-${account.balance.abs().toFixed(2)} ALL`;
+    const balance = `-${formatAll(account.balance.abs())}`;
     const recipients = new Set([account.parentId, owner?.id].filter((id): id is string => Boolean(id)));
     for (const recipient of recipients) {
       await this.notifications.create({
@@ -1693,7 +1733,7 @@ export class UsersService {
       type: NotificationType.LOW_BALANCE,
       severity: NotificationSeverity.WARNING,
       title: "Top-up requested",
-      message: `${actor.username} is asking for a top-up. Their balance is ${balance.toFixed(2)} ALL.`,
+      message: `${actor.username} is asking for a top-up. Their balance is ${formatAll(balance)}.`,
       deepLink: `/dashboard/players/${actor.id}`,
       metadata: { accountId: actor.id, balance },
     });
@@ -1869,7 +1909,7 @@ function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number
   if (playing.penalty) return `${username} is in the middle of a Penalty round. Move them once it's over.`;
   if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;
   if (openBets > 1) return `${username} still has ${openBets} open bets. Move them once they're settled.`;
-  if (balance.isNegative()) return `${username}'s balance is below zero (-${balance.abs().toFixed(2)} ALL). Give them credit to clear it before moving them.`;
+  if (balance.isNegative()) return `${username}'s balance is below zero (-${formatAll(balance.abs())}). Give them credit to clear it before moving them.`;
   return null;
 }
 
@@ -1877,4 +1917,21 @@ function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number
 function noCounterparty(type: BalanceTransactionType): string {
   if (type === BalanceTransactionType.CASINO) return "Casino";
   return type === BalanceTransactionType.BET_STAKE || type === BalanceTransactionType.BET_SETTLEMENT ? "Betting" : "Platform";
+}
+
+/**
+ * Sign-ins from a device or place this account hadn't used before (in the
+ * history kept), as alerts, newest first; the account's very first sign-in
+ * isn't one.
+ */
+function newPlaces(history: Array<{ id: string; device: string | null; browser: string | null; location: string | null; ipAddress: string | null; createdAt: Date }>) {
+  const seen = new Set<string>();
+  const alerts: Array<{ id: string; action: string; ipAddress: string | null; metadata: Prisma.JsonValue; createdAt: Date }> = [];
+  const oldestFirst = [...history].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  oldestFirst.forEach((entry, index) => {
+    const key = `${entry.device ?? ""}|${entry.browser ?? ""}|${entry.location ?? ""}`;
+    if (index > 0 && !seen.has(key)) alerts.push({ id: `new-${entry.id}`, action: "auth.new_device", ipAddress: entry.ipAddress, metadata: { device: entry.device, browser: entry.browser, location: entry.location }, createdAt: entry.createdAt });
+    seen.add(key);
+  });
+  return alerts;
 }

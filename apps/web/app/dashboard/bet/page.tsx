@@ -14,7 +14,7 @@ import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
 import { SportIcon } from "../../../components/sport-icon";
 import { TeamCrest } from "../../../components/team-crest";
-import { ApiError, apiFetch, type Bet, type BuilderQuote, type LiveWait, type MarketPause, type MyBets, type OddsEvent, type OddsSelection, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
+import { ApiError, apiFetch, type Bet, type BuilderQuote, type LiveWait, type MarketPause, type MyBets, type OddsEvent, type OddsSelection, type OddsSettings, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney, formatStake } from "../../../lib/format";
 import { byImportance } from "../../../lib/importance";
 import { MAX_SLIP, forgetPicks, readSlip, saveSlip, slipStorageKey, type SlipItem } from "../../../lib/slip";
@@ -135,6 +135,15 @@ function BetPage() {
   // Opened from a match on the Overview: scroll to it and light it up.
   const matchParam = params.get("match");
   const [focused, setFocused] = useState<string | null>(null);
+  // Greyhound racing only shows once its feed is connected: until then there are no races to bet on.
+  const [greyhoundsOn, setGreyhoundsOn] = useState(false);
+  useEffect(() => {
+    void (async () => {
+      const token = await getToken();
+      if (!token) return;
+      setGreyhoundsOn(Boolean((await apiFetch<OddsSettings>("/odds/settings", token)).greyhoundsFeed));
+    })().catch(() => undefined);
+  }, [getToken]);
 
   const [events, setEvents] = useState<OddsEvent[] | null>(null);
   const [info, setInfo] = useState<SlipInfo | null>(null);
@@ -808,7 +817,9 @@ function BetPage() {
                 ["nfl", t("NFL")],
                 ["mma", t("MMA")],
               ] as Array<[Sport, string]>
-            ).map(([key, label]) => (
+            )
+              .filter(([key]) => key !== "greyhounds" || greyhoundsOn || sport === "greyhounds")
+              .map(([key, label]) => (
               <button
                 key={key}
                 type="button"

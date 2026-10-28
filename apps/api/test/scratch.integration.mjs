@@ -189,7 +189,7 @@ test("Scratch Cards profit counts in commissions; the Casino page, Continue play
   const page = await casino.admin(owner, fromDay, to);
   assert.deepEqual(page.players.map((row) => [row.username, row.scratch.cards, row.dice.rolls, row.net]), [[sami.username, 4, 1, net]]);
   assert.equal(page.games.scratch.spins, 4);
-  assert.deepEqual(page.games.slot, { spins: 0, staked: 0, won: 0, payoutRate: null });
+  assert.deepEqual(page.games.slot, { spins: 0, freeSpins: 0, staked: 0, won: 0, payoutRate: null });
   const last = await casino.lastGame(sami);
   assert.deepEqual([last.game, last.waiting, last.amount], ["scratch", null, 50]);
   const view = await activity.activity(manager, sami.id);

@@ -257,7 +257,7 @@ test("Book of Ra counts in commissions, and the Casino page shows it as its own 
 test("the data reset clears a round in progress", async () => {
   await prisma.casinoBookFeature.create({ data: { playerId: cara.id, bet: 100, special: "KING", remaining: 3, won: 0 } });
   const clerk = { api: { users: { verifyPassword: async () => ({ verified: true }) } }, deleteUserStrict: async () => undefined };
-  await new DataResetService(prisma, clerk, audit, { get: () => undefined }).reset(sa, { username: sa.username, password: "right" });
+  await new DataResetService(prisma, clerk, audit, { get: () => undefined }).reset(sa, { phrase: "DELETE ALL TEST DATA", username: sa.username, password: "right" });
   assert.equal(await prisma.casinoBookFeature.count(), 0);
 });
 

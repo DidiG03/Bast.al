@@ -10,6 +10,7 @@ import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import { BETS, COLUMNS, GAME_NAME, MAX_WIN, MINE_COUNTS, MinesError, PAYOUT_RATE, TILES, cashOut, publicView, reveal, startRound, type Round } from "./mines";
+import { formatAll } from "../money";
 
 const RECENT = 10;
 /** A round nobody has touched for this long is cashed out, or refunded if no tile was opened. */
@@ -98,7 +99,7 @@ export class MinesService implements OnModuleInit, OnModuleDestroy {
     }
     if (!(MINE_COUNTS as readonly number[]).includes(mines)) throw new BadRequestException("Pick 1, 3, 5, 10, 15, 20 or 24 mines.");
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one round is ${tableMax.toFixed(2)} ALL`);
+    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one round is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {

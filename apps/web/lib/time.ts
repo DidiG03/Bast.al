@@ -84,3 +84,13 @@ export function endOfDateInput(value: string): Date | null {
   const start = fromDateInput(value);
   return start ? new Date(addDays(start, 1).getTime() - 1) : null;
 }
+
+/** "28/10/2026" (day/month/year, as typed in a date filter) as "2026-10-28", or null if it isn't a real date. */
+export function dayTextToInput(value: string): string | null {
+  const match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(value.trim());
+  if (!match) return null;
+  const [day, month, year] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}

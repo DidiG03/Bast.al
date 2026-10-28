@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { LeaguePicker } from "../../../components/league-picker";
 import { LiveHealth } from "../../../components/live-health";
@@ -68,14 +68,19 @@ export default function OddsPage() {
 
   const team = ownerId ? `ownerId=${encodeURIComponent(ownerId)}` : "";
 
+  /** The list asked for last: an answer for a tab switched away from (Upcoming arriving after Live was picked) is dropped. */
+  const latest = useRef("");
   const load = useCallback(async () => {
     const token = await getToken();
     if (!token) return;
+    const asked = `${filter}|${sport}|${team}`;
+    latest.current = asked;
     const [nextSettings, nextEvents] = await Promise.all([
       apiFetch<OddsSettings>(`/odds/settings?${team}`, token),
       // Each match's main market only; a match's other markets load when it's opened.
       apiFetch<OddsEvent[]>(`/odds/events?filter=${filter}&view=list&sport=${sport}&${team}`, token),
     ]);
+    if (latest.current !== asked) return;
     setSettings(nextSettings);
     setEvents(nextEvents);
   }, [getToken, filter, sport, team]);
@@ -199,8 +204,9 @@ export default function OddsPage() {
           <button
             key={key}
             type="button"
-            className={`sport-option${sport === key ? " is-active" : ""}`}
+            className={`sport-option${sport === key ? " is-active" : ""}${key === "greyhounds" && settings && !settings.greyhoundsFeed ? " is-soon" : ""}`}
             aria-pressed={sport === key}
+            title={key === "greyhounds" && settings && !settings.greyhoundsFeed ? t("Coming soon: the greyhound feed isn't connected yet") : undefined}
             onClick={() => {
               setSport(key);
               // Only football is bet on live: the other sports have no Live tab.
@@ -208,6 +214,7 @@ export default function OddsPage() {
             }}
           >
             {label}
+            {key === "greyhounds" && settings && !settings.greyhoundsFeed ? <span className="sport-soon">{t("Soon")}</span> : null}
           </button>
         ))}
       </div>
@@ -257,6 +264,8 @@ export default function OddsPage() {
               ? filter === "finished"
                 ? t("No fights finished in the last three days.")
                 : t("No fights yet. They're fetched every 2 hours, from the day before they take place.")
+              : sport === "greyhounds" && settings && !settings.greyhoundsFeed
+              ? t("Greyhound racing is coming soon. Races appear here once the greyhound feed is connected.")
               : sport === "greyhounds"
               ? filter === "finished"
                 ? t("No races finished in the last six hours.")

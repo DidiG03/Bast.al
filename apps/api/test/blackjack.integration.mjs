@@ -151,10 +151,10 @@ test("a round's money counts against the daily loss limit while it's in play, an
 });
 
 test("the max stake caps the first bet, bets are whole chips, and a low balance stops a deal", async () => {
-  await assert.rejects(blackjack.deal(bea, 2550), /most you can bet on one hand is 2500\.00 ALL/);
+  await assert.rejects(blackjack.deal(bea, 2550), /most you can bet on one hand is 2,500\.00 ALL/);
   await assert.rejects(blackjack.deal(bea, 30), /chips/);
   await prisma.bettingLimit.create({ data: { playerId: bea.id, ownerMaxStake: 2000 } });
-  await assert.rejects(blackjack.deal(bea, 2500), /2000\.00 ALL/);
+  await assert.rejects(blackjack.deal(bea, 2500), /2,000\.00 ALL/);
   await prisma.bettingLimit.delete({ where: { playerId: bea.id } });
   const balance = await balanceOf(bea);
   await prisma.user.update({ where: { id: bea.id }, data: { balance: 100 } });
@@ -203,7 +203,7 @@ test("blackjack profit counts in commissions, and the Casino page shows it as it
   const page = await casino.admin(owner, fromDay, to);
   assert.equal(page.games.blackjack.spins, rounds.length);
   assert.equal(page.games.blackjack.staked, Math.round(staked * 100) / 100);
-  assert.deepEqual(page.games.slot, { spins: 0, staked: 0, won: 0, payoutRate: null });
+  assert.deepEqual(page.games.slot, { spins: 0, freeSpins: 0, staked: 0, won: 0, payoutRate: null });
   const recent = (await blackjack.state(bea)).recent;
   assert.equal(recent.length, Math.min(10, rounds.length));
   assert.ok(recent[0].dealer.every((card) => card !== null), "finished rounds show the dealer's cards");
@@ -214,7 +214,7 @@ test("a round in play is cleared by the data reset", async () => {
   await blackjack.deal(bea, 100);
   const clerk = { api: { users: { verifyPassword: async () => ({ verified: true }) } }, deleteUserStrict: async () => undefined };
   const reset = new DataResetService(prisma, clerk, audit, { get: () => undefined });
-  await reset.reset(sa, { username: sa.username, password: "right" });
+  await reset.reset(sa, { phrase: "DELETE ALL TEST DATA", username: sa.username, password: "right" });
   assert.equal(await prisma.blackjackHand.count(), 0);
   assert.equal(await prisma.casinoSpin.count(), 0);
 });

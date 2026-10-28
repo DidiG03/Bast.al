@@ -1,14 +1,15 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
 import { UserMenu } from "../../../components/user-menu";
-import { apiFetch, type DataResetPreview, type DataResetResult, type MeResponse, type SecurityOverview } from "../../../lib/api";
+import { apiFetch, type SecurityOverview } from "../../../lib/api";
 import { useI18n } from "../../../components/i18n-provider";
 import { LanguagePicker } from "../../../components/language-toggle";
 import { HelpTip } from "../../../components/help-tip";
+import { msg } from "../../../lib/i18n/core";
 
 /** "::ffff:1.2.3.4" is an IPv4 address written the IPv6 way. */
 const plainIp = (ip: string) => (ip.startsWith("::ffff:") && ip.includes(".") ? ip.slice(7) : ip);
@@ -30,6 +31,14 @@ function isInternalIp(ip: string): boolean {
   if (!Number.isInteger(a) || !Number.isInteger(b)) return false;
   return a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
 }
+
+/** What each sign-in alert is, in words. */
+const ALERTS: Record<string, string> = {
+  "auth.failure": msg("Suspicious sign-in attempt"),
+  "auth.refused": msg("Sign-in refused"),
+  "security.integrity_failure": msg("Request stopped by the security check"),
+  "auth.new_device": msg("Sign-in from a new device or place"),
+};
 
 export default function SecurityPage() {
   const { getToken, sessionId: currentSessionId } = useAuth();
@@ -71,45 +80,10 @@ export default function SecurityPage() {
   const [data, setData] = useState<SecurityOverview | null>(null);
   const [failed, setFailed] = useState(false);
   const toast = useToast();
-  // Super Admin only: deleting all test data before real users start.
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [reset, setReset] = useState<DataResetPreview | null>(null);
-  const [resetOpen, setResetOpen] = useState(false);
-  const [resetUsername, setResetUsername] = useState("");
-  const [resetPassword, setResetPassword] = useState("");
-  const [resetting, setResetting] = useState(false);
-
   async function load() {
     const token = await getToken();
     if (!token) throw new Error(t("You're not signed in"));
-    const [overview, profile] = await Promise.all([apiFetch<SecurityOverview>("/users/me/security", token), apiFetch<MeResponse>("/users/me", token)]);
-    setData(overview);
-    setMe(profile);
-    if (profile.role === "SUPER_ADMIN") setReset(await apiFetch<DataResetPreview>("/users/data-reset", token).catch(() => null));
-  }
-
-  function closeReset() {
-    setResetOpen(false);
-    setResetUsername("");
-    setResetPassword("");
-  }
-
-  async function onReset(event: FormEvent) {
-    event.preventDefault();
-    setResetting(true);
-    try {
-      const token = await getToken();
-      if (!token) throw new Error(t("You're not signed in"));
-      const done = await apiFetch<DataResetResult>("/users/data-reset", token, { method: "POST", body: JSON.stringify({ username: resetUsername, password: resetPassword }) });
-      closeReset();
-      toast.success(tn(done.accounts, "Deleted {count} account and all the test data. The app is ready for real users.", "Deleted {count} accounts and all the test data. The app is ready for real users."));
-      await load();
-    } catch (err) {
-      setResetPassword("");
-      toast.error(err instanceof Error ? err.message : t("Couldn't delete the data"));
-    } finally {
-      setResetting(false);
-    }
+    setData(await apiFetch<SecurityOverview>("/users/me/security", token));
   }
 
   useEffect(() => {
@@ -226,7 +200,12 @@ export default function SecurityPage() {
             <div>
               <strong>
                 {deviceText(entry.device, entry.browser)}
-                {entry.sessionId === currentSessionId ? <span className="security-badge">{t("This device")}</span> : null}
+                {entry.sessionId === currentSessionId ? (
+                  <>
+                    {" "}
+                    <span className="security-badge">{t("This device")}</span>
+                  </>
+                ) : null}
               </strong>
               <span className="muted">
                 {placeText(entry.location)} · {ipText(entry.ipAddress)} · {t("Signed in {when}", { when: when(entry.createdAt) })} · {t("Last seen {when}", { when: when(entry.lastSeenAt) })}
@@ -241,73 +220,22 @@ export default function SecurityPage() {
         ) : null}
       </section>
       <section className="card stack">
-        <h2 style={{ margin: 0 }}>{t("Sign-in alerts")}<HelpTip text="Wrong-password tries and other warnings about your account. Many failed tries lock the account for a while, to keep it safe." /></h2>
-        {data.activity.length === 0 ? <p className="muted">{t("No sign-in activity recorded.")}</p> : data.activity.map((entry) => (
-          <div className="security-row" key={entry.id}>
-            <div>
-              <strong>{t(entry.action === "auth.failure" ? "Suspicious sign-in attempt" : "Successful sign-in")}</strong>
-              <span className="muted">{ipText(entry.ipAddress)} · {when(entry.createdAt)}</span>
-            </div>
-          </div>
-        ))}
-      </section>
-      {me?.role === "SUPER_ADMIN" && reset ? (
-        <section className="card stack data-reset">
-          <h2 style={{ margin: 0 }}>{t("Delete all test data")}<HelpTip text="For when you go live. Everything made while testing goes, so real users start from a clean app. Only you can do it, and you confirm it with your username and password." /></h2>
-          <p className="muted" style={{ margin: 0 }}>
-            {t("Deletes every Owner, Manager and Player with their sign-ins, and everything they did: bets, balances, the ledger, commissions, notifications and the audit log. Your Super Admin account, prices, margins, leagues and matches stay. This can't be undone.")}
-          </p>
-          {reset.enabled ? (
-            <p style={{ margin: 0 }}>
-              <strong>{tn(reset.accounts, "Right now: {count} account", "Right now: {count} accounts")}</strong>
-              {" · "}
-              {tn(reset.bets, "{count} bet", "{count} bets")}
-              {" · "}
-              {tn(reset.ledgerEntries, "{count} ledger entry", "{count} ledger entries")}
-            </p>
-          ) : (
-            <p className="muted" style={{ margin: 0 }}>{t("This is turned off on this server.")}</p>
-          )}
-          <div>
-            <button type="button" className="danger-button" onClick={() => setResetOpen(true)} disabled={!reset.enabled}>
-              {t("Delete all test data")}
-            </button>
-          </div>
-        </section>
-      ) : null}
-      {resetOpen && me && reset ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !resetting && closeReset()}>
-          <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="reset-title">
-            <div className="modal-header">
-              <h2 id="reset-title">{t("Delete all test data?")}</h2>
-              <button type="button" className="modal-close secondary" onClick={closeReset} disabled={resetting} aria-label={t("Close")}>×</button>
-            </div>
-            <p>
-              {tn(
-                reset.accounts,
-                "{count} account, with its sign-in, bets, balance and history, will be deleted for good. Only your Super Admin account stays.",
-                "{count} accounts, with their sign-ins, bets, balances and history, will be deleted for good. Only your Super Admin account stays.",
-              )}
-            </p>
-            <form className="stack" onSubmit={onReset}>
-              <label>
-                {t("Type your username, {name}, to confirm", { name: me.username })}
-                <input value={resetUsername} onChange={(event) => setResetUsername(event.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} required />
-              </label>
-              <label>
-                {t("Your password")}
-                <input type="password" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} autoComplete="current-password" required />
-              </label>
-              <div className="modal-actions">
-                <button type="button" className="secondary" onClick={closeReset} disabled={resetting}>{t("Cancel")}</button>
-                <button type="submit" className="danger-button" disabled={resetting || resetUsername.trim().toLowerCase() !== me.username.toLowerCase() || !resetPassword}>
-                  {resetting ? <LoadingSpinner label="Deleting all test data" size="small" /> : t("Delete everything")}
-                </button>
+        <h2 style={{ margin: 0 }}>{t("Sign-in alerts")}<HelpTip text="Warnings about your account: refused sign-ins, requests the security check stopped, and sign-ins from a device or place you hadn't used before. Every sign-in is in Sign-in history above." /></h2>
+        {data.activity.length === 0 ? <p className="muted">{t("No warnings. Every sign-in is listed in Sign-in history above.")}</p> : data.activity.map((entry) => {
+          const where = entry.metadata as { device?: string | null; browser?: string | null; location?: string | null } | null;
+          return (
+            <div className="security-row" key={entry.id}>
+              <div>
+                <strong>{t(ALERTS[entry.action] ?? ALERTS["auth.failure"])}</strong>
+                <span className="muted">
+                  {entry.action === "auth.new_device" ? `${deviceText(where?.device ?? null, where?.browser ?? null)} · ${placeText(where?.location ?? null)} · ` : ""}
+                  {ipText(entry.ipAddress)} · {when(entry.createdAt)}
+                </span>
               </div>
-            </form>
-          </section>
-        </div>
-      ) : null}
+            </div>
+          );
+        })}
+      </section>
     </div>
   );
 }

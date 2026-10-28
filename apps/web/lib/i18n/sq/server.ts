@@ -717,4 +717,11 @@ export const server: Record<string, string> = {
   "A volleyball result is the sets won: 3–0, 3–1, 3–2, or the other way round": "Rezultati i volejbollit janë setet e fituara: 3–0, 3–1, 3–2, ose anasjelltas",
   "A football or handball score can't be more than 99": "Rezultati i futbollit ose hendbollit nuk mund të jetë mbi 99",
   "Choose 5 or 10 lines": "Zgjidh 5 ose 10 linja",
+  "Live betting on {pick} was paused while your bet was being confirmed. It was not placed, and your stake was not taken.": "Bastet live për {pick} u pezulluan ndërsa bastit tënd po i bëhej konfirmimi. Basti nuk u vendos dhe shuma nuk t'u mor.",
+  "The score changed while your bet on {pick} was being confirmed. It was not placed, and your stake was not taken.": "Rezultati ndryshoi ndërsa basti yt për {pick} po konfirmohej. Basti nuk u vendos dhe shuma nuk t'u mor.",
+  "A corner was taken while your bet on {pick} was being confirmed. It was not placed, and your stake was not taken.": "U ekzekutua një kënd ndërsa basti yt për {pick} po konfirmohej. Basti nuk u vendos dhe shuma nuk t'u mor.",
+  "A card was shown while your bet on {pick} was being confirmed. It was not placed, and your stake was not taken.": "U tregua një karton ndërsa basti yt për {pick} po konfirmohej. Basti nuk u vendos dhe shuma nuk t'u mor.",
+  "Which card?": "Cila kartë?",
+  "That card isn't yours": "Ajo kartë nuk është jotja",
+  "The line on {market} has already been passed.": "Linja për {market} është kaluar tashmë.",
 };

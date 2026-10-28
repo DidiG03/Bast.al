@@ -9,6 +9,7 @@ import { useToast } from "../../../components/toaster";
 import { apiFetch, type AdminBet, type BetStatus, type MeResponse, type SettlementEvent } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
+import { useConfirm } from "../../../components/confirm-dialog";
 import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
@@ -202,6 +203,7 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
   const [cardsAway, setCardsAway] = useState(event.stats ? String(event.stats.cardsAway) : "");
   const [reason, setReason] = useState("");
   const { t, tn, ts, date } = useI18n();
+  const [confirm, confirmDialog] = useConfirm();
   const started = new Date(event.startsAt).getTime() <= Date.now();
   /** A basketball or NFL game has only a final score, in points. */
   const basketball = event.sport === "basketball" || event.sport === "nfl";
@@ -210,7 +212,7 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
   /** Handball is settled on 60 minutes and has a half-time score, but no corners or cards. */
   const handball = event.sport === "handball";
 
-  function saveResult(formEvent: FormEvent) {
+  async function saveResult(formEvent: FormEvent) {
     formEvent.preventDefault();
     const settled = event.bets.total - event.bets.open;
     const warning = settled > 0 ? ` ${tn(settled, "{count} settled bet will be re-settled, and the Player's balance changed to match.", "{count} settled bets will be re-settled, and Players' balances changed to match.")}` : "";
@@ -232,7 +234,7 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
     ]
       .filter(Boolean)
       .join(", ");
-    if (!window.confirm(`${t("Set {match} to {result}?", { match: event.name, result })}${warning}`)) return;
+    if (!(await confirm({ title: t("Set {match} to {result}?", { match: event.name, result }), message: warning.trim() || undefined, confirmLabel: t("Set the result"), danger: settled > 0 }))) return;
     const body = {
       home: Number(home),
       away: Number(away),
@@ -242,14 +244,21 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
     void run(`/bets/admin/events/${event.id}/result`, body, t("{match} is now {result}. Its bets were settled on that score.", { match: event.name, result })).then((ok) => ok && setMode(null));
   }
 
-  function voidAll(formEvent: FormEvent) {
+  async function voidAll(formEvent: FormEvent) {
     formEvent.preventDefault();
-    if (!window.confirm(tn(event.bets.total, "Void the {count} bet on {match} and refund its stake? This also stops new bets on it.", "Void all {count} bets on {match} and refund every stake? This also stops new bets on it.", { match: event.name }))) return;
+    const sure = await confirm({
+      title: t("Void {match}?", { match: event.name }),
+      message: tn(event.bets.total, "Void the {count} bet on {match} and refund its stake? This also stops new bets on it.", "Void all {count} bets on {match} and refund every stake? This also stops new bets on it.", { match: event.name }),
+      confirmLabel: t("Void match"),
+      danger: true,
+    });
+    if (!sure) return;
     void run(`/bets/admin/events/${event.id}/void`, { reason: reason.trim() }, t("Every bet on {match} was voided and refunded.", { match: event.name })).then((ok) => ok && setMode(null));
   }
 
   return (
     <article className={`card settle-event${event.needsAttention ? " needs-attention" : ""}`}>
+      {confirmDialog}
       <header className="odds-event-header">
         <span className="muted odds-league">
           {event.league} · {date(event.startsAt, DATE_TIME)}
@@ -300,8 +309,8 @@ function SettlementEventCard({ event, run, canSettle, onShowBets }: { event: Set
                       key={result}
                       type="button"
                       className="secondary"
-                      onClick={() => {
-                        if (!window.confirm(t("Settle \"{pick}\" ({market}) as {result}? Its bets are paid on that.", { pick: pick.name, market: ts(pick.market), result: label }))) return;
+                      onClick={async () => {
+                        if (!(await confirm({ title: t("Settle \"{pick}\" ({market}) as {result}? Its bets are paid on that.", { pick: pick.name, market: ts(pick.market), result: label }), confirmLabel: label }))) return;
                         void run(`/bets/admin/selections/${pick.selectionId}/result`, { result }, t("\"{pick}\" is settled as {result}.", { pick: pick.name, result: label }));
                       }}
                     >
@@ -409,8 +418,9 @@ function AdminBetRow({ bet, run, canSettle }: { bet: AdminBet; run: Run; canSett
   const [reason, setReason] = useState("");
   const alreadyVoid = bet.status === "VOID" && Boolean(bet.voidReason);
   const { t, ts, date } = useI18n();
+  const [confirm, confirmDialog] = useConfirm();
 
-  function submit(formEvent: FormEvent) {
+  async function submit(formEvent: FormEvent) {
     formEvent.preventDefault();
     const change = bet.stake - bet.payout;
     const effect =
@@ -419,12 +429,13 @@ function AdminBetRow({ bet, run, canSettle }: { bet: AdminBet; run: Run; canSett
         : change > 0
           ? ` ${t("{amount} goes back to {name}.", { amount: formatMoney(change), name: bet.player.username })}`
           : ` ${t("{amount} is taken back from {name}.", { amount: formatMoney(-change), name: bet.player.username })}`;
-    if (!window.confirm(`${t("Void this bet and refund the {amount} stake?", { amount: formatMoney(bet.stake) })}${effect}`)) return;
+    if (!(await confirm({ title: t("Void this bet and refund the {amount} stake?", { amount: formatMoney(bet.stake) }), message: effect.trim() || undefined, confirmLabel: t("Void bet"), danger: true }))) return;
     void run(`/bets/admin/${bet.id}/void`, { reason: reason.trim() }, t("{name}'s bet was voided.", { name: bet.player.username })).then((ok) => ok && setVoiding(false));
   }
 
   return (
     <li className={`card bet-card is-${bet.status.toLowerCase()}`}>
+      {confirmDialog}
       <div className="bet-card-top">
         <div className="bet-card-name">
           <strong>{bet.player.username}</strong>

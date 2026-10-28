@@ -4,6 +4,7 @@ import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { startOfWeek } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
+import { CASINO_ROUND, type PeriodResults, periodResults } from "./results";
 
 const RECENT_LIMIT = 50;
 
@@ -101,16 +102,10 @@ export class PlayerActivityService {
     };
   }
 
-  /** From the settlement journal, like the Commissions page: a correction counts on the day it was made. */
-  private async totals(playerId: string, since: Date | null): Promise<Totals> {
-    const where = { playerId, ...(since ? { createdAt: { gte: since } } : {}) };
-    const [row, casinoRounds] = await Promise.all([
-      this.prisma.settlementEntry.aggregate({ where, _sum: { bets: true, stake: true, payout: true } }),
-      this.prisma.settlementEntry.count({ where: { ...where, casinoSpinId: { not: null } } }),
-    ]);
-    const staked = round(Number(row._sum.stake ?? 0));
-    const paidOut = round(Number(row._sum.payout ?? 0));
-    return { bets: row._sum.bets ?? 0, casinoRounds, staked, paidOut, net: round(staked - paidOut) };
+  /** From the settlement journal, the way every page counts (results.ts): a correction counts on the day it was made. */
+  private async totals(playerId: string, since: Date | null): Promise<Totals & { results: PeriodResults }> {
+    const results = await periodResults(this.prisma, { playerId }, { from: since, to: null });
+    return { bets: results.sports.bets, casinoRounds: results.casino.rounds, ...results.total, results };
   }
 
   /** The casino rounds the Player has started and not finished: a blackjack hand, a Mines or Penalty round, free spins. */
@@ -134,10 +129,10 @@ export class PlayerActivityService {
   /** Each casino game since `since`: rounds played (double or nothing guesses count with their slot), staked, paid out and the net, most staked first. */
   private async casinoByGame(playerId: string, since: Date) {
     const rows = await this.prisma.$queryRaw<Array<{ kind: string; rounds: bigint; staked: Prisma.Decimal | null; won: Prisma.Decimal | null; last: Date }>>`
-      SELECT CASE WHEN kind = 'GAMBLE' AND gamble->>'game' = 'book' THEN 'BOOK' WHEN kind = 'GAMBLE' THEN 'SPIN' ELSE kind::text END AS kind,
-        COUNT(*) FILTER (WHERE kind <> 'GAMBLE') AS rounds, SUM(stake) AS staked, SUM(win) AS won, MAX(created_at) AS last
-      FROM casino_spins
-      WHERE player_id = ${playerId} AND created_at >= ${since}
+      SELECT CASE WHEN c.kind = 'GAMBLE' AND c.gamble->>'game' = 'book' THEN 'BOOK' WHEN c.kind = 'GAMBLE' THEN 'SPIN' ELSE c.kind::text END AS kind,
+        COUNT(*) FILTER (WHERE ${CASINO_ROUND}) AS rounds, SUM(c.stake) AS staked, SUM(c.win) AS won, MAX(c.created_at) AS last
+      FROM casino_spins c
+      WHERE c.player_id = ${playerId} AND c.created_at >= ${since}
       GROUP BY 1
     `;
     return rows

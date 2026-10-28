@@ -33,6 +33,7 @@ const TITLES: Array<[string, string]> = [
   ["/dashboard/odds", msg("Prices")],
   ["/dashboard/risk", msg("Money at risk")],
   ["/dashboard/reports", msg("Reports")],
+  ["/dashboard/settings/danger", msg("Danger zone")],
   ["/dashboard/settings", msg("Settings")],
   ["/dashboard", msg("Overview")],
   ["/sign-in", msg("Sign in")],

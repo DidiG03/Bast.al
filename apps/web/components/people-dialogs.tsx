@@ -6,6 +6,7 @@ import { apiFetch, type ReassignmentPreview, type UserRow } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { ROLE_NAMES, childrenOf, moveDestinations, type Team } from "../lib/people";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
+import { useConfirm } from "./confirm-dialog";
 import { useI18n } from "./i18n-provider";
 import { LoadingSpinner } from "./loading-spinner";
 import { useToast } from "./toaster";
@@ -248,6 +249,7 @@ export function DeleteDialog({ person, onClose, onDone }: { person: UserRow; onC
   const call = useCall();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [typed, setTyped] = useState("");
   async function go() {
     setBusy(true);
     try {
@@ -262,9 +264,15 @@ export function DeleteDialog({ person, onClose, onDone }: { person: UserRow; onC
   return (
     <Dialog title={t("Delete {name}?", { name: person.username })} onClose={onClose}>
       <p style={{ margin: 0 }}>{t("Only for an account made by mistake. If they have ever bet or had money, block them instead: their history has to stay.")}</p>
+      <label>
+        {t("Type {name} to confirm", { name: person.username })}
+        <input value={typed} onChange={(event) => setTyped(event.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} />
+      </label>
       <div className="modal-actions">
         <button type="button" className="secondary" onClick={onClose} disabled={busy}>{t("Cancel")}</button>
-        <button type="button" className="danger-button" onClick={go} disabled={busy}>{busy ? <LoadingSpinner label="Applying action" size="small" /> : t("Delete")}</button>
+        <button type="button" className="danger-button" onClick={go} disabled={busy || typed.trim().toLowerCase() !== person.username.toLowerCase()}>
+          {busy ? <LoadingSpinner label="Applying action" size="small" /> : t("Delete")}
+        </button>
       </div>
     </Dialog>
   );
@@ -348,8 +356,16 @@ export function CorrectBalanceDialog({ person, onClose, onDone }: { person: User
   const [busy, setBusy] = useState(false);
   const change = Number(amount);
   const after = Number(person.balance) + (Number.isFinite(change) ? change : 0);
+  const [confirm, confirmDialog] = useConfirm();
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const sure = await confirm({
+      title: t("Correct {name}'s balance?", { name: person.username }),
+      message: t("{from} becomes {to}. Only this balance changes, and it's written to the audit log.", { from: formatMoney(person.balance), to: formatMoney(after) }),
+      confirmLabel: t("Correct balance"),
+      danger: true,
+    });
+    if (!sure) return;
     setBusy(true);
     try {
       const path = `/users/${person.id}/adjust-balance`;
@@ -365,6 +381,7 @@ export function CorrectBalanceDialog({ person, onClose, onDone }: { person: User
   }
   return (
     <Dialog title={t("Correct {name}'s balance", { name: person.username })} onClose={onClose}>
+      {confirmDialog}
       <p className="muted" style={{ margin: 0 }}>
         {t("For fixing a mistake. It changes only this balance and is written to the audit log. To give credit, use Give credit instead.")}
       </p>

@@ -34,10 +34,11 @@ import {
 } from "./book";
 import { canGamble, gambleView } from "./casino.service";
 import { GAMBLE_LIMIT, GAMBLE_STEPS } from "./game";
+import { formatAll } from "../money";
 
 const RECENT = 10;
 
-const money = (value: Prisma.Decimal | number) => `${Number(value).toFixed(2)} ALL`;
+const money = (value: Prisma.Decimal | number) => `${formatAll(Number(value))}`;
 
 /** Book of Ra has its own line per Player per day in their balance ledger. */
 const ledgerLineId = (playerId: string, at: Date) => `book_${playerId}_${dayKey(at)}`;

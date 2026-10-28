@@ -177,7 +177,7 @@ test("Keno profit counts in commissions; the Casino page and Continue playing sh
   const page = await casino.admin(owner, fromDay, to);
   assert.deepEqual(page.players.map((row) => [row.username, row.keno.rounds, row.dice.rolls, row.net]), [[kim.username, 4, 1, net]]);
   assert.equal(page.games.keno.spins, 4);
-  assert.deepEqual(page.games.slot, { spins: 0, staked: 0, won: 0, payoutRate: null });
+  assert.deepEqual(page.games.slot, { spins: 0, freeSpins: 0, staked: 0, won: 0, payoutRate: null });
   const last = await casino.lastGame(kim);
   assert.deepEqual([last.game, last.waiting, last.amount], ["keno", null, 100]);
 });

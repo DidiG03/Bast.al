@@ -162,7 +162,7 @@ test("Coin Flip profit counts in commissions; the Casino page, Continue playing 
   const page = await casino.admin(owner, fromDay, to);
   assert.deepEqual(page.players.map((row) => [row.username, row.coinFlip.flips, row.dice.rolls, row.net]), [[cleo.username, 3, 1, net]]);
   assert.equal(page.games.coinflip.spins, 3);
-  assert.deepEqual(page.games.slot, { spins: 0, staked: 0, won: 0, payoutRate: null });
+  assert.deepEqual(page.games.slot, { spins: 0, freeSpins: 0, staked: 0, won: 0, payoutRate: null });
   const last = await casino.lastGame(cleo);
   assert.deepEqual([last.game, last.waiting, last.amount], ["coinflip", null, 100]);
   const view = await activity.activity(manager, cleo.id);

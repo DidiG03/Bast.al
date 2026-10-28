@@ -1,4 +1,5 @@
 import { randomInt } from "crypto";
+import { formatAll } from "../money";
 
 /**
  * Shtatat.al's roulette: European, with 37 pockets (0 to 36, one zero). This
@@ -99,7 +100,7 @@ export function invalidBets(bets: PlacedBet[]): string | null {
     // Whole chips only: a multiple of the smallest one, worked out in cents to stay exact.
     const cents = Math.round(bet.amount * 100);
     if (!Number.isFinite(bet.amount) || Math.abs(cents - bet.amount * 100) > 1e-6 || cents <= 0 || cents % Math.round(MIN_CHIP * 100) !== 0) {
-      return `Bets are made in chips of ${MIN_CHIP.toFixed(2)} ALL and up.`;
+      return `Bets are made in chips of ${formatAll(MIN_CHIP)} and up.`;
     }
   }
   return null;

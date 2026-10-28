@@ -10,6 +10,7 @@ import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import { CHIPS, GAME_NAME, MoveError, PAYOUT_RATE, TABLE_MAX, act, deal, newShoe, paidOut, publicView, staked, standAll, type Action, type Round } from "./blackjack";
+import { formatAll } from "../money";
 
 const RECENT = 10;
 /** A round nobody has touched for this long is stood and settled. */
@@ -108,10 +109,10 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
     if (closed) throw new ForbiddenException(closed);
     const cents = Math.round(bet * 100);
     if (!Number.isFinite(bet) || Math.abs(cents - bet * 100) > 1e-6 || cents <= 0 || cents % Math.round(CHIPS[0] * 100) !== 0) {
-      throw new BadRequestException(`Bets are made in chips of ${CHIPS[0].toFixed(2)} ALL and up.`);
+      throw new BadRequestException(`Bets are made in chips of ${formatAll(CHIPS[0])} and up.`);
     }
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one hand is ${tableMax.toFixed(2)} ALL`);
+    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one hand is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {

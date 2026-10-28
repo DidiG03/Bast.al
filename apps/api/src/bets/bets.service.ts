@@ -21,6 +21,7 @@ import { MIN_STAKE } from "./bets.dto";
 import { normalSizes, systemLines, systemMaxReturn, systemName } from "./system";
 import { RiskService } from "./risk.service";
 import { assertOnTeam, type TeamSnapshot } from "./team";
+import { formatAll } from "../money";
 
 /** A goal or pause this recent on a match makes a live slip on it wait longer (LIVE_BET_EVENTFUL_DELAY_MS). The same window as a goal's longest pause. */
 const EVENTFUL_MS = 90_000;
@@ -939,7 +940,7 @@ export class BetsService {
       const already = Number(open._sum.stake ?? 0);
       if (already + stake > LIVE_CORNERS_MAX_STAKE + 0.001) {
         const left = Math.max(0, LIVE_CORNERS_MAX_STAKE - already);
-        throw new BadRequestException(`Live bets on corners are limited to ${LIVE_CORNERS_MAX_STAKE} ALL a match. You can stake ${left.toFixed(2)} ALL more on ${match}.`);
+        throw new BadRequestException(`Live bets on corners are limited to ${LIVE_CORNERS_MAX_STAKE} ALL a match. You can stake ${formatAll(left)} more on ${match}.`);
       }
     }
   }

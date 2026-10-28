@@ -10,6 +10,7 @@ import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import { BETS, GAME_NAME, MULTIPLIER, PAYOUT_RATE, SIDES, flipFor, winCents, type Side } from "./coin-flip";
 import { activeSeed, lockedActiveSeed, previousSeed, revealedSeeds, seedView } from "./fair-seeds";
+import { formatAll } from "../money";
 
 /** Flips in the Player's recent list. */
 const RECENT = 20;
@@ -100,7 +101,7 @@ export class CoinFlipService {
     if (!(SIDES as readonly string[]).includes(callInput)) throw new BadRequestException("Call heads or tails.");
     const call = callInput as Side;
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most a flip can cost you is ${tableMax.toFixed(2)} ALL`);
+    if (bet > tableMax) throw new BadRequestException(`The most a flip can cost you is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);
     const stakeCents = Math.round(bet * 100);
 

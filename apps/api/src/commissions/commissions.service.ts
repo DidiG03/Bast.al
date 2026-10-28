@@ -4,6 +4,7 @@ import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { addDays, startOfDay, startOfWeek } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
+import { periodResults } from "./results";
 
 type Account = {
   id: string;
@@ -138,7 +139,8 @@ export class CommissionsService {
       { ...emptyTotals(), superAdminCut: 0, managerCommission: 0, ownerKeeps: 0 },
     );
 
-    return { ...this.iso(period), totals, owners };
+    // The same totals split into sports and casino, as every page counts them (results.ts).
+    return { ...this.iso(period), totals, results: await periodResults(this.prisma, null, period), owners };
   }
 
   /**
@@ -205,6 +207,7 @@ export class CommissionsService {
       totals: { ...totals, superAdminCut, managerCommission, ownerKeeps: round(totals.net - superAdminCut - managerCommission) },
       /** Where the Owner stands with Super Admin. */
       ownerPayout: (await this.standings("owner", [id], period)).get(id)!,
+      results: await periodResults(this.prisma, { ownerId: id }, period),
       managers,
       directPlayers,
     };
@@ -231,6 +234,7 @@ export class CommissionsService {
       totals: { ...totals, commission: round(groups.reduce((sum, group) => sum + group.managerCut, 0)) },
       /** Where this Manager stands with their Owner. */
       payout: (await this.standings("manager", [actor.id], period)).get(actor.id)!,
+      results: await periodResults(this.prisma, { managerId: actor.id }, period),
       players,
     };
   }

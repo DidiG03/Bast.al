@@ -19,6 +19,7 @@ import { builderOutcome } from "./builder";
 import { systemOutcome } from "./system";
 import { accumulatorOutcome, gradeSelection, payoutFor } from "./grading";
 import { teamOf } from "./team";
+import { formatAll } from "../money";
 
 type Change = { betId?: string; playerId: string; eventName: string; delta: Prisma.Decimal; status: BetStatus; voidReason?: string | null; accumulator?: boolean; builder?: boolean; system?: { won: number; lines: number } };
 
@@ -35,7 +36,7 @@ type NotifiedBet = Prisma.BetGetPayload<{ select: typeof NOTIFIED_BET }>;
 /** Sports whose result is a score worth showing next to the match's name. */
 const SCORED_SPORTS = new Set(["football", "basketball", "nfl", "volleyball", "handball"]);
 
-const money = (value: Prisma.Decimal | number) => `${Number(value).toFixed(2)} ALL`;
+const money = (value: Prisma.Decimal | number) => `${formatAll(Number(value))}`;
 
 /** What `move` needs to know about a bet. */
 const movable = {
@@ -437,7 +438,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     for (const bet of bets) {
       const lateness = lateFor(bet.live, bet.placedAt, bet.selectionId!);
       if (lateness === "wait") continue;
-      if (lateness) await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId: event.id, eventName: event.name }, lateness, "settlement", actorId);
+      if (lateness) await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId: event.id, eventName: event.name, stake: Number(bet.stake) }, lateness, "settlement", actorId);
       if (lateness?.late) {
         const change = await this.move(bet, BetStatus.VOID, bet.stake, lateness.reason, actorId);
         if (change) late.push({ ...change, eventName: event.name });
@@ -518,7 +519,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
    * with what it was checked against. A void goes in the audit log too.
    */
   private async noteLate(
-    target: { kind: "bet" | "leg"; id: string; betId: string; playerId: string; live: Prisma.JsonValue | null; eventId: string; eventName: string },
+    target: { kind: "bet" | "leg"; id: string; betId: string; playerId: string; live: Prisma.JsonValue | null; eventId: string; eventName: string; stake?: number },
     decision: LateDecision,
     when: LateRecord["when"],
     actorId: string | null,
@@ -534,12 +535,24 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
     const live = { ...((target.live as Record<string, unknown> | null) ?? {}), late } as Prisma.InputJsonValue;
     if (target.kind === "bet") await this.prisma.bet.update({ where: { id: target.id }, data: { live } });
     else await this.prisma.betLeg.update({ where: { id: target.id }, data: { live } });
-    if (decision.late) {
+    // Only a new void goes in the audit log: a re-check that upholds a void already made moves no money, so it isn't logged again.
+    const before = ((target.live as { late?: { late?: boolean; reason?: string | null } } | null)?.late) ?? null;
+    if (decision.late && !(before?.late && before.reason === decision.reason)) {
       await this.audit.log({
         actorId,
         action: "bet.void_late",
         targetId: target.playerId,
-        metadata: { betId: target.betId, ...(target.kind === "leg" ? { legId: target.id } : {}), eventId: target.eventId, event: target.eventName, reason: decision.reason, detail: decision.detail, when },
+        metadata: {
+          betId: target.betId,
+          ...(target.kind === "leg" ? { legId: target.id } : {}),
+          // A single's stake comes back; an accumulator pick is taken out and the rest of the bet settles without it.
+          ...(target.stake !== undefined ? { amount: target.stake } : {}),
+          eventId: target.eventId,
+          event: target.eventName,
+          reason: decision.reason,
+          detail: decision.detail,
+          when,
+        },
       });
     }
   }
@@ -576,10 +589,10 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       const decision = lateDecision({ state, placedAt: bet.placedAt, marketKey: bet.selection!.market.key, selectionKey: bet.selection!.key, timeline: usable, seen, cornerMarks: cornerMarksOf(event.matchCentre) });
       // A bet that stands now is only logged: it's checked again, and recorded, at full time with the whole timeline.
       if (!decision.late) {
-        await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName: event.name }, decision, "arrival", null, "log");
+        await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName: event.name, stake: Number(bet.stake) }, decision, "arrival", null, "log");
         continue;
       }
-      await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName: event.name }, decision, "arrival", null);
+      await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName: event.name, stake: Number(bet.stake) }, decision, "arrival", null);
       const change = await this.move(bet, BetStatus.VOID, bet.stake, decision.reason, null);
       if (change) changes.push({ ...change, eventName: event.name });
     }
@@ -699,16 +712,19 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       const wasVoided = bet.status === BetStatus.VOID;
       // A late void that the rule in force upholds stays as it is; only its decision is brought up to date.
       if (wasVoided && decision.late) {
-        await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName }, decision, "recheck", actorId, dryRun ? "dry-run" : "record");
+        await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName, stake: Number(bet.stake) }, decision, "recheck", actorId, dryRun ? "dry-run" : "record");
         results.push({ betId: bet.id, playerId: bet.playerId, event: eventName, status: bet.status, void: true, reason: decision.reason, detail: decision.detail, balanceChange: 0 });
         continue;
       }
-      await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName }, decision, "recheck", actorId, dryRun ? "dry-run" : "record");
+      await this.noteLate({ kind: "bet", id: bet.id, betId: bet.id, playerId: bet.playerId, live: bet.live, eventId, eventName, stake: Number(bet.stake) }, decision, "recheck", actorId, dryRun ? "dry-run" : "record");
       let balanceChange = 0;
       if (wasVoided) {
         // Voided under an older rule, standing under this one: back to open (the refunded stake comes back off the balance), then settled.
         balanceChange = -Number(bet.payout);
-        if (!dryRun && (await this.move(bet, BetStatus.OPEN, new Prisma.Decimal(0), null, actorId, true))) resettle.add(eventId);
+        if (!dryRun && (await this.move(bet, BetStatus.OPEN, new Prisma.Decimal(0), null, actorId, true))) {
+          resettle.add(eventId);
+          await this.audit.log({ actorId, action: "bet.reinstate_late", targetId: bet.playerId, metadata: { betId: bet.id, amount: Number(bet.stake), eventId, event: eventName, previousReason: bet.voidReason } });
+        }
         this.logger.warn(`Late check (recheck${dryRun ? ", dry run" : ""}): bet ${bet.id} on ${eventName} was voided (${bet.voidReason}) under an older rule and stands now: ${dryRun ? "would be put" : "put"} back and settled on the result`);
       } else if (decision.late) {
         balanceChange = Number(bet.stake.sub(bet.payout));
@@ -733,6 +749,7 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         if (!dryRun) {
           await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: null, voidReason: null } });
           resettle.add(eventId);
+          await this.audit.log({ actorId, action: "bet.reinstate_late", targetId: leg.bet.playerId, metadata: { betId: leg.betId, legId: leg.id, eventId, event: eventName, previousReason: leg.voidReason } });
         }
       } else if (!wasVoided && decision.late && !dryRun) {
         await this.prisma.betLeg.update({ where: { id: leg.id }, data: { result: SelectionResult.VOID, voidReason: decision.reason } });

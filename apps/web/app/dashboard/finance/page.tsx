@@ -5,7 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatMoney } from "../../../lib/format";
 import { useRealtime } from "../../../components/realtime-provider";
-import { apiFetch, transactionLabel, type BalanceEntry, type FinancialReport, type MeResponse, type PendingApproval, type UserRow } from "../../../lib/api";
+import { apiFetch, transactionLabel, type BalanceEntry, type FinancialReport, type MeResponse, type PendingApproval, type PeriodResults, type UserRow } from "../../../lib/api";
 import { LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
 import { useI18n } from "../../../components/i18n-provider";
@@ -86,10 +86,11 @@ type MoneyView = {
     pendingCount: number;
     pendingAmount: number;
     rejectedCount: number;
-    staked: number;
-    betCount: number;
-    paidOut: number;
-    casinoNet: number;
+    /** Credit passed on further down the team: already counted in `given`. */
+    withinTeam: number;
+    withinTeamCount: number;
+    /** Settled sports and casino results in the period, counted as on Overview. */
+    results: PeriodResults;
     yourBalance: number | null;
     teamBalance: number;
     teamAccounts: number;
@@ -480,7 +481,7 @@ export default function FinancePage() {
                   <span className="muted">{tn(summary.takenBackCount, "{count} transfer", "{count} transfers")}</span>
                 </div>
                 <div className="card report-stat">
-                  <span className="muted">{t("Net given out")}<HelpTip text="Credit given minus credit taken back: how much more is out with your team than at the start of the period." /></span>
+                  <span className="muted">{t("Net given out")}<HelpTip text="Credit you gave minus credit you took back: how much more is out with your team than at the start of the period. Credit your team passes further down isn't counted again." /></span>
                   <strong className={summary.net < 0 ? "ledger-negative" : undefined}>{formatMoney(summary.net)}</strong>
                   <span className="muted">{t("Given minus taken back")}</span>
                 </div>
@@ -525,18 +526,34 @@ export default function FinancePage() {
               <dt className="muted">{t("Waiting for approval")}</dt>
               <dd>{summary.pendingCount > 0 ? `${formatMoney(summary.pendingAmount)} · ${summary.pendingCount}` : "–"}</dd>
             </div>
+            {!chosenPerson && summary.withinTeam > 0 ? (
+              <div>
+                <dt className="muted">
+                  {t("Passed on within the team")}
+                  <HelpTip text="Credit your team moved further down (an Owner to a Manager, a Manager to a Player). It's credit already counted in Credit given, so it isn't added again." />
+                </dt>
+                <dd>{`${formatMoney(summary.withinTeam)} · ${summary.withinTeamCount}`}</dd>
+              </div>
+            ) : null}
             <div>
-              <dt className="muted">{t("Players staked")}</dt>
-              <dd>{formatMoney(summary.staked)}</dd>
+              <dt className="muted">{t("Sports staked")}<HelpTip text="Stakes on bets settled in this period, the same figures as on Overview and Commissions." /></dt>
+              <dd>{`${formatMoney(summary.results.sports.staked)} · ${tn(summary.results.sports.bets, "{count} bet", "{count} bets")}`}</dd>
             </div>
             <div>
-              <dt className="muted">{t("Paid out on bets")}</dt>
-              <dd>{formatMoney(summary.paidOut)}</dd>
+              <dt className="muted">{t("Sports paid out")}</dt>
+              <dd>{formatMoney(summary.results.sports.paidOut)}</dd>
             </div>
             <div>
-              <dt className="muted">{t("Casino result")}</dt>
-              {/* The ledger keeps the Players' casino result; the team's is the other way round. */}
-              <dd className={summary.casinoNet > 0 ? "ledger-negative" : undefined}>{formatMoney(summary.casinoNet === 0 ? 0 : -summary.casinoNet)}</dd>
+              <dt className="muted">{t("Sports profit")}</dt>
+              <dd className={summary.results.sports.net < 0 ? "ledger-negative" : undefined}>{formatMoney(summary.results.sports.net)}</dd>
+            </div>
+            <div>
+              <dt className="muted">{t("Casino staked")}</dt>
+              <dd>{`${formatMoney(summary.results.casino.staked)} · ${tn(summary.results.casino.rounds, "{count} round", "{count} rounds")}`}</dd>
+            </div>
+            <div>
+              <dt className="muted">{t("Casino profit")}</dt>
+              <dd className={summary.results.casino.net < 0 ? "ledger-negative" : undefined}>{formatMoney(summary.results.casino.net)}</dd>
             </div>
             {isAdmin ? (
               <div>

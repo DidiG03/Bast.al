@@ -10,6 +10,7 @@ import { UsersService } from "../users/users.service";
 import { casinoClosedReason, maxStakeOf } from "./access";
 import { activeSeed, lockedActiveSeed, previousSeed, revealedSeeds, seedView } from "./fair-seeds";
 import { BETS, CELLS, GAME_NAME, MAX_MULTIPLIER, PRIZES, SYMBOLS, cardFor, payoutRate, winCents, winChance, type ScratchSymbol } from "./scratch";
+import { formatAll } from "../money";
 
 /** Cards in the Player's recent list. */
 const RECENT = 20;
@@ -110,7 +111,7 @@ export class ScratchService {
     const bet = Number(betInput);
     if (!(BETS as readonly number[]).includes(bet)) throw new BadRequestException(`A card costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most a card can cost you is ${tableMax.toFixed(2)} ALL`);
+    if (bet > tableMax) throw new BadRequestException(`The most a card can cost you is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);
     const stakeCents = Math.round(bet * 100);
 

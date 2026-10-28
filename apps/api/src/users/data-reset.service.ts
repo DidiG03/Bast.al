@@ -6,6 +6,9 @@ import { ClerkService } from "../auth/clerk.service";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 
+
+/** What Super Admin types, as well as their username and password, to delete all test data. */
+export const RESET_PHRASE = "DELETE ALL TEST DATA";
 /** Clerk sign-ins deleted at once: quick, and well inside Clerk's rate limit. */
 const CLERK_CONCURRENCY = 5;
 const notSuperAdmin = { role: { not: Role.SUPER_ADMIN } };
@@ -54,9 +57,10 @@ export class DataResetService {
   }
 
   /** Deletes it all, once Super Admin has typed their own username and their password. */
-  async reset(actor: Actor, input: { username: string; password: string }, ipAddress?: string) {
+  async reset(actor: Actor, input: { phrase: string; username: string; password: string }, ipAddress?: string) {
     if (actor.role !== Role.SUPER_ADMIN) throw new ForbiddenException("Only Super Admin can delete all data");
     if (!this.enabled) throw new ForbiddenException("Deleting all data is turned off on this server (DATA_RESET=off).");
+    if (input.phrase?.trim().toUpperCase() !== RESET_PHRASE) throw new BadRequestException(`Type ${RESET_PHRASE} to confirm.`);
     if (input.username.trim().toLowerCase() !== actor.username.toLowerCase()) throw new BadRequestException("Type your own username to confirm.");
     await this.checkPassword(actor, input.password);
 

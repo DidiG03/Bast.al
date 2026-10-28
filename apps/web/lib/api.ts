@@ -70,6 +70,10 @@ export type BalanceEntry = {
   approvedAt?: string | null;
   /** Signed from the viewed account's perspective: received = positive, given away = negative. */
   amount: number;
+  /** What it did to the balance: `amount` once approved, 0 for a transfer rejected or still waiting. */
+  effect?: number;
+  /** The balance right after this entry (the ledger). */
+  balanceAfter?: number;
   reason: string;
   createdAt: string;
   /** The bet this line belongs to, when it is a stake or a settlement. */
@@ -231,6 +235,19 @@ export type CommissionPayout = {
   status: "PENDING" | "APPROVED" | "REJECTED";
 };
 
+/**
+ * What Players staked and were paid in a period, counted the same way on
+ * every page (Overview, Finance, a Player's page, Casino, Commissions):
+ * settled bets on the day they settled, casino rounds on the day they were
+ * played. A casino round is one that cost a stake (free spins and double or
+ * nothing count in the money, not as rounds). `net` is the house's result.
+ */
+export type PeriodResults = {
+  sports: { bets: number; staked: number; paidOut: number; net: number };
+  casino: { rounds: number; staked: number; paidOut: number; net: number };
+  total: { staked: number; paidOut: number; net: number };
+};
+
 /** Settled-bet totals. `net` is the team's profit: what Players staked minus what they were paid. */
 export type CommissionTotals = { bets: number; staked: number; paidOut: number; net: number };
 
@@ -265,6 +282,8 @@ export type OwnerSplit = CommissionTotals & {
 
 export type SuperAdminCommissions = CommissionPeriod & {
   totals: OwnerSplit;
+  /** The same totals split into sports and casino. */
+  results?: PeriodResults;
   owners: Array<OwnerSplit & { id: string; username: string; status: UserRow["status"]; commissionRate: number; managers: number; players: number; payout: PayoutStanding }>;
 };
 
@@ -273,6 +292,7 @@ export type TeamCommissions = CommissionPeriod & {
   totals: OwnerSplit;
   /** Where the Owner stands with Super Admin. */
   ownerPayout: PayoutStanding;
+  results?: PeriodResults;
   managers: Array<CommissionTotals & { id: string; username: string; status: UserRow["status"]; commissionRate: number; commission: number; players: PlayerResult[]; payout: PayoutStanding }>;
   directPlayers: PlayerResult[];
 };
@@ -559,6 +579,8 @@ export type OddsSettings = {
   canEditTeam: boolean;
   canManageEvents: boolean;
   feed: { mode: "api-football" | "mock" | "off"; syncedAt: string | null; status: string | null } | null;
+  /** The greyhound feed is connected. */
+  greyhoundsFeed?: boolean;
   /** `maxAboveFeed`: how far above the feed price an Owner's own price can go, in percent. */
   limits: { minOdds: number; maxOdds: number; maxMargin: number; maxAboveFeed: number };
 };
@@ -872,7 +894,7 @@ export type CasinoAdmin = {
   teamGamesOff: CasinoGame[] | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
   /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), Plinko (`spins` are its balls), Dice (`spins` are its rolls), Keno (`spins` are its rounds), Coin Flip (`spins` are its flips) and Scratch Cards (`spins` are its cards). */
-  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch", { spins: number; staked: number; won: number; payoutRate: number | null }> & {
+  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch", { spins: number; freeSpins?: number; staked: number; won: number; payoutRate: number | null }> & {
     /** Book of Ra: paid spins and free ones, with double or nothing on its wins. */
     book: { spins: number; freeSpins: number; staked: number; won: number; payoutRate: number | null };
   };

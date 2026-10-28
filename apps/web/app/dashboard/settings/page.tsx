@@ -29,6 +29,7 @@ const ITEMS: Record<MeResponse["role"], Item[]> = {
     { title: msg("Prices"), text: msg("The base margin, leagues, and every team's prices."), icon: "odds", href: "/dashboard/odds" },
     { title: msg("Casino"), text: msg("Turn the Casino on or off for the site and each team."), icon: "casino", href: "/dashboard/casino" },
     { title: msg("My account"), text: msg("Your password, the devices you're signed in on, and the language."), icon: "user", href: "/dashboard/security" },
+    { title: msg("Danger zone"), text: msg("Delete all test data before real users start. Kept apart so it's never pressed by mistake."), icon: "block", href: "/dashboard/settings/danger" },
   ],
   PLAYER: [],
 };

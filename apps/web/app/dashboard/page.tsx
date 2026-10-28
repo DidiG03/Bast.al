@@ -199,21 +199,29 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label={t("Turnover")} help="All the money Players bet this week, on bets that are already finished. It shows how busy the site is, not how much you earned."
+              label={t("Turnover")} help="All the money Players staked this week: on sports bets that are already finished, and on casino rounds. It shows how busy the site is, not how much you earned."
               icon="turnover"
               value={formatMoney(totals?.staked ?? 0)}
               spark={days.map((day) => day.staked)}
               delta={{ current: totals?.staked ?? 0, previous: previousTotals?.staked ?? 0, label: t("vs last week") }}
-              hint={tn(totals?.bets ?? 0, "{count} settled bet", "{count} settled bets")}
+              hint={
+                week?.results
+                  ? t("Sports {sports} · Casino {casino}", { sports: formatMoney(week.results.sports.staked), casino: formatMoney(week.results.casino.staked) })
+                  : tn(totals?.bets ?? 0, "{count} settled bet", "{count} settled bets")
+              }
             />
             <KpiCard
-              label={t("Platform profit")} help="What all the teams made this week: the money Players lost, minus the money paid to Players who won. Red means Players won more than they lost."
+              label={t("Profit, sports and casino")} help="What all the teams made this week on sports bets and the casino together: the money Players lost, minus the money paid to Players who won. Red means Players won more than they lost."
               icon="profit"
               value={formatSignedMoney(totals?.net ?? 0)}
               tone={(totals?.net ?? 0) < 0 ? "bad" : undefined}
               spark={days.map((day) => day.net)}
               delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: t("vs last week") }}
-              hint={t("Stakes minus payouts, across every team")}
+              hint={
+                week?.results
+                  ? t("Sports {sports} · Casino {casino}", { sports: formatSignedMoney(week.results.sports.net), casino: formatSignedMoney(week.results.casino.net) })
+                  : t("Stakes minus payouts, across every team")
+              }
             />
             <KpiCard
               label={t("Owed to you")} help="Your share of every team's profit this week. Each Owner pays you their rate (%) of what their team made. You collect it on the Commissions page."
@@ -351,13 +359,17 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label={t("Team profit")} help="What your whole team made this week: the money your Players lost, minus the money paid to Players who won. Red means your Players won more than they lost."
+              label={t("Team profit, sports and casino")} help="What your whole team made this week on sports bets and the casino together: the money your Players lost, minus the money paid to Players who won. Red means your Players won more than they lost."
               icon="profit"
               value={formatSignedMoney(totals?.net ?? 0)}
               tone={(totals?.net ?? 0) < 0 ? "bad" : undefined}
               spark={days.map((day) => day.net)}
               delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: t("vs last week") }}
-              hint={tn(totals?.bets ?? 0, "{amount} staked on {count} bet", "{amount} staked on {count} bets", { amount: formatMoney(totals?.staked ?? 0) })}
+              hint={
+                week?.results
+                  ? t("Sports {sports} · Casino {casino}", { sports: formatSignedMoney(week.results.sports.net), casino: formatSignedMoney(week.results.casino.net) })
+                  : tn(totals?.bets ?? 0, "{amount} staked on {count} bet", "{amount} staked on {count} bets", { amount: formatMoney(totals?.staked ?? 0) })
+              }
             />
             <KpiCard
               label={t("You owe Super Admin")} help="Super Admin's share of your team's profit: your rate (%) of it. You pay this to Super Admin for each week."

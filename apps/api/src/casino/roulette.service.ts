@@ -11,6 +11,7 @@ import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import { CHIPS, GAME_NAME, MAX_SPOTS, PAYOUT_RATE, RED_NUMBERS, TABLE_MAX, WHEEL, colorOf, invalidBets, label, settle, spinWheel, type PlacedBet } from "./roulette";
+import { formatAll } from "../money";
 
 /** Rounds in the Player's recent list, and numbers in the strip of past results. */
 const RECENT = 10;
@@ -103,7 +104,7 @@ export class RouletteService {
     if (invalid) throw new BadRequestException(invalid);
     const staked = settle(bets, 0).staked;
     const tableMax = await this.tableMax(actor.id);
-    if (staked > tableMax) throw new BadRequestException(`The most you can have on the table in one spin is ${tableMax.toFixed(2)} ALL`);
+    if (staked > tableMax) throw new BadRequestException(`The most you can have on the table in one spin is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {

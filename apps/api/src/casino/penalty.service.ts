@@ -10,6 +10,7 @@ import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import { BETS, DIRECTIONS, FULL_PRICE_GOALS, GAME_NAME, LATER_STEP, MAX_WIN, PAYOUT_RATE, PenaltyError, cashOut, kick, publicView, startRound, type Direction, type Round } from "./penalty";
+import { formatAll } from "../money";
 
 const RECENT = 10;
 /** A shootout nobody has touched for this long is cashed out, or refunded if no goal was scored. */
@@ -97,7 +98,7 @@ export class PenaltyService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException(`A round costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);
     }
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one round is ${tableMax.toFixed(2)} ALL`);
+    if (bet > tableMax) throw new BadRequestException(`The most you can bet on one round is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);
 
     const result = await this.prisma.$transaction(async (tx) => {

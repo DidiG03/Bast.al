@@ -11,6 +11,7 @@ import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
 import { activeSeed, lockedActiveSeed, previousSeed, revealedSeeds, seedView } from "./fair-seeds";
 import { BETS, DRAWN, GAME_NAME, MAX_MULTIPLIER, MAX_PICKS, MIN_PICKS, NUMBERS, PAYS, drawFor, hitsOf, invalidPicks, payoutRate, winCents } from "./keno";
+import { formatAll } from "../money";
 
 /** Rounds in the Player's recent list. */
 const RECENT = 20;
@@ -115,7 +116,7 @@ export class KenoService {
     if (invalid) throw new BadRequestException(invalid);
     const picks = [...picksInput].sort((a, b) => a - b);
     const tableMax = await this.tableMax(actor.id);
-    if (bet > tableMax) throw new BadRequestException(`The most a round can cost you is ${tableMax.toFixed(2)} ALL`);
+    if (bet > tableMax) throw new BadRequestException(`The most a round can cost you is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);
     const stakeCents = Math.round(bet * 100);
 

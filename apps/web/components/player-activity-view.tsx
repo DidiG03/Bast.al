@@ -142,7 +142,12 @@ export function PlayerActivityView({ data }: { data: PlayerActivity }) {
           <div className="report-list">
             {shown.map((bet) => {
               const result =
-                bet.status === "WON" ? t("Won {amount}", { amount: formatMoney(bet.payout - bet.stake) }) : bet.status === "LOST" ? t("Lost {amount}", { amount: formatMoney(bet.stake) }) : t("Refunded");
+                // The profit, and the total paid back (stake included), which is what the ledger shows.
+                bet.status === "WON"
+                  ? t("Won {profit} profit · {paid} paid back", { profit: formatMoney(bet.payout - bet.stake), paid: formatMoney(bet.payout) })
+                  : bet.status === "LOST"
+                    ? t("Lost {amount}", { amount: formatMoney(bet.stake) })
+                    : t("Refunded");
               return (
                 <div className="report-list-row" key={bet.id}>
                   <div>

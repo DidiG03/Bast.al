@@ -1266,6 +1266,13 @@ table {
   border-bottom: 1px solid var(--border);
 }
 
+/* What was recorded with an audit entry: the amount, the match, the reason. */
+.audit-detail {
+  color: var(--text-2, var(--text));
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
 .audit-row > div {
   display: flex;
   min-width: 0;
@@ -5371,6 +5378,22 @@ button.is-blocked {
 
 .money-row.is-waiting {
   opacity: 0.7;
+}
+
+/* A transfer rejected or still waiting: no money moved, so its amount is grey and struck through. */
+.money-amount.is-no-effect,
+.ledger-no-effect {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.ledger-row.is-void {
+  opacity: 0.65;
+}
+
+.ledger-after {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .money-row-text {
@@ -16820,4 +16843,19 @@ html[data-theme="light"] .role-player .bet-status-lost {
   .casino-spins-chevron {
     transition: none;
   }
+}
+
+/* A sport whose feed isn't connected yet, on the Prices page. */
+.sport-option.is-soon {
+  opacity: 0.6;
+}
+
+.sport-soon {
+  margin-left: 0.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
 }

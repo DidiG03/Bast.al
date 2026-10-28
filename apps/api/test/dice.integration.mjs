@@ -182,7 +182,7 @@ test("dice profit counts in commissions, and the Casino page shows it as its own
   const page = await casino.admin(owner, fromDay, to);
   assert.deepEqual(page.players.map((row) => [row.username, row.spins, row.dice.rolls, row.net]), [[dan.username, 0, 3, net]]);
   assert.equal(page.games.dice.spins, 3);
-  assert.deepEqual(page.games.slot, { spins: 0, staked: 0, won: 0, payoutRate: null });
+  assert.deepEqual(page.games.slot, { spins: 0, freeSpins: 0, staked: 0, won: 0, payoutRate: null });
 });
 
 test("a big win goes in the audit log", async () => {

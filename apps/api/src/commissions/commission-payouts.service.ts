@@ -5,8 +5,9 @@ import { PrismaService } from "../prisma.service";
 import { shortDay as dayFormat } from "../time";
 import { UsersService } from "../users/users.service";
 import { CommissionsService } from "./commissions.service";
+import { formatAll } from "../money";
 
-const money = (value: number) => `${value.toFixed(2)} ALL`;
+const money = (value: number) => `${formatAll(value)}`;
 
 /**
  * Paying commissions for a finished period, remembered so no period is ever

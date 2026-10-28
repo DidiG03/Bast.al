@@ -153,9 +153,18 @@ export default function MoneyPage() {
                         <span className="muted">{ts(ledgerText(entry.reason))}{entry.betId ? ` · ${t("Ref {id}", { id: entry.betId.slice(-8) })}` : ""}</span>
                         {pending || rejected ? <span className="muted">{pending ? t("Waiting for approval") : t("Rejected, no money moved")}</span> : null}
                       </span>
-                      <strong className={`money-amount${tone}`}>
-                        {entry.amount >= 0 ? "+" : "−"}
-                        {formatMoney(Math.abs(entry.amount))}
+                      <strong className={`money-amount${pending || rejected ? " is-no-effect" : tone}`}>
+                        {pending || rejected ? (
+                          <s>
+                            {entry.amount >= 0 ? "+" : "−"}
+                            {formatMoney(Math.abs(entry.amount))}
+                          </s>
+                        ) : (
+                          <>
+                            {entry.amount >= 0 ? "+" : "−"}
+                            {formatMoney(Math.abs(entry.amount))}
+                          </>
+                        )}
                       </strong>
                       {entry.type === "CASINO" && CASINO_DAY.test(entry.id) ? <CasinoRounds userId={me.id} lineId={entry.id} lineAmount={entry.amount} /> : null}
                     </li>

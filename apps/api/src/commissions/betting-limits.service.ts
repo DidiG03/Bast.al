@@ -4,6 +4,7 @@ import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { startOfDay } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
+import { formatAll } from "../money";
 
 /** The database to read through: the service's pool, or the transaction a caller holds. */
 type Db = Prisma.TransactionClient;
@@ -31,7 +32,7 @@ function stricter(a: number | null, b: number | null): number | null {
  * Player; a Manager can't turn it back on over their Owner.
  */
 /** An amount as Players see it: "25.00 ALL". */
-const money = (value: number) => `${value.toFixed(2)} ALL`;
+const money = (value: number) => `${formatAll(value)}`;
 
 @Injectable()
 export class BettingLimitsService {
@@ -108,12 +109,12 @@ export class BettingLimitsService {
     const maxStake = stricter(value(row?.ownerMaxStake), value(row?.managerMaxStake));
     const dailyLossLimit = stricter(value(row?.ownerDailyLossLimit), value(row?.managerDailyLossLimit));
     if (maxStake !== null && stake > maxStake) {
-      throw new BadRequestException(`The most this Player can stake on one bet is ${maxStake.toFixed(2)} ALL`);
+      throw new BadRequestException(`The most this Player can stake on one bet is ${formatAll(maxStake)}`);
     }
     if (dailyLossLimit !== null) {
       const worstCase = (await this.lossToday(playerId, db)) + (await this.openStakes(playerId, db)) + alsoStaking + stake;
       if (worstCase > dailyLossLimit) {
-        throw new BadRequestException(`This bet could take the Player past their ${dailyLossLimit.toFixed(2)} ALL daily loss limit`);
+        throw new BadRequestException(`This bet could take the Player past their ${formatAll(dailyLossLimit)} daily loss limit`);
       }
     }
   }

@@ -112,7 +112,7 @@ export function LiveHealthView({ data, days, onDays }: { data: LiveHealthData; d
       ) : null}
       {data.pausesByReason.length > 0 ? (
         <p className="muted live-health-reasons">
-          {data.pausesByReason.map((row) => t("{reason}: {count}, {seconds} on average", { reason: t(REASON[row.reason] ?? row.reason), count: row.pauses, seconds: seconds(row.averageMs) })).join(" · ")}
+          {data.pausesByReason.map((row) => t("{reason}: {count}, {seconds} on average", { reason: t(REASON[row.reason] ?? REASON.swing), count: row.pauses, seconds: seconds(row.averageMs) })).join(" · ")}
         </p>
       ) : null}
       {data.competitions.length > 0 ? (
@@ -215,4 +215,5 @@ const REASON: Record<string, string> = {
   var: msg("VAR checks and penalties"),
   swing: msg("Price jumps"),
   reopen: msg("Bookmaker reopening"),
+  ahead: msg("Goals seen before the prices had them"),
 };

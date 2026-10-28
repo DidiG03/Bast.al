@@ -6,6 +6,7 @@ import { PrismaService } from "../prisma.service";
 import { type LiveDelta, RealtimeService, STAFF_TOPIC, teamTopic } from "../realtime/realtime.service";
 import type { MatchCentre } from "./api-football";
 import { OddsSyncService } from "./odds-sync.service";
+import { GreyhoundSyncService } from "./greyhound-sync.service";
 import { competitionKey, feedDelay, lagGate, lagStats } from "./feed-delay";
 import { LATE_REASONS, timelineOf } from "../bets/late";
 import { liveConfirmConfig } from "../bets/live-delay";
@@ -26,9 +27,14 @@ const JUST_FINISHED_MS = 10 * 60_000;
  */
 const FOOTBALL_LIVE_MAX_MS = 3.5 * 3_600_000;
 
-/** Live matches still worth listing: for football, not one stuck at its last minute hours after kick-off. */
+/**
+ * Live matches still worth listing: in play, so kicked off (a few minutes'
+ * leeway for a clock that's slightly out), and for football not one stuck at
+ * its last minute hours after kick-off.
+ */
 function stillLive(sport: Sport, now: Date): Prisma.EventWhereInput {
-  return { status: EventStatus.LIVE, ...(sport === "football" ? { startsAt: { gte: new Date(now.getTime() - FOOTBALL_LIVE_MAX_MS) } } : {}) };
+  const kickedOff = new Date(now.getTime() + 5 * 60_000);
+  return { status: EventStatus.LIVE, startsAt: { lte: kickedOff, ...(sport === "football" ? { gte: new Date(now.getTime() - FOOTBALL_LIVE_MAX_MS) } : {}) } };
 }
 
 /** The most matches the list view sends: a week of every synced league, with room to spare. */
@@ -90,10 +96,11 @@ const MARKET_KIND = /^(lines:)?[a-z0-9_]{1,60}$/;
  */
 const LIST_TTL_MS: Record<EventFilter | "top", number> = { live: 2_000, upcoming: 5_000, finished: 30_000, top: 5_000 };
 
+/** A postponed match takes no bets (eventOpen), so it's listed with the finished and called-off ones, not as upcoming. */
 const FILTER_STATUSES: Record<EventFilter, EventStatus[]> = {
-  upcoming: [EventStatus.UPCOMING, EventStatus.POSTPONED],
+  upcoming: [EventStatus.UPCOMING],
   live: [EventStatus.LIVE],
-  finished: [EventStatus.COMPLETED, EventStatus.CANCELLED],
+  finished: [EventStatus.COMPLETED, EventStatus.CANCELLED, EventStatus.POSTPONED],
 };
 
 /**
@@ -124,6 +131,7 @@ export class OddsService {
     private readonly audit: AuditService,
     private readonly sync: OddsSyncService,
     @Optional() private readonly realtime?: RealtimeService,
+    @Optional() private readonly greyhounds?: GreyhoundSyncService,
   ) {
     if (realtime) this.sync.onLiveSaved = (eventIds) => this.pushLive(eventIds);
   }
@@ -244,6 +252,8 @@ export class OddsService {
       canEditTeam: actor.role === Role.OWNER || (actor.role === Role.SUPER_ADMIN && owner !== null),
       canManageEvents: actor.role === Role.SUPER_ADMIN,
       feed: actor.role === Role.PLAYER ? null : { mode: this.sync.mode, syncedAt: platform.oddsSyncedAt, status: platform.oddsSyncStatus },
+      /** The greyhound feed is connected: without it there are no races, so the tab says so (or isn't shown to Players). */
+      greyhoundsFeed: this.greyhounds?.enabled ?? false,
       limits: { minOdds: MIN_ODDS, maxOdds: MAX_ODDS, maxMargin: MAX_MARGIN, maxAboveFeed: MAX_ABOVE_FEED },
     };
   }

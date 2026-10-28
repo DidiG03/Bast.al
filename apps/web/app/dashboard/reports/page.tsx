@@ -9,6 +9,7 @@ import { AuditLog } from "./audit-log";
 import { msg } from "../../../lib/i18n/core";
 import { getT } from "../../../lib/i18n/server";
 import { HelpTip } from "../../../components/help-tip";
+import { auditLabel, auditParties } from "../../../lib/audit";
 
 function dateLabel(value: string) {
   return getT().date(value, { dateStyle: "medium", timeStyle: "short" });
@@ -17,7 +18,8 @@ function dateLabel(value: string) {
 const STATUS_NAMES: Record<string, string> = { ACTIVE: msg("Active"), SUSPENDED: msg("Suspended") };
 
 export default async function ReportsPage() {
-  const { t, tn, ts } = getT();
+  const i18n = getT();
+  const { t, tn, ts } = i18n;
   const { getToken, userId } = await auth();
   if (!userId) redirect("/sign-in");
   const token = await getToken();
@@ -115,11 +117,8 @@ export default async function ReportsPage() {
                   key={entry.id}
                 >
                   <div>
-                    <strong>{ts(entry.action.replaceAll(".", " "))}</strong>
-                    <span className="muted">
-                      {entry.actor?.username ?? t("System")}
-                      {entry.target ? ` → ${entry.target.username}` : ""}
-                    </span>
+                    <strong>{auditLabel(entry.action, i18n)}</strong>
+                    <span className="muted">{auditParties(entry, i18n)}</span>
                   </div>
                   <time className="muted" dateTime={entry.createdAt}>
                     {dateLabel(entry.createdAt)}

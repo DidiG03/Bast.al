@@ -58,7 +58,7 @@ function ledgerPeriod(from: string, to: string): string {
 /** The same period in the reader's language, for the page. */
 function periodLabel({ t, date }: I18n, from: string, to: string): string {
   const last = new Date(new Date(to).getTime() - 1);
-  return t("{from} to {to}", { from: date(from, { day: "numeric", month: "short" }), to: date(last, { day: "numeric", month: "short" }) });
+  return t("{from} to {to}", { from: date(from, { day: "numeric", month: "long" }), to: date(last, { day: "numeric", month: "long" }) });
 }
 
 function downloadCsv(filename: string, rows: Array<Array<string | number>>) {

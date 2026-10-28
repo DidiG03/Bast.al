@@ -9,6 +9,7 @@ import { LoadingSpinner } from "./loading-spinner";
 import { useToast } from "./toaster";
 import { useI18n } from "./i18n-provider";
 import { HelpTip } from "./help-tip";
+import { useDismiss } from "./use-dismiss";
 
 const PRESETS = [10, 20, 50, 100, 200, 500];
 /** Super Admin tops up Owners, who hand it on to their whole team: bigger steps. */
@@ -24,19 +25,29 @@ type Props = {
   onDone: (message: string) => void;
   /** Super Admin's credit is new money: it comes out of no balance and needs no approval. */
   newMoney?: boolean;
+  /** What the Player asked for in a top-up request: the amount box starts with it. */
+  amount?: number;
+  /** Who's sending: says whom to ask for credit when their own balance is too low. */
+  senderRole?: "OWNER" | "MANAGER" | "SUPER_ADMIN";
 };
 
-/** One tap to send a Player a preset amount of credit. */
-export function QuickTopUp({ player, available, approvalLimit, onClose, onDone, newMoney = false }: Props) {
+/** One tap to give someone a preset amount of credit, or the amount they asked for. */
+export function QuickTopUp({ player, available, approvalLimit, onClose, onDone, newMoney = false, amount: asked, senderRole }: Props) {
   const { getToken } = useAuth();
   const { t } = useI18n();
   const moneyKey = useIdempotencyKey();
-  const [custom, setCustom] = useState("");
+  const [custom, setCustom] = useState(asked && asked > 0 ? String(asked) : "");
+  useDismiss(onClose);
   const [sending, setSending] = useState<number | null>(null);
   const toast = useToast();
   const headroom = Math.max(0, Number(player.balanceLimit) - Number(player.balance));
   const presets = newMoney ? OWNER_PRESETS : PRESETS;
   const spendable = newMoney ? Number.POSITIVE_INFINITY : available;
+  const typed = Number(custom);
+  const typedAmount = custom !== "" && Number.isFinite(typed) && typed > 0 ? typed : null;
+  // Not enough of their own balance for the smallest amount, or for the one typed: say so and whom to ask.
+  const short = !newMoney && (available < Math.min(presets[0], typedAmount ?? presets[0]) || (typedAmount !== null && typedAmount > available));
+  const askFrom = senderRole === "MANAGER" ? t("Ask your Owner for credit first.") : t("Ask Super Admin for credit first.");
 
   // A Player already at their limit can't take more; say so as the sheet opens.
   useEffect(() => {
@@ -81,11 +92,11 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone, 
       <section className="modal card top-up-sheet" role="dialog" aria-modal="true" aria-labelledby="top-up-title">
         <div className="modal-header">
           <h2 id="top-up-title">
-            {t("Top up {name}", { name: player.username })}
+            {t("Give credit to {name}", { name: player.username })}
             {newMoney ? (
               <HelpTip text="Send credit to this Owner. Tap an amount, or type your own and press Send. It is new money: it comes out of no balance, and the Owner hands it on to their team." />
             ) : (
-              <HelpTip text="Send money to this Player fast. Tap an amount, or type your own and press Send. It comes out of your balance straight away." />
+              <HelpTip text="Send credit to this person. Tap an amount, or type your own and press Send. It comes out of your own balance." />
             )}
           </h2>
           <button type="button" className="modal-close secondary" onClick={onClose} aria-label={t("Close")}>×</button>
@@ -94,6 +105,15 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone, 
           {t("Their balance:")} <strong>{formatMoney(player.balance)}</strong>
           {newMoney ? null : <> · {t("Yours:")} <strong>{formatMoney(available)}</strong></>}
         </p>
+        {asked && asked > 0 ? <p className="field-hint" style={{ margin: 0 }}>{t("{name} asked for {amount}.", { name: player.username, amount: formatMoney(asked) })}</p> : null}
+        {short ? (
+          <p className="bm-note top-up-short" role="alert">
+            {typedAmount !== null && available >= presets[0]
+              ? t("You have {amount}, not enough for {wanted}.", { amount: formatMoney(available), wanted: formatMoney(typedAmount) })
+              : t("You have {amount}.", { amount: formatMoney(available) })}{" "}
+            {askFrom}
+          </p>
+        ) : null}
         <div className="top-up-presets">
           {presets.map((amount) => (
             <button
@@ -112,11 +132,16 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone, 
             {t("Other amount")}
             <input type="number" min="0.01" max="1000000" step="0.01" inputMode="decimal" placeholder="0.00" value={custom} onChange={(event) => setCustom(event.target.value)} />
           </label>
-          <button type="submit" disabled={sending !== null || !custom}>{t("Send")}</button>
+          <button type="submit" disabled={sending !== null || typedAmount === null || typedAmount > spendable || typedAmount > headroom}>{t("Send")}</button>
         </form>
-        <p className="muted top-up-note">
-          {newMoney ? t("Sends straight away. It doesn't come out of any balance.") : t("Sends straight away. Anything over {amount} waits for approval.", { amount: formatMoney(approvalLimit) })}
-        </p>
+        {/* Only says it sends straight away when it can. */}
+        {newMoney ? (
+          <p className="muted top-up-note">{t("Sends straight away. It doesn't come out of any balance.")}</p>
+        ) : short ? null : typedAmount !== null && typedAmount > approvalLimit ? (
+          <p className="muted top-up-note">{t("{amount} is over {limit}: it waits for approval before it's sent.", { amount: formatMoney(typedAmount), limit: formatMoney(approvalLimit) })}</p>
+        ) : (
+          <p className="muted top-up-note">{t("Sends straight away. Anything over {amount} waits for approval.", { amount: formatMoney(approvalLimit) })}</p>
+        )}
       </section>
     </div>
   );

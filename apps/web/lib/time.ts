@@ -94,3 +94,19 @@ export function dayTextToInput(value: string): string | null {
   if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
+
+const NOTICE_CLOCK: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE };
+const NOTICE_DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "long", timeZone: TIME_ZONE };
+
+/**
+ * When a notification came, the one way the bell and the Overview's latest
+ * updates both say it: "Today, 10:45", "Yesterday, 18:02", or "24 October,
+ * 10:45" (Tirana time, the month in full).
+ */
+export function noticeWhen(at: string | Date, now: Date, i18n: { t: (text: string, values?: Record<string, string | number>) => string; date: (value: Date | string | number, options: Intl.DateTimeFormatOptions) => string }): string {
+  const time = i18n.date(at, NOTICE_CLOCK);
+  const day = dayKey(at);
+  if (day === dayKey(now)) return i18n.t("Today, {time}", { time });
+  if (day === dayKey(addDays(now, -1))) return i18n.t("Yesterday, {time}", { time });
+  return `${i18n.date(at, NOTICE_DAY)}, ${time}`;
+}

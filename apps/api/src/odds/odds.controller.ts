@@ -27,7 +27,7 @@ export class OddsController {
   @Get("events")
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
   events(@CurrentActor() actor: Actor, @Query() query: EventsQueryDto) {
-    return this.odds.events(actor, query.filter, query.ownerId, query.view, query.sport);
+    return this.odds.events(actor, query.filter, query.ownerId, query.view, query.sport, query.before ? new Date(query.before) : undefined);
   }
 
   /** A Player's home page: the few matches worth showing first. */

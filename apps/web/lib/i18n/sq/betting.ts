@@ -1,6 +1,8 @@
 /** Albanian for the betting pages: matches, the slip, bets, odds and price history. */
 export const betting: Record<string, string> = {
   "Today": "Sot",
+  "Today, {time}": "Sot, {time}",
+  "Yesterday, {time}": "Dje, {time}",
   "Tomorrow": "Nesër",
   "Couldn't load your account": "Llogaria juaj nuk u ngarkua",
   "Couldn't load the matches": "Ndeshjet nuk u ngarkuan",
@@ -44,6 +46,7 @@ export const betting: Record<string, string> = {
   "The match has been interrupted. Live betting reopens if play restarts.": "Ndeshja është ndërprerë. Bastet live rihapen nëse rifillon loja.",
   "Loading markets": "Duke ngarkuar tregjet",
   "Show more matches ({count} more)": "Shfaq më shumë ndeshje (edhe {count})",
+  "Show older matches": "Shfaq ndeshjet më të vjetra",
   "Show all {count} players": "Shfaq {count} lojtarë",
   "Show all {count} scores": "Shfaq {count} rezultate",
   "Main": "Kryesoret",
@@ -167,6 +170,7 @@ export const betting: Record<string, string> = {
   "To return": "Për t'u kthyer",
   "Returned": "Kthyer",
   "Postponed": "Shtyrë",
+  "Not played": "Nuk u luajt",
   "Finished, settling soon": "Mbaroi, mbyllet së shpejti",
   "Starts {when}": "Fillon {when}",
   "Match called off, stake refunded": "Ndeshja u anulua, shuma u rimbursua",

@@ -22,7 +22,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { clientIp } from "../security/client-ip";
 import { RequestIntegrityGuard } from "../security/request-integrity.guard";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { AdjustBalanceDto, ApprovalLimitDto, ApproveTransactionDto, BalanceLimitDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
+import { AdjustBalanceDto, ApprovalLimitDto, ApproveTransactionDto, BalanceLimitDto, DelegateCreditDto, ReclaimCreditDto, TopUpRequestDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { ReassignUserDto } from "./dto/reassign-user.dto";
 import { AuditQueryDto } from "./dto/audit-query.dto";
@@ -276,8 +276,8 @@ export class UsersController {
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.PLAYER)
-  requestTopUp(@CurrentActor() actor: Actor) {
-    return this.users.requestTopUp(actor);
+  requestTopUp(@CurrentActor() actor: Actor, @Body() dto: TopUpRequestDto) {
+    return this.users.requestTopUp(actor, dto?.amount);
   }
 
   @Get("me/team-settings")

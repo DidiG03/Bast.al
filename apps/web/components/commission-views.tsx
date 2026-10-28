@@ -9,9 +9,9 @@ import { useToast } from "./toaster";
 import { useI18n, type I18n } from "./i18n-provider";
 import { HelpTip } from "./help-tip";
 
-const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "long" };
 
-/** "1 Sep to 7 Sep" for a [from, to) period. */
+/** "1 September to 7 September" for a [from, to) period: the months in full, so they read the same in both languages. */
 function periodText({ t, date }: I18n, from: string, to: string, options: Intl.DateTimeFormatOptions = DAY): string {
   return t("{from} to {to}", { from: date(from, options), to: date(new Date(new Date(to).getTime() - 1), options) });
 }

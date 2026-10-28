@@ -18,6 +18,8 @@ export class ClerkService {
   private readonly client: ReturnType<typeof createClerkClient>;
   /** One check per request: the rate limiter and AuthGuard both need to know who's calling. */
   private readonly checked = new WeakMap<object, Promise<VerifiedSession | null>>();
+  /** hasTotpEnabled's answers, per Clerk user, until when they're kept. */
+  private readonly totpKept = new Map<string, { value: boolean; until: number }>();
 
   constructor(private readonly config: ConfigService) {
     this.secretKey = this.config.getOrThrow<string>("CLERK_SECRET_KEY");
@@ -79,9 +81,19 @@ export class ClerkService {
     return this.client.users.getUser(clerkId);
   }
 
-  /** True when the Clerk user has at least one second factor enrolled. */
+  /**
+   * True when the Clerk user has at least one second factor enrolled. Asked
+   * of Clerk at most once a minute per user (15 s while it's not enrolled,
+   * so enrolling lets them in quickly): /users/me and the MFA guard asked on
+   * every request, and each answer took a round trip to Clerk.
+   */
   async hasTotpEnabled(clerkId: string): Promise<boolean> {
+    const kept = this.totpKept.get(clerkId);
+    if (kept && kept.until > Date.now()) return kept.value;
     const user = await this.getUser(clerkId);
-    return Boolean(user.totpEnabled || user.twoFactorEnabled);
+    const value = Boolean(user.totpEnabled || user.twoFactorEnabled);
+    if (this.totpKept.size > 5_000) this.totpKept.clear();
+    this.totpKept.set(clerkId, { value, until: Date.now() + (value ? 60_000 : 15_000) });
+    return value;
   }
 }

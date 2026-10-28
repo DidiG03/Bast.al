@@ -8,6 +8,7 @@ import { LoadingSpinner } from "./loading-spinner";
 import { useI18n } from "./i18n-provider";
 import { useToast } from "./toaster";
 import { HelpTip } from "./help-tip";
+import { useDismiss } from "./use-dismiss";
 
 function parse(text: string): number | null | "invalid" {
   if (text.trim() === "") return null;
@@ -25,6 +26,9 @@ export function TeamSettingsModal({ onClose, onSaved }: { onClose: () => void; o
   const [approval, setApproval] = useState("");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  useDismiss(() => {
+    if (!busy) onClose();
+  });
 
   useEffect(() => {
     (async () => {

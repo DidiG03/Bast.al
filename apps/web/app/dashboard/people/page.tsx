@@ -14,6 +14,7 @@ import { useToast } from "../../../components/toaster";
 import { useI18n } from "../../../components/i18n-provider";
 import { apiFetch, type BulkAction, type MeResponse, type UserRow } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
+import { HelpTip } from "../../../components/help-tip";
 import { canGiveCredit, childrenOf, isBlocked, moveDestinations, ownerOf, team, type Team } from "../../../lib/people";
 
 type OpenBets = Record<string, { bets: number; staked: number }>;
@@ -207,7 +208,7 @@ export default function PeoplePage() {
           <span className="people-row-chevron" aria-hidden="true">›</span>
         </Link>
         {!selecting && canGiveCredit(people, user) ? (
-          <button type="button" className="secondary is-small people-row-action" onClick={() => setTopUp(user)} aria-label={t("Top up {name}", { name: user.username })}>
+          <button type="button" className="secondary is-small people-row-action" onClick={() => setTopUp(user)} aria-label={t("Give credit to {name}", { name: user.username })}>
             <NamedIcon name="plus" className="button-icon" />
             <span className="people-row-action-label">{t("Credit")}</span>
           </button>
@@ -257,6 +258,16 @@ export default function PeoplePage() {
           <p className="muted report-subtitle">
             {isAdmin ? t("Every Owner with their team under them. Tap a name to give credit, see their bets, or change their account.") : t("Tap a name to give credit, see their bets, or change their account.")}
           </p>
+          {isAdmin ? null : (
+            <p className="muted people-limits">
+              {t("Your limits: you can hold up to {cap}, and have up to {players} Players of your own ({count} now).", {
+                cap: formatMoney(people.me.balanceLimit),
+                players: people.me.managerCapacity,
+                count: people.users.filter((user) => user.role === "PLAYER" && user.parentId === people.me.id).length,
+              })}
+              <HelpTip text="Set by the account above you. The most you can hold is your credit cap: credit that would take you past it isn't accepted. Players of your own are the ones directly under you, not your Managers' Players." />
+            </p>
+          )}
         </div>
         <div className="page-title-actions">
           {isAdmin ? (
@@ -447,6 +458,7 @@ export default function PeoplePage() {
           available={Number(people.me.balance)}
           approvalLimit={people.me.approvalLimit}
           newMoney={isAdmin}
+          senderRole={people.me.role === "PLAYER" ? undefined : people.me.role}
           onClose={() => setTopUp(null)}
           onDone={(message) => {
             setTopUp(null);

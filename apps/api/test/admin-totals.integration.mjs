@@ -4,8 +4,9 @@
 // (casino rounds without free spins or double or nothing); Finance counts
 // credit once, where it leaves the viewer; a rejected transfer shows in a
 // history but moves nothing, and the history adds up to the balance; a late
-// void is logged once; and the Live list has only matches in play, with
-// postponed ones out of Upcoming. Like the other integration tests it empties
+// void is logged once; the Live list has only matches in play, with
+// postponed and unplayed ones out of Upcoming; and a Player's top-up request
+// waits in Money until credit reaches them. Like the other integration tests it empties
 // tables, so it only runs against a database whose name ends in "_test".
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -155,6 +156,29 @@ test("Live lists only matches in play; postponed ones are with the finished, not
   assert.ok(!live.includes(future.id), "a kick-off still to come isn't live");
   assert.ok(!(await ids("upcoming")).includes(postponed.id));
   assert.ok((await ids("finished")).includes(postponed.id));
+});
+
+test("a Player's top-up request waits in Money until credit reaches them, and its alert goes then", async () => {
+  await users.requestTopUp(as(player), 300);
+  const waiting = async () => (await users.moneyMovements(as(manager), { kind: "transfers" })).requests;
+  const [request] = await waiting();
+  assert.equal(request.playerId, player.id);
+  assert.equal(request.amount, 300);
+  const alert = await prisma.notification.findFirstOrThrow({ where: { userId: manager.id, title: "Top-up requested" } });
+  assert.equal(alert.metadata.deepLink, `/dashboard/people/${player.id}?credit=1&amount=300`);
+  await users.delegateCredit(as(manager), player.id, { amount: 300, reason: "Top-up" });
+  assert.deepEqual(await waiting(), [], "answered: no longer waiting");
+  assert.ok((await prisma.notification.findUniqueOrThrow({ where: { id: alert.id } })).archivedAt, "and its alert is archived");
+});
+
+test("a match still waiting to start hours after its kick-off is out of Upcoming and with the finished ones", async () => {
+  const unplayed = await prisma.event.create({ data: { name: "Kortrijk v KV Mechelen", league: "League", sport: "football", status: "UPCOMING", startsAt: new Date(Date.now() - 26 * 3_600_000) } });
+  const soon = await prisma.event.create({ data: { name: "Later today", league: "League", sport: "football", status: "UPCOMING", startsAt: new Date(Date.now() + 3_600_000) } });
+  const ids = async (filter) => (await odds.events(as(sa), filter)).map((event) => event.id);
+  const upcoming = await ids("upcoming");
+  assert.ok(!upcoming.includes(unplayed.id));
+  assert.ok(upcoming.includes(soon.id));
+  assert.ok((await ids("finished")).includes(unplayed.id));
 });
 
 test("teardown", async () => {

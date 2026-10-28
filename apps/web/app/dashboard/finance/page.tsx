@@ -12,7 +12,7 @@ import { useI18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
 import { NamedIcon } from "../../../components/icons";
-import { endOfDateInput, fromDateInput, startOfDay, startOfMonth, startOfWeek } from "../../../lib/time";
+import { endOfDateInput, fromDateInput, noticeWhen, startOfDay, startOfMonth, startOfWeek } from "../../../lib/time";
 
 const ROLE_NAMES: Record<string, string> = { SUPER_ADMIN: msg("Super Admin"), OWNER: msg("Owner"), MANAGER: msg("Manager"), PLAYER: msg("Player") };
 
@@ -98,6 +98,8 @@ type MoneyView = {
     person: { given: number; givenCount: number; takenBack: number; takenBackCount: number; gaveTheirTeam: number; tookBackFromTheirTeam: number } | null;
   };
   items: Movement[];
+  /** Players' top-up requests still waiting: no credit has reached them since they asked. */
+  requests?: Array<{ id: string; playerId: string; username: string; balance: number; amount: number | null; createdAt: string }>;
 };
 
 type Filters = { period: Period; from: string; to: string; person: string; kind: Kind; status: Status; by: By; search: string };
@@ -174,7 +176,8 @@ function writeFilters(filters: Filters, view: View) {
  */
 export default function FinancePage() {
   const { getToken } = useAuth();
-  const { t, ts, tn, date } = useI18n();
+  const i18n = useI18n();
+  const { t, ts, tn, date } = i18n;
   const toast = useToast();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [people, setPeople] = useState<UserRow[]>([]);
@@ -465,7 +468,7 @@ export default function FinancePage() {
                 <div className="card report-stat">
                   <span className="muted">{t("Net to {name}", { name: chosenPerson.username })}<HelpTip text="Credit given to this person minus credit taken back from them in this period." /></span>
                   <strong className={summary.person.given - summary.person.takenBack < 0 ? "ledger-negative" : undefined}>{formatMoney(summary.person.given - summary.person.takenBack)}</strong>
-                  <span className="muted">{t("Given minus taken back")}</span>
+                  <span className="muted">{t("What's out with your team: credit given minus taken back")}</span>
                 </div>
               </>
             ) : (
@@ -562,6 +565,37 @@ export default function FinancePage() {
               </div>
             ) : null}
           </dl>
+
+          {money.requests && money.requests.length > 0 ? (
+            <section className="card stack top-up-requests" aria-labelledby="top-up-requests-title">
+              <h2 id="top-up-requests-title" style={{ margin: 0 }}>
+                {t("Top-up requests")}
+                <HelpTip text="Players who asked for more money and haven't been sent any since. Give credit opens their Credit form with what they asked for filled in." />
+              </h2>
+              <ul className="top-up-request-list">
+                {money.requests.map((request) => (
+                  <li key={request.id}>
+                    <span>
+                      <strong>{request.username}</strong>{" "}
+                      {request.amount !== null ? t("asked for {amount}", { amount: formatMoney(request.amount) }) : t("asked for a top-up")}
+                      <span className="muted">
+                        {" · "}
+                        {t("Balance {amount}", { amount: formatMoney(request.balance) })}
+                        {" · "}
+                        {noticeWhen(request.createdAt, new Date(), i18n)}
+                      </span>
+                    </span>
+                    <span className="status-pill is-pending">{t("Waiting")}</span>
+                    {isAdmin ? null : (
+                      <Link className="button-link" href={`/dashboard/people/${request.playerId}?credit=1${request.amount !== null ? `&amount=${request.amount}` : ""}`}>
+                        {t("Give credit")}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <div className="money-view-bar">
             <nav className="tabs-nav" aria-label={t("View")}>

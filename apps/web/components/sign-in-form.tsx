@@ -1,7 +1,12 @@
 "use client";
 
-import { ClerkLoading, SignIn } from "@clerk/nextjs";
+import { ClerkLoading, SignIn, useAuth, useClerk } from "@clerk/nextjs";
+import { useEffect, useState } from "react";
+import { useI18n } from "./i18n-provider";
 import { useTheme } from "./theme-provider";
+
+/** After this long with the form still not drawn, a line says what's going on. */
+const SLOW_FORM_MS = 8_000;
 
 /** Clerk can't read CSS variables, so these mirror the admin palette in admin.css. */
 const PALETTE = {
@@ -11,12 +16,40 @@ const PALETTE = {
 
 export function SignInForm() {
   const { theme } = useTheme();
+  const { t } = useI18n();
   const colors = PALETTE[theme];
+  const { isLoaded, isSignedIn } = useAuth();
+  const { signOut } = useClerk();
+  const [slow, setSlow] = useState(false);
+  // Sent here by Sign out before Clerk had finished (UserMenu, `?signed-out=1`): the session is ended here, and the
+  // form isn't drawn meanwhile, or Clerk would take the still-open session straight back to the dashboard.
+  const [pending, setPending] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("signed-out"));
+  useEffect(() => {
+    // Taken off the address, so a reload after signing in again doesn't end that new session.
+    if (pending) window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!pending || !isLoaded) return;
+    if (!isSignedIn) {
+      setPending(false);
+      return;
+    }
+    void signOut().catch(() => undefined).finally(() => setPending(false));
+  }, [pending, isLoaded, isSignedIn, signOut]);
+  useEffect(() => {
+    if (isLoaded) return;
+    const timer = window.setTimeout(() => setSlow(true), SLOW_FORM_MS);
+    return () => window.clearTimeout(timer);
+  }, [isLoaded]);
+
+  if (pending && isLoaded && isSignedIn) return <p className="muted sign-in-note">{t("Signing out…")}</p>;
 
   return (
     <>
       {/* Clerk draws the form a second or two after the page: its shape holds the space meanwhile. */}
       <ClerkLoading>
+        {slow ? <p className="muted sign-in-note">{t("The sign-in form is taking a while to load. Check your connection, or reload the page.")}</p> : null}
         <div className="sign-in-skeleton" aria-hidden="true">
           <span className="skeleton-bar is-title" />
           <span className="skeleton-bar is-line" />

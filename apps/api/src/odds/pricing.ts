@@ -93,15 +93,9 @@ export function marketPause(market: LiveMarketState, now: Date = new Date()): st
 }
 
 /**
- * Whether a live market is one the feed isn't pricing during play: no
- * priced reading of it for LIVE_MARKET_STALE_MS, or, for one never priced
- * live at all (`everPriced` false), that long since kick-off. Not while the
- * match is at a break, when the bookmaker may take everything down for a
- * while.
- */
-/**
- * Corners and cards the feed isn't pricing during play. They go under
- * "Not available during play" rather than sitting as a dead Suspended row.
+ * Corners and cards the feed isn't pricing during play (no live price at
+ * all). They're left off the live match (OddsService) rather than sitting
+ * as a dead Suspended row.
  */
 export function liveSideUnpriced(key: string | undefined, hasLivePrice: boolean): boolean {
   if (hasLivePrice || !key) return false;
@@ -109,9 +103,20 @@ export function liveSideUnpriced(key: string | undefined, hasLivePrice: boolean)
   return group === "corners" || group === "cards";
 }
 
+/**
+ * Whether a live market is one the feed isn't pricing during play: no open
+ * (not suspended) reading of it for LIVE_MARKET_STALE_MS. One with no open
+ * reading at all is counted from kick-off when it was never priced live
+ * (`everPriced` false), or when the bookmaker has it suspended: a market
+ * kept suspended from kick-off on (corners often are) leaves the board after
+ * that long instead of staying Suspended all match. Not while the match is
+ * at a break, when the bookmaker may take everything down for a while.
+ */
 export function marketStale(event: { status: string; startsAt: Date; period?: string | null }, market: LiveMarketState, now: Date = new Date(), everPriced = true): boolean {
   if (event.status !== "LIVE" || LIVE_MARKET_STALE_MS <= 0 || ["HT", "BT", "P"].includes(event.period ?? "")) return false;
-  const since = market.liveQuotedAt ?? (everPriced ? null : event.startsAt);
+  // Not read with the market (undefined): unknown, so not stale.
+  if (market.liveQuotedAt === undefined) return false;
+  const since = market.liveQuotedAt ?? (!everPriced || market.liveSuspended ? event.startsAt : null);
   return since !== null && now.getTime() - since.getTime() > LIVE_MARKET_STALE_MS;
 }
 

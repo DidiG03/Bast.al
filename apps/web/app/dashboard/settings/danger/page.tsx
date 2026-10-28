@@ -7,6 +7,7 @@ import { useToast } from "../../../../components/toaster";
 import { apiFetch, type DataResetPreview, type DataResetResult, type MeResponse } from "../../../../lib/api";
 import { useI18n } from "../../../../components/i18n-provider";
 import { HelpTip } from "../../../../components/help-tip";
+import { EscapeCloses } from "../../../../components/use-dismiss";
 
 /** What Super Admin types, as well as their username and password (the API checks it too). */
 const RESET_PHRASE = "DELETE ALL TEST DATA";
@@ -109,6 +110,7 @@ export default function DangerZonePage() {
       {open && reset ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !resetting && close()}>
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+            <EscapeCloses onClose={() => !resetting && close()} />
             <div className="modal-header">
               <h2 id="reset-title">{t("Delete all test data?")}</h2>
               <button type="button" className="modal-close secondary" onClick={close} disabled={resetting} aria-label={t("Close")}>×</button>

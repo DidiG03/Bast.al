@@ -29,7 +29,7 @@ if (!database.endsWith("_test")) {
 const prisma = new PrismaClient();
 const D = (v) => new Prisma.Decimal(v);
 const sent = [];
-const notifications = { create: async (n) => (sent.push(n), n) };
+const notifications = { create: async (n) => (sent.push(n), n), archiveTopUpRequests: async () => undefined };
 const realtime = { publish: async () => undefined, publishBalances: async () => undefined };
 const hierarchy = new HierarchyService(prisma);
 const audit = new AuditService(prisma);

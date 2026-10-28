@@ -4,6 +4,7 @@ import type { NotificationItem } from "../lib/api";
 import { HelpTip } from "./help-tip";
 import { NamedIcon, type IconName } from "./icons";
 import { getT } from "../lib/i18n/server";
+import { noticeWhen } from "../lib/time";
 
 /** A framed block: a quiet header strip with the title, and the content on a raised inner sheet. */
 export function Panel({
@@ -161,7 +162,8 @@ export function BarChart({ points, summary }: { points: BarPoint[]; summary?: Re
   const bottom = -niceCeiling(Math.max(0, ...points.map((point) => -point.value)));
   const range = top - bottom || 1;
   const zero = (top / range) * 100;
-  const ticks = bottom < 0 ? [top, 0, bottom] : [top, top / 2, 0];
+  // An empty period (or one with only losses) has repeated lines (0, 0, 0): each is drawn once.
+  const ticks = (bottom < 0 ? [top, 0, bottom] : [top, top / 2, 0]).filter((tick, index, all) => all.indexOf(tick) === index);
 
   return (
     <div className={`bar-chart${dense ? " is-dense" : ""}`}>
@@ -232,18 +234,21 @@ const CATEGORY_ICONS: Record<NotificationItem["category"], IconName> = {
   SYSTEM: "info",
 };
 
-const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Tirane" };
-const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", timeZone: "Europe/Tirane" };
-
+/** The same "Today, 10:45" / "24 October, 10:45" as the bell. */
 function when(iso: string, now: Date) {
-  const { date } = getT();
-  return date(iso, DAY) === date(now, DAY) ? date(iso, TIME) : date(iso, DAY);
+  return noticeWhen(iso, now, getT());
+}
+
+/** A Player's top-up request: a link to their Credit form, with what they asked for filled in. */
+function creditLink(item: NotificationItem): string | null {
+  const meta = item.metadata as { topUpRequest?: unknown; deepLink?: unknown } | null;
+  return meta && meta.topUpRequest === true && typeof meta.deepLink === "string" ? meta.deepLink : null;
 }
 
 /** The latest notifications, newest first, as a quiet timeline. */
 export function ActivityFeed({ items, now }: { items: NotificationItem[]; now: Date }) {
   const { t, ts } = getT();
-  if (items.length === 0) return <p className="panel-empty">{t("No activity yet this week.")}</p>;
+  if (items.length === 0) return <p className="panel-empty">{t("No recent activity yet.")}</p>;
   return (
     <ol className="activity">
       {items.map((item) => (
@@ -257,6 +262,11 @@ export function ActivityFeed({ items, now }: { items: NotificationItem[]; now: D
               <time dateTime={item.createdAt}>{when(item.createdAt, now)}</time>
             </div>
             <p>{ts(item.message)}</p>
+            {creditLink(item) ? (
+              <Link className="button-link activity-action" href={creditLink(item)!}>
+                {t("Give credit")}
+              </Link>
+            ) : null}
           </div>
         </li>
       ))}

@@ -3,10 +3,11 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RelativeTime } from "./relative-time";
 import { useRealtime } from "./realtime-provider";
 import { apiFetch, type NotificationItem, type NotificationPreferences, type NotificationResponse } from "../lib/api";
+import { serverNow } from "../lib/clock";
 import { formatMoney } from "../lib/format";
+import { noticeWhen } from "../lib/time";
 import { msg } from "../lib/i18n/core";
 import { pickLabel } from "../lib/picks";
 import { useI18n, type I18n } from "./i18n-provider";
@@ -265,6 +266,12 @@ export function NotificationCenter() {
     setItems((current) => current.filter((item) => item.id !== id));
   }
 
+  /** A Player's top-up request: straight to their Credit form, with what they asked for filled in. */
+  function creditLink(item: NotificationItem): string | null {
+    const meta = item.metadata as { topUpRequest?: unknown; deepLink?: unknown } | null;
+    return meta && meta.topUpRequest === true && typeof meta.deepLink === "string" ? meta.deepLink : null;
+  }
+
   function deepLink(item: NotificationItem) {
     if (item.metadata && typeof item.metadata === "object" && "deepLink" in item.metadata && typeof item.metadata.deepLink === "string") {
       router.push(item.metadata.deepLink);
@@ -291,7 +298,8 @@ export function NotificationCenter() {
             {items.length === 0 ? <p className="muted notification-empty">{t("You're all caught up.")}</p> : items.map((item) => {
               const details = betDetails(item);
               const notice = details ? betNotice(details, i18n) : null;
-              const when = <RelativeTime value={item.createdAt} />;
+              // The same "Today, 10:45" / "24 October, 10:45" as the Overview's latest updates.
+              const when = <time dateTime={item.createdAt}>{noticeWhen(item.createdAt, new Date(serverNow()), i18n)}</time>;
               return (
               <div key={item.id} className={`notification-item${item.readAt ? "" : " is-unread"} notification-severity-${item.severity.toLowerCase()}${notice ? ` is-bet is-${notice.tone}` : ""}`}>
                 <span className="notification-item-dot" />
@@ -312,7 +320,7 @@ export function NotificationCenter() {
                     <span><strong>{ts(item.title)}</strong><span>{ts(item.message)}</span><small>{t(CATEGORY_LABELS[item.category] ?? item.category)} · {t(SEVERITY_LABELS[item.severity] ?? item.severity)}</small>{when}</span>
                   )}
                 </button>
-                <span className="notification-item-actions"><button type="button" onClick={() => archive(item.id)}>{t("Archive")}</button><button type="button" onClick={() => remove(item.id)}>{t("Delete")}</button></span>
+                <span className="notification-item-actions">{creditLink(item) ? <button type="button" className="is-primary" onClick={() => { if (!item.readAt) markRead(item.id); router.push(creditLink(item)!); setOpen(false); }}>{t("Give credit")}</button> : null}<button type="button" onClick={() => archive(item.id)}>{t("Archive")}</button><button type="button" onClick={() => remove(item.id)}>{t("Delete")}</button></span>
               </div>
               );
             })}

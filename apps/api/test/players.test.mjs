@@ -27,8 +27,18 @@ test("a Player's top-up request notifies whoever looks after them", async () => 
   assert.equal(sent[0].userId, "m1");
   assert.equal(sent[0].title, "Top-up requested");
   assert.equal(sent[0].message, "ardi is asking for a top-up. Their balance is 3.50 ALL.");
-  assert.equal(sent[0].deepLink, "/dashboard/players/p1");
+  assert.equal(sent[0].deepLink, "/dashboard/people/p1?credit=1", "opens their Credit form");
+  assert.equal(sent[0].metadata.topUpRequest, true);
   assert.equal(logged[0].action, "balance.topup_request");
+});
+
+test("a top-up request can name an amount: it's in the message and fills in the Credit form", async () => {
+  const { service, sent, logged } = usersWith();
+  await service.requestTopUp(player, 500);
+  assert.equal(sent[0].message, "ardi is asking for a top-up of 500.00 ALL. Their balance is 3.50 ALL.");
+  assert.equal(sent[0].deepLink, "/dashboard/people/p1?credit=1&amount=500");
+  assert.equal(sent[0].metadata.amount, 500);
+  assert.equal(logged[0].metadata.amount, 500);
 });
 
 test("a Player can ask again only after 30 minutes", async () => {

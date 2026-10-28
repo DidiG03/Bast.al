@@ -56,6 +56,12 @@ export function startOfWeek(at: Date): Date {
   return midnight(clock.year, clock.month, clock.day - ((weekday + 6) % 7));
 }
 
+/** The 1st of the month `at` falls in, at midnight. */
+export function startOfMonth(at: Date): Date {
+  const clock = wallClock(at);
+  return midnight(clock.year, clock.month, 1);
+}
+
 /** "2026-09-21": the day `at` falls on, for keys that are one per day. */
 export function dayKey(at: Date): string {
   const clock = wallClock(at);

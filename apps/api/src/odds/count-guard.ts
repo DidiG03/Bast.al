@@ -5,6 +5,8 @@
  */
 
 export const COUNT_STATS_MAX_AGE_MS = 60_000;
+/** A count this old (or none this long after kick-off) puts the corners or cards markets under "Not available during play" rather than holding them. */
+export const COUNT_STATS_OFF_MS = 5 * 60_000;
 
 export type CountPair = [number, number];
 
@@ -81,4 +83,24 @@ export function countSelectionDead(centre: unknown, at: Date | null | undefined,
   if (!isCountMarket(marketKey) || countStatsStale(centre, at, marketKey, now)) return false;
   const count = countForMarket(marketKey, countsFromCentre(centre, at ?? null));
   return count !== null && countLineDead(marketKey, selectionKey, count);
+}
+
+/**
+ * What the live count lets a corners or cards market do during play:
+ * - "ok": read within the last minute, so its lines can be checked;
+ * - "held": a little older, or not read yet in the first minutes: Suspended until the next read;
+ * - "off": not read for COUNT_STATS_OFF_MS: under "Not available during play" until it is;
+ * - "none": the feed's statistics for this match have no such count, so an Over already won couldn't be told apart: the market isn't shown.
+ * Any other market is "ok".
+ */
+export type CountAvailability = "ok" | "held" | "off" | "none";
+
+export function countAvailability(event: { matchCentre: unknown; matchCentreAt: Date | null | undefined; startsAt: Date }, marketKey: string, now: Date): CountAvailability {
+  if (!isCountFamily(marketKey)) return "ok";
+  const at = event.matchCentreAt ?? null;
+  if (!at) return now.getTime() - event.startsAt.getTime() > COUNT_STATS_OFF_MS ? "off" : "held";
+  const stats = countsFromCentre(event.matchCentre, at);
+  if ((/corners/.test(marketKey) ? stats.corners : stats.cards) === null) return "none";
+  const age = now.getTime() - at.getTime();
+  return age <= COUNT_STATS_MAX_AGE_MS ? "ok" : age <= COUNT_STATS_OFF_MS ? "held" : "off";
 }

@@ -45,7 +45,7 @@ export function PlayerActivityView({ data }: { data: PlayerActivity }) {
   const shown = showAll ? recent : recent.slice(0, FIRST_RESULTS);
   const periods: Array<[string, typeof summary.thisWeek]> = [
     [t("This week"), summary.thisWeek],
-    [t("Last 30 days"), summary.last30Days],
+    [t("This month"), summary.thisMonth],
     [t("All time"), summary.allTime],
   ];
   return (
@@ -108,12 +108,12 @@ export function PlayerActivityView({ data }: { data: PlayerActivity }) {
         <div className="tree-header">
           <h2 style={{ margin: 0 }}>
             {t("Casino")}
-            <HelpTip text="This Player's Casino games in the last 30 days: how many rounds they played, what they staked and what was paid back. Each game keeps one line a day in their money history." />
+            <HelpTip text="This Player's Casino games this month: how many rounds they played, what they staked and what was paid back. Each game keeps one line a day in their money history." />
           </h2>
-          <span className="muted">{t("Last 30 days")}</span>
+          <span className="muted">{t("This month")}</span>
         </div>
         {casino.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>{t("No Casino play in the last 30 days.")}</p>
+          <p className="muted" style={{ margin: 0 }}>{t("No Casino play this month.")}</p>
         ) : (
           <div className="report-list">
             {casino.map((row) => (

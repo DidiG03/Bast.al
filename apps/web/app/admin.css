@@ -742,6 +742,18 @@ html:has(.role-admin) body {
   white-space: nowrap;
 }
 
+/* This week / This month, and the dates they cover. */
+.overview-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.overview-period-switch {
+  align-self: center;
+}
+
 .period-chip-icon {
   width: 0.95rem;
   height: 0.95rem;

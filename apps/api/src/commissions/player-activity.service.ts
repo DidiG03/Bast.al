@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { BetStatus, Prisma, Role } from "@prisma/client";
 import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
-import { startOfWeek } from "../time";
+import { startOfMonth, startOfWeek } from "../time";
 import { HierarchyService } from "../users/hierarchy.service";
 import { CASINO_ROUND, type PeriodResults, periodResults } from "./results";
 
@@ -32,9 +32,9 @@ function round(value: number): number {
 
 /**
  * What a Player is doing with the credit they were given: bets still open
- * and casino rounds still in play, recent results, each casino game over the
- * last 30 days, and their net result over a few periods (bets and casino
- * together). Visible to anyone above the Player in the hierarchy.
+ * and casino rounds still in play, recent results, each casino game this
+ * month, and their net result this week, this month and all time (bets and
+ * casino together; weeks and months on the Tirana calendar, as on Overview). Visible to anyone above the Player in the hierarchy.
  */
 @Injectable()
 export class PlayerActivityService {
@@ -55,10 +55,10 @@ export class PlayerActivityService {
     if (player.role !== Role.PLAYER) throw new BadRequestException("Activity is only available for Players");
 
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
-    const [thisWeek, last30Days, allTime, open, recent, inPlay, casino] = await Promise.all([
+    const monthStart = startOfMonth(now);
+    const [thisWeek, thisMonth, allTime, open, recent, inPlay, casino] = await Promise.all([
       this.totals(playerId, startOfWeek(now)),
-      this.totals(playerId, thirtyDaysAgo),
+      this.totals(playerId, monthStart),
       this.totals(playerId, null),
       this.prisma.bet.findMany({
         where: { playerId, status: BetStatus.OPEN },
@@ -72,7 +72,7 @@ export class PlayerActivityService {
         select: { id: true, description: true, odds: true, stake: true, payout: true, status: true, placedAt: true, settledAt: true },
       }),
       this.casinoInPlay(playerId),
-      this.casinoByGame(playerId, thirtyDaysAgo),
+      this.casinoByGame(playerId, monthStart),
     ]);
 
     return {
@@ -83,7 +83,7 @@ export class PlayerActivityService {
         balance: Number(player.balance),
         parent: player.parent,
       },
-      summary: { thisWeek, last30Days, allTime },
+      summary: { thisWeek, thisMonth, allTime },
       open: {
         count: open.length,
         staked: round(open.reduce((sum, bet) => sum + Number(bet.stake), 0)),
@@ -91,7 +91,7 @@ export class PlayerActivityService {
         /** Casino rounds started and not finished: their stake is already out of the balance. Free spins cost nothing. */
         casino: inPlay,
       },
-      /** Each casino game played in the last 30 days, most staked first. */
+      /** Each casino game played this month, most staked first. */
       casino,
       recent: recent.map((bet) => ({
         ...bet,

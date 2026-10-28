@@ -10,10 +10,12 @@
  * floored to the cent. That 15% is the house edge: before the cents are
  * floored, cashing out after any number of tiles pays back 85% on average.
  * With one mine, 85% of the fair price of the first few tiles is under 1
- * (the second tile is 0.92×). Those tiles step up by 0.01× from the last
- * cash-out, and never sit at 1.00× or below. Once 85% of the fair price is
- * higher than that, it is what the tile pays, so the multiplier keeps
- * rising. A round pays at most 5,000 times the bet.
+ * (the second tile is 0.92×), and it only pulls clear after a handful of
+ * tiles. Until it rises at least 0.02× a tile above 1.01×, the tiles climb
+ * evenly from 1.01× to where it does (one mine: 1.01, 1.03, 1.05, 1.07,
+ * 1.09, then 1.11 on the 85% price), so every coin raises the multiplier
+ * by a step the Player can see, as with more mines. After that, 85% of the
+ * fair price is what the tile pays. A round pays at most 5,000 times the bet.
  */
 
 export const GAME_NAME = "Mines";
@@ -24,10 +26,12 @@ export const TILES = 25;
 export const MINE_COUNTS = [1, 3, 5, 10, 15, 20, 24] as const;
 /** What a round can cost, in dollars. The same chips as the fruit slot. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
-/** The house's edge: 15%, so a round pays back 85% on average, except where that would pay 1.00× or less, or no more than the previous tile. */
+/** The house's edge: 15%, so a round pays back 85% on average, except on the early tiles that climb evenly from 1.01×. */
 export const HOUSE_EDGE = 0.15;
-/** The first safe tile pays at least this, in hundredths (101 is 1.01×). Each later tile pays at least one hundredth more. */
+/** The first safe tile pays at least this, in hundredths (101 is 1.01×). */
 const FIRST_TILE_MIN = 101;
+/** Until 85% of the fair price is this far a tile above FIRST_TILE_MIN (in hundredths), the tiles climb evenly to it. */
+const LEAST_STEP = 2;
 /** What a round pays back on average, in percent of the stake, before cents are floored. */
 export const PAYOUT_RATE = 85;
 /** The most a round pays, in times the bet. */
@@ -83,14 +87,25 @@ function fairHundredths(mines: number, opened: number): bigint {
   return num / den;
 }
 
+/** The first tile whose 85% price is at least LEAST_STEP a tile above 1.01×: the tiles before it climb evenly to it. */
+function anchorTile(mines: number): number {
+  const safe = TILES - mines;
+  for (let opened = 1; opened < safe; opened++) {
+    if (fairHundredths(mines, opened) >= BigInt(FIRST_TILE_MIN + LEAST_STEP * (opened - 1))) return opened;
+  }
+  return safe;
+}
+
 /** The multiplier after `opened` safe tiles, in hundredths (110 is 1.10), floored, and never past MAX_WIN. */
 export function multiplierHundredths(mines: number, opened: number): number {
   if (opened <= 0) return 100;
-  const raw = fairHundredths(mines, opened);
-  const previous = opened === 1 ? 100 : multiplierHundredths(mines, opened - 1);
-  // 85% of the fair odds, but always above 1.00× and always above the cash-out before this tile.
-  const least = BigInt(Math.max(previous + 1, FIRST_TILE_MIN));
-  let hundredths = raw > least ? raw : least;
+  const anchor = anchorTile(mines);
+  let hundredths = fairHundredths(mines, Math.max(opened, anchor));
+  if (opened < anchor) {
+    // Before the anchor: evenly from 1.01× up to the anchor tile's price.
+    hundredths = BigInt(FIRST_TILE_MIN) + ((hundredths - BigInt(FIRST_TILE_MIN)) * BigInt(opened - 1)) / BigInt(anchor - 1);
+  }
+  if (hundredths < BigInt(FIRST_TILE_MIN)) hundredths = BigInt(FIRST_TILE_MIN);
   const cap = BigInt(MAX_WIN) * 100n;
   if (hundredths > cap) hundredths = cap;
   return Number(hundredths);

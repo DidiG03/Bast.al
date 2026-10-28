@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsBoolean, IsNumber, IsString, IsPositive, Max, MaxLength, Min, MinLength, ValidateIf } from "class-validator";
+import { IsBoolean, IsNumber, IsOptional, IsString, IsPositive, Max, MaxLength, Min, MinLength, ValidateIf } from "class-validator";
 
 /** Delegate credit to a direct child (Owner→Manager, Owner→Player, Manager→Player). */
 export class DelegateCreditDto {
@@ -68,4 +68,14 @@ export class ApproveTransactionDto {
   @ApiProperty()
   @IsBoolean()
   approve!: boolean;
+}
+
+/** A Player asking for a top-up, optionally for a set amount. */
+export class TopUpRequestDto {
+  @ApiProperty({ example: 500, required: false, description: "How much they ask for" })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Max(1000000)
+  amount?: number;
 }

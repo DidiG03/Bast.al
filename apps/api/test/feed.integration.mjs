@@ -26,7 +26,7 @@ delete process.env.ODDS_FEED_MOCK;
 
 const prisma = new PrismaClient();
 const sent = [];
-const notifications = { create: async (n) => (sent.push(n), n), archiveSettledApprovals: async () => undefined };
+const notifications = { create: async (n) => (sent.push(n), n), archiveSettledApprovals: async () => undefined, archiveTopUpRequests: async () => undefined };
 const realtime = { publish: async () => undefined, publishBalances: async () => undefined };
 const hierarchy = new HierarchyService(prisma);
 const audit = new AuditService(prisma);

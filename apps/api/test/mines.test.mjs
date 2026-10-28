@@ -43,10 +43,9 @@ test("every cash-out after a safe tile pays more than 1×, and 24 mines pays 21.
     }
   }
   assert.equal(multiplierHundredths(1, 1), 101, "one mine: 85% of 25/24 is under 1, so the first coin is 1.01");
-  assert.equal(multiplierHundredths(1, 2), 102, "one mine, two tiles: 85% is 0.92, so it steps up to 1.02");
-  assert.equal(multiplierHundredths(1, 3), 103);
-  assert.ok(multiplierHundredths(1, 4) > multiplierHundredths(1, 3));
-  assert.equal(payoutCents(5_000, 1, 2), 5_100, "50 ALL cashes out at 51.00 after two coins");
+  assert.deepEqual([2, 3, 4, 5, 6, 7].map((opened) => multiplierHundredths(1, opened)), [103, 105, 107, 109, 111, 118], "one mine climbs evenly to the 85% price (1.11 on the sixth coin), then follows it");
+  assert.equal(multiplierHundredths(3, 2), 110, "more mines are on the 85% price from the second coin");
+  assert.equal(payoutCents(5_000, 1, 2), 5_150, "50 ALL cashes out at 51.50 after two coins");
   assert.equal(multiplierHundredths(24, 1), 2125);
   assert.equal(payoutCents(100, 24, 1), 2125);
 });
@@ -74,7 +73,7 @@ test("cashing out after any number of tiles pays back 85% before the cents are f
   for (const mines of [1, 3, 10]) {
     const safe = TILES - mines;
     for (let opened = 1; opened <= Math.min(safe, 4); opened++) {
-      // Tiles held just above the previous cash-out pay more than 85% on purpose, so the multiplier can keep rising.
+      // The early tiles that climb evenly from 1.01× pay more than 85% on purpose, so every coin raises the multiplier.
       let num = 85n;
       let den = 1n;
       for (let step = 0; step < opened; step++) {

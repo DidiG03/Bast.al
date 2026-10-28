@@ -1703,6 +1703,8 @@ function BetSlip({
   const liveSeconds = planned?.live ? Math.ceil((planned.waitMs + CHECK_TYPICAL_MS) / 1000) : null;
   const overMax = info?.maxStake != null ? (system ? totalStake > info.maxStake : combined ? accaStakeValue > info.maxStake : items.some((item) => stakeValue(item.stake) > info.maxStake!)) : false;
   const tooLittle = info ? totalStake > info.balance : false;
+  /** What a top-up request from the slip asks for: what's missing for it, in whole ALL. */
+  const shortfall = info && tooLittle ? Math.ceil(totalStake - info.balance) : undefined;
   const moved = items.some((item) => item.previousOdds !== undefined);
   const priceMoved = moved || takeNewPrice;
   // What to do when a price moves between the tap and the bet going in (before kick-off; a live bet is only ever
@@ -1772,7 +1774,7 @@ function BetSlip({
     // Why the slip can't go yet pops up when they try, instead of sitting in the slip.
     if (blocker) {
       // Too little money: a tap on the message asks their Manager or Owner for more.
-      if (needsMoney) toast.warning(blocker, { onClick: () => void topUp.request() });
+      if (needsMoney) toast.warning(blocker, { onClick: () => void topUp.request(shortfall) });
       else toast.warning(blocker);
       return;
     }
@@ -2109,7 +2111,7 @@ function BetSlip({
               <div className="bet-slip-summary-lead">
                 <strong>{summaryTitle}</strong>
                 {blocker && needsMoney ? (
-                  <button type="button" className="text-button bet-slip-flag" onClick={() => void topUp.request()}>{blocker}</button>
+                  <button type="button" className="text-button bet-slip-flag" onClick={() => void topUp.request(shortfall)}>{blocker}</button>
                 ) : (
                   <p className={blocker ? "bet-slip-flag" : "muted"}>{blocker ?? summaryHint}</p>
                 )}

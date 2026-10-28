@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "./i18n-provider";
+import { useDismiss } from "./use-dismiss";
 
 export type ConfirmOptions = {
   title: string;
@@ -38,10 +39,8 @@ function ConfirmModal({ options, onAnswer }: { options: ConfirmOptions; onAnswer
   useEffect(() => {
     // Cancel has the focus, so Enter by reflex doesn't go ahead.
     cancel.current?.focus();
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onAnswer(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onAnswer]);
+  }, []);
+  useDismiss(() => onAnswer(false));
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onAnswer(false)}>
       <section className="modal card confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">

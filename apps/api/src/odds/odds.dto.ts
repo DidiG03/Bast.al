@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsISO8601, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from "class-validator";
 import { MAX_MARGIN, MAX_ODDS, MIN_ODDS } from "./pricing";
 
 export class TeamQueryDto {
@@ -23,6 +23,11 @@ export class EventsQueryDto extends TeamQueryDto {
   @IsOptional()
   @IsIn(["football", "greyhounds", "mma", "basketball", "nfl", "tennis", "volleyball", "handball"])
   sport?: "football" | "greyhounds" | "mma" | "basketball" | "nfl" | "tennis" | "volleyball" | "handball";
+
+  /** Finished only: the page of matches that started before this time (the oldest start on the page before). */
+  @IsOptional()
+  @IsISO8601()
+  before?: string;
 }
 
 export class TopEventsQueryDto {

@@ -57,12 +57,9 @@ export function AuditLog() {
       if ((from.trim() && !fromDay) || (to.trim() && !toDay)) toast.warning(t("Type dates as dd/mm/yyyy, for example 26/10/2026."));
       if (fromDay) params.set("from", fromDateInput(fromDay)?.toISOString() ?? "");
       if (toDay) params.set("to", endOfDateInput(toDay)?.toISOString() ?? "");
-      setResult(
-        await apiFetch<AuditResponse>(
-          `/users/audit?${params.toString()}`,
-          token,
-        ),
-      );
+      const next = await apiFetch<AuditResponse>(`/users/audit?${params.toString()}`, token);
+      // A later page is added under the entries already shown ("Show more"); page 1 starts afresh.
+      setResult((current) => (nextPage > 1 && current ? { ...next, items: [...current.items, ...next.items.filter((entry) => !current.items.some((had) => had.id === entry.id))] } : next));
       setPage(nextPage);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("Could not load audit log"));
@@ -172,7 +169,11 @@ export function AuditLog() {
       <section className="card audit-table-card">
         <div className="tree-header">
           <span>
-            {result ? t("{count} entries", { count: result.total }) : t("Audit entries")}
+            {result
+              ? result.items.length < result.total
+                ? t("Showing {shown} of {count} entries", { shown: result.items.length, count: result.total })
+                : t("{count} entries", { count: result.total })
+              : t("Audit entries")}
             <HelpTip text="A record of everything that happened: who did it, to whom, and when. Nobody can change or delete it. Use the filters above to find something, then press Apply filters." />
           </span>
           {busy ? (
@@ -206,24 +207,10 @@ export function AuditLog() {
             </p>
           )}
         </div>
-        {result && result.pages > 1 ? (
+        {result && page < result.pages ? (
           <div className="audit-pagination">
-            <button
-              className="secondary"
-              disabled={page <= 1 || busy}
-              onClick={() => load(page - 1)}
-            >
-              {t("Previous")}
-            </button>
-            <span className="muted">
-              {t("Page {page} of {pages}", { page, pages: result.pages })}
-            </span>
-            <button
-              className="secondary"
-              disabled={page >= result.pages || busy}
-              onClick={() => load(page + 1)}
-            >
-              {t("Next")}
+            <button className="secondary" disabled={busy} onClick={() => load(page + 1)}>
+              {t("Show {count} more ({left} left)", { count: Math.min(result.limit, result.total - result.items.length), left: result.total - result.items.length })}
             </button>
           </div>
         ) : null}

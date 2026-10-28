@@ -9,6 +9,7 @@ import { MarketPriceHistory } from "../../../components/price-history";
 import { usePolling } from "../../../lib/use-polling";
 import { apiFetch, type MeResponse, type OddsEvent, type OddsFilter, type OddsSelection, type OddsSettings, type Sport, type UserRow } from "../../../lib/api";
 import { RaceResultList, RaceRunnerList } from "../../../components/greyhound-races";
+import { EscapeCloses } from "../../../components/use-dismiss";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { useToast } from "../../../components/toaster";
 import { msg } from "../../../lib/i18n/core";
@@ -26,6 +27,8 @@ const FILTERS: Array<[OddsFilter, string]> = [
 const odds = (value: number) => value.toFixed(2);
 /** Matches drawn at first; "Show more matches" adds this many again. */
 const MATCHES_SHOWN = 60;
+/** Finished matches come a page at a time (newest first); a full page means there are older ones. */
+const FINISHED_PAGE = 120;
 
 function dayLabel(iso: string, { t, date: format }: I18n): string {
   if (isDaysFromToday(iso, 0)) return t("Today");
@@ -39,6 +42,8 @@ function statusText(event: OddsEvent, { t, date }: I18n): string {
   if (event.status === "COMPLETED") return t("Full time");
   if (event.status === "POSTPONED") return t("Postponed");
   if (event.status === "CANCELLED") return t("Cancelled");
+  // Still waiting to start hours after its kick-off: listed with the finished ones.
+  if (event.status === "UPCOMING" && Date.parse(event.startsAt) < Date.now() - 2 * 3_600_000) return t("Not played");
   return date(event.startsAt, { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -62,6 +67,9 @@ export default function OddsPage() {
   const [syncing, setSyncing] = useState(false);
   const [failed, setFailed] = useState(false);
   const [limit, setLimit] = useState(MATCHES_SHOWN);
+  /** Finished: older matches than the ones loaded can be asked for. */
+  const [older, setOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   /** Bumped after every change, so opened matches load their markets again. */
   const [version, setVersion] = useState(0);
   const toast = useToast();
@@ -83,7 +91,28 @@ export default function OddsPage() {
     if (latest.current !== asked) return;
     setSettings(nextSettings);
     setEvents(nextEvents);
+    setOlder(filter === "finished" && nextEvents.length >= FINISHED_PAGE);
   }, [getToken, filter, sport, team]);
+
+  /** Finished: the next page of older matches, after the ones loaded. */
+  async function loadOlder() {
+    const last = events?.[events.length - 1];
+    const token = await getToken();
+    if (!last || !token) return;
+    const asked = latest.current;
+    setLoadingOlder(true);
+    try {
+      const page = await apiFetch<OddsEvent[]>(`/odds/events?filter=finished&view=list&sport=${sport}&before=${encodeURIComponent(last.startsAt)}&${team}`, token);
+      if (latest.current !== asked) return;
+      setEvents((current) => [...(current ?? []), ...page.filter((event) => !current?.some((had) => had.id === event.id))]);
+      setOlder(page.length >= FINISHED_PAGE);
+      setLimit((current) => current + MATCHES_SHOWN);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("Could not load odds"));
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -300,6 +329,10 @@ export default function OddsPage() {
         <button type="button" className="secondary bet-show-more" onClick={() => setLimit(limit + MATCHES_SHOWN)}>
           {t("Show more matches ({count} more)", { count: events.length - limit })}
         </button>
+      ) : events && older ? (
+        <button type="button" className="secondary bet-show-more" onClick={() => void loadOlder()} disabled={loadingOlder}>
+          {loadingOlder ? t("Loading…") : t("Show older matches")}
+        </button>
       ) : null}
     </div>
   );
@@ -431,9 +464,27 @@ function MarginsCard({ settings, run, syncing, onSync, ownerQuery }: { settings:
           <span className="muted odds-setting-note">
             {t("Added to the base margin, so this team's prices run at {margin}% under the feed. A negative number gives Players better odds, down to the feed price.", { margin: team.effectiveMargin })}
           </span>
+          {settings.canEditTeam ? <MarginExample base={settings.baseMargin} typed={teamMargin} max={settings.limits.maxMargin} /> : null}
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * What the team margin being typed does, in plain numbers: 5 is 5% lower
+ * prices than the base margin alone, and a 2.00 feed price as the team's
+ * Players would see it with the total (rounded down, as the site prices it).
+ */
+function MarginExample({ base, typed, max }: { base: number; typed: string; max: number }) {
+  const { t } = useI18n();
+  const value = Number(typed);
+  const total = Math.min(max, Math.max(0, base + (Number.isFinite(value) ? value : 0)));
+  const price = Math.max(1.01, Math.floor(2 * (1 - total / 100) * 100 + 1e-6) / 100);
+  return (
+    <span className="muted odds-setting-note odds-margin-example">
+      {t("Example: 5 makes your Players' prices 5% lower than with the base margin alone, and -1 makes them 1% better. With {total}% in all, a 2.00 price from the feed shows as {price}.", { total: Number(total.toFixed(2)), price: price.toFixed(2) })}
+    </span>
   );
 }
 
@@ -614,6 +665,7 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run, version }
             </div>
             {editing && market.selections.some((s) => s.id === editing.id) ? (
               <form className="odds-editor" onSubmit={savePrice}>
+                <EscapeCloses onClose={() => setEditing(null)} />
                 <label className="field">
                   <span>
                     {t("Your price for {pick}", { pick: ts(editing.name) })}

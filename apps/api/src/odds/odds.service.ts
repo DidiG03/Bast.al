@@ -10,7 +10,7 @@ import { GreyhoundSyncService } from "./greyhound-sync.service";
 import { competitionKey, feedDelay, lagGate, lagStats } from "./feed-delay";
 import { LATE_REASONS, timelineOf } from "../bets/late";
 import { liveConfirmConfig } from "../bets/live-delay";
-import { countSelectionDead, countStatsStale } from "./count-guard";
+import { countAvailability, countSelectionDead, countStatsStale, isCountFamily } from "./count-guard";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
@@ -43,6 +43,33 @@ const LIST_LIMIT = 2_000;
 type PricedEvent = Prisma.EventGetPayload<{ include: { markets: { include: { selections: true } }; _count: { select: { markets: true } } } }>;
 
 const COUNT_MARKETS = { _count: { select: { markets: true } } } as const;
+
+/** A match's large records, left out of the lists outside Live (see `events`). */
+const LARGE_FIELDS = new Set<string>(["matchCentre", "resultGoals", "lateCheck", "fightResult"]);
+const LIST_SELECT = {
+  ...Object.fromEntries(Object.values(Prisma.EventScalarFieldEnum).filter((field) => !LARGE_FIELDS.has(field)).map((field) => [field, true])),
+  ...COUNT_MARKETS,
+} as Prisma.EventSelect;
+/** A row read with LIST_SELECT, with the left-out records as empty. */
+const withoutLarge = <E extends object>(row: E) => ({ ...row, matchCentre: null, resultGoals: null, lateCheck: null, fightResult: null }) as E;
+
+/** Finished matches sent per page, newest first; the next page is asked for with `before`. */
+const FINISHED_PAGE = 120;
+
+/**
+ * A corners or cards market left off a live match altogether (unless it's
+ * paused, when it stays in place under the match's banner): the feed isn't
+ * pricing it during play, or the feed's statistics for the match have no
+ * such count, so its lines couldn't be checked against the count.
+ */
+function liveCountHidden(
+  event: { status: string; matchCentre: unknown; matchCentreAt: Date | null; startsAt: Date },
+  market: { key: string; livePausedAt?: Date | null; livePausedUntil?: Date | null; livePauseReason?: string | null; selections: Array<{ liveOdds: unknown }> },
+  now: Date,
+): boolean {
+  if (event.status !== EventStatus.LIVE || !isCountFamily(market.key) || marketPause({ ...market, liveSuspended: false }, now) !== null) return false;
+  return liveSideUnpriced(market.key, market.selections.some((selection) => selection.liveOdds !== null)) || countAvailability(event, market.key, now) === "none";
+}
 
 /** A live match's prices sent to a team are forgotten this long after its last update (it finished, or stopped being sent). */
 const LIVE_SENT_KEPT_MS = 30 * 60_000;
@@ -96,6 +123,14 @@ const MARKET_KIND = /^(lines:)?[a-z0-9_]{1,60}$/;
  */
 const LIST_TTL_MS: Record<EventFilter | "top", number> = { live: 2_000, upcoming: 5_000, finished: 30_000, top: 5_000 };
 
+/**
+ * A match still waiting to start this long after its kick-off time (the
+ * feed never said it started, or it wasn't played) is no longer upcoming:
+ * it takes no bets (eventOpen), so it's listed with the finished ones, as
+ * "Not played". Its bets are refunded after UNPLAYED_VOID_MS.
+ */
+const UPCOMING_GRACE_MS = 2 * 3_600_000;
+
 /** A postponed match takes no bets (eventOpen), so it's listed with the finished and called-off ones, not as upcoming. */
 const FILTER_STATUSES: Record<EventFilter, EventStatus[]> = {
   upcoming: [EventStatus.UPCOMING],
@@ -125,6 +160,7 @@ export class OddsService {
    */
   private readonly liveSent = new Map<string, Map<string, { at: number; values: Map<string, string> }>>();
   private limitsKept: { at: number; value: LiveLimits } | null = null;
+  private greyhoundsKept: { at: number; value: boolean } | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -183,7 +219,7 @@ export class OddsService {
       for (const row of events) {
         const live = row.status === EventStatus.LIVE;
         const view = this.liveView(row, limits);
-        const event = { ...row, liveSlowCompetition: view.slow, markets: row.markets.filter((market) => !view.hides(market.key)) };
+        const event = { ...row, liveSlowCompetition: view.slow, markets: row.markets.filter((market) => !view.hides(market.key) && !liveCountHidden(row, market, now)) };
         const before = sent.get(event.id)?.values ?? new Map<string, string>();
         const values = new Map<string, string>();
         const delta: LiveDelta = { id: event.id };
@@ -204,10 +240,10 @@ export class OddsService {
         values.set("h", headerKey);
         if (before.get("h") !== headerKey) delta.header = header;
         for (const market of event.markets) {
-          const hasLivePrice = market.selections.some((s) => s.liveOdds !== null);
           const pauseReason = live ? marketPause(market, now) : null;
-          const stale = marketStale(event, market, now, hasLivePrice) || (live && pauseReason === null && liveSideUnpriced(market.key, hasLivePrice));
-          const countHeld = live && countStatsStale(event.matchCentre, event.matchCentreAt, market.key, now);
+          const count = live ? countAvailability(event, market.key, now) : "ok";
+          const stale = marketStale(event, market, now, market.selections.some((s) => s.liveOdds !== null)) || count === "off";
+          const countHeld = count !== "ok";
           const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || pauseReason !== null || stale || countHeld);
           const value = `${suspended ? 1 : 0}${stale ? 1 : 0}|${pauseReason ?? ""}`;
           values.set(`m:${market.id}`, value);
@@ -240,10 +276,23 @@ export class OddsService {
     await this.realtime.publishTopic(STAFF_TOPIC, { type: "odds.changed" });
   }
 
+  /** Whether greyhound races are listed: the feed is connected (a sandbox key with no races doesn't count) and has races from yesterday to the next two days. Kept a minute. */
+  private async greyhoundsListed(): Promise<boolean> {
+    if (!this.greyhounds?.enabled) return false;
+    if (this.greyhoundsKept && Date.now() - this.greyhoundsKept.at < 60_000) return this.greyhoundsKept.value;
+    const now = Date.now();
+    const races = await this.prisma.event.count({ where: { sport: "greyhounds", startsAt: { gte: new Date(now - 86_400_000), lte: new Date(now + 2 * 86_400_000) } } });
+    this.greyhoundsKept = { at: now, value: races > 0 };
+    return races > 0;
+  }
+
   async settings(actor: Actor, ownerIdParam?: string) {
     const [platform, ownerId] = await Promise.all([this.platform(), this.teamOwnerFor(actor, ownerIdParam)]);
     const baseMargin = Number(platform.baseOddsMargin);
-    const owner = ownerId ? await this.prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, username: true, oddsMargin: true } }) : null;
+    const [owner, greyhoundsFeed] = await Promise.all([
+      ownerId ? this.prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, username: true, oddsMargin: true } }) : null,
+      this.greyhoundsListed(),
+    ]);
     const ownerMargin = num(owner?.oddsMargin) ?? 0;
     return {
       baseMargin,
@@ -252,8 +301,8 @@ export class OddsService {
       canEditTeam: actor.role === Role.OWNER || (actor.role === Role.SUPER_ADMIN && owner !== null),
       canManageEvents: actor.role === Role.SUPER_ADMIN,
       feed: actor.role === Role.PLAYER ? null : { mode: this.sync.mode, syncedAt: platform.oddsSyncedAt, status: platform.oddsSyncStatus },
-      /** The greyhound feed is connected: without it there are no races, so the tab says so (or isn't shown to Players). */
-      greyhoundsFeed: this.greyhounds?.enabled ?? false,
+      /** The greyhound feed is connected and has races listed: until then the tab says "Soon" (and isn't shown on the betting page). */
+      greyhoundsFeed,
       limits: { minOdds: MIN_ODDS, maxOdds: MAX_ODDS, maxMargin: MAX_MARGIN, maxAboveFeed: MAX_ABOVE_FEED },
     };
   }
@@ -298,7 +347,7 @@ export class OddsService {
    * so the whole week's football stays a small download; a match's other
    * markets come from `event`.
    */
-  async events(actor: Actor, filter: EventFilter = "upcoming", ownerIdParam?: string, view?: "list", sport: Sport = "football") {
+  async events(actor: Actor, filter: EventFilter = "upcoming", ownerIdParam?: string, view?: "list", sport: Sport = "football", before?: Date) {
     const isAdmin = actor.role === Role.SUPER_ADMIN;
     const now = new Date();
     const where: Prisma.EventWhereInput = {
@@ -306,16 +355,32 @@ export class OddsService {
       // Live also keeps matches that finished in the last few minutes, marked full time, so they don't just vanish.
       ...(filter === "live"
         ? { OR: [stillLive(sport, now), { status: EventStatus.COMPLETED, finishedAt: { gte: new Date(now.getTime() - JUST_FINISHED_MS) } }] }
-        : { status: { in: FILTER_STATUSES[filter] } }),
+        : filter === "upcoming"
+          ? { status: { in: FILTER_STATUSES.upcoming }, startsAt: { gte: new Date(now.getTime() - UPCOMING_GRACE_MS) } }
+          : filter === "finished"
+            ? { OR: [{ status: { in: FILTER_STATUSES.finished } }, { status: EventStatus.UPCOMING, startsAt: { lt: new Date(now.getTime() - UPCOMING_GRACE_MS) } }] }
+            : { status: { in: FILTER_STATUSES[filter] } }),
       ...(isAdmin ? {} : { hidden: false }),
-      // Finished matches only for the last three days; races (dozens an hour) for the last six hours.
-      ...(filter === "finished" ? { startsAt: { gte: new Date(now.getTime() - (sport === "greyhounds" ? 6 * 3_600_000 : 3 * 86_400_000)) } } : {}),
+      // Finished matches only for the last three days, a page at a time, newest first; races (dozens an hour) for the last six hours.
+      ...(filter === "finished"
+        ? { startsAt: { gte: new Date(now.getTime() - (sport === "greyhounds" ? 6 * 3_600_000 : 3 * 86_400_000)), ...(before ? { lt: before } : {}) } }
+        : {}),
     };
-    const orderBy: Prisma.EventOrderByWithRelationInput = { startsAt: filter === "finished" ? "desc" : "asc" };
+    const orderBy: Prisma.EventOrderByWithRelationInput = filter === "finished" ? { startsAt: "desc" } : { startsAt: "asc" };
+    const take = filter === "finished" ? FINISHED_PAGE : LIST_LIMIT;
+    // Outside Live, the list leaves out the match centre and the other large records: a finished match's line-ups and
+    // timeline made the Finished list tens of megabytes to read. Live keeps it (the corners and cards counts).
+    const select = filter === "live" ? null : LIST_SELECT;
     const events =
       view === "list"
         ? // Everyone browsing asks for the same list: requests that arrive together share one read.
-          await this.kept(`list:${sport}:${filter}:${isAdmin}`, LIST_TTL_MS[filter], async () => this.withMainMarket(await this.prisma.event.findMany({ where, orderBy, take: LIST_LIMIT, include: COUNT_MARKETS })))
+          await this.kept(`list:${sport}:${filter}:${isAdmin}:${before?.toISOString() ?? ""}`, LIST_TTL_MS[filter], async () =>
+            this.withMainMarket(
+              select
+                ? ((await this.prisma.event.findMany({ where, orderBy, take, select: select })) as unknown as Array<Prisma.EventGetPayload<{ include: typeof COUNT_MARKETS }>>).map(withoutLarge)
+                : await this.prisma.event.findMany({ where, orderBy, take, include: COUNT_MARKETS }),
+            ),
+          )
         : await this.prisma.event.findMany({
             where,
             orderBy,
@@ -337,7 +402,7 @@ export class OddsService {
     const soon = now.getTime() + 2 * 86_400_000;
     const rows = await this.kept(`top:${sport}`, LIST_TTL_MS.top, () =>
       this.prisma.event.findMany({
-        where: { sport, OR: [stillLive(sport, now), { status: { in: FILTER_STATUSES.upcoming } }], hidden: false },
+        where: { sport, OR: [stillLive(sport, now), { status: { in: FILTER_STATUSES.upcoming }, startsAt: { gte: new Date(now.getTime() - UPCOMING_GRACE_MS) } }], hidden: false },
         orderBy: { startsAt: "asc" },
         take: LIST_LIMIT,
         include: COUNT_MARKETS,
@@ -557,13 +622,20 @@ export class OddsService {
         : [];
     const limits = liveIds.length > 0 ? await this.liveLimits() : null;
     // Cards and corners markets left off live matches in competitions the feed never prices them for live: not counted either.
+    // So are those left off one match (liveCountHidden): not priced during play, or no such count in its statistics.
     const hiddenCounts = new Map<string, number>();
-    if (limits && (limits.noCards.size > 0 || limits.noCorners.size > 0)) {
-      const limited = events.filter((event) => event.status === EventStatus.LIVE && this.liveView(event, limits).hidesAny);
-      if (limited.length > 0) {
-        const keys = await this.prisma.market.findMany({ where: { eventId: { in: limited.map((event) => event.id) }, OR: ["cards_", "home_cards_", "away_cards_", "corners_", "home_corners_", "away_corners_"].map((prefix) => ({ key: { startsWith: prefix } })) }, select: { eventId: true, key: true } });
-        const views = new Map(limited.map((event) => [event.id, this.liveView(event, limits)]));
-        for (const market of keys) if (views.get(market.eventId)?.hides(market.key)) hiddenCounts.set(market.eventId, (hiddenCounts.get(market.eventId) ?? 0) + 1);
+    if (limits) {
+      const liveEvents = events.filter((event) => event.status === EventStatus.LIVE);
+      if (liveEvents.length > 0) {
+        const keys = await this.prisma.market.findMany({
+          where: { eventId: { in: liveEvents.map((event) => event.id) }, OR: ["cards_", "home_cards_", "away_cards_", "corners_", "home_corners_", "away_corners_"].map((prefix) => ({ key: { startsWith: prefix } })) },
+          select: { eventId: true, key: true, livePausedAt: true, livePausedUntil: true, livePauseReason: true, selections: { select: { liveOdds: true } } },
+        });
+        const byId = new Map(liveEvents.map((event) => [event.id, { event, view: this.liveView(event, limits) }]));
+        for (const market of keys) {
+          const entry = byId.get(market.eventId);
+          if (entry && (entry.view.hides(market.key) || liveCountHidden(entry.event, market, now))) hiddenCounts.set(market.eventId, (hiddenCounts.get(market.eventId) ?? 0) + 1);
+        }
       }
     }
 
@@ -571,7 +643,7 @@ export class OddsService {
       const live = row.status === EventStatus.LIVE;
       const race = row.sport === "greyhounds";
       const view = live && limits ? this.liveView(row, limits) : null;
-      const event = view ? { ...row, liveSlowCompetition: view.slow, markets: row.markets.filter((market) => !view.hides(market.key)) } : row;
+      const event = view ? { ...row, liveSlowCompetition: view.slow, markets: row.markets.filter((market) => !view.hides(market.key) && !liveCountHidden(row, market, now)) } : row;
       return {
       id: event.id,
       sport: event.sport,
@@ -634,10 +706,10 @@ export class OddsService {
             suspended: held,
           };
         });
-        const hasLivePrice = market.selections.some((s) => s.liveOdds !== null);
         const paused = live ? marketPause(market, now) : null;
-        const countHeld = live && countStatsStale(event.matchCentre, event.matchCentreAt, market.key, now);
-        const stale = marketStale(event, market, now, hasLivePrice) || (live && paused === null && liveSideUnpriced(market.key, hasLivePrice));
+        const count = live ? countAvailability(event, market.key, now) : "ok";
+        const countHeld = count !== "ok";
+        const stale = marketStale(event, market, now, market.selections.some((s) => s.liveOdds !== null)) || count === "off";
         return {
           id: market.id,
           key: market.key,

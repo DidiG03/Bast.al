@@ -37,22 +37,40 @@ import {
 import { getMe, serverApiFetch } from "../../lib/api-server";
 import { formatMoney, formatSignedMoney } from "../../lib/format";
 import { getT } from "../../lib/i18n/server";
-import { addDays, startOfDay, startOfWeek } from "../../lib/time";
+import { addDays, startOfDay, startOfMonth, startOfWeek } from "../../lib/time";
 
 const MATCH_TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
 const DAY_MS = 86_400_000;
 const WEEKDAY: Intl.DateTimeFormatOptions = { weekday: "short" };
-const SHORT_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+const SHORT_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "long" };
 
 type Period = { from: Date; to: Date };
+/** What the Overview counts: this week (from Monday) or this month, on the Tirana calendar (`?period=month`). */
+type View = "week" | "month";
 
-/** This week so far, and the same stretch of last week for a fair comparison mid-week. */
-function periods(now: Date) {
+/**
+ * The period so far, and the same stretch of the one before for a fair
+ * comparison part-way through: last week to the same moment, or last month
+ * to the same day and time (or its last day, in a shorter month).
+ */
+function periods(now: Date, view: View = "week") {
+  if (view === "month") {
+    const monthStart = startOfMonth(now);
+    const lastStart = startOfMonth(addDays(monthStart, -1));
+    const into = now.getTime() - monthStart.getTime();
+    return { thisWeek: { from: monthStart, to: now } as Period, lastWeek: { from: lastStart, to: new Date(Math.min(lastStart.getTime() + into, monthStart.getTime())) } as Period };
+  }
   const weekStart = startOfWeek(now);
   const thisWeek: Period = { from: weekStart, to: now };
   const lastWeek: Period = { from: addDays(weekStart, -7), to: new Date(now.getTime() - 7 * DAY_MS) };
   return { thisWeek, lastWeek };
+}
+
+/** "vs last week" or "vs last month", for the cards' comparison. */
+function versus(view: View) {
+  const { t } = getT();
+  return view === "month" ? t("vs last month") : t("vs last week");
 }
 
 function query(period: Period, extra = "") {
@@ -76,21 +94,32 @@ function dayLabel(day: Day, index: number, days: Day[]) {
   return index === days.length - 1 ? t("Today") : date(day.from, WEEKDAY);
 }
 
-function PageHeader({ username, subtitle, now }: { username: string; subtitle: string; now: Date }) {
+function PageHeader({ username, subtitle, now, view }: { username: string; subtitle: string; now: Date; view: View }) {
   const { t, date } = getT();
-  const weekStart = startOfWeek(now);
+  const start = view === "month" ? startOfMonth(now) : startOfWeek(now);
+  const label = view === "month" ? t("This month") : t("This week");
   return (
     <div className="overview-header">
       <div>
         <h1>{t("Welcome back, {name}", { name: username })}</h1>
         <p>{subtitle}</p>
       </div>
-      <span className="period-chip">
-        <NamedIcon name="calendar" className="period-chip-icon" />
-        {weekStart.getTime() === startOfDay(now).getTime()
-          ? t("This week · since {day}", { day: date(weekStart, SHORT_DATE) })
-          : t("This week · {from} to {to}", { from: date(weekStart, SHORT_DATE), to: date(now, SHORT_DATE) })}
-      </span>
+      <div className="overview-period">
+        <nav className="segmented overview-period-switch" aria-label={t("Period")}>
+          <Link href="/dashboard" className={view === "week" ? "is-active" : ""} aria-current={view === "week" ? "page" : undefined}>
+            {t("This week")}
+          </Link>
+          <Link href="/dashboard?period=month" className={view === "month" ? "is-active" : ""} aria-current={view === "month" ? "page" : undefined}>
+            {t("This month")}
+          </Link>
+        </nav>
+        <span className="period-chip">
+          <NamedIcon name="calendar" className="period-chip-icon" />
+          {start.getTime() === startOfDay(now).getTime()
+            ? t("{period} · since {day}", { period: label, day: date(start, SHORT_DATE) })
+            : t("{period} · {from} to {to}", { period: label, from: date(start, SHORT_DATE), to: date(now, SHORT_DATE) })}
+        </span>
+      </div>
     </div>
   );
 }
@@ -131,7 +160,7 @@ function signedTone(value: number) {
   return value < 0 ? "is-bad" : value > 0 ? "is-good" : "";
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams?: { period?: string } }) {
   const { getToken } = await auth();
   const token = await getToken();
   if (!token) redirect("/sign-in");
@@ -143,9 +172,10 @@ export default async function DashboardPage() {
   }
 
   const now = new Date();
-  if (me.role === "SUPER_ADMIN") return <SuperAdminOverview token={token} me={me} now={now} />;
-  if (me.role === "OWNER") return <OwnerOverview token={token} me={me} now={now} />;
-  return <ManagerOverview token={token} me={me} now={now} />;
+  const view: View = searchParams?.period === "month" ? "month" : "week";
+  if (me.role === "SUPER_ADMIN") return <SuperAdminOverview token={token} me={me} now={now} view={view} />;
+  if (me.role === "OWNER") return <OwnerOverview token={token} me={me} now={now} view={view} />;
+  return <ManagerOverview token={token} me={me} now={now} view={view} />;
 }
 
 async function notificationsFor(token: string) {
@@ -157,9 +187,9 @@ async function notificationsFor(token: string) {
   };
 }
 
-async function SuperAdminOverview({ token, me, now }: { token: string; me: MeResponse; now: Date }) {
+async function SuperAdminOverview({ token, me, now, view }: { token: string; me: MeResponse; now: Date; view: View }) {
   const { t, tn } = getT();
-  const { thisWeek, lastWeek } = periods(now);
+  const { thisWeek, lastWeek } = periods(now, view);
   const [users, pending, notifications, settlementEvents, week, previous, days] = await Promise.all([
     serverApiFetch<UserRow[]>("/users", token),
     optional(serverApiFetch<PendingApproval[]>("/users/balance/pending", token)),
@@ -185,7 +215,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
 
   return (
     <div className="overview">
-      <PageHeader username={me.username} now={now} subtitle={t("How the whole platform is doing this week, and what each Owner owes you.")} />
+      <PageHeader username={me.username} now={now} view={view} subtitle={view === "month" ? t("How the whole platform is doing this month, and what each Owner owes you.") : t("How the whole platform is doing this week, and what each Owner owes you.")} />
       <QuickActions
         actions={[
           { href: "/dashboard/people?add=owner", label: t("Add an owner"), icon: "userPlus", primary: true },
@@ -199,11 +229,11 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label={t("Turnover")} help="All the money Players staked this week: on sports bets that are already finished, and on casino rounds. It shows how busy the site is, not how much you earned."
+              label={t("Turnover")} help="All the money Players staked in the period shown: on sports bets that are already finished, and on casino rounds. It shows how busy the site is, not how much you earned."
               icon="turnover"
               value={formatMoney(totals?.staked ?? 0)}
               spark={days.map((day) => day.staked)}
-              delta={{ current: totals?.staked ?? 0, previous: previousTotals?.staked ?? 0, label: t("vs last week") }}
+              delta={{ current: totals?.staked ?? 0, previous: previousTotals?.staked ?? 0, label: versus(view) }}
               hint={
                 week?.results
                   ? t("Sports {sports} · Casino {casino}", { sports: formatMoney(week.results.sports.staked), casino: formatMoney(week.results.casino.staked) })
@@ -211,12 +241,12 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
               }
             />
             <KpiCard
-              label={t("Profit, sports and casino")} help="What all the teams made this week on sports bets and the casino together: the money Players lost, minus the money paid to Players who won. Red means Players won more than they lost."
+              label={t("Profit, sports and casino")} help="What all the teams made in the period shown on sports bets and the casino together: the money Players lost, minus the money paid to Players who won. Red means Players won more than they lost."
               icon="profit"
               value={formatSignedMoney(totals?.net ?? 0)}
               tone={(totals?.net ?? 0) < 0 ? "bad" : undefined}
               spark={days.map((day) => day.net)}
-              delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: t("vs last week") }}
+              delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: versus(view) }}
               hint={
                 week?.results
                   ? t("Sports {sports} · Casino {casino}", { sports: formatSignedMoney(week.results.sports.net), casino: formatSignedMoney(week.results.casino.net) })
@@ -224,11 +254,11 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
               }
             />
             <KpiCard
-              label={t("Owed to you")} help="Your share of every team's profit this week. Each Owner pays you their rate (%) of what their team made. You collect it on the Commissions page."
+              label={t("Owed to you")} help="Your share of every team's profit in the period shown. Each Owner pays you their rate (%) of what their team made. You collect it on the Commissions page."
               icon="wallet"
               value={formatSignedMoney(totals?.superAdminCut ?? 0)}
               tone={(totals?.superAdminCut ?? 0) < 0 ? "bad" : undefined}
-              delta={{ current: totals?.superAdminCut ?? 0, previous: previousTotals?.superAdminCut ?? 0, label: t("vs last week") }}
+              delta={{ current: totals?.superAdminCut ?? 0, previous: previousTotals?.superAdminCut ?? 0, label: versus(view) }}
               hint={t("Each Owner's rate on their team's profit")}
             />
           </div>
@@ -272,7 +302,7 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
         </aside>
       </div>
 
-      <Panel title={t("Owners this week")} help="One line for each Owner: how much their team bet and made this week, and how much they owe you. Status shows if you already collected it." icon="commissions" flush action={<Link href="/dashboard/commissions" className="panel-link">{t("Earnings")}</Link>}>
+      <Panel title={view === "month" ? t("Owners this month") : t("Owners this week")} help="One line for each Owner: how much their team bet and made in the period shown, and how much they owe you. Status shows if you already collected it." icon="commissions" flush action={<Link href="/dashboard/commissions" className="panel-link">{t("Earnings")}</Link>}>
         {week && week.owners.length > 0 ? (
           <table className="data-table">
             <thead>
@@ -315,9 +345,9 @@ async function SuperAdminOverview({ token, me, now }: { token: string; me: MeRes
   );
 }
 
-async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse; now: Date }) {
+async function OwnerOverview({ token, me, now, view }: { token: string; me: MeResponse; now: Date; view: View }) {
   const { t, tn, ts } = getT();
-  const { thisWeek, lastWeek } = periods(now);
+  const { thisWeek, lastWeek } = periods(now, view);
   const [users, pending, notifications, week, previous, days, risk] = await Promise.all([
     serverApiFetch<UserRow[]>("/users", token),
     optional(serverApiFetch<PendingApproval[]>("/users/balance/pending", token)),
@@ -345,7 +375,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
 
   return (
     <div className="overview">
-      <PageHeader username={me.username} now={now} subtitle={t("Your team's results this week, what you owe, and where your risk sits.")} />
+      <PageHeader username={me.username} now={now} view={view} subtitle={view === "month" ? t("Your team's results this month, what you owe, and where your risk sits.") : t("Your team's results this week, what you owe, and where your risk sits.")} />
       <QuickActions
         actions={[
           { href: "/dashboard/people?add=player", label: t("Add a player"), icon: "userPlus", primary: true },
@@ -359,12 +389,12 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label={t("Team profit, sports and casino")} help="What your whole team made this week on sports bets and the casino together: the money your Players lost, minus the money paid to Players who won. Red means your Players won more than they lost."
+              label={t("Team profit, sports and casino")} help="What your whole team made in the period shown on sports bets and the casino together: the money your Players lost, minus the money paid to Players who won. Red means your Players won more than they lost."
               icon="profit"
               value={formatSignedMoney(totals?.net ?? 0)}
               tone={(totals?.net ?? 0) < 0 ? "bad" : undefined}
               spark={days.map((day) => day.net)}
-              delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: t("vs last week") }}
+              delta={{ current: totals?.net ?? 0, previous: previousTotals?.net ?? 0, label: versus(view) }}
               hint={
                 week?.results
                   ? t("Sports {sports} · Casino {casino}", { sports: formatSignedMoney(week.results.sports.net), casino: formatSignedMoney(week.results.casino.net) })
@@ -379,11 +409,11 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
               hint={t("{rate}% of team profit, before Managers are paid", { rate: Number(me.commissionRate) })}
             />
             <KpiCard
-              label={t("You keep")} help="Your money after paying Super Admin and your Managers. This is what your team earned for you this week."
+              label={t("You keep")} help="Your money after paying Super Admin and your Managers. This is what your team earned for you in the period shown."
               icon="money"
               value={formatSignedMoney(totals?.ownerKeeps ?? 0)}
               tone={(totals?.ownerKeeps ?? 0) < 0 ? "bad" : undefined}
-              delta={{ current: totals?.ownerKeeps ?? 0, previous: previousTotals?.ownerKeeps ?? 0, label: t("vs last week") }}
+              delta={{ current: totals?.ownerKeeps ?? 0, previous: previousTotals?.ownerKeeps ?? 0, label: versus(view) }}
               hint={t("After {amount} to your Managers", { amount: formatSignedMoney(totals?.managerCommission ?? 0) })}
             />
           </div>
@@ -413,6 +443,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
                     { label: t("Payout cap"), value: risk.cap === null ? t("None set") : formatMoney(risk.cap) },
                   ]}
                 />
+                <p className="muted panel-hint">{t("Worst case payout: the most you'd have to pay if every open bet won.")}</p>
                 {riskiest.length > 0 ? (
                   <ul className="risk-list">
                     {riskiest.map((event) => (
@@ -447,7 +478,7 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
       </div>
 
       <Panel
-        title={t("Managers this week")} help="One line for each Manager: how much their Players bet and lost this week, and the commission you pay that Manager."
+        title={view === "month" ? t("Managers this month") : t("Managers this week")} help="One line for each Manager: how much their Players bet and lost in the period shown, and the commission you pay that Manager."
         icon="users"
         flush
         action={
@@ -512,9 +543,9 @@ async function OwnerOverview({ token, me, now }: { token: string; me: MeResponse
   );
 }
 
-async function ManagerOverview({ token, me, now }: { token: string; me: MeResponse; now: Date }) {
+async function ManagerOverview({ token, me, now, view }: { token: string; me: MeResponse; now: Date; view: View }) {
   const { t, tn, date } = getT();
-  const { thisWeek, lastWeek } = periods(now);
+  const { thisWeek, lastWeek } = periods(now, view);
   const [users, notifications, week, previous, history] = await Promise.all([
     serverApiFetch<UserRow[]>("/users", token),
     notificationsFor(token),
@@ -541,7 +572,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
 
   return (
     <div className="overview">
-      <PageHeader username={me.username} now={now} subtitle={t("Your Players, their balances, and what you've earned this week.")} />
+      <PageHeader username={me.username} now={now} view={view} subtitle={view === "month" ? t("Your Players, their balances, and what you've earned this month.") : t("Your Players, their balances, and what you've earned this week.")} />
       <QuickActions
         actions={[
           { href: "/dashboard/people?add=player", label: t("Add a player"), icon: "userPlus", primary: true },
@@ -555,12 +586,12 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
         <div className="overview-main">
           <div className="kpi-row">
             <KpiCard
-              label={t("Your commission")} help="What you earned this week. You get your rate (%) of the money your Players lose. Your Owner pays it to you."
+              label={t("Your commission")} help="What you earned in the period shown. You get your rate (%) of the money your Players lose. Your Owner pays it to you."
               icon="money"
               value={formatSignedMoney(week?.totals.commission ?? 0)}
               tone={(week?.totals.commission ?? 0) < 0 ? "bad" : undefined}
               spark={weeks.map((row) => row.commission)}
-              delta={{ current: week?.totals.commission ?? 0, previous: previous?.totals.commission ?? 0, label: t("vs last week") }}
+              delta={{ current: week?.totals.commission ?? 0, previous: previous?.totals.commission ?? 0, label: versus(view) }}
               hint={
                 week?.paidBy
                   ? t("{rate}% of the profit from your Players, paid by {name}", { rate: Number(me.commissionRate), name: week.paidBy })
@@ -568,11 +599,11 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
               }
             />
             <KpiCard
-              label={t("Profit from your Players")} help="The money your Players lost, minus the money they won, this week. The higher it is, the more you earn. Red means they won more than they lost."
+              label={t("Profit from your Players")} help="The money your Players lost, minus the money they won, in the period shown. The higher it is, the more you earn. Red means they won more than they lost."
               icon="profit"
               value={formatSignedMoney(week?.totals.net ?? 0)}
               tone={(week?.totals.net ?? 0) < 0 ? "bad" : undefined}
-              delta={{ current: week?.totals.net ?? 0, previous: previous?.totals.net ?? 0, label: t("vs last week") }}
+              delta={{ current: week?.totals.net ?? 0, previous: previous?.totals.net ?? 0, label: versus(view) }}
               hint={tn(week?.totals.bets ?? 0, "{amount} staked on {count} bet", "{amount} staked on {count} bets", { amount: formatMoney(week?.totals.staked ?? 0) })}
             />
             <KpiCard
@@ -629,7 +660,7 @@ async function ManagerOverview({ token, me, now }: { token: string; me: MeRespon
         </aside>
       </div>
 
-      <Panel title={t("Players this week")} help="One line for each Player: how much they bet this week, and whether they won or lost." icon="users" flush action={<Link href="/dashboard/people" className="panel-link">{t("Manage Players")}</Link>}>
+      <Panel title={view === "month" ? t("Players this month") : t("Players this week")} help="One line for each Player: how much they bet in the period shown, and whether they won or lost." icon="users" flush action={<Link href="/dashboard/people" className="panel-link">{t("Manage Players")}</Link>}>
         {sortedPlayers.length > 0 ? (
           <table className="data-table">
             <thead>

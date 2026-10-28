@@ -378,7 +378,7 @@ function Person() {
       </div>
 
       {open === "credit" && canGiveCredit(people, person) ? (
-        <QuickTopUp player={person} available={Number(me.balance)} approvalLimit={me.approvalLimit} newMoney={isAdmin} onClose={() => { setOpen(null); router.replace(`/dashboard/people/${person.id}`, { scroll: false }); }} onDone={(message) => close(message)} />
+        <QuickTopUp player={person} available={Number(me.balance)} approvalLimit={me.approvalLimit} newMoney={isAdmin} amount={Number(params.get("amount")) || undefined} senderRole={me.role === "PLAYER" ? undefined : me.role} onClose={() => { setOpen(null); router.replace(`/dashboard/people/${person.id}`, { scroll: false }); }} onDone={(message) => close(message)} />
       ) : null}
       {open === "takeBack" ? <TakeBackDialog person={person} retire={isAdmin} onClose={() => setOpen(null)} onDone={close} /> : null}
       {open === "correct" && isAdmin ? <CorrectBalanceDialog person={person} onClose={() => setOpen(null)} onDone={close} /> : null}

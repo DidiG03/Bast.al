@@ -71,7 +71,7 @@ const LIVE_ODDS_WATCHED_MS = Number(process.env.LIVE_ODDS_INTERVAL_MS) || 5_000;
 const LIVE_ODDS_IDLE_MS = 20_000;
 /** Live scores, minutes and finished matches: every 15 seconds, how often the feed updates them. */
 const LIVE_SCORES_MS = Number(process.env.ODDS_LIVE_INTERVAL_MS) || 15_000;
-/** Match centres of matches with bets or someone watching: every 30 seconds, up to 3 requests a run. */
+/** Match centres of matches with bets, someone watching, or live corners and cards: every 30 seconds, up to 3 requests a run. */
 const MATCH_CENTRE_EVERY_MS = 30_000;
 /**
  * The part of what's left today each live task may use. Scores (results,
@@ -835,8 +835,12 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * The match centre (timeline and numbers) of each football match a Player
    * has a bet on, while it's live and once more in the first minutes after
    * it ends, so their bet shows who scored, who was booked and the corners.
-   * Up to 20 matches per request (fixtures by id carry their events and
-   * statistics), every MATCH_CENTRE_EVERY_MS, while the day's quota has room.
+   * Also every live match with corners or cards priced during play: their
+   * markets are checked against the live count (count-guard.ts), are held
+   * while it's more than a minute old, and pause on a corner or a card seen
+   * in it. Matches with bets come first. Up to 20 matches per request
+   * (fixtures by id carry their events and statistics), every
+   * MATCH_CENTRE_EVERY_MS, while the day's quota has room.
    */
   private async syncMatchCentres(): Promise<number> {
     const now = Date.now();
@@ -865,6 +869,22 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       orderBy: { startsAt: "asc" },
       take: MATCH_CENTRE_MAX,
     });
+    if (due.length < MATCH_CENTRE_MAX) {
+      const counted = await this.prisma.event.findMany({
+        where: {
+          provider: this.provider(),
+          sport: "football",
+          externalId: { not: null },
+          status: EventStatus.LIVE,
+          id: { notIn: due.map((event) => event.id) },
+          markets: { some: { OR: STATS_MARKET_PREFIXES.map((prefix) => ({ key: { startsWith: prefix } })), selections: { some: { liveOdds: { not: null } } } } },
+        },
+        select: { id: true, externalId: true },
+        orderBy: { startsAt: "asc" },
+        take: MATCH_CENTRE_MAX - due.length,
+      });
+      due.push(...counted);
+    }
     let saved = 0;
     for (let i = 0; i < due.length; i += 20) saved += (await this.saveMatchCentres(due.slice(i, i + 20))).saved;
     return saved;

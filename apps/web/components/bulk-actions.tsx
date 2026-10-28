@@ -9,6 +9,7 @@ import { LoadingSpinner } from "./loading-spinner";
 import { useI18n, type I18n } from "./i18n-provider";
 import { useToast } from "./toaster";
 import { HelpTip } from "./help-tip";
+import { useDismiss } from "./use-dismiss";
 
 
 
@@ -57,6 +58,9 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
   const [amount, setAmount] = useState("");
   const [parentId, setParentId] = useState("");
   const [busy, setBusy] = useState(false);
+  useDismiss(() => {
+    if (!busy) onClose();
+  });
   const toast = useToast();
   const names = users.map((user) => user.username);
 
@@ -100,7 +104,7 @@ export function BulkActionModal({ action, users, destinations, onClose, onDone }
       : action === "unsuspend"
         ? tn(users.length, "Reactivate {count} account", "Reactivate {count} accounts")
         : action === "delegate"
-          ? tn(users.length, "Top up {count} account", "Top up {count} accounts")
+          ? tn(users.length, "Give credit to {count} account", "Give credit to {count} accounts")
           : tn(users.length, "Move {count} account", "Move {count} accounts");
 
   return (

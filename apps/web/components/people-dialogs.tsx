@@ -10,10 +10,12 @@ import { useConfirm } from "./confirm-dialog";
 import { useI18n } from "./i18n-provider";
 import { LoadingSpinner } from "./loading-spinner";
 import { useToast } from "./toaster";
+import { useDismiss } from "./use-dismiss";
 
 /** A dialog with a title, a close button, and its content. Tapping outside closes it. */
 export function Dialog({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const { t } = useI18n();
+  useDismiss(onClose);
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className={`modal card people-dialog${wide ? " modal-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>

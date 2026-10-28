@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
 import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCooldown, marketGroup, mergePause, sameLivePrice, sameScorePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
-import { countLineDead, countSelectionDead, countStatsStale } from "../dist/odds/count-guard.js";
+import { countAvailability, countLineDead, countSelectionDead, countStatsStale } from "../dist/odds/count-guard.js";
 import { lagSample } from "../dist/odds/feed-delay.js";
 import { confirmationDelay } from "../dist/bets/live-delay.js";
 import { applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
@@ -330,6 +330,9 @@ test("a market the feed hasn't priced live for 5 minutes is stale; the banner li
   assert.equal(marketStale(event, { liveSuspended: true, liveQuotedAt: new Date(now.getTime() - 6 * 60_000) }, now), true);
   assert.equal(marketStale(event, { liveSuspended: false, liveQuotedAt: new Date(now.getTime() - 60_000) }, now), false);
   assert.equal(marketStale(event, { liveSuspended: true, liveQuotedAt: null }, now, false), true, "never priced live since kick-off");
+  assert.equal(marketStale(event, { liveSuspended: true, liveQuotedAt: null }, now), true, "priced, but suspended by the bookmaker since kick-off");
+  assert.equal(marketStale(event, { liveSuspended: false, liveQuotedAt: null }, now), false, "priced and open: not stale for want of a quote time");
+  assert.equal(marketStale({ ...event, startsAt: new Date(now.getTime() - 4 * 60_000) }, { liveSuspended: true, liveQuotedAt: null }, now), false, "not in the first 5 minutes");
   assert.equal(marketStale({ ...event, period: "HT" }, { liveSuspended: true, liveQuotedAt: new Date(now.getTime() - 6 * 60_000) }, now), false, "not at half-time");
   assert.equal(liveSideUnpriced("corners_9_5", false), true, "corners the feed never prices leave the board");
   assert.equal(liveSideUnpriced("cards_3_5", false), true);
@@ -678,6 +681,20 @@ test("an over that the live count has already reached is dead, and a stale count
   assert.equal(countStatsStale(null, fresh, "cards_2_5", now), true, "no card count holds cards");
   assert.equal(countStatsStale(centre, fresh, "corners_9_5", now), false);
   assert.equal(countStatsStale(centre, old, "match_winner", now), false, "goals markets are not held for a corner count");
+});
+
+test("a live corners or cards market: open on a fresh count, held while it's a little old, off the board after 5 minutes, and not shown without one", () => {
+  const now = new Date("2026-10-26T19:40:00Z");
+  const startsAt = new Date(now.getTime() - 30 * 60_000);
+  const centre = { corners: [2, 1], yellow: [1, 0], red: [0, 0] };
+  const ago = (seconds) => new Date(now.getTime() - seconds * 1000);
+  assert.equal(countAvailability({ matchCentre: centre, matchCentreAt: ago(20), startsAt }, "corners_9_5", now), "ok");
+  assert.equal(countAvailability({ matchCentre: centre, matchCentreAt: ago(90), startsAt }, "corners_9_5", now), "held");
+  assert.equal(countAvailability({ matchCentre: centre, matchCentreAt: ago(6 * 60), startsAt }, "cards_3_5", now), "off");
+  assert.equal(countAvailability({ matchCentre: null, matchCentreAt: null, startsAt: ago(60) }, "corners_9_5", now), "held", "not read yet in the first minutes");
+  assert.equal(countAvailability({ matchCentre: null, matchCentreAt: null, startsAt }, "corners_9_5", now), "off");
+  assert.equal(countAvailability({ matchCentre: { ...centre, corners: null }, matchCentreAt: ago(20), startsAt }, "corners_9_5", now), "none", "the feed's statistics have no corners for this match");
+  assert.equal(countAvailability({ matchCentre: null, matchCentreAt: null, startsAt }, "match_winner", now), "ok");
 });
 
 test("a corner pauses corners only, a yellow pauses cards only, and a red pauses goals and cards", () => {

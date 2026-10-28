@@ -313,7 +313,7 @@ export type CasinoInPlay = { game: CasinoGameKey; staked: number; freeSpins: num
 export type PlayerActivity = {
   player: { id: string; username: string; status: UserRow["status"]; balance: number; parent: { username: string; role: UserRole } | null };
   /** Bets and casino together; `casinoRounds` are the spins, hands and rounds among them. */
-  summary: { thisWeek: CommissionTotals & { casinoRounds: number }; last30Days: CommissionTotals & { casinoRounds: number }; allTime: CommissionTotals & { casinoRounds: number } };
+  summary: { thisWeek: CommissionTotals & { casinoRounds: number }; thisMonth: CommissionTotals & { casinoRounds: number }; allTime: CommissionTotals & { casinoRounds: number } };
   open: { count: number; staked: number; bets: BetSummary[]; casino: CasinoInPlay[] };
   /** Each casino game played in the last 30 days, most staked first. */
   casino: Array<{ game: CasinoGameKey; rounds: number; staked: number; paidOut: number; net: number; lastPlayed: string }>;

@@ -11,8 +11,8 @@ export const help: Record<string, string> = {
     "Të gjitha paratë që Lojtarët vunë këtë javë, në baste që kanë mbaruar. Tregon sa punë ka faqja, jo sa fitove ti.",
   "What all the teams made this week: the money Players lost, minus the money paid to Players who won. Red means Players won more than they lost.":
     "Sa fituan të gjitha skuadrat këtë javë: paratë që humbën Lojtarët, minus paratë që u paguan Lojtarëve që fituan. E kuqja do të thotë që Lojtarët fituan më shumë se humbën.",
-  "Your share of every team's profit this week. Each Owner pays you their rate (%) of what their team made. You collect it on the Commissions page.":
-    "Pjesa jote nga fitimi i çdo skuadre këtë javë. Çdo Pronar të paguan përqindjen e tij (%) nga ajo që fitoi skuadra. E mbledh te faqja Komisionet.",
+  "Your share of every team's profit in the period shown. Each Owner pays you their rate (%) of what their team made. You collect it on the Commissions page.":
+    "Pjesa jote nga fitimi i çdo skuadre në periudhën që shihet. Çdo Pronar të paguan përqindjen e tij (%) nga ajo që fitoi skuadra. E mbledh te faqja Komisionet.",
   "One bar for each of the last 7 days. A taller bar means more money was bet that day. Put your mouse on a bar, or tap it, to see the exact amount.":
     "Një shtyllë për secilën nga 7 ditët e fundit. Shtylla më e lartë do të thotë që atë ditë u vunë më shumë para. Vendos miun mbi shtyllë, ose shtype, për të parë shumën e saktë.",
   "Things waiting for you. A number means you have something to do: a big transfer to approve, a match with no final score, or a user almost out of money. Tap a line to go there.":
@@ -21,30 +21,30 @@ export const help: Record<string, string> = {
     "Sa Pronarë, Menaxherë dhe Lojtarë ka, dhe të gjitha paratë që kanë në balancat e tyre bashkë.",
   "Your newest notifications: money sent, approvals and alerts. The bell at the top of the page shows all of them.":
     "Njoftimet e tua më të reja: para të dërguara, miratime dhe paralajmërime. Zilja në krye të faqes i tregon të gjitha.",
-  "One line for each Owner: how much their team bet and made this week, and how much they owe you. Status shows if you already collected it.":
-    "Një rresht për çdo Pronar: sa vuri dhe sa fitoi skuadra e tij këtë javë, dhe sa të detyrohet. Statusi tregon nëse i ke mbledhur tashmë.",
+  "One line for each Owner: how much their team bet and made in the period shown, and how much they owe you. Status shows if you already collected it.":
+    "Një rresht për çdo Pronar: sa vuri dhe sa fitoi skuadra e tij në periudhën që shihet, dhe sa të detyrohet. Statusi tregon nëse i ke mbledhur tashmë.",
 
   // Overview: Owner
   "What your whole team made this week: the money your Players lost, minus the money paid to Players who won. Red means your Players won more than they lost.":
     "Sa fitoi e gjithë skuadra jote këtë javë: paratë që humbën Lojtarët e tu, minus paratë që u paguan Lojtarëve që fituan. E kuqja do të thotë që Lojtarët e tu fituan më shumë se humbën.",
   "Super Admin's share of your team's profit: your rate (%) of it. You pay this to Super Admin for each week.":
     "Pjesa e Super Adminit nga fitimi i skuadrës tënde: përqindja jote (%) prej tij. Këtë ia paguan Super Adminit për çdo javë.",
-  "Your money after paying Super Admin and your Managers. This is what your team earned for you this week.":
-    "Paratë e tua pasi paguan Super Adminin dhe Menaxherët. Kjo është ajo që fitoi skuadra për ty këtë javë.",
+  "Your money after paying Super Admin and your Managers. This is what your team earned for you in the period shown.":
+    "Paratë e tua pasi paguan Super Adminin dhe Menaxherët. Kjo është ajo që fitoi skuadra për ty në periudhën që shihet.",
   "One bar for each day. Above the line: your team made money that day. Below the line: your Players won money. Tap a bar to see the exact amount.":
     "Një shtyllë për çdo ditë. Mbi vijë: skuadra jote fitoi para atë ditë. Nën vijë: Lojtarët e tu fituan para. Shtyp një shtyllë për të parë shumën e saktë.",
   "Bets that are not finished yet. “Worst case payout” is the most you could have to pay if the Players' picks win. The payout cap stops new bets that could pay more than it.":
     "Bastet që ende nuk kanë mbaruar. “Pagesa në rastin më të keq” është më e shumta që mund të duhet të paguash nëse fitojnë zgjedhjet e Lojtarëve. Kufiri i pagesës ndalon bastet e reja që mund të paguanin më shumë se ai.",
   "Things waiting for you: big transfers from your Managers that need your OK, and users who are almost out of money. Tap a line to go there.":
     "Gjërat që të presin: transferta të mëdha nga Menaxherët që duan miratimin tënd, dhe përdorues që po u mbarojnë paratë. Shtyp rreshtin për të shkuar atje.",
-  "One line for each Manager: how much their Players bet and lost this week, and the commission you pay that Manager.":
-    "Një rresht për çdo Menaxher: sa vunë dhe sa humbën Lojtarët e tij këtë javë, dhe komisioni që i paguan atij Menaxheri.",
+  "One line for each Manager: how much their Players bet and lost in the period shown, and the commission you pay that Manager.":
+    "Një rresht për çdo Menaxher: sa vunë dhe sa humbën Lojtarët e tij në periudhën që shihet, dhe komisioni që i paguan atij Menaxheri.",
 
   // Overview: Manager
-  "What you earned this week. You get your rate (%) of the money your Players lose. Your Owner pays it to you.":
-    "Sa fitove këtë javë. Merr përqindjen tënde (%) nga paratë që humbin Lojtarët e tu. Ta paguan Pronari yt.",
-  "The money your Players lost, minus the money they won, this week. The higher it is, the more you earn. Red means they won more than they lost.":
-    "Paratë që humbën Lojtarët e tu, minus paratë që fituan, këtë javë. Sa më e lartë, aq më shumë fiton ti. E kuqja do të thotë që ata fituan më shumë se humbën.",
+  "What you earned in the period shown. You get your rate (%) of the money your Players lose. Your Owner pays it to you.":
+    "Sa fitove në periudhën që shihet. Merr përqindjen tënde (%) nga paratë që humbin Lojtarët e tu. Ta paguan Pronari yt.",
+  "The money your Players lost, minus the money they won, in the period shown. The higher it is, the more you earn. Red means they won more than they lost.":
+    "Paratë që humbën Lojtarët e tu, minus paratë që fituan, në periudhën që shihet. Sa më e lartë, aq më shumë fiton ti. E kuqja do të thotë që ata fituan më shumë se humbën.",
   "Money you can give to your Players. Your Owner sends it to you. The bar shows how close you are to your limit.":
     "Paratë që mund t'u japësh Lojtarëve të tu. Ta dërgon Pronari yt. Shiriti tregon sa afër je limitit.",
   "What you earned in each of the last weeks. Tap a bar to see the exact amount.":
@@ -53,8 +53,8 @@ export const help: Record<string, string> = {
     "Lojtarët e tu: sa ke, sa janë të bllokuar (të pezulluar), dhe sa para kanë bashkë.",
   "Players who are almost out of money. Tap the line to see them and top them up.":
     "Lojtarë që po u mbarojnë paratë. Shtyp rreshtin për t'i parë dhe për t'u shtuar para.",
-  "One line for each Player: how much they bet this week, and whether they won or lost.":
-    "Një rresht për çdo Lojtar: sa vuri këtë javë, dhe nëse fitoi apo humbi.",
+  "One line for each Player: how much they bet in the period shown, and whether they won or lost.":
+    "Një rresht për çdo Lojtar: sa vuri në periudhën që shihet, dhe nëse fitoi apo humbi.",
 
   // Player home
   "The money you can bet with. Your Manager or Owner adds it. When you win, your winnings come back here.":
@@ -239,4 +239,7 @@ export const help: Record<string, string> = {
   "The credit pulled back from this person in this period.": "Krediti i marrë mbrapsht nga ky person në këtë periudhë.",
   "Credit given to this person minus credit taken back from them in this period.": "Krediti i dhënë këtij personi minus krediti i marrë mbrapsht prej tij në këtë periudhë.",
   "Send credit to this Owner. Tap an amount, or type your own and press Send. It is new money: it comes out of no balance, and the Owner hands it on to their team.": "Dërgo kredit te ky Pronar. Prek një shumë, ose shkruaj tënden dhe shtyp Dërgo. Janë para të reja: nuk dalin nga asnjë balancë, dhe Pronari ia jep skuadrës së vet.",
+  "Players who asked for more money and haven't been sent any since. Give credit opens their Credit form with what they asked for filled in.": "Lojtarët që kërkuan para dhe nuk u është dërguar asgjë që atëherë. Jep kredit hap formën e kreditit me shumën që kërkuan të plotësuar.",
+  "Set by the account above you. The most you can hold is your credit cap: credit that would take you past it isn't accepted. Players of your own are the ones directly under you, not your Managers' Players.": "I vendos llogaria mbi ty. Më e shumta që mund të mbash është kufiri yt i kreditit: krediti që do të të çonte mbi të nuk pranohet. Lojtarët e tu janë ata direkt nën ty, jo Lojtarët e Menaxherëve të tu.",
+  "Send credit to this person. Tap an amount, or type your own and press Send. It comes out of your own balance.": "Dërgo kredit te ky person. Prek një shumë, ose shkruaj tënden dhe shtyp Dërgo. Del nga balanca jote.",
 };

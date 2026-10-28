@@ -148,6 +148,23 @@ export class NotificationsService {
     }
   }
 
+  /** A Player was sent credit: their "Top-up requested" alerts (to whoever they asked) are answered, so they're archived and read. */
+  async archiveTopUpRequests(accountId: string) {
+    try {
+      const open = await this.prisma.notification.findMany({
+        where: { type: NotificationType.LOW_BALANCE, title: "Top-up requested", archivedAt: null, metadata: { path: ["accountId"], equals: accountId } },
+        select: { id: true, userId: true },
+      });
+      if (open.length === 0) return;
+      const now = new Date();
+      await this.prisma.notification.updateMany({ where: { id: { in: open.map((row) => row.id) } }, data: { archivedAt: now } });
+      await this.prisma.notification.updateMany({ where: { id: { in: open.map((row) => row.id) }, readAt: null }, data: { readAt: now } });
+      for (const user of new Set(open.map((row) => row.userId))) await this.realtime.publish(user, { type: "notifications.changed" });
+    } catch (error) {
+      this.logger.warn(`Answered top-up requests not archived: ${String(error)}`);
+    }
+  }
+
   private async updateOwned(actor: Actor, id: string, data: { readAt?: Date; archivedAt?: Date }) {
     const notification = await this.prisma.notification.findFirst({ where: { id, userId: actor.id } });
     if (!notification) throw new NotFoundException("Notification not found");

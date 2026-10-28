@@ -749,6 +749,8 @@ export class UsersService {
       metadata: { amount: dto.amount, reason: dto.reason },
     });
     await this.realtime.publishBalances([id, isPrint ? null : actor.id]);
+    // Their top-up request has its answer: its alert goes from the bell and the latest updates.
+    await this.notifications.archiveTopUpRequests(id);
     if (!isPrint) await this.alertLowBalance(actor.id, dto.amount);
     await this.notifications.create({
       userId: id,
@@ -1140,6 +1142,7 @@ export class UsersService {
       ownSums,
       results,
     ]);
+    const requests = await this.openTopUpRequests(scope);
 
     const bucket = (type: BalanceTransactionType, status: BalanceTransactionStatus = approved) => {
       const row = groups.find((group) => group.type === type && group.status === status);
@@ -1189,7 +1192,37 @@ export class UsersService {
           : null,
       },
       items: items.map((entry) => ({ ...entry, amount: Number(entry.amount) })),
+      /** Players' top-up requests still waiting: no credit has reached them since they asked. */
+      requests,
     };
+  }
+
+  /**
+   * Top-up requests from the viewer's Players (everyone's, for Super Admin)
+   * still waiting: the newest from each Player in the last 7 days, with no
+   * credit sent to them since (a transfer waiting for approval counts as sent).
+   */
+  private async openTopUpRequests(scope: string[] | null) {
+    const since = new Date(Date.now() - 7 * 86_400_000);
+    const asked = await this.prisma.auditLog.findMany({
+      where: { action: "balance.topup_request", createdAt: { gte: since }, ...(scope ? { actorId: { in: scope } } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: { id: true, actorId: true, createdAt: true, metadata: true, actor: { select: { username: true, balance: true } } },
+    });
+    const latest = new Map<string, (typeof asked)[number]>();
+    for (const row of asked) if (row.actorId && !latest.has(row.actorId)) latest.set(row.actorId, row);
+    if (latest.size === 0) return [];
+    const credited = await this.prisma.balanceTransaction.findMany({
+      where: { type: BalanceTransactionType.DELEGATION, toUserId: { in: [...latest.keys()] }, createdAt: { gte: since }, status: { not: BalanceTransactionStatus.REJECTED } },
+      select: { toUserId: true, createdAt: true },
+    });
+    return [...latest.values()]
+      .filter((row) => !credited.some((credit) => credit.toUserId === row.actorId && credit.createdAt >= row.createdAt))
+      .map((row) => {
+        const amount = (row.metadata as { amount?: unknown } | null)?.amount;
+        return { id: row.id, playerId: row.actorId!, username: row.actor?.username ?? "", balance: Number(row.actor?.balance ?? 0), amount: typeof amount === "number" ? amount : null, createdAt: row.createdAt };
+      });
   }
 
   /**
@@ -1718,7 +1751,7 @@ export class UsersService {
    * A Player asks whoever looks after them (their Manager, or their Owner)
    * for more money. At most once every 30 minutes, so it can't be spammed.
    */
-  async requestTopUp(actor: Actor) {
+  async requestTopUp(actor: Actor, amount?: number) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players can ask for a top-up");
     if (!actor.parentId) throw new BadRequestException("You don't have a Manager or Owner yet");
     const since = new Date(Date.now() - TOP_UP_REQUEST_GAP_MS);
@@ -1728,16 +1761,20 @@ export class UsersService {
       throw new BadRequestException(`You already asked. You can ask again in ${minutes} min.`);
     }
     const balance = Number(actor.balance);
+    const asked = amount !== undefined && amount > 0 ? Math.round(amount * 100) / 100 : null;
     await this.notifications.create({
       userId: actor.parentId,
       type: NotificationType.LOW_BALANCE,
       severity: NotificationSeverity.WARNING,
       title: "Top-up requested",
-      message: `${actor.username} is asking for a top-up. Their balance is ${formatAll(balance)}.`,
-      deepLink: `/dashboard/players/${actor.id}`,
-      metadata: { accountId: actor.id, balance },
+      message: asked
+        ? `${actor.username} is asking for a top-up of ${formatAll(asked)}. Their balance is ${formatAll(balance)}.`
+        : `${actor.username} is asking for a top-up. Their balance is ${formatAll(balance)}.`,
+      // Opens their page with the Credit form, the amount they asked for filled in.
+      deepLink: `/dashboard/people/${actor.id}?credit=1${asked ? `&amount=${asked}` : ""}`,
+      metadata: { accountId: actor.id, balance, amount: asked, topUpRequest: true },
     });
-    await this.audit.log({ actorId: actor.id, action: "balance.topup_request", targetId: actor.parentId, metadata: { balance } });
+    await this.audit.log({ actorId: actor.id, action: "balance.topup_request", targetId: actor.parentId, metadata: { balance, amount: asked } });
     return { ok: true };
   }
 

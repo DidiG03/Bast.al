@@ -1241,9 +1241,12 @@ const MatchCard = memo(function MatchCard({
     const limit = scorers ? SCORERS_SHOWN : 12;
     const showAll = (!scorers && !scores) || allPlayers.has(market.id) || offered.length <= limit + 2;
     const visible = showAll ? offered : offered.filter((selection, index) => index < limit || selected.has(selection.id));
+    const labels = new Map(visible.map((selection) => [selection.id, pickLabel(selection.name, i18n)]));
+    // Names that would be cut short in a grid ("RB Bragantino & Over 3.5", a player): on a phone they're a list, one a row.
+    const long = visible.some((selection) => labels.get(selection.id)!.length > LONG_PICK_NAME);
     return (
       <>
-        <div className={`odds-selections${scorers ? " is-players" : ""}${margin ? " is-margin" : ""}`}>{visible.map((selection) => pick(market, selection, pickLabel(selection.name, i18n), "odds-selection bet-pick"))}</div>
+        <div className={`odds-selections${scorers ? " is-players" : ""}${margin ? " is-margin" : ""}${long ? " is-long" : ""}`}>{visible.map((selection) => pick(market, selection, labels.get(selection.id)!, "odds-selection bet-pick"))}</div>
         {!showAll ? (
           <button type="button" className="text-button bet-all-players" onClick={() => setAllPlayers((current) => new Set(current).add(market.id))}>
             {scorers ? tn(offered.length, "Show all {count} players", "Show all {count} players") : tn(offered.length, "Show all {count} scores", "Show all {count} scores")}
@@ -1522,6 +1525,9 @@ const PAUSE_TEXT: Record<string, string> = {
 type Suggestion = { id: string; name: string; live: boolean };
 
 /** What paused the markets, in the banner. */
+/** A pick's name longer than this doesn't fit a price button on a phone: its market shows as a list there (`is-long`). */
+const LONG_PICK_NAME = 10;
+
 const PAUSE_REASON: Record<string, string> = {
   goal: msg("⚽ Goal"),
   ahead: msg("Score not confirmed yet"),

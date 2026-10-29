@@ -200,6 +200,8 @@ export function SlotGame() {
   const [recent, setRecent] = useState<CasinoSpinRow[]>([]);
   const [grid, setGrid] = useState<SlotSymbol[][] | null>(null);
   const [lastWin, setLastWin] = useState<{ amount: number; lines: number; freeSpinsWon: number; big: boolean } | null>(null);
+  /** The last spin paid nothing: said so, until the next spin. */
+  const [missed, setMissed] = useState(false);
   const [combos, setCombos] = useState<Combo[]>([]);
   /** The win lit up on the reels right now; null while they all show together. */
   const [showing, setShowing] = useState<number | null>(null);
@@ -276,6 +278,7 @@ export function SlotGame() {
     slotSound.unlock();
     setSpinning(true);
     setLastWin(null);
+    setMissed(false);
     setCombos([]);
     setShowing(null);
     setPinned(null);
@@ -305,6 +308,7 @@ export function SlotGame() {
         slotSound.win(result.win >= result.spin.bet * BIG_WIN);
         slotSound.coins(countUpTime(result.win));
       }
+      setMissed(result.win === 0 && !(result.freeSpinsWon > 0));
       if (result.win > 0 || result.freeSpinsWon > 0) {
         setLastWin({ amount: result.win, lines: result.lines.length, freeSpinsWon: result.freeSpinsWon, big: result.win >= result.spin.bet * BIG_WIN });
       }
@@ -465,7 +469,9 @@ export function SlotGame() {
         : t("Better luck next time")
       : lastWin
         ? t("Win {amount}", { amount: formatMoney(countedWin) })
-        : playingFree
+        : missed && !playingFree && !tooBig(bet)
+          ? t("No win this spin")
+          : playingFree
           ? tn(freeSpins.remaining, "{count} free spin left", "{count} free spins left")
           : tooBig(bet)
             ? bet > balance
@@ -621,27 +627,26 @@ export function SlotGame() {
             {rulesOpen && fullScreen !== "off" ? <Rules game={state.game} bet={playingFree ? freeSpins.bet : bet} lines={lines} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
           </section>
 
-          {combos.length > 0 ? (
-            <div className="casino-combos" role="group" aria-label={t("Your wins on this spin")}>
-              {combos.map((combo, index) => (
-                <button
-                  key={combo.key}
-                  type="button"
-                  className={`casino-combo${showing === index ? " is-showing" : ""}`}
-                  style={{ "--combo-color": combo.reel.color } as CSSProperties}
-                  aria-pressed={pinned === index}
-                  onClick={() => pick(index)}
-                >
-                  <span className="casino-combo-name">{combo.line === null ? t(SYMBOL_NAMES[combo.symbol]) : t("Line {number}", { number: combo.line })}</span>
-                  <span className="casino-combo-symbols" aria-label={`${combo.count} × ${t(SYMBOL_NAMES[combo.symbol])}`}>
-                    <SymbolPicture symbol={combo.symbol} alt="" />×{combo.count}
-                  </span>
-                  <strong>{combo.amount > 0 ? `+${formatMoney(combo.amount)}` : null}</strong>
-                </button>
-              ))}
-              {combos.length > 1 ? <p className="muted casino-combos-hint">{t("Tap a win to see it on the reels.")}</p> : null}
-            </div>
-          ) : null}
+          {/* Always there, empty between wins: the row appearing under the cabinet after a win took its height from the reels, which shrank. */}
+          <div className={`casino-combos${combos.length === 0 ? " is-empty" : ""}`} role="group" aria-label={t("Your wins on this spin")}>
+            {combos.map((combo, index) => (
+              <button
+                key={combo.key}
+                type="button"
+                className={`casino-combo${showing === index ? " is-showing" : ""}`}
+                style={{ "--combo-color": combo.reel.color } as CSSProperties}
+                aria-pressed={pinned === index}
+                onClick={() => pick(index)}
+              >
+                <span className="casino-combo-name">{combo.line === null ? t(SYMBOL_NAMES[combo.symbol]) : t("Line {number}", { number: combo.line })}</span>
+                <span className="casino-combo-symbols" aria-label={`${combo.count} × ${t(SYMBOL_NAMES[combo.symbol])}`}>
+                  <SymbolPicture symbol={combo.symbol} alt="" />×{combo.count}
+                </span>
+                <strong>{combo.amount > 0 ? `+${formatMoney(combo.amount)}` : null}</strong>
+              </button>
+            ))}
+            {combos.length > 1 ? <p className="muted casino-combos-hint">{t("Tap a win to see it on the reels.")}</p> : null}
+          </div>
         </>
       )}
 

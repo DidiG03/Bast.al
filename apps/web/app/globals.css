@@ -3402,6 +3402,21 @@ button.odds-selection:hover,
   flex-wrap: nowrap;
 }
 
+.bet-quick-unit {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* The amounts share the row evenly, so the last one is never cut off. */
+.bet-quick .bet-chip {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: 0.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .bet-chips::-webkit-scrollbar,
 .bet-quick::-webkit-scrollbar {
   display: none;
@@ -4027,8 +4042,9 @@ button.odds-selection:hover,
     bottom: calc(4.6rem + env(safe-area-inset-bottom));
   }
 
+  /* Room under the last match for the slip bar floating above it (its height and the gap below it). */
   .bet-page {
-    padding-bottom: 4rem;
+    padding-bottom: 5.5rem;
   }
 }
 
@@ -5405,7 +5421,47 @@ button.is-blocked {
 .money-row-text > span {
   font-size: 0.8rem;
   font-weight: 500;
-  overflow-wrap: anywhere;
+  /* Words wrap whole ("International de Bogota"); only a word too long for the line is split. */
+  overflow-wrap: break-word;
+}
+
+/* A narrow phone: the icon, title and amount on the first line; the time and the description (the bet's name) on
+   the full width below, instead of a squeezed column. */
+@media (max-width: 480px) {
+  .money-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.3rem 0.6rem;
+  }
+
+  .money-row .money-icon {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .money-row-text {
+    display: contents;
+  }
+
+  .money-row-text > strong {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .money-row .money-amount {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .money-row .money-time {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+  }
+
+  .money-row-text > span {
+    grid-column: 2 / -1;
+  }
 }
 
 .money-rounds-toggle {
@@ -6781,6 +6837,23 @@ button.is-blocked {
   gap: 0.5rem;
 }
 
+/* On the game pages the cabinet fills the screen's height: the wins row keeps one line's room even when empty, and
+   scrolls sideways rather than wrapping, so the reels stay the same size from spin to spin. */
+.role-player .casino-page .casino-combos {
+  flex: none;
+  flex-wrap: nowrap;
+  justify-content: safe center;
+  align-items: center;
+  min-height: 2.6rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.role-player .casino-page .casino-combos .casino-combo,
+.role-player .casino-page .casino-combos-hint {
+  flex: none;
+}
+
 .casino-combo {
   --combo-color: var(--accent);
   display: inline-flex;
@@ -6947,6 +7020,92 @@ button.is-blocked {
   color: #fff;
   font-family: inherit;
   text-transform: uppercase;
+}
+
+/* Double or nothing in a short reel window (Book of Ra fits its reels to the screen's height): the card beside the
+   amounts, message and buttons, so nothing spills over the controls below. */
+.slot-gamble {
+  container: gamble / size;
+  /* Never wider than the reels it covers, whatever its buttons would like. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.slot-gamble .gamble-screen {
+  min-width: 0;
+  overflow: hidden;
+}
+
+@container gamble (max-height: 300px) {
+  .slot-gamble .gamble-screen {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 0.3rem 0.8rem;
+    padding: 0.45rem 0.7rem;
+  }
+
+  .slot-gamble .gamble-top {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .slot-gamble .gamble-table {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+
+  .slot-gamble .gamble-card {
+    height: min(100%, 7.5rem);
+    min-height: 0;
+  }
+
+  .slot-gamble .gamble-message {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+  }
+
+  .slot-gamble .gamble-buttons {
+    grid-column: 2;
+    grid-row: 3;
+    gap: 0.35rem;
+  }
+
+  /* Room for what matters: the earlier cards go, and the two amounts sit side by side on one line each. */
+  .slot-gamble .gamble-history {
+    display: none;
+  }
+
+  .slot-gamble .gamble-top,
+  .slot-gamble .gamble-amounts {
+    width: 100%;
+  }
+
+  .slot-gamble .gamble-amounts {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .slot-gamble .gamble-amounts dt {
+    font-size: 0.56rem;
+    white-space: nowrap;
+  }
+
+  .slot-gamble .gamble-amounts dd {
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .slot-gamble .gamble-message strong {
+    font-size: 0.72rem;
+  }
+
+  .slot-gamble .gamble-pick,
+  .slot-gamble .gamble-take {
+    min-height: 36px;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.7rem;
+    border-radius: 8px;
+  }
 }
 
 .gamble-top {
@@ -10170,6 +10329,26 @@ button.is-blocked {
   align-items: center;
   gap: clamp(0.6rem, 2vw, 1.25rem);
   padding: 0.6rem clamp(0.5rem, 2vw, 1rem) 0.75rem;
+}
+
+/* The last spin's wins, on the left of the START and TOTAL BET row (hidden while double or nothing is open). */
+.book-rings .casino-combos.book-wins {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin-right: auto;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.book-rings .casino-combos.book-wins.is-empty {
+  visibility: hidden;
+}
+
+.book-rings .casino-combos.book-wins .casino-combos-hint {
+  display: none;
 }
 
 .book-ring-spot {
@@ -13868,6 +14047,32 @@ button.is-blocked {
   overflow: hidden;
 }
 
+/* No card bought yet: the foil waits under a plain "buy one" cover, so a covered card never looks paid for. */
+.scratch-unbought {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  gap: 0.3rem;
+  padding: 1rem;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(30, 34, 44, 0.62);
+  color: #fff;
+  text-align: center;
+  font: inherit;
+  cursor: pointer;
+}
+
+.scratch-unbought strong {
+  font-size: 1.15rem;
+}
+
+.scratch-unbought:disabled {
+  cursor: default;
+}
+
 .scratch-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -16983,4 +17188,74 @@ html[data-theme="light"] .role-player .bet-status-lost {
   justify-self: start;
   white-space: normal;
   text-align: left;
+}
+
+/* Last in the file, so they win over the sidebar offsets above. */
+/* A phone on its side: a small slip bar in the corner rather than a full-width strip across a short screen. */
+@media (max-height: 500px) and (pointer: coarse) {
+  .bet-slip-bar,
+  .role-player .bet-slip-bar,
+  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content .bet-slip-bar {
+    right: calc(0.75rem + env(safe-area-inset-right));
+    left: auto;
+    width: min(20rem, 45vw);
+    min-height: 2.5rem;
+    padding: 0.35rem 0.85rem;
+  }
+}
+
+/* No bottom bar on a wide phone on its side: the slip bar sits low in the corner. */
+@media (max-height: 500px) and (pointer: coarse) and (min-width: 761px) {
+  .bet-slip-bar,
+  .role-player .bet-slip-bar,
+  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content .bet-slip-bar {
+    bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+
+  .bet-page {
+    padding-bottom: 3.5rem;
+  }
+}
+
+/* Owners, Managers and Super Admin on a narrow phone: the logo alone, a balance that gives way, and the language,
+   theme and bell buttons always whole on the right (the bell was cut off at 390 px). */
+@media (max-width: 480px) {
+  .role-admin .dashboard-topbar {
+    gap: 0.3rem;
+  }
+
+  .role-admin .dashboard-topbar .topbar-brand > span:last-child {
+    display: none;
+  }
+
+  .role-admin .dashboard-topbar .player-balance-chip {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+    max-width: max-content;
+    margin-left: auto;
+    padding-inline: 0.5rem;
+    overflow: hidden;
+    font-size: 0.75rem;
+  }
+
+  .role-admin .dashboard-topbar .player-balance-chip-amounts {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .role-admin .topbar-actions {
+    flex: none;
+    gap: 0.1rem;
+  }
+
+  .role-admin .topbar-actions .language-toggle,
+  .role-admin .topbar-actions .theme-toggle,
+  .role-admin .dashboard-topbar .notification-trigger {
+    flex: none;
+    min-width: 2.15rem;
+    height: 2.15rem;
+    padding-inline: 0.35rem;
+  }
 }

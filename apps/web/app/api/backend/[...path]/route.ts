@@ -58,8 +58,10 @@ async function proxy(request: NextRequest, parts: string[]) {
     url.searchParams.set(key, value);
   });
 
-  const { getToken } = await auth();
-  const token = await getToken();
+  // The page's own sign-in token first: it's the one apiFetch just asked Clerk for (fresh after a 401), while the
+  // session cookie can be a minute old in a tab that slept. The API checks either the same way.
+  const sent = /^Bearer\s+(\S+)$/.exec(request.headers.get("authorization") ?? "")?.[1];
+  const token = sent && sent !== "undefined" && sent !== "null" ? sent : await (await auth()).getToken();
   const method = request.method.toUpperCase();
   const bodyText =
     method === "GET" || method === "HEAD" ? undefined : await request.text();

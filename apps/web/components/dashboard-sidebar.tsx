@@ -119,8 +119,20 @@ const TAB_OF: Array<[string, string]> = [
 export function DashboardSidebar({ role, username, initialCollapsed, casinoOpen = false }: SidebarProps) {
   const pathname = usePathname();
   const { t } = useI18n();
-  const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const [savedCollapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // A phone on its side is wide enough for the sidebar but short: it starts as icons, so the page keeps its room.
+  // Opening it there lasts for the visit and isn't saved.
+  const [shortScreen, setShortScreen] = useState(false);
+  const [openedHere, setOpenedHere] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-height: 500px) and (pointer: coarse)");
+    const update = () => setShortScreen(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const collapsed = savedCollapsed || (shortScreen && !openedHere);
   const touchStartX = useRef<number | null>(null);
 
   // While the drawer is open on a phone, keep the page behind it still and let Escape close it.
@@ -139,8 +151,13 @@ export function DashboardSidebar({ role, username, initialCollapsed, casinoOpen 
   useEffect(() => setMobileOpen(false), [pathname]);
 
   function toggleCollapsed() {
+    if (shortScreen && !savedCollapsed) {
+      setOpenedHere(collapsed);
+      return;
+    }
     const next = !collapsed;
     setCollapsed(next);
+    if (!next) setOpenedHere(true);
     document.cookie = `bastal-sidebar=${next ? "collapsed" : "expanded"}; path=/; max-age=31536000; samesite=lax`;
   }
 

@@ -15,7 +15,7 @@ import { useRealtime } from "../../../components/realtime-provider";
 import { SportIcon } from "../../../components/sport-icon";
 import { TeamCrest } from "../../../components/team-crest";
 import { ApiError, apiFetch, type Bet, type BuilderQuote, type LiveWait, type MarketPause, type MyBets, type OddsEvent, type OddsSelection, type OddsSettings, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
-import { formatMoney, formatStake } from "../../../lib/format";
+import { formatMoney } from "../../../lib/format";
 import { byImportance } from "../../../lib/importance";
 import { MAX_SLIP, forgetPicks, readSlip, saveSlip, slipStorageKey, type SlipItem } from "../../../lib/slip";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
@@ -452,6 +452,8 @@ function BetPage() {
 
   useEffect(() => {
     if (!matchParam || !events || tab !== "matches") return;
+    // The live matches can show before the days ahead have loaded: a match later today isn't looked for until they have.
+    if (lists.current.upcoming === null) return;
     const found = events.find((event) => event.id === matchParam && (event.bettable || event.live) && event.markets.length > 0);
     // The link is used once; a refresh of the page shouldn't jump back to it.
     router.replace("/dashboard/bet", { scroll: false });
@@ -662,9 +664,12 @@ function BetPage() {
       if (items.some((item) => item.selectionId === selection.id)) return items.filter((item) => item.selectionId !== selection.id);
       if (items.length >= MAX_SLIP) return items;
       const lastStake = items[items.length - 1]?.stake ?? "";
+      const market = event.markets.find((entry) => entry.selections.some((option) => option.id === selection.id));
+      // Added while its market is held (a pause that just started, say): it goes on the slip paused, and comes back on its own.
+      const paused = event.live && (!event.bettable || (market ? pickHeld(event, market, selection) : false));
       return [
         ...items,
-        { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, name: selection.name, odds: selection.price, stake: lastStake, live: event.live, sp: selection.sp, addedAt: Date.now() },
+        { selectionId: selection.id, eventId: event.id, eventName: event.name, startsAt: event.startsAt, market: marketName, marketId: market?.id, name: selection.name, odds: selection.price, stake: lastStake, live: event.live, sp: selection.sp, addedAt: Date.now(), ...(paused ? { paused: true } : {}) },
       ];
     });
   }, [toast, t]);
@@ -1195,7 +1200,7 @@ const MatchCard = memo(function MatchCard({
     const isSelected = selected.has(selection.id);
     // A pause still shows the last price, greyed out, and won't take the bet.
     // A dash is only for an outcome that has no price at all.
-    const offBoard = Boolean(market.suspended || selection.suspended);
+    const offBoard = event.live ? pickHeld(event, market, selection) : Boolean(market.suspended || selection.suspended);
     const locked = !event.bettable || offBoard;
     return (
       <button
@@ -1533,10 +1538,23 @@ const PAUSE_TEXT: Record<string, string> = {
 /** Another match to bet on while one's main market is paused. */
 type Suggestion = { id: string; name: string; live: boolean };
 
-/** What paused the markets, in the banner. */
+/**
+ * Whether a live outcome is off the board: its market or itself suspended, not priced during play, or named in the
+ * match's pause banner while that pause runs (a list that was already loading can bring the market back before the
+ * pause the push announced has ended).
+ */
+function pickHeld(event: OddsEvent, market: OddsEvent["markets"][number], selection: OddsSelection): boolean {
+  if (market.suspended || market.stale || selection.suspended) return true;
+  const pause = event.marketPause;
+  if (!pause || Date.parse(pause.until) <= serverNow()) return false;
+  const family = market.name.replace(/\s+\d+(\.\d+)?$/, "");
+  return pause.markets.includes(market.name) || pause.markets.includes(family);
+}
+
 /** A pick's name longer than this doesn't fit a price button on a phone: its market shows as a list there (`is-long`). */
 const LONG_PICK_NAME = 10;
 
+/** What paused the markets, in the banner. */
 const PAUSE_REASON: Record<string, string> = {
   goal: msg("⚽ Goal"),
   ahead: msg("Score not confirmed yet"),
@@ -1695,7 +1713,7 @@ function BetSlip({
       if (!token || cancelled) return;
       try {
         const quote = await apiFetch<BuilderQuote>("/bets/builder/quote", token, { method: "POST", body: JSON.stringify({ selectionIds: builderKey.split("#")[0].split(",").map((part) => part.split(":")[0]) }) });
-        if (!cancelled) setBuilderQuote({ key: builderKey, odds: quote.odds, error: null });
+        if (!cancelled) setBuilderQuote({ key: builderKey, odds: quote.odds, error: quote.problem ? ts(quote.problem) : null });
       } catch (err) {
         if (!cancelled) setBuilderQuote({ key: builderKey, odds: null, error: err instanceof Error ? err.message : t("Couldn't price this bet builder") });
       }
@@ -1703,13 +1721,14 @@ function BetSlip({
     return () => {
       cancelled = true;
     };
-  }, [builderKey, getToken, t]);
+  }, [builderKey, getToken, t, ts]);
   const quote = builder && builderQuote?.key === builderKey ? builderQuote : null;
   const builderOdds = quote?.odds ?? 0;
   const hasSp = items.some((item) => item.sp);
   // Closed or paused picks can't be bet on: they're greyed out and left out of every total (odds, stake, return)
   // until they reopen or are removed.
   const valid = items.filter((item) => !item.closed && !item.paused);
+  const nothingToPlace = items.length > 0 && valid.length === 0;
   const accaOdds = combinedOdds(valid.map((item) => item.odds));
   const accaStakeValue = stakeValue(accaStake);
   const sameMatch = new Set(items.map((item) => item.eventId)).size < items.length;
@@ -2006,7 +2025,9 @@ function BetSlip({
               </select>
             </label>
           ) : null}
-          <div className="bet-quick" role="group" aria-label={system ? t("Stake per bet") : builder ? t("Bet builder stake") : acca ? t("Accumulator stake") : t("Same stake on every bet")}>
+          <div className="bet-quick" role="group" aria-label={`${system ? t("Stake per bet") : builder ? t("Bet builder stake") : acca ? t("Accumulator stake") : t("Same stake on every bet")} (ALL)`}>
+            {/* The currency once, so the five amounts fit across a phone's slip without scrolling. */}
+            <span className="bet-quick-unit" aria-hidden="true">ALL</span>
             {QUICK_STAKES.map((amount) => {
               const chosen = combined || system ? accaStakeValue === amount : items.length > 0 && items.every((item) => stakeValue(item.stake) === amount);
               return (
@@ -2017,7 +2038,7 @@ function BetSlip({
                   aria-pressed={chosen}
                   onClick={() => (combined || system ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
                 >
-                  {formatStake(amount)}
+                  {amount.toLocaleString("en-US")}
                 </button>
               );
             })}
@@ -2236,11 +2257,14 @@ function BetSlip({
                 ) : null}
               </div>
             ) : null}
-            <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing} aria-disabled={Boolean(blocker)}>
+            {/* Every pick paused, closed or gone: nothing would be staked, so there's nothing to press (the reason is above). */}
+            <button type="submit" className={`bet-place${blocker ? " is-blocked" : ""}`} disabled={placing || nothingToPlace} aria-disabled={Boolean(blocker)}>
               {placing
                 ? hasLive
                   ? <LiveCountdown deadline={deadline} />
                   : <LoadingSpinner label="Placing" size="small" />
+                : nothingToPlace
+                  ? t("Nothing to place right now")
                 : priceMoved
                   ? t("Place at the new price · {amount}", { amount: formatMoney(totalStake) })
                   : system
@@ -2249,7 +2273,7 @@ function BetSlip({
                   ? t("Place bet builder · {amount}", { amount: formatMoney(totalStake) })
                   : acca
                   ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
-                  : tn(items.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
+                  : tn(valid.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
             </button>
             <label className="bet-price-setting">
               <span className="muted">{t("Accept price changes")}</span>

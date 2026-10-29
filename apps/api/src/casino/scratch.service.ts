@@ -74,18 +74,20 @@ export class ScratchService {
       casinoClosedReason(this.prisma, actor, "scratch"),
       this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } }),
       this.tableMax(actor.id),
-      this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "SCRATCH" }, orderBy: { createdAt: "desc" }, take: RECENT, select: roundSelect }),
+      this.prisma.casinoSpin.findMany({ where: { playerId: actor.id, kind: "SCRATCH" }, orderBy: { createdAt: "desc" }, take: RECENT + 1, select: roundSelect }),
       lockedActiveSeed(this.prisma, actor.id),
       previousSeed(this.prisma, actor.id),
     ]);
     const revealed = await revealedSeeds(this.prisma, recent.map((round) => (round.scratch as Stored | null)?.seedId));
+    // A card bought and not yet scratched isn't in the list: what it holds shows once it's scratched.
+    const open = recent[0] && (recent[0].scratch as Stored | null)?.shown === false ? recent[0] : null;
     return {
       closed,
       balance: Number(player.balance),
       tableMax,
-      recent: recent.map((round) => roundView(round, revealed)),
-      /** A card bought and not yet scratched. Reloading brings it back; the stake stays taken. */
-      open: recent[0] && (recent[0].scratch as Stored | null)?.shown === false ? roundView(recent[0], revealed) : null,
+      recent: recent.filter((round) => (round.scratch as Stored | null)?.shown !== false).slice(0, RECENT).map((round) => roundView(round, revealed)),
+      /** A card bought and not yet scratched. Reloading brings it back; the stake stays taken and its prize is paid once it's scratched. */
+      open: open ? roundView(open, revealed) : null,
       seed: seedView(seed),
       /** The last seed pair the Player changed, its server seed shown. */
       previousSeed: previous ? seedView(previous) : null,
@@ -120,6 +122,9 @@ export class ScratchService {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
       // A slot win still open to double or nothing is taken as it is: it's already in the balance.
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
+      // A card bought earlier and never scratched (another tab, a closed page) is settled first, so its prize is never left behind.
+      const unscratched = await tx.casinoSpin.findMany({ where: { playerId: actor.id, kind: "SCRATCH", scratch: { path: ["shown"], equals: false } }, select: { id: true, scratch: true, win: true } });
+      for (const old of unscratched) await this.settleCard(tx, actor.id, old);
       await this.limits.assertCanPlace(actor.id, bet, 0, tx);
 
       const seed = await activeSeed(tx, actor.id);
@@ -175,24 +180,32 @@ export class ScratchService {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const paid = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
-      const round = await tx.casinoSpin.findFirst({ where: { id, playerId: actor.id, kind: "SCRATCH" }, select: { scratch: true, win: true } });
+      const round = await tx.casinoSpin.findFirst({ where: { id, playerId: actor.id, kind: "SCRATCH" }, select: { id: true, scratch: true, win: true } });
       if (!round) throw new NotFoundException("That card isn't yours");
-      const stored = round.scratch as Stored;
-      if (stored.shown !== false) return false;
-      if (stored.held) {
-        const win = round.win;
-        if (win.greaterThan(0)) await tx.user.update({ where: { id: actor.id }, data: { balance: { increment: win } } });
-        await tx.balanceTransaction.create({
-          data: { id: `scratchwin_${id}`, toUserId: actor.id, actorId: actor.id, type: BalanceTransactionType.CASINO, amount: win, reason: win.greaterThan(0) ? "Scratch Cards: card won" : "Scratch Cards: no win", createdAt: new Date() },
-        });
-        await tx.settlementEntry.updateMany({ where: { casinoSpinId: id }, data: { payout: win } });
-      }
-      await tx.casinoSpin.update({ where: { id }, data: { scratch: { ...stored, shown: true, held: false } } });
-      return stored.held === true;
+      return this.settleCard(tx, actor.id, round);
     });
     const balance = Number((await this.prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { balance: true } })).balance);
     if (paid) await this.realtime.publishBalances([actor.id]);
     return { ok: true, balance };
   }
 
+  /**
+   * Marks a card shown and, if its prize is still held, pays it (0 for a card
+   * that didn't win, so the round always has its result line). Returns
+   * whether anything was settled. Runs inside the caller's locked transaction.
+   */
+  private async settleCard(tx: Prisma.TransactionClient, playerId: string, round: { id: string; scratch: Prisma.JsonValue; win: Prisma.Decimal }) {
+    const stored = round.scratch as Stored;
+    if (stored.shown !== false) return false;
+    if (stored.held) {
+      const win = round.win;
+      if (win.greaterThan(0)) await tx.user.update({ where: { id: playerId }, data: { balance: { increment: win } } });
+      await tx.balanceTransaction.create({
+        data: { id: `scratchwin_${round.id}`, toUserId: playerId, actorId: playerId, type: BalanceTransactionType.CASINO, amount: win, reason: win.greaterThan(0) ? "Scratch Cards: card won" : "Scratch Cards: no win", createdAt: new Date() },
+      });
+      await tx.settlementEntry.updateMany({ where: { casinoSpinId: round.id }, data: { payout: win } });
+    }
+    await tx.casinoSpin.update({ where: { id: round.id }, data: { scratch: { ...stored, shown: true, held: false } } });
+    return stored.held === true;
   }
+}

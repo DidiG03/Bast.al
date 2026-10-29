@@ -148,7 +148,7 @@ test("singles and an accumulator mixing volleyball, handball and football, count
   assert.equal((await risk.exposure(prisma, ownerB.id, [altekma.id])).size, 0, "not on team B");
   assert.equal((await risk.exposure(prisma, ownerB.id, [htft.id])).get(htft.id).singles.bets, 1);
   // A volleyball pick can't go in a bet builder: that's football only.
-  await assert.rejects(bets.quoteBuilder(actor(playerA), [altekma.id, setsLine.id]), /football/);
+  assert.match((await bets.quoteBuilder(actor(playerA), [altekma.id, setsLine.id])).problem, /football/);
 });
 
 test("bets close when the game starts: there are no live prices", async () => {

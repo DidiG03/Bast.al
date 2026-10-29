@@ -126,6 +126,23 @@ test("buying a card takes the price, and scratching it pays the prize: one ledge
   assert.equal(await ledgerTotal(sami), 10000, "the ledger adds up to the balance");
 });
 
+test("a card left unscratched stays out of the list, and buying the next one pays it first", async () => {
+  await skipTo(sami, (card) => card.symbol === "BELL");
+  const left = await scratch.buy(sami, 100);
+  const before = await balanceOf(sami);
+  const state = await scratch.state(sami);
+  assert.equal(state.open.id, left.round.id);
+  assert.equal(state.recent.some((round) => round.id === left.round.id), false, "what an unscratched card holds isn't shown");
+  await skipTo(sami, (card) => card.symbol === null);
+  const next = await scratch.buy(sami, 100);
+  assert.equal(next.balance, before + 500 - 100, "the first card's 500 prize was paid before the next 100 left");
+  const after = await scratch.state(sami);
+  assert.equal(after.open.id, next.round.id);
+  assert.equal(after.recent[0].id, left.round.id);
+  await scratch.markShown(sami, next.round.id);
+  assert.equal(await ledgerTotal(sami), await balanceOf(sami), "the ledger adds up to the balance");
+});
+
 test("Scratch Cards and Dice share the seed pair: changing it reveals the server seed, and every card checks out", async () => {
   const before = await activeSeed(sami);
   const roll = await dice.roll(sami, 100, 50, "UNDER");
@@ -164,7 +181,7 @@ test("a bad price, the max stake, the Player's Casino switch, the daily loss lim
   await prisma.user.update({ where: { id: sami.id }, data: { balance } });
   assert.equal(await balanceOf(sami), balance);
   assert.equal((await activeSeed(sami)).nonce, nonce, "a refused card doesn't use up a nonce");
-  assert.equal(await prisma.casinoSpin.count({ where: { kind: "SCRATCH" } }), 3);
+  assert.equal(await prisma.casinoSpin.count({ where: { kind: "SCRATCH" } }), 5);
 });
 
 test("a big win goes in the audit log", async () => {
@@ -187,8 +204,8 @@ test("Scratch Cards profit counts in commissions; the Casino page, Continue play
   const team = await commissions.team(owner, undefined, fromDay, to);
   assert.equal(team.managers.find((row) => row.id === manager.id).net, net);
   const page = await casino.admin(owner, fromDay, to);
-  assert.deepEqual(page.players.map((row) => [row.username, row.scratch.cards, row.dice.rolls, row.net]), [[sami.username, 4, 1, net]]);
-  assert.equal(page.games.scratch.spins, 4);
+  assert.deepEqual(page.players.map((row) => [row.username, row.scratch.cards, row.dice.rolls, row.net]), [[sami.username, 6, 1, net]]);
+  assert.equal(page.games.scratch.spins, 6);
   assert.deepEqual(page.games.slot, { spins: 0, freeSpins: 0, staked: 0, won: 0, payoutRate: null });
   const last = await casino.lastGame(sami);
   assert.deepEqual([last.game, last.waiting, last.amount], ["scratch", null, 50]);

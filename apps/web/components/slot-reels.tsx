@@ -228,7 +228,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
           for (const symbol of symbols) registry.register(symbol, StaticSpinSymbol, { createInner: sprite, cache: spinTextures, blurRampMs: 120 });
         })
         .weights(Object.fromEntries(symbols.map((symbol) => [symbol, weights[symbol] ?? 1])))
-        .speed("normal", SpeedPresets.NORMAL)
+        // Quicker than the library's normal: the reels stop one after another in about a second once the result is in.
+        .speed("normal", { ...SpeedPresets.NORMAL, stopDelay: 110, bounceDistance: 40, bounceDuration: 320, minimumSpinTime: 350 })
         .initialFrame(grid.map((column) => ({ visible: column })))
         .ticker(app.ticker)
         .build();
@@ -568,7 +569,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         }
         if (skipped.current) return;
         const tease = current.anticipate(next);
-        if (tease.length > 0) current.reelSet.setAnticipation(tease, { stagger: 400, duration: 1100, slowdown: { from: 0.45, to: 0.25 } });
+        if (tease.length > 0) current.reelSet.setAnticipation(tease, { stagger: 250, duration: 700, slowdown: { from: 0.45, to: 0.25 } });
       },
       skip() {
         const current = engine.current;

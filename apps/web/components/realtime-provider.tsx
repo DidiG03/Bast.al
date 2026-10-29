@@ -29,6 +29,11 @@ type Listener = (event: RealtimeEvent) => void;
 const RealtimeContext = createContext<Set<Listener> | null>(null);
 
 const MAX_BACKOFF_MS = 30_000;
+/**
+ * The API sends a ping every 15 s. A stream silent for longer than this has died on the way (a phone changing
+ * networks, an HTTP/2 connection the browser gave up on) without saying so: it's dropped and opened again at once.
+ */
+const STALL_MS = 25_000;
 
 /**
  * Holds one live stream per tab for the signed-in account and hands its
@@ -56,6 +61,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       controller?.abort();
       const mine = new AbortController();
       controller = mine;
+      let stalled = false;
+      let heard = Date.now();
+      const watchdog = window.setInterval(() => {
+        if (Date.now() - heard < STALL_MS) return;
+        stalled = true;
+        mine.abort();
+      }, 5_000);
       try {
         const token = await getToken();
         if (stopped || controller !== mine) return;
@@ -73,6 +85,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         while (!stopped) {
           const chunk = await reader.read();
           if (chunk.done) break;
+          heard = Date.now();
           buffer += decoder
             .decode(chunk.value, { stream: true })
             .replace(/\r\n?/g, "\n");
@@ -96,9 +109,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       } catch {
         // Aborted because a newer connect took over: that one carries on, so this one schedules nothing.
         // Retrying here too would abort the new stream, whose retry would abort the next, for ever.
-        if (mine.signal.aborted) return;
-        failures += 1;
+        // A stream the watchdog dropped for going silent is the exception: it's opened again below.
+        if (mine.signal.aborted && !stalled) {
+          window.clearInterval(watchdog);
+          return;
+        }
+        if (!stalled) failures += 1;
       }
+      window.clearInterval(watchdog);
       if (stopped || controller !== mine) return;
       // The server closes each stream after a few minutes on purpose, so a
       // clean end reconnects at once; errors back off.

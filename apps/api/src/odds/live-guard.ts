@@ -130,9 +130,8 @@ export function sameLivePrice(slip: number, offered: number): boolean {
 
 /**
  * Pauses on single markets. Something happening in a live match pauses the
- * markets it changes, not the whole match: a goal the goal markets (result,
- * double chance, totals, both teams to score, correct score, handicaps and
- * the rest that settle on goals), a red card, a VAR check, a penalty or a
+ * markets it changes, not the whole match: a goal every market (the goal
+ * markets, and corners and cards, which a goal changes too), a red card, a VAR check, a penalty or a
  * jump in the prices those and the cards markets. The bookmaker reopening a
  * match it had blocked pauses every market briefly. A market the event
  * doesn't change stays open only if the reading that brought the event (so
@@ -156,9 +155,10 @@ export function marketGroup(key: string): MarketGroup {
 
 /** The markets each kind of event changes. */
 export const EVENT_HITS: Record<MarketPauseReason, readonly MarketGroup[]> = {
-  goal: ["goals"],
+  // A goal changes how both teams play, so corners and cards are repriced too: every market pauses, and each reopens on its fresh prices.
+  goal: ["goals", "cards", "corners"],
   // The timeline is ahead of the score on the board. Same markets as a goal, but it isn't called a goal until the score changes.
-  ahead: ["goals"],
+  ahead: ["goals", "cards", "corners"],
   red: ["goals", "cards"],
   /** A corner in the live statistics. Corners markets only; goals and cards stay open. */
   corner: ["corners"],

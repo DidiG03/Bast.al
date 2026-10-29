@@ -11,6 +11,15 @@ const nextConfig = {
     config.resolve.alias = { ...config.resolve.alias, "@esotericsoftware/spine-pixi-v8": false };
     return config;
   },
+  // Short and old addresses still in links, bookmarks and old notifications.
+  async redirects() {
+    return [
+      { source: "/casino", destination: "/dashboard/casino", permanent: false },
+      { source: "/casino/:path*", destination: "/dashboard/casino/:path*", permanent: false },
+      { source: "/dashboard/prices", destination: "/dashboard/odds", permanent: false },
+      { source: "/dashboard/prices/:path*", destination: "/dashboard/odds", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

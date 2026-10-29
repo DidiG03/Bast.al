@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { LastSpins } from "./casino-last-spins";
+import { useConfirm } from "./confirm-dialog";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { useChipBalance } from "./balance-chip";
@@ -26,7 +27,13 @@ const STEP_MS_REDUCED = 35;
 /** Time between balls on autoplay. */
 const AUTO_MS = 380;
 /** How many balls an auto run drops, unless Stop is pressed sooner. */
-const AUTO_BALLS = [10, 25, 50] as const;
+const AUTO_BALLS = [1, 3, 5, 10, 25, 50] as const;
+/** Auto starts small: a bigger run is picked on purpose. */
+const AUTO_DEFAULT = 3;
+/** Balls the history shows at first, and how many more each "Show more" adds. */
+const HISTORY_PAGE = 10;
+/** Balls kept in the history this visit (the API sends its last 50 on load). */
+const HISTORY_KEPT = 100;
 /** Auto stops once the stakes sent outrun the wins by this many stakes. */
 const AUTO_LOSS = [5, 10, 25] as const;
 /** The quickest balls can follow each other, however fast Space is pressed: 5 a second, inside the API's limit of 360 a minute. */
@@ -62,7 +69,7 @@ type Falling = { id: number; path: number[]; start: number; step: number; rows: 
 /** Plinko for a Player: pick the rows, the risk and the stake, and drop balls. */
 export function PlinkoGame() {
   const { getToken } = useAuth();
-  const { t, ts, date } = useI18n();
+  const { t, tn, ts, date } = useI18n();
   const toast = useToast();
   const { ref: cabinet, mode: fullScreen, toggle: toggleFullScreen } = useFullScreen<HTMLElement>();
 
@@ -71,11 +78,13 @@ export function PlinkoGame() {
   const [risk, setRisk] = useState<PlinkoRisk>("MEDIUM");
   const [bet, setBet] = useState(0);
   const [recent, setRecent] = useState<PlinkoBall[]>([]);
+  const [historyShown, setHistoryShown] = useState(HISTORY_PAGE);
+  const [confirm, confirmDialog] = useConfirm();
   const [rulesOpen, setRulesOpen] = useState(false);
   useDismiss(() => setRulesOpen(false));
   const [soundOn, setSoundOn] = useState(true);
   const [auto, setAuto] = useState(false);
-  const [autoBalls, setAutoBalls] = useState<(typeof AUTO_BALLS)[number]>(25);
+  const [autoBalls, setAutoBalls] = useState<(typeof AUTO_BALLS)[number]>(AUTO_DEFAULT);
   const [lossMultiple, setLossMultiple] = useState<(typeof AUTO_LOSS)[number]>(10);
   const [autoLeftShown, setAutoLeftShown] = useState(0);
   const autoOn = useRef(false);
@@ -326,13 +335,24 @@ export function PlinkoGame() {
         }
         slotSound.bucket(ball.multiplier);
         setLit((current) => ({ ...current, [ball.bucket]: (current[ball.bucket] ?? 0) + 1 }));
-        setRecent((list) => [ball, ...list].slice(0, 10));
+        setRecent((list) => [ball, ...list].slice(0, HISTORY_KEPT));
         if (ball.win > ball.bet) setLastWin(ball);
       },
     });
     redraw();
     return true;
   }, [state, canDrop, bet, rows, risk, getToken, t, toast, ts, redraw, stopAuto]);
+
+  /** Auto drops many balls at the stake on the table: the total is shown and agreed to first. */
+  async function confirmAuto() {
+    const total = Math.round(autoBalls * bet * 100) / 100;
+    const yes = await confirm({
+      title: t("Start autoplay?"),
+      message: t("{balls} × {stake} = {total}. Autoplay stops sooner if you press Stop or lose {times}× the stake.", { balls: tn(autoBalls, "{count} ball", "{count} balls"), stake: formatStake(bet), total: formatMoney(total), times: lossMultiple }),
+      confirmLabel: tn(autoBalls, "Drop {count} ball", "Drop {count} balls"),
+    });
+    if (yes && !autoOn.current && canDrop) startAuto();
+  }
 
   // Autoplay: a ball every AUTO_MS until it's switched off or a ball can't be dropped.
   const dropRef = useRef(drop);
@@ -525,7 +545,7 @@ export function PlinkoGame() {
                   <select value={autoBalls} disabled={auto} onChange={(event) => setAutoBalls(Number(event.target.value) as (typeof AUTO_BALLS)[number])}>
                     {AUTO_BALLS.map((count) => (
                       <option key={count} value={count}>
-                        {t("{count} balls", { count })}
+                        {tn(count, "{count} ball", "{count} balls")}
                       </option>
                     ))}
                   </select>
@@ -559,7 +579,7 @@ export function PlinkoGame() {
                   onClick={() => {
                     if (performance.now() - stopStamp.current < 700) return;
                     if (autoOn.current) stopAuto();
-                    else startAuto();
+                    else void confirmAuto();
                   }}
                 >
                   {auto ? `${t("Stop")} · ${autoLeftShown}` : t("Auto")}
@@ -576,7 +596,7 @@ export function PlinkoGame() {
           <p className="muted" style={{ margin: 0 }}>{t("No balls yet.")}</p>
         ) : (
           <div className="report-list">
-            {recent.map((ball) => (
+            {recent.slice(0, historyShown).map((ball) => (
               <div className="report-list-row" key={ball.id}>
                 <div>
                   <strong>{times(ball.multiplier)}</strong>
@@ -589,7 +609,13 @@ export function PlinkoGame() {
             ))}
           </div>
         )}
+        {recent.length > historyShown ? (
+          <button type="button" className="secondary" onClick={() => setHistoryShown((shown) => shown + HISTORY_PAGE)}>
+            {t("Show more ({count} more)", { count: Math.min(HISTORY_PAGE, recent.length - historyShown) })}
+          </button>
+        ) : null}
       </LastSpins>
+      {confirmDialog}
 
       {rulesOpen ? (
         <div className="modal-backdrop" onClick={() => setRulesOpen(false)}>

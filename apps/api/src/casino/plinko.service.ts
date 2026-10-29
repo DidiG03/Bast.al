@@ -14,7 +14,7 @@ import { BETS, GAME_NAME, MAX_MULTIPLIER, PAYOUT_RATE, PAY_TABLES, RISKS, ROWS, 
 import { formatAll } from "../money";
 
 /** Balls in the Player's recent list. */
-const RECENT = 10;
+const RECENT = 50;
 /** A ball paying this many times its stake or more goes in the audit log. */
 const BIG_WIN = 100;
 

@@ -156,6 +156,7 @@ export const betting: Record<string, string> = {
   "No settled bets yet. Results appear here once a match finishes.": "Ende asnjë bast i mbyllur. Rezultatet shfaqen këtu sapo mbaron ndeshja.",
   "Browse matches": "Shiko ndeshjet",
   "Loading…": "Duke u ngarkuar…",
+  "Nothing to place right now": "Asgjë për të vendosur tani",
   "Show more": "Shfaq më shumë",
   "Open all": "Hap të gjitha",
   "Add {market} to favourite markets": "Shto {market} te tregjet e preferuara",

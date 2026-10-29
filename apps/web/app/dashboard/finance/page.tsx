@@ -104,7 +104,7 @@ type MoneyView = {
 
 type Filters = { period: Period; from: string; to: string; person: string; kind: Kind; status: Status; by: By; search: string };
 
-const DEFAULTS: Filters = { period: "month", from: "", to: "", person: "", kind: "transfers", status: "", by: "", search: "" };
+const DEFAULTS: Filters = { period: "week", from: "", to: "", person: "", kind: "transfers", status: "", by: "", search: "" };
 const PAGE_SIZE = 50;
 
 /** [from, to] of a period on Albanian time; {} for all time; null for custom dates not picked yet. */

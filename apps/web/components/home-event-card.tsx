@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { OddsEvent, OddsSelection, Sport } from "../lib/api";
+import { serverNow } from "../lib/clock";
 import { liveClock } from "../lib/live";
 import { pickLabel } from "../lib/picks";
 import { MAX_SLIP, addToSlip, readSlip } from "../lib/slip";
@@ -47,6 +48,18 @@ export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; s
     if (!userId) return;
     setPicked(new Set(readSlip(userId).map((item) => item.selectionId)));
   }, [userId]);
+
+  // The home page is drawn on the server and can sit open a while: a match that kicked off meanwhile (closed to
+  // pre-match bets, and not on the live list yet) leaves the cards rather than leading to "isn't open any more".
+  const [kickedOff, setKickedOff] = useState(false);
+  useEffect(() => {
+    if (playing) return;
+    const check = () => setKickedOff(Date.parse(event.startsAt) <= serverNow());
+    check();
+    const timer = window.setInterval(check, 15_000);
+    return () => window.clearInterval(timer);
+  }, [event.startsAt, playing]);
+  if (kickedOff || (!playing && !event.bettable)) return null;
 
   function choose(selection: OddsSelection) {
     if (!market) return;

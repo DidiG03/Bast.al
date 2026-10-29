@@ -502,8 +502,16 @@ export class BetsService {
   /** The bet builder's price for these picks, for the slip while the Player picks them. */
   async quoteBuilder(actor: Actor, selectionIds: string[]) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players can place bets");
-    const quote = await this.priceBuilderFor(actor.id, selectionIds);
-    return { odds: Number(quote.odds), legs: quote.legs.map((leg) => ({ selectionId: leg.selectionId, odds: Number(leg.price) })) };
+    // Asking for a price is not a bet: picks that can't go together are a normal answer (the slip shows why), not a
+    // failed request. Placing them is still refused.
+    let quote: Awaited<ReturnType<BetsService["priceBuilderFor"]>>;
+    try {
+      quote = await this.priceBuilderFor(actor.id, selectionIds);
+    } catch (error) {
+      if (error instanceof BadRequestException) return { odds: null, legs: [], problem: error.message };
+      throw error;
+    }
+    return { odds: Number(quote.odds), legs: quote.legs.map((leg) => ({ selectionId: leg.selectionId, odds: Number(leg.price) })), problem: null };
   }
 
   /**

@@ -123,12 +123,17 @@ test("each team's builder price comes from its own prices: margins and the Owner
 
 test("the builder refuses picks it can't take", async () => {
   const city = await pick("CITY", "match_winner", "home");
-  const q = (who, ...selections) => bets.quoteBuilder(actor(who), selections.map((s) => s.id));
-  await assert.rejects(q(playerA, city, await pick("CITY", "match_winner", "draw")), /one pick from each market/);
-  await assert.rejects(q(playerA, city, await pick("SPURS", "btts", "yes")), /same match/);
-  await assert.rejects(q(playerA, city, await pick("CITY", "draw_no_bet", "home")), /can't go in a bet builder/);
-  await assert.rejects(q(playerA, city, await pick("CITY", "goals_1_5", "under"), await pick("CITY", "btts", "yes")), /can't all happen together/);
-  await assert.rejects(q(playerA, city, city), /twice/);
+  // Asking for the price answers why, without failing the request.
+  const q = async (who, ...selections) => {
+    const quote = await bets.quoteBuilder(actor(who), selections.map((s) => s.id));
+    assert.equal(quote.odds, null);
+    return quote.problem;
+  };
+  assert.match(await q(playerA, city, await pick("CITY", "match_winner", "draw")), /one pick from each market/);
+  assert.match(await q(playerA, city, await pick("SPURS", "btts", "yes")), /same match/);
+  assert.match(await q(playerA, city, await pick("CITY", "draw_no_bet", "home")), /can't go in a bet builder/);
+  assert.match(await q(playerA, city, await pick("CITY", "goals_1_5", "under"), await pick("CITY", "btts", "yes")), /can't all happen together/);
+  assert.match(await q(playerA, city, city), /twice/);
   await assert.rejects(bets.quoteBuilder({ id: ownerA.id, role: "OWNER" }, [city.id, (await pick("CITY", "btts", "yes")).id]), /Only Players/);
 });
 

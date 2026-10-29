@@ -78,6 +78,9 @@ export function ScratchGame() {
   const [card, setCard] = useState<ScratchCard | null>(null);
   const [revealed, setRevealed] = useState<boolean[]>(allShown);
   const [settled, setSettled] = useState(true);
+  /** The card on the table was bought on an earlier visit (its price left then), not just now. */
+  const [carried, setCarried] = useState(false);
+  const carriedRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"manual" | "auto">("manual");
   const [autoCount, setAutoCount] = useState("10");
@@ -189,18 +192,28 @@ export function ScratchGame() {
       setSeed(answer.seed);
       setRecent((rows) => (rows.some((row) => row.id === round.id) ? rows : [round, ...rows].slice(0, 20)));
       void (async () => {
-        const token = await getToken();
-        if (!token) return;
-        const paid = await apiFetch<{ balance: number }>("/casino/scratch/shown", token, { method: "POST", body: JSON.stringify({ id: round.id }) }).catch(() => null);
-        if (paid) {
-          balanceRef.current = paid.balance;
-          setBalance(paid.balance);
+        // The prize is paid here: asked again if the connection drops, and if it still can't be, it's paid when the page next loads or the next card is bought.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const token = await getToken();
+          if (!token) return;
+          const paid = await apiFetch<{ balance: number }>("/casino/scratch/shown", token, { method: "POST", body: JSON.stringify({ id: round.id }) }).catch(() => null);
+          if (paid) {
+            balanceRef.current = paid.balance;
+            setBalance(paid.balance);
+            return;
+          }
+          await sleep(1500 * (attempt + 1));
         }
+        if (round.win > 0) toast.error(t("Couldn't record this card's prize yet. It's paid when you buy your next card or reload the page."));
       })();
-      setVisit((current) => ({ cards: current.cards + 1, wins: current.wins + (round.multiplier > 0 ? 1 : 0), profit: Math.round((current.profit + round.win - round.bet) * 100) / 100 }));
+      // A card bought on an earlier visit cost this visit nothing: only its prize counts here.
+      const cost = carriedRef.current ? 0 : round.bet;
+      carriedRef.current = false;
+      setCarried(false);
+      setVisit((current) => ({ cards: current.cards + 1, wins: current.wins + (round.multiplier > 0 ? 1 : 0), profit: Math.round((current.profit + round.win - cost) * 100) / 100 }));
       slotSound.scratchResult(round.multiplier);
     }
-  }, [getToken]);
+  }, [getToken, t, toast]);
 
   /** Shows one box: clears its foil, and settles the card once it's the last. */
   const revealCell = useCallback(
@@ -250,6 +263,8 @@ export function ScratchGame() {
       settledRef.current = false;
       setSettled(false);
       pending.current = { round: next.open, balance: next.balance, seed: next.seed };
+      carriedRef.current = true;
+      setCarried(true);
     } else {
       cardRef.current = null;
       setCard(null);
@@ -321,6 +336,8 @@ export function ScratchGame() {
     balanceRef.current = response.balance;
     setBalance(response.balance);
     pending.current = response;
+    carriedRef.current = false;
+    setCarried(false);
     cardRef.current = response.round;
     settledRef.current = false;
     revealedRef.current = noneShown();
@@ -640,6 +657,12 @@ export function ScratchGame() {
                       );
                     })}
                   </div>
+                  {!card && !busy ? (
+                    <button type="button" className="scratch-unbought" disabled={locked || !!stakeProblem} onClick={() => void buyManual()}>
+                      <strong>{t("No card yet")}</strong>
+                      <span>{t("Buy a card for {amount}, then scratch it.", { amount: formatStake(stake) })}</span>
+                    </button>
+                  ) : null}
                   <canvas
                     ref={canvasRef}
                     className={`scratch-foil${scratchable && !auto ? " is-live" : ""}`}
@@ -668,7 +691,9 @@ export function ScratchGame() {
                 {!card
                   ? t("Buy a card, then scratch the boxes.")
                   : !settled
-                    ? t("Scratch the boxes, or reveal them all.")
+                    ? carried
+                      ? t("You bought this card at {time} for {amount}; its price has already left your balance. Scratch it to see what it pays.", { time: date(card.createdAt, { hour: "2-digit", minute: "2-digit" }), amount: formatMoney(card.bet) })
+                      : t("Card bought for {amount}. Scratch the boxes, or reveal them all.", { amount: formatMoney(card.bet) })
                     : card.multiplier > 0
                       ? t("3 × {symbol}: you won {amount}", { symbol: symbolName(card.symbol as ScratchSymbol), amount: formatMoney(card.win) })
                       : t("No win this time")}
@@ -819,7 +844,7 @@ export function ScratchGame() {
             {t("About {chance}% of cards win something; three cherries give the price back.", { chance: state.game.winChance })}
           </p>
           <p>
-            {t("A card costs {min} to {max}, never more than your max stake. The card is decided and paid when you buy it; scratching only shows it. Autoplay buys and reveals cards for you and stops after the number of cards you set, when it reaches your stop on profit or stop on loss, or when you stop it.", {
+            {t("A card costs {min} to {max}, never more than your max stake. Buying a card takes its price and decides what it holds; scratching shows it and pays its prize. Autoplay buys and reveals cards for you and stops after the number of cards you set, when it reaches your stop on profit or stop on loss, or when you stop it.", {
               min: formatStake(state.game.bets[0]),
               max: formatStake(state.tableMax),
             })}

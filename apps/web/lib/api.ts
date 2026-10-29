@@ -722,7 +722,8 @@ export type LiveWait = { live: boolean; waitMs: number; checkMs: number; longerB
 export type PlaceBetsResponse = { bets: Bet[]; total: number; adjusted?: boolean; balance?: number };
 
 /** The bet builder's price for picks from one match, and each pick's own price in it. */
-export type BuilderQuote = { odds: number; legs: Array<{ selectionId: string; odds: number }> };
+/** A bet builder's price, or (odds null) why its picks can't go together. */
+export type BuilderQuote = { odds: number | null; legs: Array<{ selectionId: string; odds: number }>; problem: string | null };
 
 export type AdminBet = Bet & { player: { id: string; username: string } };
 

@@ -274,10 +274,10 @@ test("a goal pauses the goal markets; others stay open only if priced after it",
     assert.equal(pause.until.getTime() - goalAt.getTime(), 90_000, "the fallback");
     assert.equal(pause.reopenFrom.getTime() - goalAt.getTime(), 15_000, "15 s at least");
   }
-  // A goal or a red card leaves the markets it doesn't change open, priced or not. Corners stay open on a red card.
-  assert.equal(goal("cards_3_5", true), null);
-  assert.equal(goal("cards_3_5", false), null, "a goal leaves cards open");
-  assert.equal(goal("corners_9_5", false), null, "a goal leaves corners open");
+  // A goal pauses corners and cards too, priced or not; a red card leaves corners open.
+  assert.ok(goal("cards_3_5", true), "a goal pauses cards");
+  assert.ok(goal("corners_9_5", false), "and corners");
+  assert.equal(goal("corners_9_5", true).reopenFrom.getTime() - goalAt.getTime(), 15_000, "they reopen on fresh prices like the rest");
   assert.ok(eventPause({ reason: "red", marketKey: "cards_3_5", pricedSinceEvent: false, now: goalAt }));
   assert.equal(eventPause({ reason: "red", marketKey: "corners_9_5", pricedSinceEvent: false, now: goalAt }), null, "a red card leaves corners open");
   assert.equal(eventPause({ reason: "red", marketKey: "corners_9_5", pricedSinceEvent: true, now: goalAt }), null);
@@ -697,7 +697,7 @@ test("a live corners or cards market: open on a fresh count, held while it's a l
   assert.equal(countAvailability({ matchCentre: null, matchCentreAt: null, startsAt }, "match_winner", now), "ok");
 });
 
-test("a corner pauses corners only, a yellow pauses cards only, and a red pauses goals and cards", () => {
+test("a corner pauses corners only, a yellow pauses cards only, a red pauses goals and cards, and a goal pauses everything", () => {
   const now = new Date("2026-10-26T19:43:00Z");
   const pause = (reason, marketKey) => eventPause({ reason, marketKey, pricedSinceEvent: false, now });
   assert.ok(pause("corner", "corners_9_5"));
@@ -711,7 +711,8 @@ test("a corner pauses corners only, a yellow pauses cards only, and a red pauses
   assert.ok(pause("red", "match_winner"));
   assert.ok(pause("red", "cards_3_5"));
   assert.equal(pause("red", "corners_9_5"), null);
-  assert.equal(pause("goal", "corners_9_5"), null, "a goal leaves corners open");
+  assert.ok(pause("goal", "corners_9_5"), "a goal pauses corners too");
+  assert.ok(pause("goal", "cards_3_5"), "and cards");
 });
 
 test("a live confirmation wait is the competition's lag plus 3 s, between 8 s and 20 s", () => {

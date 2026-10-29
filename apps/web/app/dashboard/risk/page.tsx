@@ -24,6 +24,8 @@ export default function RiskPage() {
   const { t } = useI18n();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [owners, setOwners] = useState<UserRow[]>([]);
+  // Super Admin: the Owners list has come back. Until then "no Owners" would only be "not loaded yet".
+  const [ownersLoaded, setOwnersLoaded] = useState(false);
   const [ownerId, setOwnerId] = useState("");
   const [view, setView] = useState<RiskView | null>(null);
   const [failed, setFailed] = useState(false);
@@ -43,6 +45,7 @@ export default function RiskPage() {
         const list = (await apiFetch<UserRow[]>("/users", token)).filter((user) => user.role === "OWNER");
         setOwners(list);
         setOwnerId((current) => current || list[0]?.id || "");
+        setOwnersLoaded(true);
       }
     })().catch((err) => {
       setFailed(true);
@@ -88,7 +91,7 @@ export default function RiskPage() {
     }
   }
 
-  const noOwners = isAdmin && owners.length === 0;
+  const noOwners = isAdmin && ownersLoaded && owners.length === 0;
   // The first time, show nothing but the spinner until the team's numbers are in.
   if (!me || (!view && !noOwners && !failed && !everLoaded.current)) return failed ? null : <PageLoading label="Loading risk" />;
   if (view) everLoaded.current = true;

@@ -5,6 +5,7 @@ import { HelpTip } from "../../components/help-tip";
 import { HomeEventCard } from "../../components/home-event-card";
 import { NamedIcon, type IconName } from "../../components/icons";
 import { PlayerSportTabs, type SportTab } from "../../components/player-sport-tabs";
+import { RefreshEvery } from "../../components/refresh-every";
 import { ToastOnMount } from "../../components/toast-on-mount";
 import {
   ActivityFeed,
@@ -773,6 +774,7 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
       {blocked ? <ToastOnMount kind="warning" message={blocked} /> : null}
       {me.parent ? null : <ToastOnMount kind="warning" message={t("Not yet assigned to a Manager or Owner.")} />}
 
+      {me.parent && !blocked ? <RefreshEvery ms={60_000} /> : null}
       {me.parent && !blocked ? (
         <section className="stack">
           <div className="page-title-row">

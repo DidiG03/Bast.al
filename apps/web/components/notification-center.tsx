@@ -10,6 +10,7 @@ import { formatMoney } from "../lib/format";
 import { noticeWhen } from "../lib/time";
 import { msg } from "../lib/i18n/core";
 import { pickLabel } from "../lib/picks";
+import { topUpCreditLink } from "../lib/top-up";
 import { useI18n, type I18n } from "./i18n-provider";
 import { useToast } from "./toaster";
 
@@ -268,8 +269,7 @@ export function NotificationCenter() {
 
   /** A Player's top-up request: straight to their Credit form, with what they asked for filled in. */
   function creditLink(item: NotificationItem): string | null {
-    const meta = item.metadata as { topUpRequest?: unknown; deepLink?: unknown } | null;
-    return meta && meta.topUpRequest === true && typeof meta.deepLink === "string" ? meta.deepLink : null;
+    return topUpCreditLink(item);
   }
 
   function deepLink(item: NotificationItem) {

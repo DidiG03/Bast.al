@@ -5,6 +5,7 @@ import { HelpTip } from "./help-tip";
 import { NamedIcon, type IconName } from "./icons";
 import { getT } from "../lib/i18n/server";
 import { noticeWhen } from "../lib/time";
+import { topUpCreditLink } from "../lib/top-up";
 
 /** A framed block: a quiet header strip with the title, and the content on a raised inner sheet. */
 export function Panel({
@@ -241,8 +242,7 @@ function when(iso: string, now: Date) {
 
 /** A Player's top-up request: a link to their Credit form, with what they asked for filled in. */
 function creditLink(item: NotificationItem): string | null {
-  const meta = item.metadata as { topUpRequest?: unknown; deepLink?: unknown } | null;
-  return meta && meta.topUpRequest === true && typeof meta.deepLink === "string" ? meta.deepLink : null;
+  return topUpCreditLink(item);
 }
 
 /** The latest notifications, newest first, as a quiet timeline. */

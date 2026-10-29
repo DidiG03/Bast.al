@@ -79,7 +79,7 @@ test("setup", async () => {
   player = await prisma.user.create({ data: { clerkId: "clerk_lm3", username: "lm_player", emailCipher: "x", emailHash: "hlm3", role: "PLAYER", parentId: owner.id } });
 });
 
-test("(a) fresh prices after a goal reopen its markets at the minimum, not the fallback; (c) a priced cards market stays open", async () => {
+test("(a) fresh prices after a goal reopen its markets at the minimum, not the fallback; (c) cards pause with them", async () => {
   const match = await liveMatch("Fresh after a goal");
   await sync.applyLiveOdds(match.id, reading(0, 0, board({ home: 2.1, draw: 3.2, away: 3.6 }, { over: 1.8, under: 2 }, { over: 2, under: 1.8 })));
   assert.equal(await open(match, "match_winner"), true);
@@ -88,7 +88,7 @@ test("(a) fresh prices after a goal reopen its markets at the minimum, not the f
   await sync.applyLiveOdds(match.id, reading(1, 0, board({ home: 1.4, draw: 4.5, away: 8 }, { over: 1.5, under: 2.5 }, { over: 2, under: 1.8 })));
   assert.equal(await open(match, "match_winner"), false, "the goal pauses the match result");
   assert.equal(await open(match, "goals_2_5"), false, "and the totals");
-  assert.equal(await open(match, "cards_3_5"), true, "(c) not a cards market the goal's reading still prices");
+  assert.equal(await open(match, "cards_3_5"), false, "(c) and cards: a goal changes them too");
   const paused = await marketOf(match, "match_winner");
   assert.ok(paused.livePausedUntil.getTime() - goalAt >= 8_500, "the fallback, until fresh prices come");
   // (a) Fresh prices a second in (a tenth of 10 s): made after the goal, moved since it.

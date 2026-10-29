@@ -220,6 +220,8 @@ export function BookGame() {
     amount: number;
     big: boolean;
   } | null>(null);
+  /** The last spin paid nothing: said so, until the next spin. */
+  const [missed, setMissed] = useState(false);
   const [combos, setCombos] = useState<Combo[]>([]);
   const [showing, setShowing] = useState<number | null>(null);
   const [pinned, setPinned] = useState<number | null>(null);
@@ -303,6 +305,7 @@ export function BookGame() {
     setSpinning(true);
     setBetMenu(false);
     setLastWin(null);
+    setMissed(false);
     setCombos([]);
     setShowing(null);
     setPinned(null);
@@ -344,6 +347,7 @@ export function BookGame() {
         setCombos(won);
         showAll(won, () => setGambleShown(true));
       }
+      setMissed(result.win === 0 && !(result.freeSpinsWon > 0));
       const big = result.win >= result.spin.bet * BIG_WIN;
       if (result.win > 0) {
         slotSound.win(big);
@@ -535,7 +539,9 @@ export function BookGame() {
         : t("Better luck next time")
       : lastWin
         ? t("Win {amount}", { amount: formatMoney(countedWin) })
-        : playingFree
+        : missed && !playingFree && !tooBig(bet)
+          ? t("No win this spin")
+          : playingFree
           ? tn(feature.remaining, "{count} free spin left", "{count} free spins left")
           : tooBig(bet)
             ? bet > balance
@@ -755,6 +761,32 @@ export function BookGame() {
 
               {/* START and TOTAL BET: rings over the right-hand numbers, as in the original. */}
               <div className="book-rings">
+                {/* The wins of the last spin, in the empty left of this row: under the cabinet they took height from the reels, which shrank. */}
+                <div className={`casino-combos book-wins${combos.length === 0 || gambleOpen ? " is-empty" : ""}`} role="group" aria-label={t("Your wins on this spin")}>
+                  {combos.map((combo, index) => (
+                    <button
+                      key={combo.key}
+                      type="button"
+                      className={`casino-combo${showing === index ? " is-showing" : ""}`}
+                      style={{ "--combo-color": combo.reel.color } as CSSProperties}
+                      aria-pressed={pinned === index}
+                      onClick={() => pick(index)}
+                    >
+                      <span className="casino-combo-name">
+                        {combo.kind === "line"
+                          ? t("Line {number}", { number: combo.line! })
+                          : combo.kind === "books"
+                            ? t(SYMBOL_NAMES.BOOK)
+                            : t("Special symbol, every line")}
+                      </span>
+                      <span className="casino-combo-symbols" aria-label={`${combo.count} × ${t(SYMBOL_NAMES[combo.symbol])}`}>
+                        <SymbolPicture symbol={combo.symbol} alt="" />×{combo.count}
+                      </span>
+                      <strong>{combo.amount > 0 ? `+${formatMoney(combo.amount)}` : null}</strong>
+                    </button>
+                  ))}
+                  {combos.length > 1 ? <p className="muted casino-combos-hint">{t("Tap a win to see it on the reels.")}</p> : null}
+                </div>
                 <div className="book-ring-spot is-start">
                   <button type="button" className="book-ring is-start" data-key="Space" onClick={() => (auto ? setAuto(null) : spinning ? reels.current?.skip() : spin())} disabled={!auto && !spinning && !canSpin}>
                     <StartArrows />
@@ -805,33 +837,6 @@ export function BookGame() {
             ) : null}
           </section>
 
-          {combos.length > 0 ? (
-            <div className="casino-combos" role="group" aria-label={t("Your wins on this spin")}>
-              {combos.map((combo, index) => (
-                <button
-                  key={combo.key}
-                  type="button"
-                  className={`casino-combo${showing === index ? " is-showing" : ""}`}
-                  style={{ "--combo-color": combo.reel.color } as CSSProperties}
-                  aria-pressed={pinned === index}
-                  onClick={() => pick(index)}
-                >
-                  <span className="casino-combo-name">
-                    {combo.kind === "line"
-                      ? t("Line {number}", { number: combo.line! })
-                      : combo.kind === "books"
-                        ? t(SYMBOL_NAMES.BOOK)
-                        : t("Special symbol, every line")}
-                  </span>
-                  <span className="casino-combo-symbols" aria-label={`${combo.count} × ${t(SYMBOL_NAMES[combo.symbol])}`}>
-                    <SymbolPicture symbol={combo.symbol} alt="" />×{combo.count}
-                  </span>
-                  <strong>{combo.amount > 0 ? `+${formatMoney(combo.amount)}` : null}</strong>
-                </button>
-              ))}
-              {combos.length > 1 ? <p className="muted casino-combos-hint">{t("Tap a win to see it on the reels.")}</p> : null}
-            </div>
-          ) : null}
         </>
       )}
 

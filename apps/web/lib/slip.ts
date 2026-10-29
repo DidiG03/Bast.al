@@ -5,6 +5,8 @@ export type SlipItem = {
   eventName: string;
   startsAt: string;
   market: string;
+  /** The market's id, for live pushes that pause or reopen it (older slips don't have it). */
+  marketId?: string;
   name: string;
   odds: number;
   /** The price when it was added, if the price has moved since. */

@@ -13,6 +13,18 @@ const LOOSE = 6;
 /** Words that turn up in English sentences but not in team, market or pick names. */
 const SENTENCE_WORD = /(?:^|\s)(?:is|are|was|were|be|been|not|must|should|can|cannot|could|will|would|has|have|had|the|than|you|your|this|that|it|its)(?=\s|$)/;
 
+/**
+ * Narrower captures for some placeholders. A line is a number ("2.5", "+1.5"), and a team's name never holds the
+ * " · " between a match and its market: without these, "{team} cards {line}" swallowed a whole bet description
+ * ("Bogota v Millonarios · Total cards 5.5: Under 5.5") before the description's own pattern was tried.
+ */
+const CAPTURE: Record<string, string> = {
+  line: "([+-]?\\d+(?:\\.\\d+)?)",
+  team: "([^·]+?)",
+  home: "([^·]+?)",
+  away: "([^·]+?)",
+};
+
 function compile(dict: Record<string, string>): Pattern[] {
   return Object.entries(dict)
     .filter(([key]) => /\{\w+\}/.test(key))
@@ -24,7 +36,7 @@ function compile(dict: Record<string, string>): Pattern[] {
           const name = /^\{(\w+)\}$/.exec(part)?.[1];
           if (name) {
             names.push(name);
-            return "(.+?)";
+            return CAPTURE[name] ?? "(.+?)";
           }
           return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         })

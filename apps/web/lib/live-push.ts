@@ -84,7 +84,12 @@ export function hasUnknownSelections(event: OddsEvent, delta: LiveDelta | undefi
  */
 export function applyToSlip(items: SlipItem[], deltas: Map<string, LiveDelta>, bettableNow: (eventId: string) => boolean | undefined): { items: SlipItem[]; recheck: boolean } {
   const prices = new Map<string, { price: number; suspended: boolean }>();
-  for (const delta of Array.from(deltas.values())) for (const [id, price, suspended] of delta.prices ?? []) prices.set(id, { price, suspended });
+  // A market taken off the board (paused after a corner, say) holds its picks even when their prices didn't move.
+  const markets = new Map<string, boolean>();
+  for (const delta of Array.from(deltas.values())) {
+    for (const [id, price, suspended] of delta.prices ?? []) prices.set(id, { price, suspended });
+    for (const [id, suspended] of delta.markets ?? []) markets.set(id, suspended);
+  }
   let changed = false;
   let recheck = false;
   const next = items.map((item) => {
@@ -106,6 +111,10 @@ export function applyToSlip(items: SlipItem[], deltas: Map<string, LiveDelta>, b
     else if (quote && bettable === true) paused = quote.suspended;
     // The match reopened, or its state isn't on the list, with no word on this pick: ask.
     else if (delta.header || (quote && bettable === undefined)) recheck = true;
+    const marketHeld = item.marketId ? markets.get(item.marketId) : undefined;
+    if (marketHeld === true) paused = true;
+    // Its market came back with no word on the pick's price: ask.
+    else if (marketHeld === false && paused && !quote) recheck = true;
     // Still paused: the slip asks why and until when (and whether another line took its place).
     if (paused) recheck = true;
     if (paused !== item.paused) updated = { ...updated, paused, ...(paused ? {} : { pause: null, replacement: null }) };

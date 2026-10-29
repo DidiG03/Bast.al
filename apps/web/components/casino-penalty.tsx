@@ -23,6 +23,8 @@ const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 const STRIKE_MS = 560;
 const CONTACT_MS = 960;
 const MOVE_MS = 2250;
+/** A kick or cash-out that hasn't answered by now is looked up instead of waited for. */
+const STEP_TIMEOUT_MS = 12_000;
 
 /** Penalty for a Player: aim, the keeper dives, cash out before a save. */
 export function PenaltyGame() {
@@ -60,6 +62,7 @@ export function PenaltyGame() {
     // A round still in play comes back; a finished one stays in the history, and the pitch starts fresh.
     setRound(next.round ?? null);
     setBet((current) => current || Math.min(next.game.bets[0], next.tableMax));
+    return next;
   }, [getToken, t]);
 
   useEffect(() => {
@@ -83,9 +86,25 @@ export function PenaltyGame() {
     const token = await getToken();
     if (!token) throw new Error(t("You're not signed in"));
     const text = body ? JSON.stringify(body) : "";
-    const result = await apiFetch<PenaltyStepResult>(path, token, { method: "POST", ...(text ? { body: text } : {}), idempotencyKey: key.keyFor(path, text) });
+    // A connection that died on the way (a phone switching networks) would leave the pitch frozen: past this the round is looked up instead.
+    const result = await apiFetch<PenaltyStepResult>(path, token, { method: "POST", ...(text ? { body: text } : {}), idempotencyKey: key.keyFor(path, text), signal: AbortSignal.timeout(STEP_TIMEOUT_MS) });
     key.done();
     return result;
+  }
+
+  /** After a step that failed or never answered: the round as the server has it (a cash-out may have gone through), and the balance. */
+  async function resync(err: unknown) {
+    const lost = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError" || err.name === "TypeError");
+    const wasPlaying = round?.phase === "PLAY";
+    try {
+      const next = await load();
+      // The round ended on the server (cashed out, or the kick was saved): it stays on the pitch with its result.
+      if (!next.round && wasPlaying && next.recent[0]) setRound(next.recent[0]);
+      if (lost) toast.info(t("The connection dropped. This is where your round stands now."));
+      else toast.error(err instanceof Error ? ts(err.message) : t("That didn't go through. Try again."));
+    } catch {
+      toast.error(t("Couldn't reach the server. Try again in a moment."));
+    }
   }
 
   function show(next: PenaltyRoundView, balanceNext: number) {
@@ -146,7 +165,7 @@ export function PenaltyGame() {
       // The next kick waits until the keeper is down, the ball has stopped and the taker is back on his mark.
       await new Promise((resolve) => window.setTimeout(resolve, MOVE_MS));
     } catch (err) {
-      toast.error(err instanceof Error ? ts(err.message) : t("That didn't go through. Try again."));
+      await resync(err);
     } finally {
       setBusy(false);
     }
@@ -160,7 +179,7 @@ export function PenaltyGame() {
       const result = await send("/casino/penalty/cashout", null, stepKey);
       show(result.round, result.balance);
     } catch (err) {
-      toast.error(err instanceof Error ? ts(err.message) : t("That didn't go through. Try again."));
+      await resync(err);
     } finally {
       setBusy(false);
     }

@@ -48,7 +48,7 @@ const BALL_POCKET = 0.545;
 const BALL_SIZE = 0.03;
 
 /** How long a spin takes, and when the ball leaves the track. */
-const SPIN_MS = 7200;
+const SPIN_MS = 5200;
 const DROP_AT = 0.58;
 /** Turns the ball makes against the wheel. */
 const TURNS = 7;

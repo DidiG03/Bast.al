@@ -63,13 +63,6 @@ const SQ_MONTHS_SHORT = ["jan", "shk", "mar", "pri", "maj", "qer", "korr", "gush
 const SQ_DAYS = ["e diel", "e hënë", "e martë", "e mërkurë", "e enjte", "e premte", "e shtunë"];
 const SQ_DAYS_SHORT = ["Die", "Hën", "Mar", "Mër", "Enj", "Pre", "Sht"];
 
-/** Whether this browser or server knows Albanian dates. Chrome ships without them and quietly uses English. */
-let sqSupported: boolean | null = null;
-function knowsAlbanian(): boolean {
-  if (sqSupported === null) sqSupported = new Intl.DateTimeFormat("sq-AL").resolvedOptions().locale.startsWith("sq");
-  return sqSupported;
-}
-
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const dayAndMonthFormats = new Map<string, Intl.DateTimeFormat>();
 
@@ -101,6 +94,8 @@ function albanianParts(formatter: Intl.DateTimeFormat, options: Intl.DateTimeFor
       if (part.type === "month" && (options.month === "long" || options.month === "short")) return (options.month === "long" ? SQ_MONTHS : SQ_MONTHS_SHORT)[month];
       // "e premte, 2 tetor": a comma after the day's name.
       if (part.type === "literal" && parts[index - 1]?.type === "weekday" && !part.value.includes(",")) return `,${part.value}`;
+      // en-GB joins a full date to its time with " at ": Albanian dates use a comma ("24 tetor, 02:43").
+      if (part.type === "literal" && part.value === " at ") return ", ";
       return part.value;
     })
     .join("");
@@ -112,8 +107,10 @@ function albanianParts(formatter: Intl.DateTimeFormat, options: Intl.DateTimeFor
  * zone: the same on the server, which runs on UTC, as in any browser.
  */
 export function formatDate(lang: Lang, value: Date | string | number, requested: Intl.DateTimeFormatOptions): string {
-  const fallback = lang === "sq" && !knowsAlbanian();
-  const zoned = { timeZone: TIME_ZONE, ...requested };
+  // Albanian is always spelled out from en-GB's parts, even where the browser or server knows Albanian: native data
+  // gave "24 tet 2026, 02:44" on the server and something else in Chrome. One way everywhere: "24 tetor, 02:43".
+  const fallback = lang === "sq";
+  const zoned = houseStyle(lang, { timeZone: TIME_ZONE, ...requested }, new Date(value));
   // dateStyle/timeStyle can't be taken apart by name, so without Albanian data they're spelled out.
   const options = fallback ? spelledOut(zoned) : zoned;
   const key = `${lang}:${fallback}:${JSON.stringify(options)}`;
@@ -126,6 +123,23 @@ export function formatDate(lang: Lang, value: Date | string | number, requested:
   }
   const date = new Date(value);
   return fallback ? albanianParts(formatter, options, date) : formatter.format(date);
+}
+
+/**
+ * The one date style: full month names in Albanian ("tetor", not "tet"), and no year on a date and time in the
+ * current year ("24 tetor, 02:43"; "24 tetor 2025, 02:43" for last year's).
+ */
+function houseStyle(lang: Lang, options: Intl.DateTimeFormatOptions, date: Date): Intl.DateTimeFormatOptions {
+  let next = options;
+  if (lang === "sq" && next.month === "short") next = { ...next, month: "long" };
+  if (next.year === "numeric" && next.day && next.month && next.hour !== undefined && !Number.isNaN(date.getTime())) {
+    const year = (at: Date) => new Intl.DateTimeFormat("en", { timeZone: next.timeZone, year: "numeric" }).format(at);
+    if (year(date) === year(new Date())) {
+      next = { ...next };
+      delete next.year;
+    }
+  }
+  return next;
 }
 
 function spelledOut(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormatOptions {

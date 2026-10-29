@@ -7,7 +7,7 @@ import type { Actor } from "../auth/permissions";
 import { RealtimeService } from "./realtime.service";
 
 /** Keeps proxies and load balancers from closing an idle stream. */
-const HEARTBEAT_MS = 25_000;
+const HEARTBEAT_MS = 15_000;
 /**
  * The session is only checked when the stream opens, so each stream ends after
  * a while and the browser reconnects with a fresh token. That is how a

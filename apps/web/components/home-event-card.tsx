@@ -59,7 +59,8 @@ export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; s
     const timer = window.setInterval(check, 15_000);
     return () => window.clearInterval(timer);
   }, [event.startsAt, playing]);
-  if (kickedOff || (!playing && !event.bettable)) return null;
+  // Only football takes bets once it starts: another sport's match in play has nothing to open.
+  if (kickedOff || (!playing && !event.bettable) || (playing && sport !== "football")) return null;
 
   function choose(selection: OddsSelection) {
     if (!market) return;

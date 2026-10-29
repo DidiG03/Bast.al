@@ -442,7 +442,8 @@ export class OddsService {
         include: COUNT_MARKETS,
       }),
     );
-    const open = rows.filter((event) => (event.status === EventStatus.LIVE || eventOpen(event, now)) && event._count.markets > 0);
+    // Only football is bet on once it starts: another sport's match in play can't be opened on the Bet page, so it isn't listed.
+    const open = rows.filter((event) => ((sport === "football" && event.status === EventStatus.LIVE) || eventOpen(event, now)) && event._count.markets > 0);
     const byMarkets = (a: (typeof rows)[number], b: (typeof rows)[number]) => b._count.markets - a._count.markets || a.startsAt.getTime() - b.startsAt.getTime();
     const live = open.filter((event) => event.status === EventStatus.LIVE).sort(byMarkets);
     const upcoming = open.filter((event) => event.status !== EventStatus.LIVE);

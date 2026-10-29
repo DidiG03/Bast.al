@@ -156,6 +156,11 @@ test("bets close when the game starts: there are no live prices", async () => {
   await volleyball.saveGame(live);
   const altekma = await pick(String(VB), "vb_winner", "home");
   await assert.rejects(bets.place(actor(playerA), { bets: [{ selectionId: altekma.id, stake: 5, odds: await priceFor(playerA, altekma) }] }), /paused|closed/);
+  // Nothing to open on the Bet page, so the home page's Top events leave it out.
+  const playing = await prisma.event.findFirstOrThrow({ where: { externalId: String(VB) } });
+  assert.equal(playing.status, "LIVE");
+  const top = await odds.topEvents(actor(playerA), 12, "volleyball");
+  assert.equal(top.some((event) => event.id === playing.id), false, "a volleyball match in play isn't a top event");
 });
 
 test("results from the feed settle every bet, and each journal row carries its team", async () => {

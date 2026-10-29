@@ -455,8 +455,9 @@ function BetPage() {
     // The live matches can show before the days ahead have loaded: a match later today isn't looked for until they have.
     if (lists.current.upcoming === null) return;
     const found = events.find((event) => event.id === matchParam && (event.bettable || event.live) && event.markets.length > 0);
-    // The link is used once; a refresh of the page shouldn't jump back to it.
-    router.replace("/dashboard/bet", { scroll: false });
+    // The link is used once; a refresh of the page shouldn't jump back to it. The sport stays in the address: without
+    // it the page switched to football and the volleyball (or tennis…) match it had just opened was gone.
+    router.replace(sport === "football" ? "/dashboard/bet" : `/dashboard/bet?sport=${sport}`, { scroll: false });
     if (!found) {
       toast.info(t("That match isn't open for bets any more."));
       return;
@@ -470,7 +471,7 @@ function BetPage() {
     // The match someone came here for opens with every market showing.
     setExpanded((current) => new Set(current).add(found.id));
     void loadDetail(found.id).catch(() => undefined);
-  }, [matchParam, events, tab, router, toast, t, loadDetail]);
+  }, [matchParam, events, tab, sport, router, toast, t, loadDetail]);
 
   useEffect(() => {
     if (!focused) return;

@@ -776,4 +776,7 @@ export const casino: Record<string, string> = {
   "Paytable": "Tabela e fitimeve",
   "All rules": "Të gjitha rregullat",
   "Back to the game": "Kthehu te loja",
+  "Bet/line": "Bast/linjë",
+  "Gamble": "Dyfisho",
+  "Pays": "Fitimet",
 };

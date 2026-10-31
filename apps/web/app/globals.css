@@ -10310,127 +10310,15 @@ button.is-blocked {
   background: #c9a227;
 }
 
-/* START and TOTAL BET: two rings in a row under the controls. Over the right-hand numbers they hid the line badges and the last reel. */
-.slot-cabinet.is-book.is-gamble .book-hall {
-  position: relative;
-  z-index: 6;
-}
-
-.slot-cabinet.is-book.is-gamble .book-rings {
-  pointer-events: none;
-}
-
-.book-rings {
-  --book-ring: clamp(4.5rem, 11vw, 6.5rem);
-  position: relative;
-  z-index: 3;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: clamp(0.6rem, 2vw, 1.25rem);
-  padding: 0.6rem clamp(0.5rem, 2vw, 1rem) 0.75rem;
-}
-
-/* The last spin's wins, on the left of the START and TOTAL BET row (hidden while double or nothing is open). */
-.book-rings .casino-combos.book-wins {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  margin-right: auto;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.book-rings .casino-combos.book-wins.is-empty {
-  visibility: hidden;
-}
-
-.book-rings .casino-combos.book-wins .casino-combos-hint {
-  display: none;
-}
-
-.book-ring-spot {
-  position: relative;
-  flex: none;
-  width: var(--book-ring);
-  height: var(--book-ring);
-  container-type: size;
-}
-
-.book-ring-spot.is-start {
-  order: 2;
-}
-
-.book-ring {
-  position: relative;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 2px solid;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.3) 70%, rgba(0, 0, 0, 0.18));
-  font-weight: 900;
-  line-height: 1.1;
-  cursor: pointer;
-}
-
-.book-ring.is-start {
-  border-color: #3ec03e;
-  color: #5ae04a;
-  font-size: 15cqw;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-  text-transform: uppercase;
-}
-
-.book-ring.is-start:not(:disabled):hover {
-  box-shadow: 0 0 14px rgba(80, 230, 80, 0.55);
-}
-
-.book-ring.is-start:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.book-start-arrows {
-  position: absolute;
-  inset: 6%;
-  width: 88%;
-  height: 88%;
-}
-
-.book-ring.is-start span {
-  position: relative;
-}
-
-.book-ring.is-bet {
-  border-color: #c9a227;
-  color: #f6d21e;
-}
-
-.book-ring.is-bet:disabled {
-  cursor: default;
-}
-
-.book-ring.is-bet small {
-  color: #fff;
-  font-size: 10cqw;
-  text-transform: uppercase;
-}
-
-.book-ring.is-bet b {
-  font-size: 15cqw;
-  font-variant-numeric: tabular-nums;
-}
-
 .book-bet-menu {
-  right: calc(100% + 0.4rem);
-  bottom: 0;
+  right: auto;
+  left: 0;
+  bottom: calc(100% + 0.4rem);
   width: min(15rem, 70vw);
+}
+
+.book-bet-menu > .slot-btn {
+  min-height: 2.4rem;
 }
 
 .book-bet-menu .book-auto-counts {
@@ -10442,101 +10330,7 @@ button.is-blocked {
   background: rgba(246, 210, 30, 0.2);
 }
 
-/*
- * A computer or tablet: TOTAL BET and START sit at the end of the control
- * bar, in its row, with the last spin's wins before it; not on a row of their
- * own under it, so the reels get that height. The hall is a grid for this:
- * the reels across the top, then [wins | bar | bet | start] centred, the bar
- * as wide as the reels when there's room. Only when the game is wide enough
- * for the bar and both buttons in one row; narrower, they keep their own row.
- * (A phone has its own layout below.)
- */
-@media (min-width: 761px) and (orientation: portrait), (min-width: 761px) and (min-height: 521px) {
-  .slot-cabinet.is-book {
-    container: book-cabinet / inline-size;
-  }
-
-  @container book-cabinet (min-width: 50rem) {
-    .slot-cabinet.is-book .book-hall {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, max-content) auto auto minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr) auto;
-      column-gap: 0.5rem;
-    }
-
-    .slot-cabinet.is-book .book-hall > .slot-stage {
-      grid-column: 1 / -1;
-      grid-row: 1;
-    }
-
-    .slot-cabinet.is-book .slot-controls {
-      grid-column: 2;
-      grid-row: 2;
-      width: max(var(--book-reels-width, 36rem), 36rem);
-      max-width: 100%;
-    }
-
-    /* The rings and the wins go into the hall's grid themselves. */
-    .slot-cabinet.is-book .book-rings {
-      display: contents;
-    }
-
-    .slot-cabinet.is-book .book-rings .casino-combos.book-wins {
-      grid-column: 1;
-      grid-row: 2;
-      justify-self: end;
-      align-self: center;
-      max-width: 100%;
-      min-height: 0;
-      margin: 0.3rem 0 0.6rem;
-      padding-left: 0.5rem;
-    }
-
-    /* As tall as the bar's buttons (the same space above and below them), and square. */
-    .slot-cabinet.is-book .book-ring-spot {
-      grid-row: 2;
-      align-self: stretch;
-      width: auto;
-      height: auto;
-      min-width: 3.4rem;
-      aspect-ratio: 1;
-      margin: 0.3rem 0 0.6rem;
-    }
-
-    .slot-cabinet.is-book .book-ring-spot.is-bet {
-      grid-column: 3;
-    }
-
-    .slot-cabinet.is-book .book-ring-spot.is-start {
-      grid-column: 4;
-    }
-
-    /* Words sized to the smaller rings. */
-    .slot-cabinet.is-book .book-ring.is-start {
-      font-size: 24cqw;
-    }
-
-    .slot-cabinet.is-book .book-ring.is-bet small {
-      font-size: 15cqw;
-    }
-
-    .slot-cabinet.is-book .book-ring.is-bet b {
-      font-size: 24cqw;
-    }
-
-    /* The bet choices open above the ring rather than over the bar. */
-    .slot-cabinet.is-book .book-bet-menu {
-      right: 0;
-      bottom: calc(100% + 0.4rem);
-    }
-  }
-}
-
-/*
- * A phone: the stake and the spin sit in the control bar, not on a row of
- * their own. That row was as tall as the reels and left them a small square
- * in the middle of the wall.
- */
+/* A phone held sideways (or a narrow window): narrower number columns and a shorter marquee, so the reels keep their room. */
 @media (max-width: 760px), (orientation: landscape) and (max-height: 520px) {
   .slot-cabinet.is-book .book-hall {
     --book-marker-wide: 1.35rem;
@@ -10546,74 +10340,6 @@ button.is-blocked {
   /* Taller stage, so the reels grow out to the line numbers instead of sitting as a narrow strip. */
   .slot-cabinet.is-book.is-full .slot-stage > * {
     --reels-wide: min(calc(100cqw - 3.2rem), calc((100cqh - 6px) * 680 / 384));
-  }
-
-  .slot-cabinet.is-book .book-rings {
-    --book-ring: 2.95rem;
-    position: absolute;
-    right: 0.25rem;
-    bottom: 0.22rem;
-    z-index: 4;
-    gap: 0.3rem;
-    padding: 0;
-  }
-
-  .slot-cabinet.is-book .book-ring-spot.is-bet {
-    width: 3.7rem;
-    height: 2.55rem;
-  }
-
-  .slot-cabinet.is-book .book-ring.is-start {
-    font-size: 0.68rem;
-  }
-
-  .slot-cabinet.is-book .book-ring.is-bet {
-    border-radius: 9px;
-  }
-
-  .slot-cabinet.is-book .book-ring.is-bet small {
-    font-size: 0.48rem;
-  }
-
-  .slot-cabinet.is-book .book-ring.is-bet b {
-    font-size: 0.78rem;
-  }
-
-  .slot-cabinet.is-book .slot-controls {
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 0.25rem;
-    width: 100%;
-    padding: 0.22rem 7.3rem 0.25rem 0.25rem;
-  }
-
-  .slot-cabinet.is-book .slot-message {
-    flex: 1 1 auto;
-    flex-basis: auto;
-    order: 0;
-    min-width: 0;
-    padding: 0.1rem 0.3rem;
-  }
-
-  .slot-cabinet.is-book .slot-message span {
-    font-size: 0.62rem;
-  }
-
-  .slot-cabinet.is-book .slot-message small {
-    font-size: 0.58rem;
-  }
-
-  .slot-cabinet.is-book .slot-btn {
-    flex: none;
-    min-width: 0;
-    min-height: 2.55rem;
-    padding: 0.15rem 0.3rem;
-    font-size: 0.62rem;
-  }
-
-  .slot-cabinet.is-book .slot-sound {
-    min-width: 2.2rem;
-    font-size: 0.95rem;
   }
 
   .slot-cabinet.is-book .book-marquee {
@@ -17629,4 +17355,362 @@ html[data-theme="light"] .role-player .bet-status-lost {
 .slot-cabinet.is-book .slot-btn.is-on {
   border-color: #fff;
   background: rgba(246, 210, 30, 0.18);
+}
+
+/* ============================================================
+   Book of Ra: the control panel, as on the cabinet
+   ============================================================ */
+/*
+ * The message across the top, Autoplay beside it; below, the labelled boxes
+ * (Credit, Lines, Bet/line with − and +, Bet), then Paytable, Gamble and
+ * Start. Glossy black boxes with yellow numbers, grey label tabs, green
+ * steppers, a blue Paytable, a grey Gamble and green Autoplay and Start.
+ */
+.book-panel {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(5.5rem, auto) auto auto minmax(4.5rem, auto) minmax(0, 1.35fr) minmax(0, 1fr) minmax(7.5rem, 0.95fr);
+  grid-template-areas:
+    "msg msg msg msg msg msg auto"
+    "credit lines step bet pay gamble start";
+  align-items: end;
+  gap: 0.4rem 0.45rem;
+  align-self: center;
+  width: min(100% - 1rem, 64rem);
+  padding: 0.3rem 0 0.65rem;
+  position: relative;
+  z-index: 3;
+}
+
+.book-panel-msg {
+  display: flex;
+  grid-area: msg;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  height: 3.3rem;
+  padding: 0 0.6rem;
+  border: 1px solid #000;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #2c2c2c 0%, #151515 48%, #050505 52%, #121212 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 3px 6px rgba(0, 0, 0, 0.6);
+}
+
+.book-panel-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #ffff54;
+  font-size: clamp(1rem, 2.1vw, 1.65rem);
+  font-weight: 900;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+
+.book-panel-msg.is-win .book-panel-text {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(255, 230, 80, 0.8), 0 2px 2px rgba(0, 0, 0, 0.8);
+}
+
+.book-panel-sound {
+  flex: none;
+  padding: 0.2rem;
+  border: 0;
+  background: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.book-panel-msg .casino-combos.book-wins {
+  flex: 0 1 auto;
+  max-width: 45%;
+  min-height: 0;
+  justify-content: flex-end;
+}
+
+.book-panel-msg .casino-combos.book-wins.is-empty {
+  display: none;
+}
+
+.book-panel-msg .casino-combos-hint {
+  display: none;
+}
+
+/* A labelled box: the grey tab, then the glossy black box with its number. */
+.book-field {
+  position: relative;
+  display: grid;
+  justify-items: stretch;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.book-field.is-credit {
+  grid-area: credit;
+}
+
+.book-field.is-lines {
+  grid-area: lines;
+}
+
+.book-field.is-line-bet {
+  grid-area: step;
+}
+
+.book-field.is-bet {
+  grid-area: bet;
+}
+
+.book-field-label {
+  justify-self: center;
+  min-width: 80%;
+  padding: 0.05rem 0.7rem;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #5a5a5a, #2a2a2a);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.book-field-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 2.75rem;
+  padding: 0 0.6rem;
+  border: 1px solid #000;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #2a2a2a 0%, #101010 50%, #000 52%, #141414 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  color: #ffff54;
+  font: inherit;
+}
+
+.book-field-box b {
+  min-width: 0;
+  overflow: hidden;
+  font-size: clamp(1rem, 1.9vw, 1.45rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.book-field.is-credit .book-field-box {
+  justify-content: flex-end;
+}
+
+.book-field.is-line-bet .book-field-box {
+  padding: 0 0.25rem;
+}
+
+.book-field.is-line-bet .book-field-box b {
+  min-width: 2.6rem;
+  text-align: center;
+}
+
+button.book-field-box {
+  cursor: pointer;
+}
+
+button.book-field-box:disabled {
+  cursor: default;
+}
+
+/* The green − and + squares. */
+.book-step {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  border: 2px solid #cfe9b8;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #8ee05a, #3f9a1c 55%, #2e7a12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
+  color: #0d2a05;
+  font-size: 1.5rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.book-step:disabled {
+  border-color: #9a9a9a;
+  background: linear-gradient(180deg, #b8b8b8, #7a7a7a);
+  color: #555;
+  cursor: default;
+}
+
+/* The big buttons. */
+.book-key {
+  height: 2.75rem;
+  min-width: 0;
+  padding: 0 0.6rem;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 7px;
+  font: inherit;
+  font-size: clamp(0.9rem, 1.45vw, 1.25rem);
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.book-key:disabled {
+  cursor: default;
+}
+
+.book-key.is-blue {
+  grid-area: pay;
+  border-color: #9cc2ff;
+  background: linear-gradient(180deg, #5a95ff 0%, #2459d6 50%, #163fa8 52%, #1e4fc2 100%);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.book-key.is-blue.is-on {
+  border-color: #fff;
+  background: linear-gradient(180deg, #1e4fc2, #133a96);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+.book-key.is-blue:disabled {
+  filter: saturate(0.4) brightness(0.8);
+}
+
+/* Gamble: grey until there's a win to gamble, then gold. */
+.book-key.is-gamble {
+  grid-area: gamble;
+  border-color: #ffe08a;
+  background: linear-gradient(180deg, #ffd34d 0%, #e09a12 50%, #b9760a 52%, #d18d10 100%);
+  color: #3a2200;
+}
+
+.book-key.is-gamble:disabled {
+  border-color: #b5b5b5;
+  background: linear-gradient(180deg, #cfcfcf 0%, #9a9a9a 50%, #858585 52%, #9c9c9c 100%);
+  color: #b9b9b9;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.book-key.is-green {
+  border-color: #e6ffcf;
+  background: linear-gradient(180deg, #a6f070 0%, #52c22a 50%, #3aa214 52%, #4cba22 100%);
+  color: #0d2005;
+}
+
+.book-key.is-green:disabled {
+  filter: saturate(0.45) brightness(0.75);
+}
+
+.book-key.is-green.is-on {
+  background: linear-gradient(180deg, #3aa214, #2c7d0e);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+.book-key.is-start {
+  grid-area: start;
+}
+
+.book-panel .book-auto {
+  grid-area: auto;
+  align-self: stretch;
+}
+
+/* Autoplay: as tall as the message, beside it. */
+.book-key.is-autoplay {
+  flex: 1;
+  height: auto;
+  min-height: 3.3rem;
+  border-radius: 9px;
+}
+
+.book-panel .book-auto-menu {
+  right: 0;
+}
+
+/* A narrow window or a tablet held upright: three rows. */
+@media (max-width: 760px) and (min-height: 521px) {
+  .book-panel {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas:
+      "msg msg msg msg"
+      "credit lines step bet"
+      "pay gamble auto start";
+  }
+
+  .book-key.is-autoplay {
+    min-height: 0;
+    height: 2.75rem;
+  }
+}
+
+/* A phone held sideways: one short row, without the labels; Lines (always 10) and Gamble (it comes up by itself) are left out. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .book-panel {
+    grid-template-columns: minmax(3.6rem, auto) minmax(0, 1fr) auto auto auto auto auto;
+    grid-template-areas: "credit msg step bet pay auto start";
+    align-items: center;
+    gap: 0.25rem;
+    width: calc(100% - 0.5rem);
+    padding: 0.2rem 0 0.25rem;
+  }
+
+  .book-field-label,
+  .book-field.is-lines,
+  .book-key.is-gamble,
+  .book-panel-sound,
+  .book-panel-msg .casino-combos.book-wins {
+    display: none;
+  }
+
+  .book-panel-msg {
+    height: 2.4rem;
+    padding: 0 0.35rem;
+    border-radius: 8px;
+  }
+
+  .book-panel-text {
+    font-size: 0.78rem;
+  }
+
+  .book-field-box,
+  .book-key,
+  .book-key.is-autoplay {
+    height: 2.4rem;
+    min-height: 0;
+    padding: 0 0.35rem;
+    border-radius: 7px;
+    font-size: 0.72rem;
+  }
+
+  .book-field-box b {
+    font-size: 0.82rem;
+  }
+
+  .book-step {
+    width: 1.7rem;
+    height: 1.7rem;
+    font-size: 1.1rem;
+  }
+
+  .book-field.is-line-bet .book-field-box b {
+    min-width: 1.8rem;
+  }
+
+  .book-key.is-start {
+    min-width: 4rem;
+  }
 }

@@ -1,4 +1,4 @@
-import { LIVE_CUTOFF_MINUTE, marketGroup, pauseDeadline, type LivePause } from "./live-guard";
+import { EVENT_HITS, LIVE_CUTOFF_MINUTE, fallbackMs, marketGroup, pauseDeadline, type LivePause, type MarketPauseReason } from "./live-guard";
 
 const envMs = (name: string, fallback: number) => (process.env[name] !== undefined && process.env[name] !== "" && Number(process.env[name]) >= 0 ? Number(process.env[name]) : fallback);
 
@@ -90,6 +90,51 @@ export function marketPause(market: LiveMarketState, now: Date = new Date()): st
   // The fallback after the pause started is a hard stop, even if a later reading pushed livePausedUntil past it.
   const end = pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now);
   return end === null ? null : market.livePauseReason ?? "goal";
+}
+
+/** How long after our pause on a market ends its reason is still given while the bookmaker holds the market (pauseJustEnded). */
+export const AFTER_PAUSE_MS = envMs("LIVE_AFTER_PAUSE_MS", 120_000);
+
+/**
+ * What a live market's pause was for when that pause ended in the last
+ * AFTER_PAUSE_MS, or null: the bookmaker still holding Total corners a
+ * minute after our corner pause is the corner's repricing, and the Player is
+ * told so ("Waiting for new prices after the corner") rather than the generic
+ * "on hold". Words only: whether the market takes bets doesn't change.
+ */
+export function pauseJustEnded(market: LiveMarketState, now: Date = new Date()): string | null {
+  const reason = market.livePauseReason;
+  if (!reason || !market.livePausedAt || !market.livePausedUntil || marketPause(market, now) !== null) return null;
+  const capped = reason in EVENT_HITS ? market.livePausedAt.getTime() + fallbackMs(reason as MarketPauseReason) : Infinity;
+  const ended = Math.min(market.livePausedUntil.getTime(), capped);
+  const since = now.getTime() - ended;
+  return since >= 0 && since <= AFTER_PAUSE_MS ? reason : null;
+}
+
+/** An over/under line market's family ("corners_" for "corners_10_5"), or null for any other market. */
+const lineFamilyOf = (key: string | undefined) => (key ? /^(.*_)\d+_5$/.exec(key)?.[1] ?? null : null);
+
+/**
+ * A line the feed has moved on from: it's held by the bookmaker while
+ * another line of the same market is on the board and not paused (Total
+ * corners 8.5 once 10.5 is offered after the corners went past it). Its own
+ * pause never ends on fresh prices, since none come, so it isn't counted as
+ * holding the market: the banner and the board go by the lines still offered.
+ */
+export function movedOnLine(
+  market: { key?: string; liveSuspended?: boolean },
+  others: Array<{ key?: string; liveSuspended?: boolean; livePausedAt?: Date | null; livePausedUntil?: Date | null; livePauseReason?: string | null }>,
+  now: Date = new Date(),
+): boolean {
+  const family = lineFamilyOf(market.key);
+  if (!family || !market.liveSuspended) return false;
+  return others.some(
+    (other) =>
+      other.key !== market.key &&
+      lineFamilyOf(other.key) === family &&
+      other.liveSuspended === false &&
+      pauseDeadline({ pausedAt: other.livePausedAt, until: other.livePausedUntil, reason: other.livePauseReason }, now) === null,
+  );
 }
 
 /**
@@ -191,24 +236,33 @@ export function selectionQuote(input: {
   return { price, bettable: open && !suspended, live, suspended };
 }
 
-/** What's paused on a live match, for its banner: the latest event's reason, how many markets, the first few, and when they're back. */
+/** What's paused on a live match, for its banner: the latest event's reason, how many markets, which, and when they're back. */
 export type MarketPauseSummary = {
   reason: string;
   count: number;
-  /** The first few paused markets' names, in board order. */
+  /** The paused markets' names, in board order (the banner shows the first few, the rest on a tap). */
   markets: string[];
+  /** Every market paused now, whatever paused it, for locking exactly those on the board. */
+  ids: string[];
   /** When the last of them reopens at the latest. */
   until: string;
   /** Fresh prices are in for all of them: `until` is when they reopen, not just the latest they might. */
   exact: boolean;
 };
 
+/**
+ * `markets` are the match's paused markets (or all of them); `family`, when
+ * given, the match's line markets as well, so a line the feed moved on from
+ * (movedOnLine) can be told apart and left out.
+ */
 export function pauseSummary(
-  markets: Array<{ key?: string; name: string; sortOrder: number; livePausedAt?: Date | null; livePausedUntil?: Date | null; liveReopenFrom?: Date | null; livePauseReason?: string | null }>,
+  markets: Array<{ id?: string; key?: string; name: string; sortOrder: number; liveSuspended?: boolean; livePausedAt?: Date | null; livePausedUntil?: Date | null; liveReopenFrom?: Date | null; livePauseReason?: string | null }>,
   now: Date = new Date(),
+  family: Parameters<typeof movedOnLine>[1] = markets,
 ): MarketPauseSummary | null {
   const paused = markets
     .filter((market) => pauseDeadline({ pausedAt: market.livePausedAt, until: market.livePausedUntil, reason: market.livePauseReason }, now) !== null)
+    .filter((market) => !movedOnLine(market, family, now))
     .sort((a, b) => a.sortOrder - b.sortOrder);
   if (paused.length === 0) return null;
   const latest = paused.reduce((top, market) => ((market.livePausedAt?.getTime() ?? 0) > (top.livePausedAt?.getTime() ?? 0) ? market : top));
@@ -220,7 +274,8 @@ export function pauseSummary(
   return {
     reason: latest.livePauseReason ?? "goal",
     count: names.length,
-    markets: names.slice(0, 3),
+    markets: names,
+    ids: paused.flatMap((market) => (market.id ? [market.id] : [])),
     until: new Date(until).toISOString(),
     exact: covered.every((market) => market.liveReopenFrom != null && market.livePausedUntil!.getTime() <= market.liveReopenFrom.getTime()),
   };

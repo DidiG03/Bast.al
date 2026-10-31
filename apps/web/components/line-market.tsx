@@ -12,6 +12,8 @@ export type LinedMarket = {
   suspended?: boolean;
   /** Live: paused after something in the match (a goal, a card…), back shortly. */
   paused?: string | null;
+  /** Live: held by the bookmaker just after that pause ended, its new prices on the way. */
+  after?: string | null;
   selections: OddsSelection[];
 };
 
@@ -84,6 +86,7 @@ export function MarketHead({
   title,
   suspended,
   paused,
+  after = false,
   open,
   onToggle,
   picked,
@@ -96,6 +99,8 @@ export function MarketHead({
   suspended?: boolean;
   /** Paused for a moment after a goal or a card, rather than off the board. */
   paused?: boolean;
+  /** Held by the bookmaker just after such a pause: "New prices coming" rather than "Suspended". */
+  after?: boolean;
   open: boolean;
   onToggle: () => void;
   picked: boolean;
@@ -115,7 +120,7 @@ export function MarketHead({
         </svg>
         <span className="odds-market-name">
           {title}
-          {suspended && !quiet ? <span className="muted"> · {paused ? t("Paused") : t("Suspended")}</span> : null}
+          {suspended && !quiet ? <span className="muted"> · {paused ? t("Paused") : after ? t("New prices coming") : t("Suspended")}</span> : null}
         </span>
         {picked && !open ? <span className="odds-market-picked" role="img" aria-label={t("On your slip")} title={t("On your slip")} /> : null}
       </button>
@@ -195,7 +200,7 @@ export function LineFamily<T extends LinedMarket>({
   if (!market) return null;
   return (
     <div className={`odds-market${open ? " is-open" : ""}`}>
-      <MarketHead title={title} suspended={market.suspended} paused={Boolean(market.paused)} quiet={quiet} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
+      <MarketHead title={title} suspended={market.suspended} paused={Boolean(market.paused)} after={Boolean(market.after)} quiet={quiet} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
         <span className="line-stepper">
           <button type="button" disabled={at === 0} onClick={() => step(at - 1)} aria-label={t("Lower line")}>
             ‹

@@ -17259,3 +17259,11 @@ html[data-theme="light"] .role-player .bet-status-lost {
     padding-inline: 0.35rem;
   }
 }
+
+/* The pause banner's "and N more": tapped, it lists every paused market. */
+.bm-pause .bm-pause-more {
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

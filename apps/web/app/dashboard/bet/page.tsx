@@ -1237,7 +1237,7 @@ const MatchCard = memo(function MatchCard({
     const scorers = entry.key.startsWith("scorer_");
     return (
       <div key={key} className={`odds-market${open ? " is-open" : ""}`}>
-        <MarketHead title={ts(entry.name)} suspended={entry.suspended} paused={Boolean(entry.paused)} quiet={quiet} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
+        <MarketHead title={ts(entry.name)} suspended={entry.suspended} paused={Boolean(entry.paused)} after={Boolean(entry.after)} quiet={quiet} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
           {scorers ? null : <MarketPriceHistory selections={entry.selections} compact />}
         </MarketHead>
         {open ? marketOutcomes(entry) : null}
@@ -1548,6 +1548,8 @@ function pickHeld(event: OddsEvent, market: OddsEvent["markets"][number], select
   if (market.suspended || market.stale || selection.suspended) return true;
   const pause = event.marketPause;
   if (!pause || Date.parse(pause.until) <= serverNow()) return false;
+  // By id: one line of Total corners reopened on fresh prices isn't held by another line's pause (an older server: by name).
+  if (pause.ids) return pause.ids.includes(market.id);
   const family = market.name.replace(/\s+\d+(\.\d+)?$/, "");
   return pause.markets.includes(market.name) || pause.markets.includes(family);
 }
@@ -1567,13 +1569,43 @@ const PAUSE_REASON: Record<string, string> = {
   reopen: msg("Betting reopening"),
 };
 
+/** The paused markets named in a banner before "and N more", which lists the rest on a tap. */
+const BANNER_NAMED = 3;
+
 /**
- * A live match's paused markets: what paused them, which (the first few),
- * and when they're back, counting down: "Back in" when fresh prices are in
- * and the time is known, "Back within" while it's only the latest it can be.
+ * Why a paused live market is still held after our pause ended: its new prices are on the way after that moment
+ * (SelectionQuote.pause "after:corner", OddsEvent market `after`).
+ */
+const AFTER_TEXT: Record<string, string> = {
+  corner: msg("Waiting for new prices after the corner"),
+  yellow: msg("Waiting for new prices after the card"),
+  red: msg("Waiting for new prices after the red card"),
+  goal: msg("Waiting for new prices after the goal"),
+  ahead: msg("Waiting for new prices after the goal"),
+  var: msg("Waiting for new prices after the VAR check"),
+};
+const AFTER_DEFAULT = msg("Waiting for the bookmaker's new prices");
+
+/** A line the feed moved on from, said with what moved it when that's known (the pick's pause reason, "corner" or "after:corner"). */
+const LINE_MOVED: Record<string, string> = {
+  corner: msg("The line moved after the corner."),
+  yellow: msg("The line moved after the card."),
+  red: msg("The line moved after the red card."),
+  goal: msg("The line moved after the goal."),
+  ahead: msg("The line moved after the goal."),
+};
+const LINE_GONE = msg("This line is no longer available.");
+const lineMovedText = (reason: string | undefined) => LINE_MOVED[(reason ?? "").replace(/^after:/, "")] ?? LINE_GONE;
+
+/**
+ * A live match's paused markets: what paused them, which (the first few,
+ * and the rest on a tap of "and N more"), and when they're back, counting
+ * down: "Back in" when fresh prices are in and the time is known, "Back
+ * within" while it's only the latest it can be.
  */
 function PauseBanner({ pause }: { pause: MarketPause }) {
   const { t, tn, ts } = useI18n();
+  const [listed, setListed] = useState(false);
   const until = new Date(pause.until).getTime();
   // Read on the device after it's drawn (never on the server), then every second.
   const [now, setNow] = useState<number | null>(null);
@@ -1584,14 +1616,30 @@ function PauseBanner({ pause }: { pause: MarketPause }) {
   }, []);
   const seconds = now === null ? null : Math.max(0, Math.ceil((until - now) / 1000));
   if (now !== null && now >= until) return null;
-  const names = pause.markets.map((name) => ts(name)).join(", ");
-  const others = pause.count - pause.markets.length;
-  const markets = others > 0 ? tn(others, "{markets} and {count} more", "{markets} and {count} more", { markets: names }) : names;
+  // Every name when tapped open (or when there are only a few); otherwise the first few and "and N more" to tap.
+  const shown = listed ? pause.markets : pause.markets.slice(0, BANNER_NAMED);
+  const names = shown.map((name) => ts(name)).join(", ");
+  const others = pause.count - shown.length;
+  const canList = !listed && pause.markets.length > shown.length;
+  const more = others > 0 ? tn(others, "and {count} more market", "and {count} more markets") : "";
   return (
     <p className={`bet-paused bm-note bm-pause${pause.reason === "goal" ? " is-goal" : ""}`} role="status">
       <strong>{t(PAUSE_REASON[pause.reason] ?? PAUSE_REASON.swing)}</strong>
       {" · "}
-      {t("Paused: {markets}.", { markets })}{" "}
+      {t("Paused:")} {names}
+      {others > 0 ? (
+        <>
+          {" "}
+          {canList ? (
+            <button type="button" className="text-button bm-pause-more" aria-expanded={false} onClick={() => setListed(true)}>
+              {more}
+            </button>
+          ) : (
+            more
+          )}
+        </>
+      ) : null}
+      .{" "}
       {seconds === null ? null : (
         <span className="bm-pause-time">{seconds === 0 ? t("Back any moment.") : pause.exact ? t("Back in {seconds} s.", { seconds }) : t("Back within {seconds} s.", { seconds })}</span>
       )}
@@ -1617,7 +1665,9 @@ function SlipPauseNote({ pause }: { pause: { reason: string; until: string | nul
   const reason = pause?.reason ?? "";
   const why = reason.startsWith("match:")
     ? t(PAUSE_TEXT[reason.slice("match:".length)] ?? PAUSE_TEXT.feed)
-    : reason === "count"
+    : reason.startsWith("after:")
+      ? t(AFTER_TEXT[reason.slice("after:".length)] ?? AFTER_DEFAULT)
+      : reason === "count"
       ? t("Waiting for the latest corners and cards count.")
       : reason === "suspended" || reason === ""
         ? t("The bookmaker has this market on hold.")
@@ -1773,12 +1823,14 @@ function BetSlip({
   const tooLittle = info ? totalStake > info.balance : false;
   /** What a top-up request from the slip asks for: what's missing for it, in whole ALL. */
   const shortfall = info && tooLittle ? Math.ceil(totalStake - info.balance) : undefined;
-  const moved = items.some((item) => item.previousOdds !== undefined);
+  // A paused pick's price isn't one it can be bet at yet: its move is shown once it's back, not while it's paused.
+  const priceShown = (item: SlipItem) => item.previousOdds !== undefined && !item.closed && !item.paused;
+  const moved = items.some(priceShown);
   const priceMoved = moved || takeNewPrice;
   // What to do when a price moves between the tap and the bet going in (before kick-off; a live bet is only ever
   // placed at the price on the slip): "never" asks every time, "higher" takes a better price on its own.
   const [priceChanges, setPriceChanges] = usePriceChangeSetting();
-  const movedItems = items.filter((item) => item.previousOdds !== undefined && !item.closed);
+  const movedItems = items.filter(priceShown);
   /** What the slip would have returned at the prices it was added at, to show beside the new return. */
   const returnBefore = moved
     ? (() => {
@@ -1821,7 +1873,7 @@ function BetSlip({
       paused.length > 1
         ? t("Some of your picks are paused. They come back on their own, or remove them.")
         : paused[0].replacement
-          ? t("{pick}: this line is no longer available. Switch to the current line or remove it.", { pick: pickLabel(paused[0].name, i18n) })
+          ? t("{pick}: {why} Switch to the current line or remove it.", { pick: pickLabel(paused[0].name, i18n), why: t(lineMovedText(paused[0].pause?.reason)) })
           : paused[0].pause?.reason.startsWith("match:")
             ? t("Live betting is paused on {match}. It comes back on its own, or remove it.", { match: paused[0].eventName })
             : t("{pick} is paused. It comes back on its own, or remove it.", { pick: pickLabel(paused[0].name, i18n) });
@@ -2066,14 +2118,14 @@ function BetSlip({
                     </button>
                   </div>
                   <div className="bet-slip-item-bottom">
-                    <span className={`bet-slip-odds${item.previousOdds !== undefined ? " has-moved" : ""}`}>
+                    <span className={`bet-slip-odds${priceShown(item) ? " has-moved" : ""}`}>
                       {item.closed ? (
                         <span className="error-text">{t("Closed")}</span>
                       ) : (
                         <>
-                          {item.previousOdds !== undefined ? <s className="muted">{item.previousOdds.toFixed(2)}</s> : null}
+                          {priceShown(item) ? <s className="muted">{item.previousOdds!.toFixed(2)}</s> : null}
                           <strong>{item.sp ? "SP" : item.odds.toFixed(2)}</strong>
-                          {item.previousOdds !== undefined ? <PriceArrow move={{ up: item.odds > item.previousOdds, until: Infinity }} /> : null}
+                          {priceShown(item) ? <PriceArrow move={{ up: item.odds > item.previousOdds!, until: Infinity }} /> : null}
                         </>
                       )}
                     </span>
@@ -2105,7 +2157,7 @@ function BetSlip({
                     <p className="bet-slip-flag">{t("Remove it to continue.")}</p>
                   ) : item.paused && item.replacement ? (
                     <div className="bet-slip-flag bet-slip-replace">
-                      <p>{t("This line is no longer available.")}</p>
+                      <p>{t(lineMovedText(item.pause?.reason))}</p>
                       <button
                         type="button"
                         className="secondary is-small"

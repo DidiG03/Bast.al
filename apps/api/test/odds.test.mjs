@@ -9,7 +9,7 @@ import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCoold
 import { countAvailability, countLineDead, countSelectionDead, countStatsStale } from "../dist/odds/count-guard.js";
 import { lagSample } from "../dist/odds/feed-delay.js";
 import { confirmationDelay } from "../dist/bets/live-delay.js";
-import { applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
+import { applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, movedOnLine, pauseJustEnded, pauseSummary, priceCeiling, selectionQuote, teamMargin, teamPrice } from "../dist/odds/pricing.js";
 import { hotMatches, minuteRoom } from "../dist/odds/live-polling.js";
 
 test("a margin comes off the feed price and rounds down to the cent", () => {
@@ -346,7 +346,73 @@ test("a market the feed hasn't priced live for 5 minutes is stale; the banner li
     ],
     now,
   );
-  assert.deepEqual(summary, { reason: "goal", count: 2, markets: ["Match winner", "Total goals 2.5"], until: new Date(now.getTime() + 90_000).toISOString(), exact: false });
+  assert.deepEqual(summary, { reason: "goal", count: 2, markets: ["Match winner", "Total goals 2.5"], ids: [], until: new Date(now.getTime() + 90_000).toISOString(), exact: false });
+});
+
+test("after a corner: a dead line doesn't hold Total corners, the banner names every market, and the reason outlives the pause", () => {
+  const corner = new Date("2026-01-01T12:00:00Z");
+  const at = (s) => new Date(corner.getTime() + s * 1000);
+  const pausedLine = (id, key, extra = {}) => ({ id, key, name: `Total corners ${key.replace(/^corners_(\d+)_5$/, "$1.5")}`, sortOrder: 9, liveSuspended: false, livePausedAt: corner, livePausedUntil: at(90), liveReopenFrom: at(15), livePauseReason: "corner", ...extra });
+  // 8.5 is dead (the corners went past it, the feed now offers 10.5); 10.5 reopened on fresh prices at 20 s.
+  const dead = pausedLine("m85", "corners_8_5", { liveSuspended: true });
+  const current = pausedLine("m105", "corners_10_5", { livePausedUntil: at(20) });
+  assert.equal(movedOnLine(dead, [dead, current], at(30)), true, "the feed moved on from 8.5 once 10.5 is open");
+  assert.equal(movedOnLine(dead, [dead, current], at(10)), false, "not while 10.5 is paused too: the whole market is held for the corner");
+  assert.equal(movedOnLine({ ...dead, liveSuspended: false }, [dead, current], at(30)), false, "a line still offered isn't dead");
+  assert.equal(pauseSummary([dead, current], at(10)).count, 1, "during the corner pause both lines are named once");
+  assert.deepEqual(pauseSummary([dead, current], at(10)).ids, ["m85", "m105"]);
+  assert.equal(pauseSummary([dead, current], at(30)), null, "the dead line alone doesn't keep the banner (and the lock on 10.5) up for 90 s");
+  // The list view passes the paused markets and, separately, the match's other lines.
+  assert.equal(pauseSummary([dead], at(30), [dead, { ...current, livePausedUntil: at(20) }]), null);
+
+  // Every paused market is named, not just the first three; the banner shows three and lists the rest on a tap.
+  const many = ["Match winner", "Total goals 2.5", "Both teams to score", "Double chance", "Next goal"].map((name, i) => ({ id: `g${i}`, name, sortOrder: i, livePausedAt: corner, livePausedUntil: at(90), liveReopenFrom: at(15), livePauseReason: "goal" }));
+  const summary = pauseSummary(many, at(5));
+  assert.equal(summary.count, 5);
+  assert.deepEqual(summary.markets, ["Match winner", "Total goals 2.5", "Both teams to score", "Double chance", "Next goal"]);
+
+  // The bookmaker still holding the market after our corner pause: the corner is still given as the reason, for 2 minutes.
+  const ended = { liveSuspended: true, livePausedAt: corner, livePausedUntil: at(25), livePauseReason: "corner" };
+  assert.equal(pauseJustEnded(ended, at(10)), null, "while our pause runs, it's that pause");
+  assert.equal(pauseJustEnded(ended, at(40)), "corner");
+  assert.equal(pauseJustEnded(ended, at(25 + 120)), "corner");
+  assert.equal(pauseJustEnded(ended, at(25 + 121)), null, "long after, it's the bookmaker's own hold");
+  assert.equal(pauseJustEnded({ ...ended, livePausedUntil: at(400) }, at(100)), "corner", "a pause ends at its 90 s fallback, whatever its stored end");
+  assert.equal(pauseJustEnded({ liveSuspended: true, livePausedAt: null, livePausedUntil: null, livePauseReason: null }, at(40)), null);
+});
+
+test("frequent corners: overlapping pauses never hold Total corners past the last corner's window", () => {
+  // Corners read every 30 s, prices every 5 s, a line repriced 20 s after each corner and drifting every 40 s.
+  const run = (corners, { reprice = 20, drift = 40, statsLag = 20, end = 5400 } = {}) => {
+    let pause = { pausedAt: null, until: null, reopenFrom: null, reason: null };
+    let movedAt = null;
+    let closed = 0;
+    let lastHeld = -1;
+    const seen = corners.map((c) => Math.ceil((c + statsLag) / 30) * 30);
+    for (let s = 0; s < end; s++) {
+      const now = new Date(s * 1000);
+      if (corners.some((c) => s === c + reprice) || s % drift === 0) movedAt = now;
+      if (seen.includes(s)) pause = mergePause(pause, eventPause({ reason: "corner", marketKey: "corners_9_5", pricedSinceEvent: false, now }), now);
+      if (s % 5 === 0 && pause.until && pause.until > now) {
+        const until = freshUntil(pause, { stopped: false, scoreKnown: true, priced: true, bookmakerUpdate: null, movedAt }, now);
+        if (until) pause = { ...pause, until };
+      }
+      if (marketPause({ liveSuspended: false, livePausedAt: pause.pausedAt, livePausedUntil: pause.until, livePauseReason: pause.reason }, now)) {
+        closed++;
+        lastHeld = s;
+      }
+    }
+    return { share: closed / end, lastHeld, lastSeen: Math.max(...seen) };
+  };
+  const clustered = [300, 340, 1200, 1230, 1290, 2100, 2500, 2530, 3300, 3700, 3740, 3790, 4300, 4700, 5000, 5040];
+  const busy = run(clustered);
+  assert.ok(busy.share < 0.1, `16 corners in clusters keep Total corners closed ${Math.round(busy.share * 100)}% of the match`);
+  assert.ok(busy.lastHeld < busy.lastSeen + 90, "never past 90 s after the last corner was seen");
+  const relentless = run(Array.from({ length: 60 }, (_, i) => 30 + i * 90));
+  assert.ok(relentless.share < 0.3, `a corner every 90 s all match: closed ${Math.round(relentless.share * 100)}%`);
+  // With no fresh prices at all, a corner still never holds the market past its own 90 s.
+  const frozen = run([600], { reprice: 1e9, drift: 1e9 });
+  assert.ok(frozen.lastHeld < Math.ceil((600 + 20) / 30) * 30 + 90);
 });
 
 test("the same goal does not start another pause, and the banner ends with the last market", () => {

@@ -12,7 +12,7 @@ import { LATE_REASONS, timelineOf } from "../bets/late";
 import { liveConfirmConfig } from "../bets/live-delay";
 import { countAvailability, countSelectionDead, countStatsStale, isCountFamily } from "./count-guard";
 import { pauseDeadline } from "./live-guard";
-import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
+import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseJustEnded, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
@@ -102,6 +102,9 @@ function livePickPause(
   const whole = livePause(event, now);
   if (whole) return { reason: `match:${whole}`, until: null };
   if (waitingForCount) return { reason: "count", until: null };
+  // Held by the bookmaker just after a pause of ours (Total corners repricing after the corner): said so, not "on hold".
+  const after = pauseJustEnded(market, now);
+  if (after) return { reason: `after:${after}`, until: null };
   return { reason: "suspended", until: null };
 }
 
@@ -279,9 +282,10 @@ export class OddsService {
           const stale = marketStale(event, market, now, market.selections.some((s) => s.liveOdds !== null)) || count === "off";
           const countHeld = count !== "ok";
           const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || pauseReason !== null || stale || countHeld);
-          const value = `${suspended ? 1 : 0}${stale ? 1 : 0}|${pauseReason ?? ""}`;
+          const after = suspended && !pauseReason && !stale ? pauseJustEnded(market, now) : null;
+          const value = `${suspended ? 1 : 0}${stale ? 1 : 0}|${pauseReason ?? ""}|${after ?? ""}`;
           values.set(`m:${market.id}`, value);
-          if (before.get(`m:${market.id}`) !== value) (delta.markets ??= []).push([market.id, suspended, stale, pauseReason]);
+          if (before.get(`m:${market.id}`) !== value) (delta.markets ??= []).push([market.id, suspended, stale, pauseReason, after]);
           for (const selection of market.selections) {
             const quote = selectionQuote({
               event,
@@ -629,8 +633,10 @@ export class OddsService {
         const count = live ? countAvailability(event, row.market.key, now) : "ok";
         const decided = live && countSelectionDead(event.matchCentre, event.matchCentreAt, row.market.key, row.key, now);
         const bettable = quote.bettable && count === "ok" && !decided;
-        // A line paused for a moment (a goal, a corner) comes back as it is; only one no longer offered is replaced.
-        const replacement = live && !bettable && row.market.liveSuspended && marketPause(row.market, now) === null ? lineReplacement.get(row.id) ?? null : null;
+        // A line the bookmaker holds while another line of the market takes bets: the feed moved on from it (Total corners
+        // 8.5 once the corners went past it). The current line is offered at once, even while this one's pause runs, since
+        // this one gets no fresh prices to end it. A line paused with the rest of its market has no open sibling, so none.
+        const replacement = live && !bettable && row.market.liveSuspended ? lineReplacement.get(row.id) ?? null : null;
         return {
           id: row.id,
           eventId: event.id,
@@ -707,7 +713,16 @@ export class OddsService {
       liveIds.length > 0
         ? await this.prisma.market.findMany({
             where: { eventId: { in: liveIds }, livePausedUntil: { gt: now } },
-            select: { eventId: true, key: true, name: true, sortOrder: true, livePausedAt: true, livePausedUntil: true, liveReopenFrom: true, livePauseReason: true },
+            select: { id: true, eventId: true, key: true, name: true, sortOrder: true, liveSuspended: true, livePausedAt: true, livePausedUntil: true, liveReopenFrom: true, livePauseReason: true },
+          })
+        : [];
+    // The other lines of a paused line the bookmaker holds, to tell a line the feed moved on from (movedOnLine).
+    const heldLineEvents = [...new Set(pausedMarkets.filter((market) => market.liveSuspended && /_\d+_5$/.test(market.key)).map((market) => market.eventId))];
+    const lineMarkets =
+      heldLineEvents.length > 0
+        ? await this.prisma.market.findMany({
+            where: { eventId: { in: heldLineEvents }, key: { endsWith: "_5" } },
+            select: { eventId: true, key: true, liveSuspended: true, livePausedAt: true, livePausedUntil: true, livePauseReason: true },
           })
         : [];
     const limits = liveIds.length > 0 ? await this.liveLimits() : null;
@@ -765,7 +780,13 @@ export class OddsService {
       /** Live, and the bookmaker has every market off the board for now. */
       allMarketsSuspended: live && event._count.markets > 0 && !withOpenMarket.has(event.id),
       /** Live: the markets paused after something in the match (a goal, a card…), for the match's banner. */
-      marketPause: live ? pauseSummary(pausedMarkets.filter((market) => market.eventId === event.id && !view?.hides(market.key)), now) : null,
+      marketPause: live
+        ? pauseSummary(
+            pausedMarkets.filter((market) => market.eventId === event.id && !view?.hides(market.key)),
+            now,
+            [...pausedMarkets, ...lineMarkets].filter((market) => market.eventId === event.id),
+          )
+        : null,
       /** Every market the match has; the list view sends only the first. */
       marketCount: event._count.markets - (hiddenCounts.get(event.id) ?? 0),
       /** Greyhounds: the race's number, grade and distance, and once run, the finishing order with each dog's SP. */
@@ -800,14 +821,17 @@ export class OddsService {
         const count = live ? countAvailability(event, market.key, now) : "ok";
         const countHeld = count !== "ok";
         const stale = marketStale(event, market, now, market.selections.some((s) => s.liveOdds !== null)) || count === "off";
+        const suspended = live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || paused !== null || stale || countHeld || selections.every((s) => s.suspended));
         return {
           id: market.id,
           key: market.key,
           name: market.name,
           /** Live only: off the board right now: the feed has it off (single outcomes can be off on their own), or it's paused. */
-          suspended: live && (market.liveSuspended || market.selections.every((s) => s.liveOdds === null) || paused !== null || stale || countHeld || selections.every((s) => s.suspended)),
+          suspended,
           /** Live only: paused after something in the match (a goal, a card…), and why. */
           paused,
+          /** Live only: held by the bookmaker just after our pause for this (a corner…) ended: its new prices are on the way. */
+          after: suspended && !paused && !stale ? pauseJustEnded(market, now) : null,
           /** Live only: the feed hasn't priced it during play for a while; shown under "Not available during play". */
           stale,
           selections,

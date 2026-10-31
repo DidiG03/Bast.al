@@ -536,6 +536,8 @@ export type OddsEvent = {
     suspended?: boolean;
     /** Live only: paused after something in the match, and why ("goal", "red", "var", "swing", "reopen"). */
     paused?: string | null;
+    /** Live only: held by the bookmaker just after our pause for this ("corner"…) ended: new prices are on the way. */
+    after?: string | null;
     /** Live only: the feed hasn't priced it during play for a while (shown under "Not available during play"). */
     stale?: boolean;
     selections: OddsSelection[];
@@ -546,8 +548,10 @@ export type OddsEvent = {
 export type MarketPause = {
   reason: string;
   count: number;
-  /** The first few paused markets' names, in board order. */
+  /** The paused markets' names, in board order (older servers sent only the first few; `count` is how many there are). */
   markets: string[];
+  /** Every market paused now, whatever paused it: exactly these are locked on the board (missing from older servers). */
+  ids?: string[];
   /** When the last of them reopens at the latest (ISO). */
   until: string;
   /** Fresh prices are in for all of them: `until` is when they reopen, not just the latest they might. */

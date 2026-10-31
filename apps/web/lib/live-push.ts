@@ -5,12 +5,13 @@ import { rowWord } from "./live-rules.mjs";
 /**
  * What changed on one live match, as the API pushes it to a Player's team
  * (`odds.live`): the header when the score, minute or pause changed, and
- * [id, suspended, stale, our pause reason or null] / [id, price, suspended] for markets and prices that moved.
+ * [id, suspended, stale, our pause reason or null, the reason of a pause of ours that just ended while the bookmaker
+ * still holds the market, or null] / [id, price, suspended] for markets and prices that moved.
  */
 export type LiveDelta = {
   id: string;
   header?: Pick<OddsEvent, "status" | "live" | "elapsed" | "elapsedAt" | "period" | "homeScore" | "awayScore" | "bettable" | "livePause" | "allMarketsSuspended" | "marketPause">;
-  markets?: Array<[string, boolean, boolean, string | null]>;
+  markets?: Array<[string, boolean, boolean, string | null, (string | null)?]>;
   prices?: Array<[string, number, boolean]>;
 };
 
@@ -25,7 +26,7 @@ export function byMatch(deltas: LiveDelta[]): Map<string, LiveDelta> {
  */
 export function applyDelta(event: OddsEvent, delta: LiveDelta | undefined): OddsEvent {
   if (!delta) return event;
-  const markets = new Map((delta.markets ?? []).map(([id, suspended, stale, paused]) => [id, { suspended, stale: stale ?? false, paused: paused ?? null }]));
+  const markets = new Map((delta.markets ?? []).map(([id, suspended, stale, paused, after]) => [id, { suspended, stale: stale ?? false, paused: paused ?? null, after: after ?? null }]));
   const prices = new Map((delta.prices ?? []).map(([id, price, suspended]) => [id, { price, suspended }]));
   let changed = false;
   const nextMarkets = event.markets.map((market) => {
@@ -43,9 +44,10 @@ export function applyDelta(event: OddsEvent, delta: LiveDelta | undefined): Odds
     const pauseRunning = Boolean(headerPause && Date.parse(headerPause.until) > Date.now());
     let paused = state ? (rowWord(state.paused, state.suspended, state.stale) === "paused" ? state.paused : null) : market.paused;
     if (state && !state.paused && state.suspended && pauseRunning && market.paused) paused = market.paused;
-    if (!marketChanged && paused === market.paused) return market;
+    const after = state ? (paused || !state.suspended ? null : state.after) : market.after ?? null;
+    if (!marketChanged && paused === market.paused && after === (market.after ?? null)) return market;
     changed = true;
-    return { ...market, ...(state !== undefined ? { suspended, stale: state.stale } : {}), paused, selections };
+    return { ...market, ...(state !== undefined ? { suspended, stale: state.stale } : {}), paused, after, selections };
   });
   if (!changed && !delta.header) return event;
   return { ...event, ...(delta.header ?? {}), markets: changed ? nextMarkets : event.markets };

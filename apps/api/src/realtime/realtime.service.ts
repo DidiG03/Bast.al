@@ -42,10 +42,13 @@ export type LiveDelta = {
     bettable: boolean;
     livePause: string | null;
     allMarketsSuspended: boolean;
-    marketPause: { reason: string; count: number; markets: string[]; until: string; exact: boolean } | null;
+    marketPause: { reason: string; count: number; markets: string[]; ids: string[]; until: string; exact: boolean } | null;
   };
-  /** [market id, suspended, stale, our pause reason or null]. The reason is the only source of the "Paused" label. */
-  markets?: Array<[string, boolean, boolean, string | null]>;
+  /**
+   * [market id, suspended, stale, our pause reason or null, the reason of a pause of ours that just ended while the
+   * bookmaker still holds the market (pauseJustEnded) or null]. Our pause reason is the only source of the "Paused" label.
+   */
+  markets?: Array<[string, boolean, boolean, string | null, string | null]>;
   prices?: Array<[string, number, boolean]>;
 };
 

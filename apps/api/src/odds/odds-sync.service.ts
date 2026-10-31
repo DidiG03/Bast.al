@@ -1656,14 +1656,22 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    */
   /** Saves a match's (or fight's) pre-match prices; also used by the MMA sync. */
   async upsertMarkets(eventId: string, markets: FeedMarket[]) {
+    const known = new Map((await this.prisma.market.findMany({ where: { eventId }, select: { id: true, key: true, name: true, sortOrder: true } })).map((m) => [m.key, m]));
     for (const market of markets) {
       await this.prisma.$transaction(async (tx) => {
-        const row = await tx.market.upsert({
-          where: { eventId_key: { eventId, key: market.key } },
-          create: { eventId, key: market.key, name: market.name, sortOrder: market.sortOrder },
-          update: { name: market.name, sortOrder: market.sortOrder },
-          select: { id: true },
-        });
+        const was = known.get(market.key);
+        // Written only when it's new or the feed renamed or moved it: an update writes a fresh row even when nothing
+        // in it changed, and most markets are the same on every refresh.
+        const row = !was
+          ? await tx.market.upsert({
+              where: { eventId_key: { eventId, key: market.key } },
+              create: { eventId, key: market.key, name: market.name, sortOrder: market.sortOrder },
+              update: { name: market.name, sortOrder: market.sortOrder },
+              select: { id: true },
+            })
+          : was.name !== market.name || was.sortOrder !== market.sortOrder
+            ? await tx.market.update({ where: { id: was.id }, data: { name: market.name, sortOrder: market.sortOrder }, select: { id: true } })
+            : { id: was.id };
         const existing = new Map(
           (await tx.selection.findMany({ where: { marketId: row.id }, select: { id: true, key: true, name: true, feedOdds: true, sortOrder: true, withdrawn: true } })).map((s) => [s.key, s]),
         );

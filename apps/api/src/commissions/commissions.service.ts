@@ -250,25 +250,19 @@ export class CommissionsService {
     const now = new Date();
     const thisWeek = startOfWeek(now);
     const starts = Array.from({ length: weeks }, (_, index) => addDays(thisWeek, -7 * index));
-    const oldest = starts[starts.length - 1];
-    const entries = await this.entries({ managerId: actor.id }, oldest, now);
+    // Newest first on the page; the buckets are worked out oldest first.
+    const buckets = await this.buckets(Prisma.sql`manager_id = ${actor.id}`, [...starts].reverse(), now);
 
-    const rows = starts.map((start, index) => ({
-      from: start.toISOString(),
-      // The current week runs to now; earlier weeks end where the next one starts.
-      to: index === 0 ? now.toISOString() : starts[index - 1].toISOString(),
-      ...emptyTotals(),
-      commission: 0,
-    }));
-    const cuts = rows.map(() => 0);
-    for (const entry of entries) {
-      const at = entry.createdAt.getTime();
-      const index = rows.findIndex((row) => at >= new Date(row.from).getTime() && at < new Date(row.to).getTime());
-      if (index === -1) continue;
-      add(rows[index], entry.totals);
-      cuts[index] += entry.managerCut;
-    }
-    rows.forEach((row, index) => (row.commission = round(cuts[index])));
+    const rows = starts.map((start, index) => {
+      const bucket = buckets[starts.length - 1 - index];
+      return {
+        from: start.toISOString(),
+        // The current week runs to now; earlier weeks end where the next one starts.
+        to: index === 0 ? now.toISOString() : starts[index - 1].toISOString(),
+        ...bucket.totals,
+        commission: round(bucket.managerCut),
+      };
+    });
 
     return { commissionRate: Number(manager.commissionRate), weeks: rows };
   }
@@ -280,22 +274,17 @@ export class CommissionsService {
    */
   async daily(actor: Actor, days: number) {
     if (actor.role === Role.PLAYER) throw new ForbiddenException("Players don't have team totals");
-    const scope = actor.role === Role.SUPER_ADMIN ? {} : actor.role === Role.OWNER ? { ownerId: actor.id } : { managerId: actor.id };
+    const scope = actor.role === Role.SUPER_ADMIN ? Prisma.sql`TRUE` : actor.role === Role.OWNER ? Prisma.sql`owner_id = ${actor.id}` : Prisma.sql`manager_id = ${actor.id}`;
 
     const now = new Date();
     const today = startOfDay(now);
     const starts = Array.from({ length: days }, (_, index) => addDays(today, index - (days - 1)));
+    const buckets = await this.buckets(scope, starts, now);
     const rows = starts.map((from, index) => ({
       from: from.toISOString(),
       to: (index === days - 1 ? now : starts[index + 1]).toISOString(),
-      ...emptyTotals(),
+      ...buckets[index].totals,
     }));
-    for (const entry of await this.entries(scope, starts[0], now)) {
-      // The day the entry falls in: the first one starting after it, less one.
-      const next = starts.findIndex((start) => start > entry.createdAt);
-      const index = next === -1 ? starts.length - 1 : next - 1;
-      if (index >= 0) add(rows[index], entry.totals);
-    }
     return { days: rows };
   }
 
@@ -370,21 +359,37 @@ export class CommissionsService {
     });
   }
 
-  /** Journal rows one by one, for day and week buckets. */
-  private async entries(scope: { ownerId?: string; managerId?: string }, from: Date, to: Date) {
-    const rows = await this.prisma.settlementEntry.findMany({
-      where: { ...scope, createdAt: { gte: from, lt: to } },
-      select: { bets: true, stake: true, payout: true, managerRate: true, createdAt: true },
-    });
-    return rows.map((row) => {
-      const staked = Number(row.stake);
-      const paidOut = Number(row.payout);
-      return {
-        createdAt: row.createdAt,
-        totals: { bets: row.bets, staked, paidOut, net: staked - paidOut },
-        managerCut: ((staked - paidOut) * Number(row.managerRate)) / 100,
-      };
-    });
+  /**
+   * Journal totals for consecutive periods, added up in the database: `starts`
+   * are each period's first moment, oldest first, and the last period runs to
+   * `to`. One row comes back per period that has entries, rather than every
+   * entry: a month of a busy site is hundreds of thousands of them (each
+   * casino round is one), far too many to read into the API on each refresh.
+   * The days and weeks are cut where `starts` says (Albanian time, from
+   * time.ts), so the database's own time zone never matters.
+   */
+  private async buckets(scope: Prisma.Sql, starts: Date[], to: Date): Promise<Array<{ totals: Totals; managerCut: number }>> {
+    const rows = await this.prisma.$queryRaw<Array<{ bucket: number; bets: number; staked: Prisma.Decimal; paid_out: Prisma.Decimal; manager_cut: Prisma.Decimal }>>`
+      SELECT width_bucket(created_at, ${starts}::timestamptz[]) AS bucket,
+             SUM(bets)::int AS bets,
+             SUM(stake) AS staked,
+             SUM(payout) AS paid_out,
+             SUM((stake - payout) * manager_rate / 100) AS manager_cut
+      FROM settlement_entries
+      WHERE ${scope} AND created_at >= ${starts[0]} AND created_at < ${to}
+      GROUP BY 1
+    `;
+    const result = starts.map(() => ({ totals: emptyTotals(), managerCut: 0 }));
+    for (const row of rows) {
+      // width_bucket counts from 1: period i holds [starts[i - 1], starts[i]).
+      const period = result[row.bucket - 1];
+      if (!period) continue;
+      const staked = round(Number(row.staked));
+      const paidOut = round(Number(row.paid_out));
+      period.totals = { bets: Number(row.bets), staked, paidOut, net: round(staked - paidOut) };
+      period.managerCut = Number(row.manager_cut);
+    }
+    return result;
   }
 
   /** What an Owner pays their Managers: each Manager's commission, rounded on its own. */

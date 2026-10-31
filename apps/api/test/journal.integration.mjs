@@ -246,6 +246,42 @@ test("Super Admin's cut from an Owner carries over the same way", async () => {
   assert.deepEqual([w3.payout.start, w3.payout.due], [iso(W3), 50]);
 });
 
+test("the day-by-day and week-by-week totals land each entry in its own Albanian day and week", async () => {
+  const { addDays, startOfDay, startOfWeek } = require("../dist/time.js");
+  await prisma.settlementEntry.deleteMany({});
+  const now = new Date();
+  const today = startOfDay(now);
+  const thisWeek = startOfWeek(now);
+  const entry = (player, managerId, stake, payout, createdAt) =>
+    prisma.settlementEntry.create({ data: { playerId: player.id, ownerId: owner.id, managerId, ownerRate: 10, managerRate: 20, bets: 1, stake, payout, createdAt } });
+  await entry(ardi, managerA.id, 100, 0, today); // the first moment of today counts as today
+  await entry(ardi, managerA.id, 50, 80, new Date(today.getTime() - 1)); // the last moment of yesterday
+  await entry(bora, null, 30, 0, addDays(today, -2));
+  await entry(ardi, managerA.id, 200, 0, addDays(today, -40)); // before the 7 days shown
+  await entry(ardi, managerA.id, 40, 0, new Date(now.getTime() + 60_000)); // after now: not in today yet
+
+  const { days } = await commissions.daily(owner, 7);
+  assert.equal(days.length, 7);
+  assert.equal(days[6].from, today.toISOString());
+  assert.deepEqual([days[6].bets, days[6].staked, days[6].paidOut, days[6].net], [1, 100, 0, 100], "today");
+  assert.deepEqual([days[5].bets, days[5].staked, days[5].paidOut, days[5].net], [1, 50, 80, -30], "yesterday");
+  assert.deepEqual([days[4].bets, days[4].staked], [1, 30], "two days ago");
+  assert.equal(days.reduce((sum, day) => sum + day.bets, 0), 3, "nothing from before the period or after now");
+  const managerDays = (await commissions.daily(managerA, 7)).days;
+  assert.equal(managerDays.reduce((sum, day) => sum + day.staked, 0), 150, "a Manager's chart has only their Players");
+
+  // Weeks, newest first: Manager A's commission is 20% of each week's net.
+  await prisma.settlementEntry.deleteMany({});
+  await entry(ardi, managerA.id, 500, 0, thisWeek);
+  await entry(ardi, managerA.id, 100, 300, new Date(thisWeek.getTime() - 1));
+  await entry(ardi, managerA.id, 1000, 0, addDays(thisWeek, -14));
+  const { weeks } = await commissions.history(managerA, 4);
+  assert.equal(weeks.length, 4);
+  assert.equal(weeks[0].from, thisWeek.toISOString());
+  assert.deepEqual(weeks.map((week) => [week.bets, week.net, week.commission]), [[1, 500, 100], [1, -200, -40], [1, 1000, 200], [0, 0, 0]]);
+  await prisma.settlementEntry.deleteMany({});
+});
+
 test("teardown", async () => {
   await prisma.$disconnect();
 });

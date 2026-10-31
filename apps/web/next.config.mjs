@@ -15,7 +15,8 @@ const nextConfig = {
   async redirects() {
     return [
       { source: "/casino", destination: "/dashboard/casino", permanent: false },
-      { source: "/casino/:path*", destination: "/dashboard/casino/:path*", permanent: false },
+      // Game pages only (/casino/mines): the casino's pictures live under /casino/ in public/ and must not be redirected.
+      { source: "/casino/:game([a-z-]+)", destination: "/dashboard/casino/:game", permanent: false },
       { source: "/dashboard/prices", destination: "/dashboard/odds", permanent: false },
       { source: "/dashboard/prices/:path*", destination: "/dashboard/odds", permanent: false },
     ];

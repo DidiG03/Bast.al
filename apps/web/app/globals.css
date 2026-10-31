@@ -10443,6 +10443,96 @@ button.is-blocked {
 }
 
 /*
+ * A computer or tablet: TOTAL BET and START sit at the end of the control
+ * bar, in its row, with the last spin's wins before it; not on a row of their
+ * own under it, so the reels get that height. The hall is a grid for this:
+ * the reels across the top, then [wins | bar | bet | start] centred, the bar
+ * as wide as the reels when there's room. Only when the game is wide enough
+ * for the bar and both buttons in one row; narrower, they keep their own row.
+ * (A phone has its own layout below.)
+ */
+@media (min-width: 761px) and (orientation: portrait), (min-width: 761px) and (min-height: 521px) {
+  .slot-cabinet.is-book {
+    container: book-cabinet / inline-size;
+  }
+
+  @container book-cabinet (min-width: 50rem) {
+    .slot-cabinet.is-book .book-hall {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, max-content) auto auto minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+      column-gap: 0.5rem;
+    }
+
+    .slot-cabinet.is-book .book-hall > .slot-stage {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+
+    .slot-cabinet.is-book .slot-controls {
+      grid-column: 2;
+      grid-row: 2;
+      width: max(var(--book-reels-width, 36rem), 36rem);
+      max-width: 100%;
+    }
+
+    /* The rings and the wins go into the hall's grid themselves. */
+    .slot-cabinet.is-book .book-rings {
+      display: contents;
+    }
+
+    .slot-cabinet.is-book .book-rings .casino-combos.book-wins {
+      grid-column: 1;
+      grid-row: 2;
+      justify-self: end;
+      align-self: center;
+      max-width: 100%;
+      min-height: 0;
+      margin: 0.3rem 0 0.6rem;
+      padding-left: 0.5rem;
+    }
+
+    /* As tall as the bar's buttons (the same space above and below them), and square. */
+    .slot-cabinet.is-book .book-ring-spot {
+      grid-row: 2;
+      align-self: stretch;
+      width: auto;
+      height: auto;
+      min-width: 3.4rem;
+      aspect-ratio: 1;
+      margin: 0.3rem 0 0.6rem;
+    }
+
+    .slot-cabinet.is-book .book-ring-spot.is-bet {
+      grid-column: 3;
+    }
+
+    .slot-cabinet.is-book .book-ring-spot.is-start {
+      grid-column: 4;
+    }
+
+    /* Words sized to the smaller rings. */
+    .slot-cabinet.is-book .book-ring.is-start {
+      font-size: 24cqw;
+    }
+
+    .slot-cabinet.is-book .book-ring.is-bet small {
+      font-size: 15cqw;
+    }
+
+    .slot-cabinet.is-book .book-ring.is-bet b {
+      font-size: 24cqw;
+    }
+
+    /* The bet choices open above the ring rather than over the bar. */
+    .slot-cabinet.is-book .book-bet-menu {
+      right: 0;
+      bottom: calc(100% + 0.4rem);
+    }
+  }
+}
+
+/*
  * A phone: the stake and the spin sit in the control bar, not on a row of
  * their own. That row was as tall as the reels and left them a small square
  * in the middle of the wall.

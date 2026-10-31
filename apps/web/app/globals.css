@@ -17357,3 +17357,276 @@ html[data-theme="light"] .role-player .bet-status-lost {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* ============================================================
+   Book of Ra: the paytable over the reels (Menu)
+   ============================================================ */
+.book-paytable {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2cqh;
+  padding: 1.6cqh 1.4cqw 1.2cqh;
+  overflow: hidden;
+  container-type: size;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(150, 82, 18, 0.55), transparent 65%),
+    linear-gradient(180deg, #3a2208, #1c0f03 60%, #120901);
+  color: #fff;
+  font-family: inherit;
+}
+
+.book-pt-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  grid-template-areas:
+    "book book book subs subs subs"
+    "p1 p1 free free p2 p2"
+    "p3 p3 free free p4 p4"
+    "c1 c1 c1 c2 c2 c2";
+  gap: 1.2cqh 1cqw;
+  min-height: 0;
+}
+
+/* A carved stone panel: a picture and what it pays. */
+.book-pt-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2cqw;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.6cqh 1.2cqw;
+  border: 1px solid rgba(255, 196, 92, 0.22);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(120, 66, 14, 0.55), rgba(54, 28, 4, 0.75)),
+    #2a1604;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 150, 0.15), inset 0 -2px 6px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.book-pt-cell.is-right {
+  flex-direction: row-reverse;
+}
+
+.book-pt-pictures {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 100%;
+}
+
+.book-pt-pictures img {
+  height: min(100%, 21cqh);
+  width: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+}
+
+/* A, K or Q, J, 10 overlap a little, as one group. */
+.book-pt-cell.is-set .book-pt-pictures img + img {
+  margin-left: -2.5cqw;
+}
+
+.book-pt-cell.is-book {
+  border-color: rgba(255, 90, 60, 0.45);
+}
+
+.book-pt-cell.is-book .book-pt-pictures img {
+  height: min(100%, 22cqh);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px #c4161c, 0 0 10px rgba(255, 60, 40, 0.5);
+}
+
+.book-pt-amounts {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  font-size: 4.3cqh;
+  font-weight: 900;
+  line-height: 1.05;
+  text-shadow: 0 1px 0 #2a1200, 0 0 6px rgba(0, 0, 0, 0.7);
+}
+
+.book-pt-amounts > div {
+  display: grid;
+  grid-template-columns: 2.2em auto;
+  column-gap: 0.6em;
+  align-items: baseline;
+}
+
+.book-pt-amounts dt {
+  color: #ffb84a;
+}
+
+.book-pt-amounts dd {
+  margin: 0;
+  color: #ffe26a;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.book-pt-cell.is-subs {
+  flex-direction: column;
+  gap: 0.8cqh;
+}
+
+.book-pt-cell.is-subs strong {
+  color: #ffd35a;
+  font-size: 4.2cqh;
+  text-shadow: 0 1px 0 #2a1200;
+}
+
+.book-pt-cell.is-subs .book-pt-pictures {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4cqw;
+  height: auto;
+}
+
+.book-pt-cell.is-subs .book-pt-pictures img {
+  height: 7.5cqh;
+}
+
+.book-pt-cell.is-free {
+  flex-direction: column;
+  gap: 0.2cqh;
+  text-align: center;
+  color: #ffd35a;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 #2a1200, 0 0 8px rgba(0, 0, 0, 0.7);
+}
+
+.book-pt-cell.is-free b {
+  font-size: 9cqh;
+  line-height: 1;
+}
+
+.book-pt-cell.is-free span {
+  font-size: 3.6cqh;
+  line-height: 1.15;
+}
+
+.book-pt-cell.is-free i {
+  margin: 1.2cqh 0;
+  font-size: 5cqh;
+  font-style: normal;
+  line-height: 1;
+}
+
+/* Page two: the 10 lines, two rows of five, each with its number's colour. */
+.book-pt-lines {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 2cqh 2cqw;
+  min-height: 0;
+  padding: 1cqh 2cqw;
+}
+
+.book-pt-lines figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1cqh;
+  margin: 0;
+  min-height: 0;
+}
+
+.book-pt-lines svg {
+  width: 100%;
+  height: auto;
+  max-height: calc(100% - 7cqh);
+  overflow: visible;
+}
+
+.book-pt-lines rect {
+  fill: rgba(0, 0, 0, 0.45);
+  stroke: rgba(255, 196, 92, 0.3);
+  stroke-width: 0.4;
+}
+
+.book-pt-lines rect.is-on {
+  fill: color-mix(in srgb, var(--marker) 55%, transparent);
+}
+
+.book-pt-lines polyline {
+  fill: none;
+  stroke: var(--marker);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.book-pt-lines figcaption {
+  display: grid;
+  place-items: center;
+  min-width: 2.2em;
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  background: var(--marker);
+  color: #111;
+  font-size: 3.8cqh;
+  font-weight: 900;
+}
+
+.book-pt-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1cqw;
+}
+
+.book-pt-note {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255, 236, 200, 0.75);
+  font-size: 3cqh;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.book-pt-tabs {
+  display: flex;
+  flex: none;
+  gap: 0.8cqw;
+}
+
+/* The cabinet's blue info buttons. */
+.book-pt-tabs button {
+  padding: 0.6cqh 1.4cqw;
+  border: 1px solid #8fb6ff;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #4f86f0, #1e4fb4);
+  color: #fff;
+  font: inherit;
+  font-size: 3.4cqh;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.book-pt-tabs button.is-on {
+  border-color: #fff;
+  background: linear-gradient(180deg, #2a5fcf, #123a8c);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.book-pt-tabs button.is-close {
+  border-color: #6dff94;
+  background: linear-gradient(180deg, #35b54f, #137a2b);
+}
+
+.slot-cabinet.is-book .slot-btn.is-on {
+  border-color: #fff;
+  background: rgba(246, 210, 30, 0.18);
+}

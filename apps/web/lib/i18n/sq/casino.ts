@@ -769,4 +769,11 @@ export const casino: Record<string, string> = {
   "Previous cards": "Letrat e mëparshme",
   "The card: {suit}": "Letra: {suit}",
   "A face-down card": "Një letër me fytyrë poshtë",
+  "Stands in for:": "Zëvendëson:",
+  "Free games": "Lojëra falas",
+  "Special expanding symbol": "Simbol i veçantë që zgjerohet",
+  "Pays in ALL at a {amount} bet. Lines pay from the left reel.": "Fitimet në ALL me bast {amount}. Linjat paguajnë nga rrotulla e majtë.",
+  "Paytable": "Tabela e fitimeve",
+  "All rules": "Të gjitha rregullat",
+  "Back to the game": "Kthehu te loja",
 };

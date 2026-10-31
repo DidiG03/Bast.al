@@ -93,6 +93,18 @@ function outsideBoxes(a: Point, b: Point, boxes: Box[]): Array<[number, number]>
   return pieces;
 }
 
+/** How the reels move at each pace (pixi-reels speed profiles, on top of its NORMAL). */
+type Pace = "quick" | "classic";
+const PACES: Record<Pace, { speed: Record<string, number>; tease: { stagger: number; duration: number } }> = {
+  // The reels stop one after another in about a second once the result is in.
+  quick: { speed: { stopDelay: 110, bounceDistance: 40, bounceDuration: 320, minimumSpinTime: 350 }, tease: { stagger: 250, duration: 700 } },
+  // A slower, heavier spin: the reels run a while, then stop one by one about a third of a second apart, with a fuller bounce.
+  classic: {
+    speed: { spinDelay: 140, spinSpeed: 26, stopDelay: 320, accelerationDuration: 380, bounceDistance: 56, bounceDuration: 520, minimumSpinTime: 1400 },
+    tease: { stagger: 450, duration: 1300 },
+  },
+};
+
 type Props = {
   grid: string[][];
   symbols: readonly string[];
@@ -110,6 +122,8 @@ type Props = {
   burn?: { frames: number; draw(symbol: string, size: number, frame: number, lit: boolean): HTMLCanvasElement; warm(symbol: string, size: number, frame: number): void };
   /** Land straight away instead of spinning (reduced motion). */
   instant: boolean;
+  /** How fast the reels go: "quick" (Sizzling Hot, the default) or "classic" (Book of Ra: slower, the reels stopping one by one). */
+  pace?: Pace;
   onReady(): void;
   /** The reels can't be drawn here (no WebGL, say); the page shows a plain grid instead. */
   onFailed(): void;
@@ -158,7 +172,7 @@ function motionFor(app: Application): Motion {
   return motion;
 }
 
-export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({ grid, symbols, scatter, weights, draw: drawPicture = drawFruit, burn, instant, onReady, onFailed }, ref) {
+export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({ grid, symbols, scatter, weights, draw: drawPicture = drawFruit, burn, instant, pace = "quick", onReady, onFailed }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<{
     app: Application;
@@ -182,6 +196,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
   /** What's on the reels: the last result they landed on. */
   const landed = useRef(grid);
   instantRef.current = instant;
+  const paceRef = useRef(PACES[pace]);
+  paceRef.current = PACES[pace];
   /** The Player asked to land this spin at once: no slowing down to tease. */
   const skipped = useRef(false);
 
@@ -228,8 +244,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
           for (const symbol of symbols) registry.register(symbol, StaticSpinSymbol, { createInner: sprite, cache: spinTextures, blurRampMs: 120 });
         })
         .weights(Object.fromEntries(symbols.map((symbol) => [symbol, weights[symbol] ?? 1])))
-        // Quicker than the library's normal: the reels stop one after another in about a second once the result is in.
-        .speed("normal", { ...SpeedPresets.NORMAL, stopDelay: 110, bounceDistance: 40, bounceDuration: 320, minimumSpinTime: 350 })
+        .speed("normal", { ...SpeedPresets.NORMAL, ...PACES[pace].speed })
         .initialFrame(grid.map((column) => ({ visible: column })))
         .ticker(app.ticker)
         .build();
@@ -569,7 +584,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         }
         if (skipped.current) return;
         const tease = current.anticipate(next);
-        if (tease.length > 0) current.reelSet.setAnticipation(tease, { stagger: 250, duration: 700, slowdown: { from: 0.45, to: 0.25 } });
+        if (tease.length > 0) current.reelSet.setAnticipation(tease, { ...paceRef.current.tease, slowdown: { from: 0.45, to: 0.25 } });
       },
       skip() {
         const current = engine.current;

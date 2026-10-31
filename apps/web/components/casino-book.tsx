@@ -229,6 +229,9 @@ export function BookGame() {
   const [reelsReady, setReelsReady] = useState(false);
   const [plainGrid, setPlainGrid] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  /** Menu: the paytable over the reels (BookPaytable). */
+  const [paytable, setPaytable] = useState(false);
+  const closePaytable = useCallback(() => setPaytable(false), []);
   useDismiss(() => setRulesOpen(false));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [gamble, setGamble] = useState<CasinoGamble | null>(null);
@@ -304,6 +307,7 @@ export function BookGame() {
     const free = feature !== null;
     setSpinning(true);
     setBetMenu(false);
+    setPaytable(false);
     setLastWin(null);
     setMissed(false);
     setCombos([]);
@@ -641,6 +645,7 @@ export function BookGame() {
                       weights={SPIN_WEIGHTS}
                       draw={drawBookSymbol}
                       instant={instant}
+                      pace="classic"
                       onReady={() => setReelsReady(true)}
                       onFailed={() => setPlainGrid(true)}
                     />
@@ -674,12 +679,21 @@ export function BookGame() {
                       onContinue={() => setCard(null)}
                     />
                   ) : null}
+                  {paytable ? (
+                    <BookPaytable game={state.game} bet={playingFree ? feature.bet : bet} onRules={() => setRulesOpen(true)} onClose={closePaytable} />
+                  ) : null}
                 </div>
                 <BookMarkers side="right" lit={litLines} />
               </div>
 
               <footer className="slot-controls">
-                <button type="button" className="slot-btn" onClick={() => setRulesOpen(true)}>
+                <button
+                  type="button"
+                  className={`slot-btn${paytable ? " is-on" : ""}`}
+                  aria-pressed={paytable}
+                  onClick={() => setPaytable((open) => !open)}
+                  disabled={!paytable && (spinning || auto !== null)}
+                >
                   {t("Menu")}
                 </button>
                 <button
@@ -961,6 +975,124 @@ function BookMarkers({ side, lit }: { side: "left" | "right"; lit: Set<number> }
 }
 
 /** A symbol's picture. It's drawn in the browser, so there's nothing for next/image to optimise. */
+/** A pay in the paytable: the number only (the currency is said once, in the paytable's footer). */
+const payNumber = (value: number) => formatStake(Math.floor(value * 100 + 1e-6) / 100).split(" ")[0];
+
+/**
+ * Menu: the pays and the lines, drawn over the reels like the cabinet's own
+ * paytable rather than as a sheet over the page. Page one is the symbols with
+ * what 2 to 5 on a line pay at the bet now (cards with the same pays share a
+ * panel), the book with what it stands in for, and the free games; page two
+ * the 10 lines. "All rules" opens the full rules; spinning, Menu or "Back to
+ * the game" closes it.
+ */
+function BookPaytable({ game, bet, onRules, onClose }: { game: BookState["game"]; bet: number; onRules: () => void; onClose: () => void }) {
+  const { t } = useI18n();
+  const [page, setPage] = useState<"pays" | "lines">("pays");
+  const lineBet = bet / game.lines;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  // The symbols that pay from 2 in a row each have a panel; the cards share one per set of pays (A K, then Q J 10).
+  const premium = game.paying.filter((symbol) => game.linePays[symbol][0] > 0);
+  const cardSets: BookPaying[][] = [];
+  for (const symbol of game.paying.filter((symbol) => game.linePays[symbol][0] === 0)) {
+    const same = cardSets.find((set) => game.linePays[set[0]].join() === game.linePays[symbol].join());
+    if (same) same.push(symbol);
+    else cardSets.push([symbol]);
+  }
+  const pays = (symbol: BookPaying) =>
+    game.linePays[symbol]
+      .map((pay, index) => ({ count: index + 2, pay }))
+      .filter((row) => row.pay > 0)
+      .reverse();
+  const amounts = (rows: Array<{ count: number; value: number }>) => (
+    <dl className="book-pt-amounts">
+      {rows.map((row) => (
+        <div key={row.count}>
+          <dt>{row.count}×</dt>
+          <dd>{payNumber(row.value)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+  const panel = (symbols: BookPaying[], area: string, right: boolean) => (
+    <div key={area} className={`book-pt-cell${right ? " is-right" : ""}${symbols.length > 1 ? " is-set" : ""}`} style={{ gridArea: area }}>
+      <span className="book-pt-pictures">
+        {symbols.map((symbol) => (
+          <SymbolPicture key={symbol} symbol={symbol} alt={t(SYMBOL_NAMES[symbol])} />
+        ))}
+      </span>
+      {amounts(pays(symbols[0]).map((row) => ({ count: row.count, value: row.pay * lineBet })))}
+    </div>
+  );
+  return (
+    <div className="book-paytable" role="dialog" aria-label={t("Pays and rules")}>
+      {page === "pays" ? (
+        <div className="book-pt-grid">
+          <div className="book-pt-cell is-book" style={{ gridArea: "book" }}>
+            <span className="book-pt-pictures">
+              <SymbolPicture symbol={game.book} alt={t(SYMBOL_NAMES.BOOK)} />
+            </span>
+            {amounts((["5", "4", "3"] as const).map((count) => ({ count: Number(count), value: game.scatterPays[count] * bet })))}
+          </div>
+          <div className="book-pt-cell is-subs" style={{ gridArea: "subs" }}>
+            <strong>{t("Stands in for:")}</strong>
+            <span className="book-pt-pictures">
+              {game.paying.map((symbol) => (
+                <SymbolPicture key={symbol} symbol={symbol} alt={t(SYMBOL_NAMES[symbol])} />
+              ))}
+            </span>
+          </div>
+          {premium.slice(0, 4).map((symbol, index) => panel([symbol], `p${index + 1}`, index % 2 === 1))}
+          <div className="book-pt-cell is-free" style={{ gridArea: "free" }}>
+            <b>{game.freeSpins}</b>
+            <span>{t("Free games")}</span>
+            <i aria-hidden="true">+</i>
+            <span>{t("Special expanding symbol")}</span>
+          </div>
+          {cardSets.slice(0, 2).map((set, index) => panel(set, `c${index + 1}`, index === 1))}
+        </div>
+      ) : (
+        <div className="book-pt-lines">
+          {game.lineShapes.map((shape, index) => (
+            <figure key={index} style={{ "--marker": LINE_COLORS[index] } as CSSProperties}>
+              <svg viewBox={`0 0 ${game.reels * 10} ${game.rows * 10}`} role="img" aria-label={t("Line {number}", { number: index + 1 })}>
+                {Array.from({ length: game.reels * game.rows }, (_, cell) => {
+                  const reel = cell % game.reels;
+                  const row = Math.floor(cell / game.reels);
+                  return <rect key={cell} x={reel * 10 + 1} y={row * 10 + 1} width="8" height="8" rx="1.5" className={shape[reel] === row ? "is-on" : undefined} />;
+                })}
+                <polyline points={shape.map((row, reel) => `${reel * 10 + 5},${row * 10 + 5}`).join(" ")} />
+              </svg>
+              <figcaption>{index + 1}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+      <div className="book-pt-foot">
+        <span className="book-pt-note">{t("Pays in ALL at a {amount} bet. Lines pay from the left reel.", { amount: formatStake(bet) })}</span>
+        <span className="book-pt-tabs">
+          <button type="button" className={page === "pays" ? "is-on" : undefined} aria-pressed={page === "pays"} onClick={() => setPage("pays")}>
+            {t("Paytable")}
+          </button>
+          <button type="button" className={page === "lines" ? "is-on" : undefined} aria-pressed={page === "lines"} onClick={() => setPage("lines")}>
+            {t("Lines")}
+          </button>
+          <button type="button" onClick={onRules}>
+            {t("All rules")}
+          </button>
+          <button type="button" className="is-close" onClick={onClose}>
+            {t("Back to the game")}
+          </button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function SymbolPicture({ symbol, alt }: { symbol: BookSymbol; alt: string }) {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={bookSymbolImage(symbol)} alt={alt} />;

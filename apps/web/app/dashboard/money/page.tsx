@@ -14,6 +14,28 @@ import { formatMoney } from "../../../lib/format";
 
 const PAGE = 30;
 type Filter = "all" | "topups" | "bets" | "casino";
+type Direction = "all" | "in" | "out";
+type Range = "all" | "today" | "week" | "month30" | "thisMonth" | "custom";
+type Summary = { count: number; in: number; out: number; net: number };
+/** How long the search waits after the last key before it asks. */
+const SEARCH_WAIT_MS = 350;
+
+/** "2026-10-31": a day on Albanian time, the calendar the history and its days follow; `back` days earlier. */
+function tiraneDay(back = 0): string {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Tirane", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [year, month, day] = parts.split("-").map(Number);
+  const at = new Date(Date.UTC(year, month - 1, day - back));
+  return at.toISOString().slice(0, 10);
+}
+
+/** The From and To days of a quick range. */
+function rangeDays(range: Range): { from: string; to: string } {
+  if (range === "today") return { from: tiraneDay(), to: tiraneDay() };
+  if (range === "week") return { from: tiraneDay(6), to: tiraneDay() };
+  if (range === "month30") return { from: tiraneDay(29), to: tiraneDay() };
+  if (range === "thisMonth") return { from: `${tiraneDay().slice(0, 8)}01`, to: tiraneDay() };
+  return { from: "", to: "" };
+}
 /** A day's casino line: `{game}_{playerId}_{day}`. Scratch's buy and result lines are already one card each. */
 const CASINO_DAY = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch)_.+_\d{4}-\d{2}-\d{2}$/;
 
@@ -26,13 +48,37 @@ const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 export default function MoneyPage() {
   const { getToken } = useAuth();
   const router = useRouter();
-  const { t, ts, date } = useI18n();
+  const { t, tn, ts, date } = useI18n();
   const toast = useToast();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [entries, setEntries] = useState<BalanceEntry[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  const [direction, setDirection] = useState<Direction>("all");
+  const [range, setRange] = useState<Range>("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [search, setSearch] = useState("");
+  /** The search as asked: it follows the box a moment after the last key. */
+  const [query, setQuery] = useState("");
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [filtering, setFiltering] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQuery(search.trim()), SEARCH_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  const filtered = filter !== "all" || direction !== "all" || Boolean(from) || Boolean(to) || Boolean(query);
+  /** The filters as the API takes them, on the history and on its summary. */
+  const params = useCallback(() => {
+    const out = new URLSearchParams();
+    if (filter !== "all") out.set("kind", filter);
+    if (direction !== "all") out.set("direction", direction);
+    if (from) out.set("from", from);
+    if (to) out.set("to", to);
+    if (query) out.set("q", query);
+    return out;
+  }, [filter, direction, from, to, query]);
 
   const load = useCallback(async () => {
     const token = await getToken();
@@ -42,15 +88,41 @@ export default function MoneyPage() {
       router.replace("/dashboard");
       return;
     }
-    const page = await apiFetch<BalanceEntry[]>(`/users/${profile.id}/balance/ledger?limit=${PAGE}`, token);
+    const query = params();
+    const [page, totals] = await Promise.all([
+      apiFetch<BalanceEntry[]>(`/users/${profile.id}/balance/ledger?limit=${PAGE}${query.size > 0 ? `&${query}` : ""}`, token),
+      query.size > 0 ? apiFetch<Summary>(`/users/${profile.id}/balance/ledger/summary?${query}`, token) : Promise.resolve(null),
+    ]);
     setMe(profile);
     setEntries(page);
+    setSummary(totals);
     setHasMore(page.length === PAGE);
-  }, [getToken, router]);
+  }, [getToken, router, params]);
 
   useEffect(() => {
-    load().catch((err) => toast.error(err instanceof Error ? err.message : t("Couldn't load your money history")));
+    setFiltering(true);
+    load()
+      .catch((err) => toast.error(err instanceof Error ? err.message : t("Couldn't load your money history")))
+      .finally(() => setFiltering(false));
   }, [load, toast, t]);
+
+  function chooseRange(next: Range) {
+    setRange(next);
+    if (next === "custom") return;
+    const days = rangeDays(next);
+    setFrom(days.from);
+    setTo(days.to);
+  }
+
+  function clearFilters() {
+    setFilter("all");
+    setDirection("all");
+    setRange("all");
+    setFrom("");
+    setTo("");
+    setSearch("");
+    setQuery("");
+  }
 
   useRealtime((event) => {
     if (event.type === "balance.changed" || event.type === "resync") void load().catch(() => undefined);
@@ -62,7 +134,9 @@ export default function MoneyPage() {
     if (!last || !me || !token) return;
     setLoadingMore(true);
     try {
-      const page = await apiFetch<BalanceEntry[]>(`/users/${me.id}/balance/ledger?limit=${PAGE}&before=${encodeURIComponent(last.createdAt)}`, token);
+      const query = params();
+      query.set("before", last.createdAt);
+      const page = await apiFetch<BalanceEntry[]>(`/users/${me.id}/balance/ledger?limit=${PAGE}&${query}`, token);
       setEntries((list) => [...(list ?? []), ...page]);
       setHasMore(page.length === PAGE);
     } catch (err) {
@@ -74,10 +148,8 @@ export default function MoneyPage() {
 
   if (!me || !entries) return <PageLoading label="Loading your money" />;
 
-  const isBet = (entry: BalanceEntry) => entry.type === "BET_STAKE" || entry.type === "BET_SETTLEMENT";
-  const shown = entries.filter((entry) =>
-    filter === "all" ? true : filter === "bets" ? isBet(entry) : filter === "casino" ? entry.type === "CASINO" : !isBet(entry) && entry.type !== "CASINO",
-  );
+  // The API filters (so "Show more" stays inside the filter); every line it sends is shown.
+  const shown = entries;
   const days: Array<[string, BalanceEntry[]]> = [];
   for (const entry of shown) {
     const label = date(entry.createdAt, DAY);
@@ -117,7 +189,7 @@ export default function MoneyPage() {
               ["all", t("All")],
               ["topups", t("Top-ups")],
               ["bets", t("Bets")],
-              ...(entries.some((entry) => entry.type === "CASINO") ? [["casino", t("Casino")] as [Filter, string]] : []),
+              ["casino", t("Casino")],
             ] as Array<[Filter, string]>
           ).map(([key, label]) => (
             <button key={key} type="button" className={`bet-chip${filter === key ? " is-active" : ""}`} onClick={() => setFilter(key)} aria-pressed={filter === key}>
@@ -126,9 +198,92 @@ export default function MoneyPage() {
           ))}
         </div>
 
+        {/* Search and days: words from a line (a match, a game, a reference, who sent it) or an amount, over any days. */}
+        <div className="money-filters">
+          <label className="money-search">
+            <span className="sr-only">{t("Search your history")}</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("Search: a match, a game, a reference or an amount")}
+              maxLength={100}
+            />
+          </label>
+          <div className="bet-chips money-ranges" role="group" aria-label={t("Days")}>
+            {(
+              [
+                ["all", t("All time")],
+                ["today", t("Today")],
+                ["week", t("Last 7 days")],
+                ["month30", t("Last 30 days")],
+                ["thisMonth", t("This month")],
+              ] as Array<[Range, string]>
+            ).map(([key, label]) => (
+              <button key={key} type="button" className={`bet-chip${range === key ? " is-active" : ""}`} onClick={() => chooseRange(key)} aria-pressed={range === key}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="money-dates">
+            <select className="money-direction" value={direction} onChange={(event) => setDirection(event.target.value as Direction)} aria-label={t("Money in or out")}>
+              <option value="all">{t("In and out")}</option>
+              <option value="in">{t("Money in")}</option>
+              <option value="out">{t("Money out")}</option>
+            </select>
+            <label>
+              <span className="muted">{t("From")}</span>
+              <input
+                type="date"
+                value={from}
+                max={to || tiraneDay()}
+                onChange={(event) => {
+                  setRange("custom");
+                  setFrom(event.target.value);
+                }}
+              />
+            </label>
+            <label>
+              <span className="muted">{t("To")}</span>
+              <input
+                type="date"
+                value={to}
+                min={from || undefined}
+                max={tiraneDay()}
+                onChange={(event) => {
+                  setRange("custom");
+                  setTo(event.target.value);
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {filtered ? (
+          <div className="money-summary" role="status">
+            {summary ? (
+              <span>
+                {tn(summary.count, "{count} line", "{count} lines")}
+                {" · "}
+                {t("In")} <strong className="money-amount is-in">+{formatMoney(summary.in)}</strong>
+                {" · "}
+                {t("Out")} <strong className="money-amount is-out">−{formatMoney(summary.out)}</strong>
+                {" · "}
+                {t("Net")} <strong className={`money-amount${summary.net >= 0 ? " is-in" : " is-out"}`}>{summary.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(summary.net))}</strong>
+              </span>
+            ) : (
+              <span className="muted">{t("Counting…")}</span>
+            )}
+            <button type="button" className="text-button" onClick={clearFilters}>
+              {t("Clear filters")}
+            </button>
+          </div>
+        ) : null}
+        {filtering ? <LoadingSpinner label="Searching" size="small" /> : null}
+
         {days.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            {entries.length === 0 ? t("Nothing yet. When your Manager or Owner gives you money, it shows here.") : t("Nothing of this kind yet.")}
+            {filtered ? t("Nothing matches these filters.") : t("Nothing yet. When your Manager or Owner gives you money, it shows here.")}
           </p>
         ) : (
           days.map(([label, list]) => (

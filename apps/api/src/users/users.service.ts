@@ -12,7 +12,7 @@ import { Actor, canCreateRole, canDelegateTo, roleRequiresMfa } from "../auth/pe
 import { FieldEncryptionService } from "../crypto/field-encryption.service";
 import { PrismaService } from "../prisma.service";
 import { playableGames } from "../casino/access";
-import { addDays, startOfDay } from "../time";
+import { addDays, midnight, startOfDay } from "../time";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { AdjustBalanceDto, DelegateCreditDto, ReclaimCreditDto } from "./dto/balance-transaction.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -93,6 +93,9 @@ export type LedgerHooks = {
   before?: (tx: Prisma.TransactionClient) => Promise<void>;
   after?: (tx: Prisma.TransactionClient, transactionId: string) => Promise<void>;
 };
+
+/** The ledger's filters (UsersService.ledgerFilter). */
+export type LedgerFilter = { from?: string; to?: string; q?: string; kind?: string; direction?: string };
 
 @Injectable()
 export class UsersService {
@@ -553,13 +556,80 @@ export class UsersService {
 
   /** Every credit this account has received or given — the full history behind its current balance. */
   /** Newest first. Pass `limit` (and `before`, the last entry's createdAt) to read it a page at a time. */
-  async balanceLedger(actor: Actor, id: string, page: { before?: string; limit?: number } = {}) {
+  /**
+   * The ledger's filters as a query: the days from and to (inclusive, on
+   * Albanian time), the kind (top-ups, bets, casino), the direction (money in
+   * or out) and a search. The search matches the line's text (a match, a
+   * game), its bet's reference, who sent or received it, and, when it's a
+   * number, the amount itself. Null when nothing is filtered.
+   */
+  private ledgerFilter(id: string, filter: LedgerFilter): Prisma.BalanceTransactionWhereInput | null {
+    const parts: Prisma.BalanceTransactionWhereInput[] = [];
+    const day = (value: string | undefined, name: string) => {
+      if (!value) return null;
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+      if (!match) throw new BadRequestException(`${name} must be a date like 2026-10-31`);
+      return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+    };
+    const from = day(filter.from, "From");
+    const to = day(filter.to, "To");
+    if (from) parts.push({ createdAt: { gte: midnight(from.year, from.month, from.day) } });
+    if (to) parts.push({ createdAt: { lt: midnight(to.year, to.month, to.day + 1) } });
+    if (filter.kind === "bets") parts.push({ type: { in: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT] } });
+    else if (filter.kind === "casino") parts.push({ type: BalanceTransactionType.CASINO });
+    else if (filter.kind === "topups") parts.push({ type: { notIn: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT, BalanceTransactionType.CASINO] } });
+    else if (filter.kind && filter.kind !== "all") throw new BadRequestException("Kind must be all, topups, bets or casino");
+    // Money in: received, or a line on this account that adds to it (a win, a top-up); out: given away, or one that takes from it (a stake, a loss).
+    if (filter.direction === "in") parts.push({ OR: [{ toUserId: id, amount: { gt: 0 } }, { fromUserId: id, amount: { lt: 0 } }] });
+    else if (filter.direction === "out") parts.push({ OR: [{ fromUserId: id, amount: { gt: 0 } }, { toUserId: id, amount: { lt: 0 } }] });
+    else if (filter.direction && filter.direction !== "all") throw new BadRequestException("Direction must be all, in or out");
+    const q = filter.q?.trim().slice(0, 100);
+    if (q) {
+      const words: Prisma.BalanceTransactionWhereInput[] = [
+        { reason: { contains: q, mode: "insensitive" } },
+        { betId: { contains: q.toLowerCase() } },
+        { fromUser: { username: { contains: q, mode: "insensitive" } } },
+        { toUser: { username: { contains: q, mode: "insensitive" } } },
+      ];
+      // "100" or "13,80": that amount either way (a stake is stored as a negative amount).
+      const number = Number(q.replace(",", "."));
+      if (/^\d+([.,]\d{1,2})?$/.test(q) && Number.isFinite(number)) {
+        words.push({ amount: new Prisma.Decimal(number.toFixed(2)) }, { amount: new Prisma.Decimal((-number).toFixed(2)) });
+      }
+      parts.push({ OR: words });
+    }
+    return parts.length > 0 ? { AND: parts } : null;
+  }
+
+  /** Money in, money out and how many lines, over the ledger with these filters (approved moves only). */
+  async balanceLedgerSummary(actor: Actor, id: string, filter: LedgerFilter = {}) {
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
+    if (!target) throw new NotFoundException("User not found");
+    if (target.role === Role.SUPER_ADMIN) throw new BadRequestException("Super Admin accounts do not hold a balance");
+    if (!(await this.hierarchy.canActOn(actor, id))) throw new ForbiddenException("Target is outside your hierarchy subtree");
+    const filtered = this.ledgerFilter(id, filter) ?? {};
+    const approved = { status: BalanceTransactionStatus.APPROVED };
+    const [received, given, count] = await Promise.all([
+      this.prisma.balanceTransaction.findMany({ where: { AND: [filtered, approved, { toUserId: id }] }, select: { amount: true } }),
+      this.prisma.balanceTransaction.findMany({ where: { AND: [filtered, approved, { fromUserId: id }] }, select: { amount: true } }),
+      this.prisma.balanceTransaction.count({ where: { AND: [filtered, { OR: [{ toUserId: id }, { fromUserId: id }] }] } }),
+    ]);
+    // Signed from this account's side, as in the ledger: received adds, given away takes.
+    const signed = [...received.map((row) => Number(row.amount)), ...given.map((row) => -Number(row.amount))];
+    const cents = (value: number) => Math.round(value * 100) / 100;
+    const moneyIn = cents(signed.filter((value) => value > 0).reduce((sum, value) => sum + value, 0));
+    const moneyOut = cents(-signed.filter((value) => value < 0).reduce((sum, value) => sum + value, 0));
+    return { count, in: moneyIn, out: moneyOut, net: cents(moneyIn - moneyOut) };
+  }
+
+  async balanceLedger(actor: Actor, id: string, page: { before?: string; limit?: number } & LedgerFilter = {}) {
     const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, balance: true } });
     if (!target) throw new NotFoundException("User not found");
     if (target.role === Role.SUPER_ADMIN) throw new BadRequestException("Super Admin accounts do not hold a balance");
     if (!(await this.hierarchy.canActOn(actor, id))) {
       throw new ForbiddenException("Target is outside your hierarchy subtree");
     }
+    const filtered = this.ledgerFilter(id, page);
     const before = page.before ? new Date(page.before) : null;
     // What the approved moves newer than this page changed: the balance just after its newest entry is the current one less that.
     const newer = before && !Number.isNaN(before.getTime()) ? { createdAt: { gte: before } } : null;
@@ -572,7 +642,9 @@ export class UsersService {
     let balanceAfter = Number(target.balance) - Number(inNewer?._sum.amount ?? 0) + Number(outNewer?._sum.amount ?? 0);
     const take = page.limit ? Math.min(Math.max(Math.floor(page.limit), 1), 100) : undefined;
     const entries = await this.prisma.balanceTransaction.findMany({
-      where: { OR: [{ toUserId: id }, { fromUserId: id }], ...(before && !Number.isNaN(before.getTime()) ? { createdAt: { lt: before } } : {}) },
+      where: {
+        AND: [{ OR: [{ toUserId: id }, { fromUserId: id }] }, ...(before && !Number.isNaN(before.getTime()) ? [{ createdAt: { lt: before } }] : []), ...(filtered ? [filtered] : [])],
+      },
       orderBy: { createdAt: "desc" },
       take,
       select: {
@@ -596,7 +668,14 @@ export class UsersService {
       const amount = entry.toUserId === id ? Number(entry.amount) : -Number(entry.amount);
       // A transfer rejected or still waiting moved no money: shown, but it changes nothing.
       const effect = entry.status === BalanceTransactionStatus.APPROVED ? amount : 0;
-      const row = { ...entry, amount, effect, balanceAfter: Math.round(balanceAfter * 100) / 100, counterparty: entry.toUserId === id ? entry.fromUser?.username ?? noCounterparty(entry.type) : entry.toUser.username };
+      // The balance after each line only adds up over the whole ledger: a filtered list leaves lines out, so it has none.
+      const row = {
+        ...entry,
+        amount,
+        effect,
+        balanceAfter: filtered ? undefined : Math.round(balanceAfter * 100) / 100,
+        counterparty: entry.toUserId === id ? entry.fromUser?.username ?? noCounterparty(entry.type) : entry.toUser.username,
+      };
       balanceAfter -= effect;
       return row;
     });

@@ -17753,3 +17753,86 @@ button.cab-field-box:disabled {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
   cursor: pointer;
 }
+
+/* My money: search, days and money in or out over the history, and what the filtered lines add up to. */
+.money-direction {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.money-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem 1rem;
+  align-items: center;
+}
+
+.money-search {
+  grid-column: 1 / -1;
+}
+
+.money-search input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.money-ranges {
+  flex-wrap: wrap;
+}
+
+.money-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.money-filters .money-dates label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.money-dates input {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  color-scheme: dark light;
+}
+
+.money-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.money-summary .money-amount {
+  font-size: inherit;
+}
+
+@media (max-width: 640px) {
+  .money-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+}

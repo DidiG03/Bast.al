@@ -202,8 +202,35 @@ export class UsersController {
   @ApiBearerAuth()
   @UseGuards(AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
-  balanceLedger(@CurrentActor() actor: Actor, @Param("id") id: string, @Query("before") before?: string, @Query("limit") limit?: string) {
-    return this.users.balanceLedger(actor, id, { before, limit: limit ? Number(limit) || undefined : undefined });
+  balanceLedger(
+    @CurrentActor() actor: Actor,
+    @Param("id") id: string,
+    @Query("before") before?: string,
+    @Query("limit") limit?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("q") q?: string,
+    @Query("kind") kind?: string,
+    @Query("direction") direction?: string,
+  ) {
+    return this.users.balanceLedger(actor, id, { before, limit: limit ? Number(limit) || undefined : undefined, from, to, q, kind, direction });
+  }
+
+  /** Money in, money out and how many lines, for the same filters as the ledger. */
+  @Get(":id/balance/ledger/summary")
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, MfaGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER, Role.PLAYER)
+  balanceLedgerSummary(
+    @CurrentActor() actor: Actor,
+    @Param("id") id: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("q") q?: string,
+    @Query("kind") kind?: string,
+    @Query("direction") direction?: string,
+  ) {
+    return this.users.balanceLedgerSummary(actor, id, { from, to, q, kind, direction });
   }
 
   @Get(":id/balance/ledger/rounds")

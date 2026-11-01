@@ -17,6 +17,7 @@ import { useGameKeys } from "./use-game-keys";
 import { apiFetch, type PenaltyDirection, type PenaltyRoundView, type PenaltyState, type PenaltyStepResult } from "../lib/api";
 import { formatMoney, formatStake } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 /** After the kick is chosen: the taker strikes the ball, it meets the keeper or the net, and the whole move is over, in ms (see penalty-scene.tsx). */
@@ -28,6 +29,7 @@ const STEP_TIMEOUT_MS = 12_000;
 
 /** Penalty for a Player: aim, the keeper dives, cash out before a save. */
 export function PenaltyGame() {
+  useCasinoSession("penalty", "Penalty");
   const { getToken } = useAuth();
   const { t, ts, tn, date } = useI18n();
   const toast = useToast();

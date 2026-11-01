@@ -8,7 +8,7 @@ import { POINTS_SPORTS, gradeBasketball, periodsResultOf } from "../odds/basketb
 import { gradeVolleyball, volleyballResultOf } from "../odds/volleyball";
 import { fightResultOf, gradeFight } from "../odds/mma";
 import { gradeTennis, tennisResultOf } from "../odds/tennis";
-import { OddsSyncService, UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
+import { type MatchMoment, OddsSyncService, UNPLAYED_VOID_MS } from "../odds/odds-sync.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { UsersService } from "../users/users.service";
@@ -142,7 +142,52 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
       sync.onGoalSeen = (eventId, timeline) => this.voidLateOnArrival(eventId, timeline);
       // A timeline that came in after a match's bets settled: the late ones among them are voided.
       sync.onTimeline = (eventIds) => this.recheckLate({ eventIds, since: new Date(Date.now() - LATE_RECHECK_MS) });
+      // A goal or a red card: the Players with open bets on the match hear of it.
+      sync.onMatchMoment = (eventId, moment) => this.alertOpenBets(eventId, moment);
     }
+  }
+
+  /**
+   * A goal or a red card in a live match: each Player with open bets on it
+   * (a single, or a leg of an accumulator, bet builder or system) gets one
+   * alert, in the bell and as a pop-up, with the score and the minute and
+   * how many of their bets are on the match. Never emailed. Players who turned
+   * off money alerts (Finance) don't get it.
+   */
+  async alertOpenBets(eventId: string, moment: MatchMoment) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { name: true, homeTeam: true, awayTeam: true, homeScore: true, awayScore: true, elapsed: true } });
+    if (!event) return 0;
+    const onMatch = { market: { eventId } };
+    const bets = await this.prisma.bet.findMany({
+      where: { status: BetStatus.OPEN, OR: [{ selection: onMatch }, { legs: { some: { selection: onMatch } } }] },
+      select: { playerId: true },
+    });
+    if (bets.length === 0) return 0;
+    const perPlayer = new Map<string, number>();
+    for (const bet of bets) perPlayer.set(bet.playerId, (perPlayer.get(bet.playerId) ?? 0) + 1);
+    const home = moment.home ?? event.homeScore;
+    const away = moment.away ?? event.awayScore;
+    const minute = moment.minute ?? event.elapsed;
+    const score = home !== null && away !== null ? `${home}–${away}` : null;
+    const team = moment.side === "home" ? event.homeTeam : moment.side === "away" ? event.awayTeam : null;
+    const at = minute !== null ? ` (${minute}')` : "";
+    const what = moment.kind === "goal" ? (score ? `It's ${score}${at}.` : null) : team ? `A red card for ${team}${at}.` : null;
+    if (!what) return 0;
+    const title = moment.kind === "goal" ? `Goal in ${event.name}` : `Red card in ${event.name}`;
+    for (const [playerId, count] of perPlayer) {
+      await this.notifications.create({
+        userId: playerId,
+        type: NotificationType.MATCH_ALERT,
+        title,
+        message: `${what} ${count === 1 ? "You have an open bet on this match." : `You have ${count} open bets on this match.`}`,
+        severity: NotificationSeverity.INFO,
+        deepLink: "/dashboard/bet?tab=open",
+        metadata: { eventId, kind: moment.kind },
+        email: false,
+      });
+    }
+    this.logger.log(`Match alert on ${event.name} (${moment.kind}${score ? `, ${score}` : ""}): ${perPlayer.size} Player(s) with ${bets.length} open bet(s)`);
+    return perPlayer.size;
   }
 
   async onModuleInit() {

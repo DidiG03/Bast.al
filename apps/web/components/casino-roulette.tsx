@@ -34,6 +34,7 @@ import {
   spotCentre,
 } from "../lib/roulette";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
@@ -81,6 +82,7 @@ function spotName(spot: string, t: I18n["t"]): string {
 
 /** European roulette for a Player: the wheel, the table, the chips and the last rounds. */
 export function RouletteGame() {
+  useCasinoSession("roulette", "Roulette");
   const { getToken } = useAuth();
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;

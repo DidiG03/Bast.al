@@ -30,6 +30,7 @@ import {
 import { formatMoney, formatStake } from "../lib/format";
 import { msg } from "../lib/i18n/core";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
+import { useCasinoSession } from "./use-casino-session";
 
 /** How often each symbol flashes past while the reels spin; looks only, the server decides where they stop. */
 const SPIN_WEIGHTS: Partial<Record<SlotSymbol, number>> = { LEMON: 10, CHERRY: 8, ORANGE: 6, MELON: 6, GRAPES: 6, PLUM: 4, SEVEN: 3, STAR: 2 };
@@ -180,6 +181,7 @@ export function useCountUp(target: number, instant: boolean): number {
 /** The Player's slot. */
 /** The fruit slot, for a Player: the cabinet, double or nothing, the last spins and the rules. */
 export function SlotGame() {
+  useCasinoSession("slot", "Sizzling Hot");
   const { getToken } = useAuth();
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;

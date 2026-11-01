@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { BalanceTransactionType, BetKind, BetStatus, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
@@ -973,6 +973,58 @@ export class BetsService {
       week: { count: week._count._all, staked: Number(week._sum.stake ?? 0), returned: Number(week._sum.payout ?? 0) },
       bets: bets.map(betView),
       hasMore: bets.length === limit,
+    };
+  }
+
+  /**
+   * "Bet again": a Player's own bet's picks as they stand now, to put back on
+   * the slip. Each pick comes with today's price and whether it can be bet on
+   * (`open`): a match that's over, or a market that's closed, isn't. The
+   * bet's kind and stake come too, so the slip can be set up the same way
+   * (singles, an accumulator or bet builder, or a system with its sizes).
+   * Nothing is placed: the slip places it, with its usual checks.
+   */
+  async again(actor: Actor, betId: string) {
+    if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players have bets");
+    const bet = await this.prisma.bet.findUnique({
+      where: { id: betId },
+      select: { playerId: true, kind: true, stake: true, system: true, selectionId: true, legs: { select: { selectionId: true }, orderBy: { sortOrder: "asc" } } },
+    });
+    if (!bet || bet.playerId !== actor.id) throw new NotFoundException("Bet not found");
+    const ids = bet.legs.length > 0 ? bet.legs.map((leg) => leg.selectionId) : bet.selectionId ? [bet.selectionId] : [];
+    const [rows, prices] = await Promise.all([
+      this.prisma.selection.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, market: { select: { id: true, name: true, event: { select: { id: true, name: true, startsAt: true, status: true, hidden: true } } } } },
+      }),
+      this.odds.pricesForPlayer(actor.id, ids),
+    ]);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const system = bet.system as { sizes?: number[]; lineStake?: number } | null;
+    return {
+      kind: bet.kind,
+      stake: Number(bet.stake),
+      system: system?.sizes ? { sizes: system.sizes, lineStake: Number(system.lineStake ?? 0) } : null,
+      picks: ids.flatMap((id) => {
+        const row = byId.get(id);
+        const price = prices.get(id);
+        if (!row || row.market.event.hidden) return [];
+        return [
+          {
+            selectionId: id,
+            eventId: row.market.event.id,
+            eventName: row.market.event.name,
+            startsAt: row.market.event.startsAt.toISOString(),
+            market: row.market.name,
+            marketId: row.market.id,
+            name: row.name,
+            odds: price?.odds ?? 0,
+            live: price?.live ?? false,
+            sp: price?.sp ?? false,
+            open: Boolean(price?.bettable),
+          },
+        ];
+      }),
     };
   }
 

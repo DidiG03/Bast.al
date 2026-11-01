@@ -119,7 +119,7 @@ export type SecurityOverview = {
 
 export type NotificationItem = {
   id: string;
-  type: "FUNDS_RECEIVED" | "FUNDS_RECLAIMED" | "APPROVAL_REQUESTED" | "COMMISSION_RATE_UPDATED" | "ACCOUNT_SUSPENDED" | "ACCOUNT_UPDATED" | "ACCOUNT_REASSIGNED" | "SUSPICIOUS_LOGIN" | "LOW_BALANCE" | "BET_SETTLED";
+  type: "FUNDS_RECEIVED" | "FUNDS_RECLAIMED" | "APPROVAL_REQUESTED" | "COMMISSION_RATE_UPDATED" | "ACCOUNT_SUSPENDED" | "ACCOUNT_UPDATED" | "ACCOUNT_REASSIGNED" | "SUSPICIOUS_LOGIN" | "LOW_BALANCE" | "BET_SETTLED" | "MATCH_ALERT";
   category: "FINANCE" | "ACCOUNT" | "SECURITY" | "SYSTEM";
   severity: "INFO" | "SUCCESS" | "WARNING" | "CRITICAL";
   title: string;
@@ -697,6 +697,14 @@ export type Bet = {
   voidReason: string | null;
   selection: { name: string; market: string } | null;
   event: BetEvent | null;
+};
+
+/** "Bet again" (GET /bets/:id/again): a bet's picks at today's prices, whether each can be bet on now, and how the bet was made. */
+export type BetAgain = {
+  kind: Bet["kind"];
+  stake: number;
+  system: { sizes: number[]; lineStake: number } | null;
+  picks: Array<{ selectionId: string; eventId: string; eventName: string; startsAt: string; market: string; marketId: string; name: string; odds: number; live: boolean; sp: boolean; open: boolean }>;
 };
 
 export type MyBets = {

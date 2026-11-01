@@ -195,7 +195,8 @@ export function NotificationCenter() {
       show(ts(incoming.message), {
         title: ts(incoming.title),
         onClick: () => {
-          if (incoming.type === "BET_SETTLED" && deepLink(incoming)) return;
+          // A settled bet opens the bet; a goal or red card in a match with an open bet opens the open bets.
+          if ((incoming.type === "BET_SETTLED" || incoming.type === "MATCH_ALERT") && deepLink(incoming)) return;
           setOpen(true);
         },
         ...(win ? { celebrate: true, duration: 10_000 } : {}),

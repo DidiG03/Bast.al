@@ -34,6 +34,7 @@ import {
 import { formatMoney, formatStake } from "../lib/format";
 import { msg } from "../lib/i18n/core";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
+import { useCasinoSession } from "./use-casino-session";
 
 /** How often each symbol flashes past while the reels spin; looks only, the server decides where they stop. */
 const SPIN_WEIGHTS: Partial<Record<BookSymbol, number>> = {
@@ -165,6 +166,7 @@ type Overlay = { kind: "intro"; special: BookPaying; spins: number; retrigger: b
 
 /** Book of Ra, for a Player: the cabinet, free spins, autoplay, double or nothing, the last spins and the rules. */
 export function BookGame() {
+  useCasinoSession("book", "Book of Ra");
   const { getToken } = useAuth();
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;

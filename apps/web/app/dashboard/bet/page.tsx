@@ -14,7 +14,7 @@ import { MarketPriceHistory } from "../../../components/price-history";
 import { useRealtime } from "../../../components/realtime-provider";
 import { SportIcon } from "../../../components/sport-icon";
 import { TeamCrest } from "../../../components/team-crest";
-import { ApiError, apiFetch, type Bet, type BuilderQuote, type LiveWait, type MarketPause, type MyBets, type OddsEvent, type OddsSelection, type OddsSettings, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
+import { ApiError, apiFetch, type Bet, type BetAgain, type BuilderQuote, type LiveWait, type MarketPause, type MyBets, type OddsEvent, type OddsSelection, type OddsSettings, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
 import { byImportance } from "../../../lib/importance";
 import { MAX_SLIP, forgetPicks, readSlip, saveSlip, slipStorageKey, type SlipItem } from "../../../lib/slip";
@@ -22,6 +22,7 @@ import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
 import { msg } from "../../../lib/i18n/core";
 import { HelpTip } from "../../../components/help-tip";
+import { useConfirm } from "../../../components/confirm-dialog";
 import { showBalance, showPending } from "../../../components/balance-chip";
 import { useTopUpRequest } from "../../../components/top-up-request";
 import { breakPause, liveClock } from "../../../lib/live";
@@ -675,6 +676,74 @@ function BetPage() {
     });
   }, [toast, t]);
 
+  const [confirm, confirmDialog] = useConfirm();
+  /**
+   * "Bet again": a settled bet's picks back on the slip at today's prices, set up the way the bet was (singles with its
+   * stake, an accumulator or bet builder, or a system with its sizes and stake per bet). Picks that can't be bet on now
+   * are left out, and said so. A slip with picks on it is replaced only once the Player says so.
+   */
+  const betAgain = useCallback(
+    async (bet: Bet) => {
+      const token = await getToken();
+      if (!token) return;
+      let again: BetAgain;
+      try {
+        again = await apiFetch<BetAgain>(`/bets/${bet.id}/again`, token);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t("Couldn't load that bet's picks"));
+        return;
+      }
+      const open = again.picks.filter((pick) => pick.open).slice(0, MAX_SLIP);
+      const left = again.picks.length - open.length;
+      if (open.length === 0) {
+        toast.error(t("None of this bet's picks can be bet on now: their matches have started, finished or closed."));
+        return;
+      }
+      const current = slipRef.current;
+      if (current.length > 0) {
+        const yes = await confirm({
+          title: t("Replace your slip?"),
+          message: tn(current.length, "Your slip has {count} pick. This bet's picks take its place.", "Your slip has {count} picks. This bet's picks take their place."),
+          confirmLabel: t("Replace"),
+        });
+        if (!yes) return;
+      }
+      const single = again.kind === "SINGLE";
+      const now = Date.now();
+      setSlip(
+        open.map((pick) => ({
+          selectionId: pick.selectionId,
+          eventId: pick.eventId,
+          eventName: pick.eventName,
+          startsAt: pick.startsAt,
+          market: pick.market,
+          marketId: pick.marketId,
+          name: pick.name,
+          odds: pick.odds,
+          stake: single ? String(again.stake) : "",
+          live: pick.live,
+          sp: pick.sp,
+          addedAt: now,
+        })),
+      );
+      if (again.kind === "SYSTEM" && again.system && open.length === again.picks.length) {
+        setMode("system");
+        setSystemKey(again.system.sizes.join(","));
+        setAccaStake(String(again.system.lineStake));
+      } else if (!single && open.length > 1) {
+        setMode("accumulator");
+        setAccaStake(String(again.stake));
+      } else {
+        setMode("singles");
+        if (!single) setSlip((items) => items.map((item) => ({ ...item, stake: String(again.stake) })));
+      }
+      setSheetOpen(true);
+      if (left > 0) toast.info(tn(left, "{count} pick was left out: it can't be bet on now.", "{count} picks were left out: they can't be bet on now."));
+      else toast.success(t("The picks are on your slip at today's prices. Check them, then place the bet."));
+    },
+    [getToken, toast, t, tn, confirm],
+  );
+
   const leagues = useMemo(() => Array.from(new Set((events ?? []).map((e) => e.league))).sort(), [events]);
   const query = search.trim().toLowerCase();
   const liveLabel = t("Live now");
@@ -999,7 +1068,7 @@ function BetPage() {
 
         </div>
       ) : (
-        <MyBetsList status={tab} version={betsVersion} />
+        <MyBetsList status={tab} version={betsVersion} onAgain={betAgain} />
       )}
 
       {slip.length > 0 && tab === "matches" && !sheetOpen ? (
@@ -1010,6 +1079,7 @@ function BetPage() {
         </button>
       ) : null}
 
+      {confirmDialog}
       {sheetOpen ? (
         <div className="bet-sheet-layer" role="dialog" aria-modal="true" aria-label={t("Bet slip")}>
           <button type="button" className="bet-sheet-backdrop" aria-label={t("Close bet slip")} onClick={closeSheet} />
@@ -2413,7 +2483,7 @@ const betsSeen = new Map<string, MyBets>();
 /** Bets on a page: a short first page shows sooner; "Show more" brings the next. */
 const BETS_PAGE = 20;
 
-function MyBetsList({ status, version }: { status: "open" | "settled"; version: number }) {
+function MyBetsList({ status, version, onAgain }: { status: "open" | "settled"; version: number; onAgain: (bet: Bet) => Promise<void> }) {
   const { getToken, userId } = useAuth();
   const { t, tn } = useI18n();
   const seenKey = `${userId ?? ""}:${status}`;
@@ -2510,7 +2580,7 @@ function MyBetsList({ status, version }: { status: "open" | "settled"; version: 
       ) : (
         <ul className="bet-list">
           {bets.map((bet) => (
-            <BetCard key={bet.id} bet={bet} />
+            <BetCard key={bet.id} bet={bet} onAgain={status === "settled" ? onAgain : undefined} />
           ))}
         </ul>
       )}
@@ -2528,7 +2598,26 @@ function systemLabel(system: NonNullable<Bet["system"]>, picks: number, t: I18n[
   return /from/.test(system.name) ? t("{sizes} from {picks}", { sizes: system.sizes.join("/"), picks }) : t(system.name);
 }
 
-function AccumulatorCard({ bet }: { bet: Bet }) {
+/** "Bet again" under a settled bet: its picks back on the slip at today's prices. Busy while they load. */
+function AgainButton({ bet, onAgain }: { bet: Bet; onAgain: (bet: Bet) => Promise<void> }) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className="secondary is-small bet-again"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        void onAgain(bet).finally(() => setBusy(false));
+      }}
+    >
+      {busy ? <LoadingSpinner label="Loading the picks" size="small" /> : <>↻ {t("Bet again")}</>}
+    </button>
+  );
+}
+
+function AccumulatorCard({ bet, onAgain }: { bet: Bet; onAgain?: (bet: Bet) => Promise<void> }) {
   const { t, tn, ts, date } = useI18n();
   const decided = bet.legs.filter((leg) => leg.result !== null).length;
   const when =
@@ -2573,14 +2662,15 @@ function AccumulatorCard({ bet }: { bet: Bet }) {
         {when}
         {voidText(bet.voidReason, ts, t)}
       </p>
+      {onAgain ? <AgainButton bet={bet} onAgain={onAgain} /> : null}
     </li>
   );
 }
 
-function BetCard({ bet }: { bet: Bet }) {
+function BetCard({ bet, onAgain }: { bet: Bet; onAgain?: (bet: Bet) => Promise<void> }) {
   const i18n = useI18n();
   const { t, ts, date } = i18n;
-  if (bet.kind !== "SINGLE") return <AccumulatorCard bet={bet} />;
+  if (bet.kind !== "SINGLE") return <AccumulatorCard bet={bet} onAgain={onAgain} />;
   const event = bet.event;
   const score = event?.result ?? (event && event.homeScore !== null && event.awayScore !== null && event.status !== "UPCOMING" ? { home: event.homeScore, away: event.awayScore } : null);
   let when = "";
@@ -2633,6 +2723,7 @@ function BetCard({ bet }: { bet: Bet }) {
         {voidText(bet.voidReason, ts, t)}
         {bet.status === "VOID" && !bet.voidReason ? ` · ${bet.sp ? t("Dog withdrawn or race called off, stake refunded") : t("Match called off, stake refunded")}` : ""}
       </p>
+      {onAgain ? <AgainButton bet={bet} onAgain={onAgain} /> : null}
     </li>
   );
 }

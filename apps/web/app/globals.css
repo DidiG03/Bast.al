@@ -17836,3 +17836,9 @@ button.cab-field-box:disabled {
   }
 
 }
+
+/* "Bet again" under a settled bet. */
+.bet-card .bet-again {
+  justify-self: start;
+  align-self: start;
+}

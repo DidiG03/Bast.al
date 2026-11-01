@@ -16,6 +16,7 @@ import { apiFetch, newIdempotencyKey, type DiceSeed, type DiceSeedChange, type S
 import { sha256Hex } from "../lib/dice";
 import { formatMoney, formatStake } from "../lib/format";
 import { CELLS, SYMBOL_ART, SYMBOL_NAMES, cardFromSeeds } from "../lib/scratch";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", second: "2-digit" };
 
@@ -62,6 +63,7 @@ function MiniCard({ cells, symbol }: { cells: ScratchSymbol[]; symbol: ScratchSy
 
 /** Scratch Cards for a Player: buy a card, scratch its 9 boxes, and check every card from its seeds. */
 export function ScratchGame() {
+  useCasinoSession("scratch", "Scratch Cards");
   const { getToken } = useAuth();
   const { t, ts, date } = useI18n();
   const toast = useToast();

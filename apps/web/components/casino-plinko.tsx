@@ -16,6 +16,7 @@ import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import { apiFetch, newIdempotencyKey, type PlinkoBall, type PlinkoDropResult, type PlinkoRisk, type PlinkoRows, type PlinkoState } from "../lib/api";
 import { formatMoney, formatStake } from "../lib/format";
 import { msg } from "../lib/i18n/core";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
@@ -68,6 +69,7 @@ type Falling = { id: number; path: number[]; start: number; step: number; rows: 
 
 /** Plinko for a Player: pick the rows, the risk and the stake, and drop balls. */
 export function PlinkoGame() {
+  useCasinoSession("plinko", "Plinko");
   const { getToken } = useAuth();
   const { t, tn, ts, date } = useI18n();
   const toast = useToast();

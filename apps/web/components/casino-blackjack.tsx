@@ -17,6 +17,7 @@ import { apiFetch, type BlackjackAction, type BlackjackMoveResult, type Blackjac
 import { SUIT_SYMBOLS, handTotal, isRedSuit, rankLabel } from "../lib/blackjack";
 import { formatMoney } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 /** The dealer's chip tray, decoration only: a row of stacks by colour. */
@@ -41,6 +42,7 @@ const cents = (value: number) => Math.round(value * 100);
 
 /** Blackjack for a Player: the table, the bet, the moves and the last rounds. */
 export function BlackjackGame() {
+  useCasinoSession("blackjack", "Blackjack");
   const { getToken } = useAuth();
   const i18n = useI18n();
   const { t, ts, date } = i18n;

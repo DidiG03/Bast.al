@@ -16,6 +16,7 @@ import { apiFetch, newIdempotencyKey, type DiceSeed, type DiceSeedChange, type K
 import { sha256Hex } from "../lib/dice";
 import { drawFromSeeds, quickPick, times } from "../lib/keno";
 import { formatMoney, formatStake } from "../lib/format";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", second: "2-digit" };
 
@@ -39,6 +40,7 @@ function parseMoney(text: string): number {
 
 /** Keno for a Player: pick 1 to 10 numbers, 20 of 80 are drawn, and the hits pay. Every draw can be checked from its seeds. */
 export function KenoGame() {
+  useCasinoSession("keno", "Keno");
   const { getToken } = useAuth();
   const { t, tn, ts, date } = useI18n();
   const toast = useToast();

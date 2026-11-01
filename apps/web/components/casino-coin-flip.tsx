@@ -16,6 +16,7 @@ import { apiFetch, newIdempotencyKey, type CoinFlipResult, type CoinFlipRound, t
 import { flipFromSeeds } from "../lib/coin-flip";
 import { sha256Hex } from "../lib/dice";
 import { formatMoney, formatStake } from "../lib/format";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", second: "2-digit" };
 
@@ -69,6 +70,7 @@ function MiniCoin({ side }: { side: CoinSide }) {
 
 /** Coin Flip for a Player: call heads or tails, flip, and check every flip from its seeds. */
 export function CoinFlipGame() {
+  useCasinoSession("coinflip", "Coin Flip");
   const { getToken } = useAuth();
   const { t, ts, date } = useI18n();
   const toast = useToast();

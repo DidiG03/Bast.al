@@ -16,6 +16,7 @@ import { useGameKeys } from "./use-game-keys";
 import { apiFetch, type MinesRoundView, type MinesState, type MinesStepResult, type MinesTile } from "../lib/api";
 import { formatMoney, formatStake } from "../lib/format";
 import { useIdempotencyKey } from "../lib/use-idempotency-key";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
@@ -52,6 +53,7 @@ function justOpened(previous: MinesRoundView | null, next: MinesRoundView): numb
 
 /** Mines for a Player: pick the mines and the stake, open tiles, cash out before one blows. */
 export function MinesGame() {
+  useCasinoSession("mines", "Mines");
   const { getToken } = useAuth();
   const { t, ts, tn, date } = useI18n();
   const toast = useToast();

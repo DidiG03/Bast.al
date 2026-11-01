@@ -14,6 +14,9 @@ import { marketStale } from "./pricing";
 import { mockFetchJson } from "./mock-feed";
 import { LIVE_HOT_MS, PollingStats, hotMatches, minuteRoom } from "./live-polling";
 
+/** A goal or a red card just seen on a live match (onMatchMoment): the score then, the minute, and the side it was for, when known. */
+export type MatchMoment = { kind: "goal" | "red"; home: number | null; away: number | null; minute: number | null; side: "home" | "away" | null };
+
 /**
  * Leagues synced when API_FOOTBALL_LEAGUES isn't set (API-Football ids), picked
  * so there's football every day of the year, international breaks included.
@@ -172,6 +175,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * the open live bets placed after it on a score without it (bets/late.ts).
    */
   onGoalSeen?: (eventId: string, timeline: LateTimeline | null) => Promise<unknown>;
+  /**
+   * Called once for each new goal or red card the site sees on a live match
+   * (a goal as its score first arrives, a red card as it first shows in the
+   * feed's timeline): SettlementService tells the Players with open bets on
+   * the match. Never holds up the sync.
+   */
+  onMatchMoment?: (eventId: string, moment: MatchMoment) => Promise<unknown>;
   /** Called with finished matches whose timeline just came in: SettlementService looks again at their live bets that already settled. */
   onTimeline?: (eventIds: string[]) => Promise<unknown>;
   /** Checks with the feed for one match, shared by bets placed at the same moment. */
@@ -947,6 +957,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         if (scoreKey && this.repeatScore(eventId, reason, scoreKey, { reason: was?.liveCooldownReason ?? null, until: was?.liveCooldownUntil ?? null }, savedKey, now)) return false;
         return true;
       });
+      if (starting.includes("red")) {
+        const reds = (pair: [number, number] | null | undefined) => pair ?? [0, 0];
+        const side = centre.red && prevCentre?.red ? (reds(centre.red)[0] > reds(prevCentre.red)[0] ? "home" : reds(centre.red)[1] > reds(prevCentre.red)[1] ? "away" : null) : null;
+        this.momentSeen(eventId, { kind: "red", home: was?.homeScore ?? null, away: was?.awayScore ?? null, minute: was?.elapsed ?? null, side });
+      }
       let pause: { until: Date | null; reason: string | null } | null = null;
       for (const reason of starting) {
         if (GOAL_COOLDOWN_MS <= 0) continue;
@@ -1102,6 +1117,12 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
    * how far behind the feed was is logged; the goals noted also measure the
    * feed's delay over time (feedDelay). Never holds up the live sync.
    */
+  /** Hands a new goal or red card to onMatchMoment, without waiting for it or letting it fail the sync. */
+  private momentSeen(eventId: string, moment: MatchMoment) {
+    if (!this.onMatchMoment) return;
+    void this.onMatchMoment(eventId, moment).catch((error) => this.logger.warn(`Match alert for event ${eventId} failed: ${error instanceof Error ? error.message : String(error)}`));
+  }
+
   private async noteGoal(
     eventId: string,
     before: { homeScore: number | null; awayScore: number | null },
@@ -1125,6 +1146,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         });
       if (count === 0) return false;
       this.logger.log(`Goal seen on event ${eventId}: ${after.homeScore}–${after.awayScore} at ${elapsed ?? "?"}' from the ${source} feed`);
+      this.momentSeen(eventId, { kind: "goal", home: after.homeScore, away: after.awayScore, minute: elapsed, side: after.homeScore > before.homeScore ? "home" : "away" });
       void this.goalArrived(eventId, { home: after.homeScore, away: after.awayScore }, source, seenAt).catch((error) =>
         this.logger.warn(`Late check on event ${eventId}'s new goal failed: ${error instanceof Error ? error.message : String(error)}`),
       );

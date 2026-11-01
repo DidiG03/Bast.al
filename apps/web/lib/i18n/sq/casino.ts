@@ -779,4 +779,9 @@ export const casino: Record<string, string> = {
   "Bet/line": "Bast/linjë",
   "Gamble": "Dyfisho",
   "Pays": "Fitimet",
+  "staked {amount}": "vënë {amount}",
+  "won {amount}": "fituar {amount}",
+  "Your {game} session": "Sesioni yt në {game}",
+  "{count} minute": "{count} minutë",
+  "{count} minutes": "{count} minuta",
 };

@@ -61,6 +61,13 @@ export class BetsController {
     return this.bets.slipInfo(actor);
   }
 
+  /** A Player's own bet's picks at today's prices, to put back on the slip ("Bet again"). Places nothing. */
+  @Get(":id/again")
+  @Roles(Role.PLAYER)
+  again(@CurrentActor() actor: Actor, @Param("id") id: string) {
+    return this.bets.again(actor, id);
+  }
+
   /** Super Admin sees every bet; an Owner or Manager only their own Players' bets. */
   @Get("admin")
   @Roles(Role.SUPER_ADMIN, Role.OWNER, Role.MANAGER)

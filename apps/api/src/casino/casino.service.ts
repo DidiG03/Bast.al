@@ -144,6 +144,46 @@ export class CasinoService {
   }
 
   /**
+   * A Player's session at one game since `since` (when they opened it), for
+   * the summary shown as they leave: rounds played (paid and free), double or
+   * nothing guesses, what the paid rounds took, and what came back. `net` is
+   * every round's win less what it took (a guess risks a win already paid,
+   * so it counts as taken and won like a round); `won` is staked plus net.
+   * `game` is a lobby game: slot, book, blackjack, roulette, mines, penalty,
+   * plinko, dice, keno, coinflip or scratch.
+   */
+  async session(actor: Actor, game: string, since: string) {
+    if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play the Casino");
+    const from = new Date(since);
+    if (!since || Number.isNaN(from.getTime())) throw new BadRequestException("Since must be a time");
+    const bookGuess = { path: ["game"], equals: "book" } as const;
+    const where: Prisma.CasinoSpinWhereInput = { playerId: actor.id, createdAt: { gte: from } };
+    if (game === "slot") where.OR = [{ kind: "SPIN" }, { kind: "GAMBLE", NOT: { gamble: bookGuess } }];
+    else if (game === "book") where.OR = [{ kind: "BOOK" }, { kind: "GAMBLE", gamble: bookGuess }];
+    else {
+      const kinds: Record<string, CasinoPlayKind> = { blackjack: "BLACKJACK", roulette: "ROULETTE", mines: "MINES", penalty: "PENALTY", plinko: "PLINKO", dice: "DICE", keno: "KENO", coinflip: "COIN_FLIP", scratch: "SCRATCH" };
+      if (!kinds[game]) throw new BadRequestException("Unknown game");
+      where.kind = kinds[game];
+    }
+    const rows = await this.prisma.casinoSpin.findMany({ where, select: { kind: true, free: true, stake: true, win: true } });
+    const cents = (value: number) => Math.round(value * 100) / 100;
+    let staked = 0;
+    let net = 0;
+    let rounds = 0;
+    let gambles = 0;
+    for (const row of rows) {
+      const stake = row.free ? 0 : Number(row.stake);
+      net += Number(row.win) - stake;
+      if (row.kind === "GAMBLE") gambles++;
+      else {
+        rounds++;
+        staked += stake;
+      }
+    }
+    return { rounds, gambles, staked: cents(staked), won: cents(Math.max(0, staked + net)), net: cents(net) };
+  }
+
+  /**
    * The game for the home page's "Continue playing": a round still in play
    * first (a blackjack hand, Mines, Penalty, Book of Ra's free spins, or a win
    * waiting for double or nothing), then the game played last. Null when the

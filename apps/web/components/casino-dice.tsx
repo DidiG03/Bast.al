@@ -17,6 +17,7 @@ import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import { apiFetch, newIdempotencyKey, type DiceRoll, type DiceRollResult, type DiceSeed, type DiceSeedChange, type DiceState } from "../lib/api";
 import { clampWinning, flip, multiplierOf, payoutOf, points, rollFromSeeds, sha256Hex, targetFor, targetRange, winningForMultiplier, winningNumbers, type DiceDirection } from "../lib/dice";
 import { formatMoney, formatStake } from "../lib/format";
+import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", second: "2-digit" };
 
@@ -39,6 +40,7 @@ function parseMoney(text: string): number {
 
 /** Dice for a Player: set a target, roll over or under it, and check every roll from its seeds. */
 export function DiceGame() {
+  useCasinoSession("dice", "Dice");
   const { getToken } = useAuth();
   const { t, ts, date } = useI18n();
   const toast = useToast();

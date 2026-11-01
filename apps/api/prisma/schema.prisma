@@ -56,6 +56,8 @@ enum NotificationType {
   COMMISSION_RATE_UPDATED
   LOW_BALANCE
   BET_SETTLED
+  /// A goal or a red card in a match a Player has an open bet on.
+  MATCH_ALERT
 }
 
 enum NotificationCategory {

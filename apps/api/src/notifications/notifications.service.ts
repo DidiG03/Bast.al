@@ -84,6 +84,8 @@ export class NotificationsService {
     severity?: NotificationSeverity;
     deepLink?: string;
     metadata?: Record<string, string | number | boolean | null>;
+    /** False: never emailed (a goal in a match is news for the next minutes only). */
+    email?: boolean;
   }) {
     try {
       const preferences = await this.prisma.notificationPreference.findUnique({ where: { userId: input.userId } });
@@ -108,7 +110,7 @@ export class NotificationsService {
         },
       });
       await this.realtime.publish(input.userId, { type: "notification.created", notification: created });
-      if (preferences?.emailEnabled && this.preferenceEnabled(preferences, category)) await this.sendEmail(input.userId, created.title, created.message);
+      if (input.email !== false && preferences?.emailEnabled && this.preferenceEnabled(preferences, category)) await this.sendEmail(input.userId, created.title, created.message);
       return created;
     } catch (error) {
       this.logger.error(`Failed to create notification (userId=${input.userId}, type=${input.type}): ${String(error)}`);
@@ -179,7 +181,7 @@ export class NotificationsService {
   }
 
   private categoryFor(type: NotificationType): NotificationCategory {
-    if (type === NotificationType.FUNDS_RECEIVED || type === NotificationType.FUNDS_RECLAIMED || type === NotificationType.APPROVAL_REQUESTED || type === NotificationType.COMMISSION_RATE_UPDATED || type === NotificationType.LOW_BALANCE || type === NotificationType.BET_SETTLED) return NotificationCategory.FINANCE;
+    if (type === NotificationType.FUNDS_RECEIVED || type === NotificationType.FUNDS_RECLAIMED || type === NotificationType.APPROVAL_REQUESTED || type === NotificationType.COMMISSION_RATE_UPDATED || type === NotificationType.LOW_BALANCE || type === NotificationType.BET_SETTLED || type === NotificationType.MATCH_ALERT) return NotificationCategory.FINANCE;
     if (type === NotificationType.SUSPICIOUS_LOGIN) return NotificationCategory.SECURITY;
     if (type === NotificationType.ACCOUNT_SUSPENDED || type === NotificationType.ACCOUNT_UPDATED || type === NotificationType.ACCOUNT_REASSIGNED) return NotificationCategory.ACCOUNT;
     return NotificationCategory.SYSTEM;

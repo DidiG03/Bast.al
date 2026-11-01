@@ -267,6 +267,13 @@ export class CasinoController {
     return { last: await this.casino.lastGame(actor) };
   }
 
+  /** A Player's session at one game since they opened it, for the summary as they leave. */
+  @Get("session")
+  @Roles(Role.PLAYER)
+  session(@CurrentActor() actor: Actor, @Query("game") game: string, @Query("since") since: string) {
+    return this.casino.session(actor, game ?? "", since ?? "");
+  }
+
   /** The Player's Casino: can they play, the rules, free spins, recent spins. */
   @Get()
   @Roles(Role.PLAYER)

@@ -17358,7 +17358,7 @@ html[data-theme="light"] .role-player .bet-status-lost {
 }
 
 /* ============================================================
-   Book of Ra: the control panel, as on the cabinet
+   The slots' control panel (Book of Ra, Sizzling Hot), as on the cabinet
    ============================================================ */
 /*
  * The message across the top, Autoplay beside it; below, the labelled boxes
@@ -17366,7 +17366,7 @@ html[data-theme="light"] .role-player .bet-status-lost {
  * Start. Glossy black boxes with yellow numbers, grey label tabs, green
  * steppers, a blue Paytable, a grey Gamble and green Autoplay and Start.
  */
-.book-panel {
+.cab-panel {
   display: grid;
   flex: none;
   grid-template-columns: minmax(5.5rem, auto) auto auto minmax(4.5rem, auto) minmax(0, 1.35fr) minmax(0, 1fr) minmax(7.5rem, 0.95fr);
@@ -17382,7 +17382,7 @@ html[data-theme="light"] .role-player .bet-status-lost {
   z-index: 3;
 }
 
-.book-panel-msg {
+.cab-panel-msg {
   display: flex;
   grid-area: msg;
   align-items: center;
@@ -17396,7 +17396,7 @@ html[data-theme="light"] .role-player .bet-status-lost {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 3px 6px rgba(0, 0, 0, 0.6);
 }
 
-.book-panel-text {
+.cab-panel-text {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -17409,12 +17409,12 @@ html[data-theme="light"] .role-player .bet-status-lost {
   white-space: nowrap;
 }
 
-.book-panel-msg.is-win .book-panel-text {
+.cab-panel-msg.is-win .cab-panel-text {
   color: #fff;
   text-shadow: 0 0 10px rgba(255, 230, 80, 0.8), 0 2px 2px rgba(0, 0, 0, 0.8);
 }
 
-.book-panel-sound {
+.cab-panel-sound {
   flex: none;
   padding: 0.2rem;
   border: 0;
@@ -17424,23 +17424,23 @@ html[data-theme="light"] .role-player .bet-status-lost {
   opacity: 0.85;
 }
 
-.book-panel-msg .casino-combos.book-wins {
+.cab-panel .cab-panel-msg .casino-combos {
   flex: 0 1 auto;
   max-width: 45%;
   min-height: 0;
   justify-content: flex-end;
 }
 
-.book-panel-msg .casino-combos.book-wins.is-empty {
+.cab-panel .cab-panel-msg .casino-combos.is-empty {
   display: none;
 }
 
-.book-panel-msg .casino-combos-hint {
+.cab-panel .cab-panel-msg .casino-combos-hint {
   display: none;
 }
 
 /* A labelled box: the grey tab, then the glossy black box with its number. */
-.book-field {
+.cab-field {
   position: relative;
   display: grid;
   justify-items: stretch;
@@ -17448,23 +17448,23 @@ html[data-theme="light"] .role-player .bet-status-lost {
   min-width: 0;
 }
 
-.book-field.is-credit {
+.cab-field.is-credit {
   grid-area: credit;
 }
 
-.book-field.is-lines {
+.cab-field.is-lines {
   grid-area: lines;
 }
 
-.book-field.is-line-bet {
+.cab-field.is-line-bet {
   grid-area: step;
 }
 
-.book-field.is-bet {
+.cab-field.is-bet {
   grid-area: bet;
 }
 
-.book-field-label {
+.cab-field-label {
   justify-self: center;
   min-width: 80%;
   padding: 0.05rem 0.7rem;
@@ -17478,7 +17478,7 @@ html[data-theme="light"] .role-player .bet-status-lost {
   white-space: nowrap;
 }
 
-.book-field-box {
+.cab-field-box {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -17493,7 +17493,7 @@ html[data-theme="light"] .role-player .bet-status-lost {
   font: inherit;
 }
 
-.book-field-box b {
+.cab-field-box b {
   min-width: 0;
   overflow: hidden;
   font-size: clamp(1rem, 1.9vw, 1.45rem);
@@ -17503,29 +17503,29 @@ html[data-theme="light"] .role-player .bet-status-lost {
   white-space: nowrap;
 }
 
-.book-field.is-credit .book-field-box {
+.cab-field.is-credit .cab-field-box {
   justify-content: flex-end;
 }
 
-.book-field.is-line-bet .book-field-box {
+.cab-field.is-line-bet .cab-field-box {
   padding: 0 0.25rem;
 }
 
-.book-field.is-line-bet .book-field-box b {
+.cab-field.is-line-bet .cab-field-box b {
   min-width: 2.6rem;
   text-align: center;
 }
 
-button.book-field-box {
+button.cab-field-box {
   cursor: pointer;
 }
 
-button.book-field-box:disabled {
+button.cab-field-box:disabled {
   cursor: default;
 }
 
 /* The green − and + squares. */
-.book-step {
+.cab-step {
   display: grid;
   flex: none;
   place-items: center;
@@ -17543,7 +17543,7 @@ button.book-field-box:disabled {
   cursor: pointer;
 }
 
-.book-step:disabled {
+.cab-step:disabled {
   border-color: #9a9a9a;
   background: linear-gradient(180deg, #b8b8b8, #7a7a7a);
   color: #555;
@@ -17551,7 +17551,7 @@ button.book-field-box:disabled {
 }
 
 /* The big buttons. */
-.book-key {
+.cab-key {
   height: 2.75rem;
   min-width: 0;
   padding: 0 0.6rem;
@@ -17567,11 +17567,11 @@ button.book-field-box:disabled {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
-.book-key:disabled {
+.cab-key:disabled {
   cursor: default;
 }
 
-.book-key.is-blue {
+.cab-key.is-blue {
   grid-area: pay;
   border-color: #9cc2ff;
   background: linear-gradient(180deg, #5a95ff 0%, #2459d6 50%, #163fa8 52%, #1e4fc2 100%);
@@ -17579,25 +17579,26 @@ button.book-field-box:disabled {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
-.book-key.is-blue.is-on {
+.cab-key.is-blue.is-on {
   border-color: #fff;
   background: linear-gradient(180deg, #1e4fc2, #133a96);
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45);
 }
 
-.book-key.is-blue:disabled {
+.cab-key.is-blue:disabled {
   filter: saturate(0.4) brightness(0.8);
 }
 
 /* Gamble: grey until there's a win to gamble, then gold. */
-.book-key.is-gamble {
+.cab-key.is-gamble {
   grid-area: gamble;
   border-color: #ffe08a;
   background: linear-gradient(180deg, #ffd34d 0%, #e09a12 50%, #b9760a 52%, #d18d10 100%);
   color: #3a2200;
 }
 
-.book-key.is-gamble:disabled {
+.cab-key.is-gamble:disabled,
+.cab-key.is-gamble.is-off {
   border-color: #b5b5b5;
   background: linear-gradient(180deg, #cfcfcf 0%, #9a9a9a 50%, #858585 52%, #9c9c9c 100%);
   color: #b9b9b9;
@@ -17605,45 +17606,45 @@ button.book-field-box:disabled {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
-.book-key.is-green {
+.cab-key.is-green {
   border-color: #e6ffcf;
   background: linear-gradient(180deg, #a6f070 0%, #52c22a 50%, #3aa214 52%, #4cba22 100%);
   color: #0d2005;
 }
 
-.book-key.is-green:disabled {
+.cab-key.is-green:disabled {
   filter: saturate(0.45) brightness(0.75);
 }
 
-.book-key.is-green.is-on {
+.cab-key.is-green.is-on {
   background: linear-gradient(180deg, #3aa214, #2c7d0e);
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45);
 }
 
-.book-key.is-start {
+.cab-key.is-start {
   grid-area: start;
 }
 
-.book-panel .book-auto {
+.cab-panel .book-auto {
   grid-area: auto;
   align-self: stretch;
 }
 
 /* Autoplay: as tall as the message, beside it. */
-.book-key.is-autoplay {
+.cab-key.is-autoplay {
   flex: 1;
   height: auto;
   min-height: 3.3rem;
   border-radius: 9px;
 }
 
-.book-panel .book-auto-menu {
+.cab-panel .book-auto-menu {
   right: 0;
 }
 
 /* A narrow window or a tablet held upright: three rows. */
 @media (max-width: 760px) and (min-height: 521px) {
-  .book-panel {
+  .cab-panel {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     grid-template-areas:
       "msg msg msg msg"
@@ -17651,7 +17652,7 @@ button.book-field-box:disabled {
       "pay gamble auto start";
   }
 
-  .book-key.is-autoplay {
+  .cab-key.is-autoplay {
     min-height: 0;
     height: 2.75rem;
   }
@@ -17659,7 +17660,7 @@ button.book-field-box:disabled {
 
 /* A phone held sideways: one short row, without the labels; Lines (always 10) and Gamble (it comes up by itself) are left out. */
 @media (orientation: landscape) and (max-height: 520px) {
-  .book-panel {
+  .cab-panel {
     grid-template-columns: minmax(3.6rem, auto) minmax(0, 1fr) auto auto auto auto auto;
     grid-template-areas: "credit msg step bet pay auto start";
     align-items: center;
@@ -17668,27 +17669,27 @@ button.book-field-box:disabled {
     padding: 0.2rem 0 0.25rem;
   }
 
-  .book-field-label,
-  .book-field.is-lines,
-  .book-key.is-gamble,
-  .book-panel-sound,
-  .book-panel-msg .casino-combos.book-wins {
+  .cab-field-label,
+  .slot-cabinet.is-book .cab-field.is-lines,
+  .slot-cabinet.is-book .cab-key.is-gamble,
+  .cab-panel-sound,
+  .cab-panel .cab-panel-msg .casino-combos {
     display: none;
   }
 
-  .book-panel-msg {
+  .cab-panel-msg {
     height: 2.4rem;
     padding: 0 0.35rem;
     border-radius: 8px;
   }
 
-  .book-panel-text {
+  .cab-panel-text {
     font-size: 0.78rem;
   }
 
-  .book-field-box,
-  .book-key,
-  .book-key.is-autoplay {
+  .cab-field-box,
+  .cab-key,
+  .cab-key.is-autoplay {
     height: 2.4rem;
     min-height: 0;
     padding: 0 0.35rem;
@@ -17696,21 +17697,59 @@ button.book-field-box:disabled {
     font-size: 0.72rem;
   }
 
-  .book-field-box b {
+  .cab-field-box b {
     font-size: 0.82rem;
   }
 
-  .book-step {
+  .cab-step {
     width: 1.7rem;
     height: 1.7rem;
     font-size: 1.1rem;
   }
 
-  .book-field.is-line-bet .book-field-box b {
+  .cab-field.is-line-bet .cab-field-box b {
     min-width: 1.8rem;
   }
 
-  .book-key.is-start {
+  .cab-key.is-start {
     min-width: 4rem;
   }
+}
+
+/* Sizzling Hot's Lines box has its own − and + (5 or 10 lines). */
+.cab-field.is-lines:has(.cab-step) .cab-field-box {
+  padding: 0 0.25rem;
+}
+
+.cab-field.is-lines:has(.cab-step) .cab-field-box b {
+  min-width: 2rem;
+  text-align: center;
+}
+
+/* Sizzling Hot: the panel on a dark band across the cabinet, as its red bar was. */
+.slot-cabinet:not(.is-book) .cab-panel {
+  width: 100%;
+  padding: 0.45rem max(0.6rem, calc((100% - 64rem) / 2)) 0.65rem;
+  background: linear-gradient(180deg, #2a0705, #160302);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* A phone held sideways: Sizzling Hot keeps Lines and the red or black switch, so the phone row needs them in its columns. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .slot-cabinet:not(.is-book) .cab-panel {
+    grid-template-columns: minmax(3.4rem, auto) minmax(0, 1fr) auto auto auto auto auto auto auto;
+    grid-template-areas: "credit msg lines step bet pay gamble auto start";
+    padding: 0.2rem 0.3rem 0.25rem;
+  }
+
+  .slot-cabinet:not(.is-book) .cab-step {
+    width: 1.5rem;
+  }
+}
+
+/* Switched off but still a switch (Sizzling Hot's red or black): grey, with dark words that read as pressable. */
+.cab-key.is-gamble.is-off:not(:disabled) {
+  color: #3d3d3d;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  cursor: pointer;
 }

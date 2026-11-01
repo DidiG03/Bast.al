@@ -666,11 +666,11 @@ export function BookGame() {
                 The control panel, as on the cabinet: the message across the top (with the sound and the last spin's wins),
                 then Credit, Lines, Bet per line (− +) and Bet, labelled; Paytable and Gamble; Autoplay and Start on the right.
               */}
-              <footer className="book-panel">
-                <div className={`book-panel-msg${lastWin || card?.won ? " is-win" : ""}`}>
+              <footer className="cab-panel">
+                <div className={`cab-panel-msg${lastWin || card?.won ? " is-win" : ""}`}>
                   <button
                     type="button"
-                    className="book-panel-sound"
+                    className="cab-panel-sound"
                     aria-pressed={soundOn}
                     aria-label={soundOn ? t("Sound on. Tap to turn it off.") : t("Sound off. Tap to turn it on.")}
                     onClick={() => {
@@ -681,7 +681,7 @@ export function BookGame() {
                   >
                     <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
                   </button>
-                  <span className="book-panel-text" aria-live="polite">
+                  <span className="cab-panel-text" aria-live="polite">
                     {message}
                   </span>
                   <div className={`casino-combos book-wins${combos.length === 0 || gambleOpen ? " is-empty" : ""}`} role="group" aria-label={t("Your wins on this spin")}>
@@ -710,28 +710,28 @@ export function BookGame() {
                   </div>
                 </div>
 
-                <div className="book-field is-credit">
-                  <span className="book-field-label">{t("Credit")}</span>
-                  <span className="book-field-box">
+                <div className="cab-field is-credit">
+                  <span className="cab-field-label">{t("Credit")}</span>
+                  <span className="cab-field-box">
                     <b>{plainMoney(balance)}</b>
                   </span>
                 </div>
-                <div className="book-field is-lines">
-                  <span className="book-field-label">{t("Lines")}</span>
-                  <span className="book-field-box">
+                <div className="cab-field is-lines">
+                  <span className="cab-field-label">{t("Lines")}</span>
+                  <span className="cab-field-box">
                     <b>{state.game.lines}</b>
                   </span>
                 </div>
-                <div className="book-field is-line-bet">
-                  <span className="book-field-label">{t("Bet/line")}</span>
-                  <span className="book-field-box">
-                    <button type="button" className="book-step" onClick={() => stepBet(-1)} disabled={!canChangeBet || betIndex <= 0} aria-label={t("Lower the bet")}>
+                <div className="cab-field is-line-bet">
+                  <span className="cab-field-label">{t("Bet/line")}</span>
+                  <span className="cab-field-box">
+                    <button type="button" className="cab-step" onClick={() => stepBet(-1)} disabled={!canChangeBet || betIndex <= 0} aria-label={t("Lower the bet")}>
                       −
                     </button>
                     <b>{plainStake(shownBet / state.game.lines)}</b>
                     <button
                       type="button"
-                      className="book-step"
+                      className="cab-step"
                       onClick={() => stepBet(1)}
                       disabled={!canChangeBet || betIndex >= allowedBets.length - 1 || tooBig(allowedBets[betIndex + 1] ?? Infinity)}
                       aria-label={t("Raise the bet")}
@@ -740,11 +740,11 @@ export function BookGame() {
                     </button>
                   </span>
                 </div>
-                <div className="book-field is-bet">
-                  <span className="book-field-label">{t("Bet")}</span>
+                <div className="cab-field is-bet">
+                  <span className="cab-field-label">{t("Bet")}</span>
                   <button
                     type="button"
-                    className="book-field-box"
+                    className="cab-field-box"
                     aria-expanded={betMenu}
                     aria-label={`${t("Change the bet")}: ${formatStake(shownBet)}`}
                     onClick={() => setBetMenu((open) => !open)}
@@ -778,7 +778,7 @@ export function BookGame() {
 
                 <button
                   type="button"
-                  className={`book-key is-blue is-paytable${paytable ? " is-on" : ""}`}
+                  className={`cab-key is-blue is-paytable${paytable ? " is-on" : ""}`}
                   aria-pressed={paytable}
                   onClick={() => setPaytable((open) => !open)}
                   disabled={!paytable && (spinning || auto !== null)}
@@ -788,7 +788,7 @@ export function BookGame() {
                 {/* Double or nothing comes up by itself once the winning lines have shown; this brings it up straight away. */}
                 <button
                   type="button"
-                  className="book-key is-gamble"
+                  className="cab-key is-gamble"
                   onClick={() => {
                     setPaytable(false);
                     setGambleShown(true);
@@ -801,7 +801,7 @@ export function BookGame() {
                 <div className="book-auto">
                   <button
                     type="button"
-                    className={`book-key is-green is-autoplay${auto ? " is-on" : ""}`}
+                    className={`cab-key is-green is-autoplay${auto ? " is-on" : ""}`}
                     aria-pressed={auto !== null}
                     aria-expanded={autoMenu}
                     onClick={() => (auto ? setAuto(null) : setAutoMenu((open) => !open))}
@@ -848,7 +848,7 @@ export function BookGame() {
                 </div>
                 <button
                   type="button"
-                  className="book-key is-green is-start"
+                  className="cab-key is-green is-start"
                   data-key="Space"
                   onClick={() => (auto ? setAuto(null) : spinning ? reels.current?.skip() : spin())}
                   disabled={!auto && !spinning && !canSpin}

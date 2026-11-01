@@ -219,6 +219,8 @@ export function SlotGame() {
   const countedWin = useCountUp(lastWin?.amount ?? 0, instant);
   /** Auto: spins again by itself until the Player stops it, a spin fails, or the balance runs out. */
   const [auto, setAuto] = useState(false);
+  /** The list of bets, opened from the Bet box. */
+  const [betMenu, setBetMenu] = useState(false);
   /** Double or nothing offered after a win; some Players never want it. Read in spin() through the ref. */
   const [gambleOn, setGambleOn] = useState(true);
   const gambleOnRef = useRef(gambleOn);
@@ -277,6 +279,7 @@ export function SlotGame() {
     if (!state || spinning || !grid) return;
     slotSound.unlock();
     setSpinning(true);
+    setBetMenu(false);
     setLastWin(null);
     setMissed(false);
     setCombos([]);
@@ -429,16 +432,18 @@ export function SlotGame() {
   /** The cards drawn at double or nothing, newest first. */
   const gambleHistory = recent.flatMap((spin) => (spin.kind === "GAMBLE" && spin.gamble ? [spin.gamble.suit] : []));
   const choices = state.game.lineChoices ?? [state.game.lines];
-  const otherLines = choices.find((choice) => choice !== lines) ?? lines;
-  /** 5 ⇄ 10 lines, remembered on this device. The wins on the reels belong to the last spin's lines, so they're cleared. */
-  function switchLines() {
-    setLinesState(otherLines);
+  /** 5 or 10 lines, remembered on this device. The wins on the reels belong to the last spin's lines, so they're cleared. */
+  function chooseLines(next: number) {
+    if (next === lines || !choices.includes(next)) return;
+    slotSound.unlock();
+    slotSound.click();
+    setLinesState(next);
     setCombos([]);
     setShowing(null);
     setPinned(null);
     reels.current?.clear();
     try {
-      window.localStorage.setItem(LINES_KEY, String(otherLines));
+      window.localStorage.setItem(LINES_KEY, String(next));
     } catch {
       // Not remembered on this device; it opens on 10 lines next time.
     }
@@ -458,7 +463,20 @@ export function SlotGame() {
     slotSound.click();
     const affordable = allowedBets.filter((value) => value <= balance);
     setBet(affordable[affordable.length - 1] ?? allowedBets[0] ?? bet);
+    setBetMenu(false);
   };
+  const chooseBet = (value: number) => {
+    slotSound.unlock();
+    slotSound.click();
+    setBet(value);
+    setBetMenu(false);
+  };
+  const shownBet = playingFree ? freeSpins.bet : bet;
+  const betIndex = allowedBets.indexOf(bet);
+  const canChangeBet = !spinning && !auto && !playingFree;
+  const sortedChoices = [...choices].sort((a, b) => a - b);
+  const linesIndex = sortedChoices.indexOf(lines);
+  const canChangeLines = !spinning && !auto && sortedChoices.length > 1;
   /** The lines lit on the reels right now, by index; the markers at the sides light up with them. */
   const litLines = new Set(combos.flatMap((combo, index) => (combo.line !== null && (showing === null || showing === index) ? [combo.line - 1] : [])));
   const message = spinning
@@ -556,97 +574,164 @@ export function SlotGame() {
               <LineMarkers side="right" shapes={shapesOf(state.game, lines)} lit={litLines} />
             </div>
 
-            <footer className="slot-controls">
-              <button type="button" className="slot-btn" onClick={() => setRulesOpen(true)}>
-                {t("Menu")}
-              </button>
-              <button
-                type="button"
-                className={`slot-btn slot-sound${soundOn ? " is-on" : ""}`}
-                aria-pressed={soundOn}
-                aria-label={soundOn ? t("Sound on. Tap to turn it off.") : t("Sound off. Tap to turn it on.")}
-                onClick={() => {
-                  slotSound.setOn(!soundOn);
-                  setSoundOn(!soundOn);
-                  if (!soundOn) slotSound.click();
-                }}
-              >
-                <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
-              </button>
-              <button
-                type="button"
-                className="slot-btn is-grey slot-lines"
-                onClick={switchLines}
-                disabled={spinning || auto || (state.game.lineChoices ?? []).length < 2}
-                aria-label={t("Lines: {count}. Tap to play {other}.", { count: lines, other: otherLines })}
-              >
-                <small>{t("Lines")}</small>
-                <b>{lines}</b>
-              </button>
-              <div className="slot-btn is-static slot-bet">
-                <small>
-                  <button type="button" onClick={() => stepBet(-1)} disabled={spinning || auto || playingFree} aria-label={t("Lower the bet")}>
+            {/*
+              The control panel, as on the cabinet (the same as Book of Ra's): the message across the top with the sound and
+              the last spin's wins, Autoplay beside it; then Credit, Lines (5 or 10), Bet per line (− +) and Bet, labelled;
+              Pays, red or black after a win on or off, and Start.
+            */}
+            <footer className="cab-panel">
+              <div className={`cab-panel-msg${lastWin || card?.won ? " is-win" : ""}`}>
+                <button
+                  type="button"
+                  className="cab-panel-sound"
+                  aria-pressed={soundOn}
+                  aria-label={soundOn ? t("Sound on. Tap to turn it off.") : t("Sound off. Tap to turn it on.")}
+                  onClick={() => {
+                    slotSound.setOn(!soundOn);
+                    setSoundOn(!soundOn);
+                    if (!soundOn) slotSound.click();
+                  }}
+                >
+                  <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
+                </button>
+                <span className="cab-panel-text" aria-live="polite">
+                  {message}
+                </span>
+                <div className={`casino-combos${combos.length === 0 ? " is-empty" : ""}`} role="group" aria-label={t("Your wins on this spin")}>
+                  {combos.map((combo, index) => (
+                    <button
+                      key={combo.key}
+                      type="button"
+                      className={`casino-combo${showing === index ? " is-showing" : ""}`}
+                      style={{ "--combo-color": combo.reel.color } as CSSProperties}
+                      aria-pressed={pinned === index}
+                      onClick={() => pick(index)}
+                    >
+                      <span className="casino-combo-name">{combo.line === null ? t(SYMBOL_NAMES[combo.symbol]) : t("Line {number}", { number: combo.line })}</span>
+                      <span className="casino-combo-symbols" aria-label={`${combo.count} × ${t(SYMBOL_NAMES[combo.symbol])}`}>
+                        <SymbolPicture symbol={combo.symbol} alt="" />×{combo.count}
+                      </span>
+                      <strong>{combo.amount > 0 ? `+${formatMoney(combo.amount)}` : null}</strong>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="cab-field is-credit">
+                <span className="cab-field-label">{t("Credit")}</span>
+                <span className="cab-field-box">
+                  <b>{plainMoney(balance)}</b>
+                </span>
+              </div>
+              <div className="cab-field is-lines">
+                <span className="cab-field-label">{t("Lines")}</span>
+                <span className="cab-field-box">
+                  {sortedChoices.length > 1 ? (
+                    <button type="button" className="cab-step" onClick={() => chooseLines(sortedChoices[linesIndex - 1])} disabled={!canChangeLines || linesIndex <= 0} aria-label={t("Lines: {count}. Tap to play {other}.", { count: lines, other: sortedChoices[linesIndex - 1] ?? lines })}>
+                      −
+                    </button>
+                  ) : null}
+                  <b>{lines}</b>
+                  {sortedChoices.length > 1 ? (
+                    <button
+                      type="button"
+                      className="cab-step"
+                      onClick={() => chooseLines(sortedChoices[linesIndex + 1])}
+                      disabled={!canChangeLines || linesIndex >= sortedChoices.length - 1}
+                      aria-label={t("Lines: {count}. Tap to play {other}.", { count: lines, other: sortedChoices[linesIndex + 1] ?? lines })}
+                    >
+                      +
+                    </button>
+                  ) : null}
+                </span>
+              </div>
+              <div className="cab-field is-line-bet">
+                <span className="cab-field-label">{t("Bet/line")}</span>
+                <span className="cab-field-box">
+                  <button type="button" className="cab-step" onClick={() => stepBet(-1)} disabled={!canChangeBet || betIndex <= 0} aria-label={t("Lower the bet")}>
                     −
                   </button>
-                  {t("Total bet")}
-                  <button type="button" onClick={() => stepBet(1)} disabled={spinning || auto || playingFree} aria-label={t("Raise the bet")}>
+                  <b>{plainStake(shownBet / lines)}</b>
+                  <button type="button" className="cab-step" onClick={() => stepBet(1)} disabled={!canChangeBet || betIndex >= allowedBets.length - 1} aria-label={t("Raise the bet")}>
                     +
                   </button>
-                </small>
-                <b>{formatStake(playingFree ? freeSpins.bet : bet)}</b>
+                </span>
               </div>
-              <div className={`slot-message${lastWin || card?.won ? " is-win" : ""}`} aria-live="polite">
-                <span>{message}</span>
-                <small>
-                  {t("Credits")}: {formatMoney(balance)}
-                </small>
+              <div className="cab-field is-bet">
+                <span className="cab-field-label">{t("Bet")}</span>
+                <button
+                  type="button"
+                  className="cab-field-box"
+                  aria-expanded={betMenu}
+                  aria-label={`${t("Change the bet")}: ${formatStake(shownBet)}`}
+                  onClick={() => setBetMenu((open) => !open)}
+                  disabled={!canChangeBet}
+                >
+                  <b>{plainStake(shownBet)}</b>
+                </button>
+                {betMenu && canChangeBet ? (
+                  <div className="book-auto-menu book-bet-menu" role="dialog" aria-label={t("Total bet")}>
+                    <strong>{t("Total bet")}</strong>
+                    <div className="book-auto-counts">
+                      {allowedBets.map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`slot-btn${value === bet ? " is-on" : ""}`}
+                          aria-pressed={value === bet}
+                          disabled={value > balance}
+                          onClick={() => chooseBet(value)}
+                        >
+                          {formatStake(value)}
+                        </button>
+                      ))}
+                    </div>
+                    <button type="button" className="slot-btn" onClick={maxBet}>
+                      {t("Max bet")}
+                    </button>
+                  </div>
+                ) : null}
               </div>
-              <button type="button" className="slot-btn" onClick={maxBet} disabled={spinning || auto || playingFree}>
-                {t("Max bet")}
+
+              <button type="button" className="cab-key is-blue" onClick={() => setRulesOpen(true)}>
+                {t("Pays")}
               </button>
+              {/* Red or black after a win: gold while it's on, grey while it's off. */}
               <button
                 type="button"
-                className={`slot-btn slot-auto slot-gamble-switch${gambleOn ? " is-on" : ""}`}
+                className={`cab-key is-gamble${gambleOn ? "" : " is-off"}`}
                 aria-pressed={gambleOn}
                 onClick={switchGamble}
                 disabled={guessing}
                 title={gambleOn ? t("Red or black after a win: on. Tap to turn it off.") : t("Red or black after a win: off. Tap to turn it on.")}
               >
-                <small>{t("Red/black")}</small>
-                <span className="slot-switch" aria-hidden="true" />
+                {t("Gamble")}
               </button>
-              <button type="button" className={`slot-btn slot-auto${auto ? " is-on" : ""}`} aria-pressed={auto} onClick={() => setAuto((on) => !on)} disabled={!auto && !canSpin}>
-                <small>{t("Auto")}</small>
-                <span className="slot-switch" aria-hidden="true" />
-              </button>
-              <button type="button" className="slot-btn slot-start" data-key="Space" onClick={() => (auto ? setAuto(false) : spinning ? reels.current?.skip() : spin())} disabled={!auto && !spinning && !canSpin}>
-                {/* While the reels turn, the button says Stop: it stops them early (the result is already decided). */}
-                <span aria-hidden="true">{auto || spinning ? "■" : "⟳"}</span> {auto || spinning ? t("Stop") : t("Start")}
+
+              <div className="book-auto">
+                <button
+                  type="button"
+                  className={`cab-key is-green is-autoplay${auto ? " is-on" : ""}`}
+                  aria-pressed={auto}
+                  onClick={() => setAuto((on) => !on)}
+                  disabled={!auto && !canSpin}
+                >
+                  {auto ? t("Stop autoplay") : t("Autoplay")}
+                </button>
+              </div>
+              <button
+                type="button"
+                className="cab-key is-green is-start"
+                data-key="Space"
+                onClick={() => (auto ? setAuto(false) : spinning ? reels.current?.skip() : spin())}
+                disabled={!auto && !spinning && !canSpin}
+              >
+                {auto || spinning ? t("Stop") : playingFree ? t("Free spin") : t("Start")}
               </button>
             </footer>
             {rulesOpen && fullScreen !== "off" ? <Rules game={state.game} bet={playingFree ? freeSpins.bet : bet} lines={lines} onClose={() => setRulesOpen(false)} i18n={i18n} /> : null}
           </section>
 
-          {/* Always there, empty between wins: the row appearing under the cabinet after a win took its height from the reels, which shrank. */}
-          <div className={`casino-combos${combos.length === 0 ? " is-empty" : ""}`} role="group" aria-label={t("Your wins on this spin")}>
-            {combos.map((combo, index) => (
-              <button
-                key={combo.key}
-                type="button"
-                className={`casino-combo${showing === index ? " is-showing" : ""}`}
-                style={{ "--combo-color": combo.reel.color } as CSSProperties}
-                aria-pressed={pinned === index}
-                onClick={() => pick(index)}
-              >
-                <span className="casino-combo-name">{combo.line === null ? t(SYMBOL_NAMES[combo.symbol]) : t("Line {number}", { number: combo.line })}</span>
-                <span className="casino-combo-symbols" aria-label={`${combo.count} × ${t(SYMBOL_NAMES[combo.symbol])}`}>
-                  <SymbolPicture symbol={combo.symbol} alt="" />×{combo.count}
-                </span>
-                <strong>{combo.amount > 0 ? `+${formatMoney(combo.amount)}` : null}</strong>
-              </button>
-            ))}
-            {combos.length > 1 ? <p className="muted casino-combos-hint">{t("Tap a win to see it on the reels.")}</p> : null}
-          </div>
         </>
       )}
 
@@ -685,6 +770,10 @@ export function SlotGame() {
     </div>
   );
 }
+
+/** An amount in the control panel's boxes: the number only, the currency being the site's (ALL). */
+const plainMoney = (value: number) => formatMoney(value).split(" ")[0];
+const plainStake = (value: number) => formatStake(Math.round(value * 100) / 100).split(" ")[0];
 
 /** The numbered markers at the side of the reels: each line's number where it starts (left) and ends (right), placed where its line meets the edge. */
 export function LineMarkers({ side, shapes, lit }: { side: "left" | "right"; shapes: number[][]; lit: Set<number> }) {

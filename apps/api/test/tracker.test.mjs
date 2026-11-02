@@ -40,6 +40,19 @@ test("matching: picks the fixture with both names and the kickoff, within 15 min
   assert.deepEqual(matchTrackerFixture(target, list), { externalId: "a2", confidence: 0.9 });
 });
 
+test("matching: one team clearly the same at the same kickoff, the other close (Central Cordoba de Santiago / SDE)", () => {
+  const target = { homeTeam: "Platense", awayTeam: "Central Cordoba de Santiago", startsAt: at("2026-11-02T22:00:00Z") };
+  const list = [
+    fixture("c1", "CA Platense", "Central Cordoba SDE", "2026-11-02T22:00:00Z"),
+    fixture("c2", "Olancho FC Reserves", "CD Platense Reserves", "2026-11-02T21:30:00Z"),
+  ];
+  assert.deepEqual(matchTrackerFixture(target, list), { externalId: "c1", confidence: 0.85 });
+  // The same names 10 minutes apart: not sure enough for the looser rule.
+  assert.equal(matchTrackerFixture(target, [fixture("c3", "CA Platense", "Central Cordoba SDE", "2026-11-02T22:10:00Z")]), null);
+  // A different opponent with the same first team at the same time still doesn't pass.
+  assert.equal(matchTrackerFixture(target, [fixture("c4", "CA Platense", "Boca Juniors", "2026-11-02T22:00:00Z")]), null);
+});
+
 test("matching: no answer when unsure", () => {
   const target = { homeTeam: "Arsenal", awayTeam: "Chelsea", startsAt: at("2026-11-02T20:00:00Z") };
   // Kickoff too far apart.

@@ -22,6 +22,14 @@ export interface TrackerTarget {
 export const KICKOFF_TOLERANCE_MS = 15 * 60_000;
 /** Lowest name score (the weaker of the two teams) we accept. */
 export const MIN_NAME_SCORE = 0.85;
+/**
+ * One team clearly the same and the kickoff within a few minutes: then the
+ * other name only needs to be close ("Central Cordoba de Santiago" vs
+ * "Central Cordoba SDE"). A team doesn't play two matches at once.
+ */
+export const SURE_TEAM_SCORE = 0.9;
+export const OTHER_TEAM_SCORE = 0.6;
+export const SAME_KICKOFF_MS = 5 * 60_000;
 /** The best fixture must beat the runner-up by this much, or we don't pick. */
 export const MIN_LEAD = 0.08;
 
@@ -89,7 +97,13 @@ export function matchTrackerFixture(target: TrackerTarget, candidates: TrackerCa
   if (!target.homeTeam || !target.awayTeam) return null;
   const scored = candidates
     .filter((candidate) => Math.abs(candidate.kickoff.getTime() - target.startsAt.getTime()) <= KICKOFF_TOLERANCE_MS)
-    .map((candidate) => ({ candidate, score: Math.min(teamScore(target.homeTeam!, candidate.homeTeam), teamScore(target.awayTeam!, candidate.awayTeam)) }))
+    .map((candidate) => {
+      const home = teamScore(target.homeTeam!, candidate.homeTeam);
+      const away = teamScore(target.awayTeam!, candidate.awayTeam);
+      const sameKickoff = Math.abs(candidate.kickoff.getTime() - target.startsAt.getTime()) <= SAME_KICKOFF_MS;
+      const oneSure = Math.max(home, away) >= SURE_TEAM_SCORE && Math.min(home, away) >= OTHER_TEAM_SCORE && sameKickoff;
+      return { candidate, score: Math.max(Math.min(home, away), oneSure ? MIN_NAME_SCORE : 0) };
+    })
     .sort((a, b) => b.score - a.score);
   const [best, next] = scored;
   if (!best || best.score < MIN_NAME_SCORE) return null;

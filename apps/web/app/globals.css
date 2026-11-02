@@ -15141,11 +15141,19 @@ button.is-blocked {
   }
 }
 
+/* SportScore's frame opens with a strip of its own (team names and a red
+   "LIVE · minute" chip) that repeats our match row: it sits above the panel's
+   top edge, out of sight. Their attribution at the bottom stays in view. */
+.live-tracker-frame {
+  --tracker-head: 2.25rem;
+}
+
 .live-tracker-frame iframe {
   position: absolute;
-  inset: 0;
+  top: calc(-1 * var(--tracker-head));
+  left: 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% + var(--tracker-head));
   border: 0;
 }
 

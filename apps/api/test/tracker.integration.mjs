@@ -19,7 +19,7 @@ const { PrismaClient } = require("@prisma/client");
 const { TrackerService } = require("../dist/tracker/tracker.service.js");
 
 const prisma = new PrismaClient();
-const tracker = new TrackerService(prisma);
+const tracker = new TrackerService(prisma, async () => ({ ok: true, json: async () => ({ matches: [] }) }));
 const player = { id: "p", role: "PLAYER", parentId: null, username: "p" };
 const kickoff = new Date(Date.now() - 30 * 60_000);
 let united, women, tennis, upcoming;

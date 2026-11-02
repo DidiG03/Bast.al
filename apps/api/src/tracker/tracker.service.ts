@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import { EventStatus, Role } from "@prisma/client";
 import type { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
@@ -8,6 +8,12 @@ import { fetchLiveFixtures } from "./sportscore-feed";
 
 /** How often SportScore's live list is read while one of our live football matches has no tracker yet (~720 calls a day at most; their free tier allows ~10,000). */
 const SYNC_MS = 2 * 60_000;
+/** The first read after the API starts. */
+const FIRST_SYNC_MS = 20_000;
+/** Opening a match without a tracker reads SportScore at most this often (then the 2-minute timer does the rest). */
+const ON_VIEW_SYNC_MS = 60_000;
+/** Lets tests hand in their own fetch. */
+export const TRACKER_FETCH = "TRACKER_FETCH";
 /** Imported fixtures are kept this long. */
 const KEEP_FIXTURES_MS = 2 * 24 * 60 * 60_000;
 
@@ -32,20 +38,29 @@ export type TrackerView = { show: false } | { show: true; provider: string; src:
 export class TrackerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TrackerService.name);
   private timer: NodeJS.Timeout | null = null;
-  private syncing = false;
+  private first: NodeJS.Timeout | null = null;
+  private syncing: Promise<{ fetched: number; matched: number } | null> | null = null;
+  private lastSyncAt = 0;
+  private readonly fetcher: typeof fetch;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly fetcher: typeof fetch = fetch,
-  ) {}
+    @Optional() @Inject(TRACKER_FETCH) fetcher?: typeof fetch,
+  ) {
+    this.fetcher = fetcher ?? fetch;
+  }
 
   onModuleInit() {
     if (process.env.NODE_ENV === "test" || process.env.TRACKER_SYNC === "off") return;
+    this.logger.log(`Tracker ${trackerEnabled() ? "on" : "off (LIVE_TRACKER_ENABLED is not true)"}; SportScore is read every ${SYNC_MS / 60_000} min while a live football match has no tracker`);
+    this.first = setTimeout(() => void this.sync(), FIRST_SYNC_MS);
+    this.first.unref();
     this.timer = setInterval(() => void this.sync(), SYNC_MS);
     this.timer.unref();
   }
 
   onModuleDestroy() {
+    if (this.first) clearTimeout(this.first);
     if (this.timer) clearInterval(this.timer);
   }
 
@@ -55,26 +70,34 @@ export class TrackerService implements OnModuleInit, OnModuleDestroy {
    * already has a tracker (or a manual choice), so it only calls out when needed.
    */
   async sync(now = new Date()): Promise<{ fetched: number; matched: number } | null> {
-    if (this.syncing || !trackerEnabled()) return null;
-    this.syncing = true;
+    if (!trackerEnabled()) return null;
+    // One read at a time: a page view during a read waits for that read.
+    if (this.syncing) return this.syncing;
+    this.syncing = this.runSync(now).finally(() => {
+      this.syncing = null;
+    });
+    return this.syncing;
+  }
+
+  private async runSync(now: Date): Promise<{ fetched: number; matched: number } | null> {
     try {
       const waiting = await this.prisma.event.count({
         where: { sport: "football", status: EventStatus.LIVE, hidden: false, OR: [{ trackerMapping: null }, { trackerMapping: { externalId: null, method: { not: "manual" } } }] },
       });
       if (waiting === 0) return null;
+      this.lastSyncAt = Date.now();
       // Their fixture days are UTC: just after midnight, matches that kicked off yesterday are still on.
       const days = [now.toISOString().slice(0, 10)];
       if (now.getUTCHours() < 3) days.push(new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10));
       const fixtures = (await Promise.all(days.map((day) => fetchLiveFixtures(day, this.fetcher)))).flat();
       await this.prisma.trackerFixture.deleteMany({ where: { kickoff: { lt: new Date(now.getTime() - KEEP_FIXTURES_MS) } } });
       const { matched } = await this.importFixtures(fixtures);
+      this.logger.log(`Tracker sync: ${fixtures.length} live fixtures from SportScore, ${matched} of our matches mapped (${waiting} were waiting)`);
       return { fetched: fixtures.length, matched };
     } catch (error) {
       // SportScore being down only means no tracker; it never touches anything else.
       this.logger.warn(`Tracker sync failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
-    } finally {
-      this.syncing = false;
     }
   }
 
@@ -89,6 +112,11 @@ export class TrackerService implements OnModuleInit, OnModuleDestroy {
     let mapping = event.trackerMapping;
     if (!mapping || (mapping.method !== "manual" && !mapping.externalId && Date.now() - mapping.checkedAt.getTime() > RECHECK_MS)) {
       mapping = await this.match(event);
+    }
+    // Still nothing: read SportScore now (at most once a minute) rather than wait for the timer.
+    if (!mapping.externalId && mapping.method !== "manual" && Date.now() - this.lastSyncAt > ON_VIEW_SYNC_MS) {
+      await this.sync();
+      mapping = (await this.prisma.trackerMapping.findUnique({ where: { eventId } })) ?? mapping;
     }
     const src = mapping?.externalId ? trackerEmbedSrc(mapping.externalId, lang, theme) : null;
     return src ? { show: true, provider: TRACKER_PROVIDER, src, attributionUrl: TRACKER_ATTRIBUTION_URL } : { show: false };

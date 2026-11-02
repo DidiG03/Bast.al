@@ -22,7 +22,7 @@ const prisma = new PrismaClient();
 const tracker = new TrackerService(prisma, async () => ({ ok: true, json: async () => ({ matches: [] }) }));
 const player = { id: "p", role: "PLAYER", parentId: null, username: "p" };
 const kickoff = new Date(Date.now() - 30 * 60_000);
-let united, women, tennis, upcoming;
+let united, women, tennis, upcoming, later;
 
 const event = (data) => prisma.event.create({ data: { sport: "football", league: "Premier League", status: "LIVE", startsAt: kickoff, provider: "api-football", ...data } });
 
@@ -33,6 +33,7 @@ test("setup", async () => {
   women = await event({ name: "Arsenal W vs Chelsea W", homeTeam: "Arsenal W", awayTeam: "Chelsea W" });
   tennis = await event({ sport: "tennis", name: "A vs B", homeTeam: "A", awayTeam: "B" });
   upcoming = await event({ status: "UPCOMING", name: "Leeds vs Everton", homeTeam: "Leeds", awayTeam: "Everton" });
+  later = await event({ status: "UPCOMING", name: "Fulham vs Brentford", homeTeam: "Fulham", awayTeam: "Brentford", startsAt: new Date(Date.now() + 3 * 86_400_000) });
   process.env.LIVE_TRACKER_ENABLED = "true";
   process.env.SPORTSCORE_EMBED_URL = "https://sportscore.com/embed/{id}?lang={lang}&theme={theme}";
   process.env.NODE_ENV = "test";
@@ -59,7 +60,8 @@ test("a live football match with a confident mapping gets the embed and the attr
 test("hidden otherwise", async () => {
   assert.deepEqual(await tracker.forEvent(player, women.id, "en", "light"), { show: false }, "no confident match");
   assert.deepEqual(await tracker.forEvent(player, tennis.id, "en", "light"), { show: false }, "not football");
-  assert.deepEqual(await tracker.forEvent(player, upcoming.id, "en", "light"), { show: false }, "not live");
+  assert.equal((await tracker.forEvent(player, upcoming.id, "en", "light")).show, true, "not started yet, within a day: SportScore's kick-off card");
+  assert.deepEqual(await tracker.forEvent(player, later.id, "en", "light"), { show: false }, "days away");
   process.env.LIVE_TRACKER_ENABLED = "false";
   assert.deepEqual(await tracker.forEvent(player, united.id, "en", "light"), { show: false }, "switched off");
   process.env.LIVE_TRACKER_ENABLED = "true";
@@ -107,6 +109,22 @@ test("sync: reads SportScore's live list only when a live football match still n
   await tracker.clearManual(women.id);
   const down = new TrackerService(prisma, async () => ({ ok: false, status: 503 }));
   assert.equal(await down.sync(), null);
+});
+
+test("a match page before kick-off reads that day's not-started fixtures, once in a while", async () => {
+  const calls = [];
+  const kick = new Date(Date.now() + 2 * 3_600_000);
+  const soon = await event({ status: "UPCOMING", name: "Roma vs Lazio", homeTeam: "AS Roma", awayTeam: "Lazio", startsAt: kick });
+  const body = { matches: [{ home: "Roma", away: "Lazio", status: "upcoming", time: kick.toISOString(), url: "/football/match/lazio-vs-roma/r1z/" }] };
+  const feed = new TrackerService(prisma, async (url) => (calls.push(url), { ok: true, json: async () => body }));
+  const view = await feed.forEvent(player, soon.id, "en", "dark");
+  assert.equal(view.src, "https://sportscore.com/embed/lazio-vs-roma?lang=en&theme=dark");
+  assert.equal(new URL(calls[0]).searchParams.get("status"), "upcoming");
+  assert.equal(new URL(calls[0]).searchParams.get("date"), kick.toISOString().slice(0, 10));
+  // Another unpaired match the same day within 10 minutes: no second read.
+  const other = await event({ status: "UPCOMING", name: "Genoa vs Torino", homeTeam: "Genoa", awayTeam: "Torino", startsAt: kick });
+  assert.deepEqual(await feed.forEvent(player, other.id, "en", "dark"), { show: false });
+  assert.equal(calls.length, 1);
 });
 
 test("teardown", async () => {

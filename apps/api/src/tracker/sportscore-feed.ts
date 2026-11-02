@@ -36,9 +36,9 @@ export function parseFixtures(body: unknown): SportScoreFixture[] {
   return out;
 }
 
-/** One UTC day's live football fixtures. */
-export async function fetchLiveFixtures(day: string, fetcher: typeof fetch = fetch): Promise<SportScoreFixture[]> {
-  const url = `${SPORTSCORE_FIXTURES_URL}?sport=football&status=live&date=${day}&limit=200&src=${SOURCE}`;
+/** One UTC day's football fixtures that are live (or, with "upcoming", not started yet). */
+export async function fetchLiveFixtures(day: string, fetcher: typeof fetch = fetch, status: "live" | "upcoming" = "live"): Promise<SportScoreFixture[]> {
+  const url = `${SPORTSCORE_FIXTURES_URL}?sport=football&status=${status}&date=${day}&limit=200&src=${SOURCE}`;
   const response = await fetcher(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`SportScore fixtures: HTTP ${response.status}`);
   return parseFixtures(await response.json());

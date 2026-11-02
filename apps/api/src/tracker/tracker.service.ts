@@ -12,6 +12,10 @@ const SYNC_MS = 2 * 60_000;
 const FIRST_SYNC_MS = 20_000;
 /** Opening a match without a tracker reads SportScore at most this often (then the 2-minute timer does the rest). */
 const ON_VIEW_SYNC_MS = 60_000;
+/** Before kick-off, a match's page shows SportScore's tracker (its kick-off card until it starts) from this long before. */
+const UPCOMING_MS = 24 * 3_600_000;
+/** A day's not-started fixtures are read at most this often, when a match page needs them. */
+const UPCOMING_READ_MS = 10 * 60_000;
 /** Lets tests hand in their own fetch. */
 export const TRACKER_FETCH = "TRACKER_FETCH";
 /** Imported fixtures are kept this long. */
@@ -41,6 +45,8 @@ export class TrackerService implements OnModuleInit, OnModuleDestroy {
   private first: NodeJS.Timeout | null = null;
   private syncing: Promise<{ fetched: number; matched: number } | null> | null = null;
   private lastSyncAt = 0;
+  /** When each UTC day's not-started fixtures were last read. */
+  private readonly upcomingReadAt = new Map<string, number>();
   private readonly fetcher: typeof fetch;
 
   constructor(
@@ -108,18 +114,34 @@ export class TrackerService implements OnModuleInit, OnModuleDestroy {
       select: { id: true, sport: true, status: true, hidden: true, homeTeam: true, awayTeam: true, startsAt: true, trackerMapping: true },
     });
     if (!event || (event.hidden && actor.role !== Role.SUPER_ADMIN)) throw new NotFoundException("Match not found");
-    if (!trackerEnabled() || event.sport !== "football" || event.status !== EventStatus.LIVE) return { show: false };
+    const soon = event.status === EventStatus.UPCOMING && event.startsAt.getTime() - Date.now() < UPCOMING_MS;
+    if (!trackerEnabled() || event.sport !== "football" || (event.status !== EventStatus.LIVE && !soon)) return { show: false };
     let mapping = event.trackerMapping;
     if (!mapping || (mapping.method !== "manual" && !mapping.externalId && Date.now() - mapping.checkedAt.getTime() > RECHECK_MS)) {
       mapping = await this.match(event);
     }
-    // Still nothing: read SportScore now (at most once a minute) rather than wait for the timer.
-    if (!mapping.externalId && mapping.method !== "manual" && Date.now() - this.lastSyncAt > ON_VIEW_SYNC_MS) {
-      await this.sync();
+    // Still nothing: read SportScore now (live: at most once a minute; not started: that day's list, every 10 minutes at most).
+    if (!mapping.externalId && mapping.method !== "manual") {
+      if (soon) await this.readUpcoming(event.startsAt);
+      else if (Date.now() - this.lastSyncAt > ON_VIEW_SYNC_MS) await this.sync();
       mapping = (await this.prisma.trackerMapping.findUnique({ where: { eventId } })) ?? mapping;
     }
     const src = mapping?.externalId ? trackerEmbedSrc(mapping.externalId, lang, theme) : null;
     return src ? { show: true, provider: TRACKER_PROVIDER, src, attributionUrl: TRACKER_ATTRIBUTION_URL } : { show: false };
+  }
+
+  /** SportScore's not-started fixtures for one UTC day, imported and matched. Failures are only logged. */
+  private async readUpcoming(kickoff: Date): Promise<void> {
+    const day = kickoff.toISOString().slice(0, 10);
+    if (Date.now() - (this.upcomingReadAt.get(day) ?? 0) < UPCOMING_READ_MS) return;
+    this.upcomingReadAt.set(day, Date.now());
+    try {
+      const fixtures = await fetchLiveFixtures(day, this.fetcher, "upcoming");
+      const { matched } = await this.importFixtures(fixtures);
+      this.logger.log(`Tracker: ${fixtures.length} not-started fixtures from SportScore for ${day}, ${matched} of our matches mapped`);
+    } catch (error) {
+      this.logger.warn(`Tracker read of not-started fixtures failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** Runs the matcher for one event and saves the answer (a miss is saved too, as "none"). */

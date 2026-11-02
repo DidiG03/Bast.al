@@ -919,7 +919,8 @@ function BetPage() {
           {t("Bet")}
           <HelpTip text="The matches for this day. Tap a price to add it to your bet slip. A higher number pays more but is less likely to win. Example: 10 ALL at 2.50 pays back 25 ALL if it wins." />
         </h1>
-        <nav className="tabs-nav bet-tabs" aria-label={t("Betting sections")}>
+        {/* A match's own page is about that match: no section tabs or sports there, just the way back. */}
+        {eventParam ? null : <nav className="tabs-nav bet-tabs" aria-label={t("Betting sections")}>
           {(
             [
               ["matches", t("Matches")],
@@ -931,10 +932,10 @@ function BetPage() {
               {label}
             </button>
           ))}
-        </nav>
+        </nav>}
       </div>
 
-      {tab === "matches" ? (
+      {tab === "matches" && !eventParam ? (
         <div className={`sport-switch-wrap${sportEdges.start ? " has-more-start" : ""}${sportEdges.end ? " has-more-end" : ""}`}>
           <div ref={sportRow} className="sport-switch" role="group" aria-label={t("Sport")}>
             {(
@@ -1583,7 +1584,8 @@ const MatchCard = memo(function MatchCard({
       ) : null}
       {expanded ? (
         <div className="bm-detail">
-          {event.live && !over && (event.sport ?? "football") === "football" ? <LiveTracker eventId={event.id} name={event.name} /> : null}
+          {/* Live, or on the match's own page before kick-off (SportScore shows the kick-off time until it starts). The API decides whether there is one. */}
+          {(event.live || (page && event.status === "UPCOMING")) && !over && (event.sport ?? "football") === "football" ? <LiveTracker eventId={event.id} name={event.name} /> : null}
           {inRow ? <p className="bm-detail-main">{ts(inRow.name)}</p> : null}
           {entries.length > 1 ? (
             <div className="bm-detail-tools">

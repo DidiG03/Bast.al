@@ -41,7 +41,7 @@ export const betting: Record<string, string> = {
   "This match has finished. Bets on it are settled in a few minutes.": "Kjo ndeshje përfundoi. Bastet mbi të mbyllen për pak minuta.",
   "Break before extra time": "Pushim para shtesës",
   "Match interrupted": "Ndeshja e ndërprerë",
-  "Half-time break. Live betting reopens when the second half starts.": "Pushimi i pjesës së parë. Bastet live rihapen kur fillon pjesa e dytë.",
+  "Half-time. The bookmaker isn't taking bets on this match right now. It reopens when they price it again.": "Pushimi i pjesës së parë. Operatori nuk po pranon baste për këtë ndeshje tani. Rihapet kur t'i japë sërish koeficientët.",
   "Break before extra time. Live betting reopens when play restarts.": "Pushim para kohës shtesë. Bastet live rihapen kur rifillon loja.",
   "The match has been interrupted. Live betting reopens if play restarts.": "Ndeshja është ndërprerë. Bastet live rihapen nëse rifillon loja.",
   "Loading markets": "Duke ngarkuar tregjet",

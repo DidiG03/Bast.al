@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets } from "../dist/odds/api-football.js";
+import { ApiFootballClient, eventStatus, parseLiveOdds, parseMarkets, readingStopped } from "../dist/odds/api-football.js";
 import { mockFetchJson } from "../dist/odds/mock-feed.js";
 import { bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, laterCooldown, marketGroup, mergePause, sameLivePrice, sameScorePause, scoreChanged, smallPriceMove, takenWithoutAsking } from "../dist/odds/live-guard.js";
 import { countAvailability, countLineDead, countSelectionDead, countStatsStale } from "../dist/odds/count-guard.js";
@@ -810,4 +810,23 @@ test("an Owner's own price can't go more than 10% above the feed price", () => {
   // A typo (150 for 1.50) is held to the ceiling, and so is a price set before the feed price dropped.
   assert.equal(teamPrice({ feedOdds: 1.5, baseMargin: 5, ownerMargin: 0, override: 150 }), 1.65);
   assert.equal(teamPrice({ feedOdds: 1.5, baseMargin: 5, ownerMargin: 0, override: 1.4 }), 1.4, "a price below the feed stands");
+});
+
+test("half-time: a stopped clock during a break keeps the match open; blocked or finished still closes it", () => {
+  const raw = (status, long) => ({ fixture: { id: 1, status: { long, elapsed: 45 } }, status, odds: [] });
+  const ht = parseLiveOdds(raw({ stopped: true, blocked: false, finished: false }, "Halftime"), "A", "B");
+  assert.equal(ht.stopped, true);
+  assert.equal(ht.clockOnly, true);
+  assert.equal(ht.atBreak, true);
+  assert.equal(readingStopped(ht, "HT"), false);
+  // The feed's text may lag the fixture's phase: our period alone is enough.
+  assert.equal(readingStopped(parseLiveOdds(raw({ stopped: true }, "Second Half"), "A", "B"), "HT"), false);
+  assert.equal(readingStopped(parseLiveOdds(raw({ stopped: true }, "Break Time"), "A", "B"), "ET"), false);
+  // During play a stopped clock still closes the match.
+  assert.equal(readingStopped(parseLiveOdds(raw({ stopped: true }, "First Half"), "A", "B"), "1H"), true);
+  // Blocked or finished closes it at half-time too.
+  assert.equal(readingStopped(parseLiveOdds(raw({ stopped: true, blocked: true }, "Halftime"), "A", "B"), "HT"), true);
+  assert.equal(readingStopped(parseLiveOdds(raw({ blocked: true }, "Halftime"), "A", "B"), "HT"), true);
+  assert.equal(readingStopped(parseLiveOdds(raw({ finished: true }, "Halftime"), "A", "B"), "HT"), true);
+  assert.equal(readingStopped(parseLiveOdds(raw({}, "Halftime"), "A", "B"), "HT"), false);
 });

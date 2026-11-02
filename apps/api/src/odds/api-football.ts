@@ -34,9 +34,11 @@ export type RawOdds = {
 };
 
 /**
- * One live match from `/odds/live`. `status.stopped` and `status.blocked` mean
- * the bookmaker isn't taking bets on the whole match right now; `suspended`
- * on a value means that price is off the board.
+ * One live match from `/odds/live`. `status.blocked` means the bookmaker isn't
+ * taking bets on the whole match right now; `status.stopped` means the match
+ * clock is stopped, which also closes the match, except during a break
+ * (half-time), when the bookmaker keeps pricing it. `suspended` on a value
+ * means that price is off the board.
  */
 export type RawLiveOdds = {
   fixture: { id: number; status?: { long?: string; elapsed?: number | null; seconds?: string | null } };
@@ -56,6 +58,14 @@ export type FeedLiveOdds = {
   externalId: string;
   /** The feed isn't taking bets on this match at all right now. */
   stopped: boolean;
+  /**
+   * `stopped` came only from the feed's clock-stopped flag (not `blocked` or
+   * `finished`): at half-time and other breaks the clock stops but the prices
+   * stay up, so it doesn't close the match then (see breakStopped).
+   */
+  clockOnly: boolean;
+  /** The feed's own phase text says it's a break ("Halftime", "Break Time"). */
+  atBreak: boolean;
   /** The feed says the match is over, often a minute before the fixtures list does. */
   finished: boolean;
   /** The score and minute the prices were made for, when the feed sends them. */
@@ -750,6 +760,8 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
   return {
     externalId: String(raw.fixture.id),
     stopped: Boolean(raw.status?.stopped || raw.status?.blocked || raw.status?.finished),
+    clockOnly: Boolean(raw.status?.stopped && !raw.status?.blocked && !raw.status?.finished),
+    atBreak: /half\s*-?\s*time|break/i.test(raw.fixture.status?.long ?? ""),
     finished: Boolean(raw.status?.finished),
     homeScore: goals(raw.teams?.home?.goals),
     awayScore: goals(raw.teams?.away?.goals),
@@ -1254,4 +1266,18 @@ export function httpFetchJson(host: string, apiKey: string, onQuota?: (left: num
     if (errors.length > 0) throw new Error(`API-Football: ${errors.join("; ")}`);
     return body;
   };
+}
+
+/** Breaks in play by the fixture's phase: the clock is stopped but the bookmaker keeps pricing the match. */
+export const BREAK_PERIODS = new Set(["HT", "BT"]);
+
+/**
+ * Whether a live reading closes the whole match. A stopped clock during a
+ * break (half-time, the break before extra time) doesn't: Players can bet on
+ * the markets still priced, and any the bookmaker pulls are suspended on
+ * their own. Blocked or finished always closes it.
+ */
+export function readingStopped(odds: Pick<FeedLiveOdds, "stopped" | "clockOnly" | "atBreak">, period: string | null): boolean {
+  if (!odds.stopped) return false;
+  return !(odds.clockOnly && (odds.atBreak || BREAK_PERIODS.has(period ?? "")));
 }

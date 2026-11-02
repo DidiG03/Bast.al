@@ -5,7 +5,7 @@ import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { GOAL_MARKET_KEYS } from "../bets/goals";
 import type { FeedMark, LateTimeline } from "../bets/late";
-import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, feedMarkOf, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseLiveTimeline, parseMarkets, parseMatchCentre } from "./api-football";
+import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, feedMarkOf, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseLiveTimeline, parseMarkets, parseMatchCentre, readingStopped } from "./api-football";
 import { feedDelay, goalForScore, goalLag } from "./feed-delay";
 import { savedCrests, savedMarks } from "./crest";
 import { PREMATCH_REFRESH_MS, RICH_PLAN, isDailyLimitError, msUntilReset, pacedInterval, quotaReserve } from "./feed-budget";
@@ -1454,7 +1454,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       select: { homeScore: true, awayScore: true, elapsed: true, liveStopped: true, liveSlowFeed: true, liveCooldownUntil: true, liveCooldownReason: true, liveScoreAhead: true, liveOddsAt: true, status: true, startsAt: true, period: true },
     });
     const scored = odds.homeScore !== null && odds.awayScore !== null;
-    const after = { homeScore: scored ? odds.homeScore : before.homeScore, awayScore: scored ? odds.awayScore : before.awayScore, stopped: odds.stopped };
+    // Half-time: the feed stops the clock but keeps its prices up, so the match stays open (readingStopped).
+    const stopped = readingStopped(odds, before.period);
+    const after = { homeScore: scored ? odds.homeScore : before.homeScore, awayScore: scored ? odds.awayScore : before.awayScore, stopped };
     // Read before the new prices are saved: still the ones from before the goal.
     const beforeGoal = scored ? await this.pricesBeforeGoal(eventId, before, after) : null;
     const { swing, priced } = await this.upsertLiveMarkets(eventId, odds.markets, now);
@@ -1470,27 +1472,27 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const caughtUp = !ahead || (scored && odds.homeScore! + odds.awayScore! >= ahead.home + ahead.away);
     const goal = scoreChanged(saved, after);
     const elapsed = odds.elapsed ?? null;
-    const matchOpen = !odds.stopped && !before.liveSlowFeed && !(LIVE_CUTOFF_MINUTE > 0 && (elapsed ?? 0) >= LIVE_CUTOFF_MINUTE);
+    const matchOpen = !stopped && !before.liveSlowFeed && !(LIVE_CUTOFF_MINUTE > 0 && (elapsed ?? 0) >= LIVE_CUTOFF_MINUTE);
     // The event's pause on the markets it changes (the reading brought it, so a market it prices was made after it), and the
     // paused markets this reading is fresh for reopened.
     const markets = await this.pauseMarkets(
       eventId,
       cooldown ? { reason: cooldown.reason, pricedSinceEvent: priced } : null,
-      { stopped: odds.stopped, scoreKnown: scored && caughtUp, bookmakerUpdate, priced },
+      { stopped, scoreKnown: scored && caughtUp, bookmakerUpdate, priced },
       now,
       { status: before.status, startsAt: before.startsAt, period: odds.finished ? "FT" : before.period, open: matchOpen },
     );
     // The match banner ends when the last paused market does, sooner than the 90 s fallback once fresh prices are in.
     if (pause.until && EVENT_PAUSES.has(pause.reason ?? "") && (!markets.latestUntil || markets.latestUntil < pause.until)) pause = { ...pause, until: markets.latestUntil ?? now };
     // The score, a pause starting, or the bookmaker blocking or reopening the match: a change a bet being confirmed must not go through (Event.liveVersion).
-    const stateMoved = goal || odds.stopped !== before.liveStopped || markets.started;
+    const stateMoved = goal || stopped !== before.liveStopped || markets.started;
     // Market-time since the last reading, for the share of it the board was open (capped: a gap means the readings stopped).
     const seconds = before.liveOddsAt ? Math.min(60, Math.max(0, (now.getTime() - before.liveOddsAt.getTime()) / 1000)) : 0;
     await this.prisma.event.update({
       where: { id: eventId },
       data: {
         liveOddsAt: now,
-        liveStopped: odds.stopped,
+        liveStopped: stopped,
         ...(stateMoved ? { liveVersion: { increment: 1 } } : {}),
         ...(odds.finished ? { period: "FT" } : {}),
         ...(scored ? { homeScore: odds.homeScore, awayScore: odds.awayScore } : {}),

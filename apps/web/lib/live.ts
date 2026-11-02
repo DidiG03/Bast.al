@@ -15,7 +15,7 @@ const BREAKS: Record<string, string> = {
 /** Why live bets are paused during a break, in words a Player understands. */
 const BREAK_PAUSES: Record<string, string> = {
   FT: msg("This match has finished. Bets on it are settled in a few minutes."),
-  HT: msg("Half-time break. Live betting reopens when the second half starts."),
+  HT: msg("Half-time. The bookmaker isn't taking bets on this match right now. It reopens when they price it again."),
   BT: msg("Break before extra time. Live betting reopens when play restarts."),
   SUSP: msg("The match has been interrupted. Live betting reopens if play restarts."),
   INT: msg("The match has been interrupted. Live betting reopens if play restarts."),

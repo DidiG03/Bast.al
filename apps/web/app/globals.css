@@ -149,6 +149,10 @@ main {
 
 .dashboard-shell {
   min-height: 100vh;
+  /* Nothing may make the page wider than the screen. iPhone Safari ignores
+     overflow on <body> when panning, so this clips on the shell too ("clip",
+     unlike "hidden", keeps sticky bars working). */
+  overflow-x: clip;
 }
 
 .dashboard-content {
@@ -16693,8 +16697,30 @@ html[data-theme="light"] .role-player .bet-status-lost {
   outline-offset: 2px;
 }
 
-/* A narrow phone: the logo alone, so the balance and the bigger touch buttons fit on the top bar. */
-@media (max-width: 400px) {
+/* A phone: the top bar never gets wider than the screen. The balance gives
+   way (shrinks, then cuts off with "…") before anything else; a wider top
+   bar would let iPhone Safari scroll the whole page sideways. */
+@media (max-width: 760px) {
+  .role-player .dashboard-topbar {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .role-player .player-balance-chip {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .role-player .player-balance-chip-amounts {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* A narrow phone (up to 440px, so the 402–430px iPhones too): the logo alone, so the balance and the bigger touch buttons fit on the top bar. */
+@media (max-width: 440px) {
   .role-player .dashboard-topbar .topbar-brand > span:last-child {
     display: none;
   }
@@ -16735,7 +16761,9 @@ html[data-theme="light"] .role-player .bet-status-lost {
     width: 2.15rem;
     height: 2.15rem;
   }
+}
 
+@media (max-width: 400px) {
   .mines-marquee,
   .penalty-marquee,
   .scratch-marquee {

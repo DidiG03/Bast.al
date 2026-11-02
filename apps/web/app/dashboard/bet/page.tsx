@@ -180,7 +180,8 @@ function BetPage() {
       window.removeEventListener("keydown", onKey);
     };
   }, [sheetOpen]);
-  const [mode, setMode] = useState<SlipMode>("singles");
+  // Kombinim (an accumulator, or a bet builder for picks from one match) whenever the picks can be combined; the Player can switch to singles.
+  const [mode, setMode] = useState<SlipMode>("accumulator");
   const [accaStake, setAccaStake] = useState("");
   /** The system's line sizes, as "2,3,4". */
   const [systemKey, setSystemKey] = useState("");
@@ -882,6 +883,10 @@ function BetPage() {
       onClose={closeSheet}
     />
   );
+  // An emptied slip starts over on the default.
+  useEffect(() => {
+    if (slip.length === 0) setMode("accumulator");
+  }, [slip.length]);
   const slipSystem = mode === "system" ? chosenSystem(slip, systemKey) : null;
   // The same total the slip shows: closed and paused picks aren't counted.
   const slipValid = slip.filter((item) => !item.closed && !item.paused);
@@ -1632,28 +1637,12 @@ function LiveNote() {
 }
 const LIVE_NOTE_KEY = "bastal-live-note";
 
-/** The Player's choice of what to do with a price that moves before a bet goes in, kept in this browser. */
+/**
+ * What happens to a price that moves before a bet goes in: a higher one is taken before kick-off, anything
+ * else needs the Player's OK. Always this (the choice used to be on the slip). Live bets only go in at the slip's price.
+ */
 type PriceChanges = "never" | "higher";
-const PRICE_CHANGES_KEY = "bastal-price-changes";
-function usePriceChangeSetting(): [PriceChanges, (value: PriceChanges) => void] {
-  const [value, setValue] = useState<PriceChanges>("higher");
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem(PRICE_CHANGES_KEY) === "never") setValue("never");
-    } catch {
-      // The default stands.
-    }
-  }, []);
-  const save = useCallback((next: PriceChanges) => {
-    setValue(next);
-    try {
-      window.localStorage.setItem(PRICE_CHANGES_KEY, next);
-    } catch {
-      // Kept for this visit.
-    }
-  }, []);
-  return [value, save];
-}
+const PRICE_CHANGES: PriceChanges = "higher";
 
 /** Just finished: the live list keeps it a few minutes, marked full time, instead of dropping it. */
 function finishedNow(event: OddsEvent): boolean {
@@ -1964,7 +1953,7 @@ function BetSlip({
   const priceMoved = moved || takeNewPrice;
   // What to do when a price moves between the tap and the bet going in (before kick-off; a live bet is only ever
   // placed at the price on the slip): "never" asks every time, "higher" takes a better price on its own.
-  const [priceChanges, setPriceChanges] = usePriceChangeSetting();
+  const priceChanges = PRICE_CHANGES;
   const movedItems = items.filter(priceShown);
   /** What the slip would have returned at the prices it was added at, to show beside the new return. */
   const returnBefore = moved
@@ -2097,7 +2086,7 @@ function BetSlip({
       setTakeNewPrice(false);
       onChange(() => []);
       onAccaStake("");
-      onMode("singles");
+      onMode("accumulator");
       onPlaced();
     } catch (err) {
       showPending(null);
@@ -2463,13 +2452,6 @@ function BetSlip({
                   ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
                   : tn(valid.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
             </button>
-            <label className="bet-price-setting">
-              <span className="muted">{t("Accept price changes")}</span>
-              <select value={priceChanges} onChange={(e) => setPriceChanges(e.target.value === "never" ? "never" : "higher")}>
-                <option value="higher">{t("Only higher odds, before kick-off")}</option>
-                <option value="never">{t("Never")}</option>
-              </select>
-            </label>
             {hasLive ? <p className="muted bet-price-setting-note">{t("Live bets are only placed at the price on your slip.")}</p> : null}
             {info ? <SlipLimits info={info} staking={totalStake} /> : null}
             {hasLive ? (

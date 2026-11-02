@@ -92,3 +92,9 @@ export function byImportance<T extends Pick<OddsEvent, "league" | "country" | "h
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .map(({ event }) => event);
 }
+
+/** A competition's tier for the league filter: 1 the top ones, 2 the second tier, 3 the rest. */
+export function leagueTier(league: string, country: string | null): 1 | 2 | 3 {
+  const key = `${(country ?? "").toLowerCase()}|${league.toLowerCase()}`;
+  return TOP_LEAGUES.has(key) ? 1 : SECOND_LEAGUES.has(key) ? 2 : 3;
+}

@@ -8,6 +8,8 @@ import { BetLegs } from "../../../components/bet-legs";
 import { LineFamily, MarketHead, bundleLines, marketKind, resultHeads, visibleCountry } from "../../../components/line-market";
 import { MatchCentre, MatchStatsPanel } from "../../../components/match-centre";
 import { LiveTracker } from "../../../components/live-tracker";
+import { CountryFilter, type CountryOption } from "../../../components/country-filter";
+import { countryEmoji, countryLabel, countryRank } from "../../../lib/countries";
 import { GreyhoundRaces } from "../../../components/greyhound-races";
 import { ListSkeleton, LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
@@ -17,7 +19,7 @@ import { SportIcon } from "../../../components/sport-icon";
 import { TeamCrest } from "../../../components/team-crest";
 import { ApiError, apiFetch, type Bet, type BetAgain, type BuilderQuote, type LiveWait, type MarketPause, type MyBets, type OddsEvent, type OddsSelection, type OddsSettings, type PlaceBetsResponse, type SelectionQuote, type SlipInfo, type Sport } from "../../../lib/api";
 import { formatMoney } from "../../../lib/format";
-import { byImportance } from "../../../lib/importance";
+import { byImportance, leagueTier } from "../../../lib/importance";
 import { MAX_SLIP, forgetPicks, readSlip, saveSlip, slipStorageKey, type SlipItem } from "../../../lib/slip";
 import { useIdempotencyKey } from "../../../lib/use-idempotency-key";
 import { useI18n, type I18n } from "../../../components/i18n-provider";
@@ -183,6 +185,8 @@ function BetPage() {
   /** The system's line sizes, as "2,3,4". */
   const [systemKey, setSystemKey] = useState("");
   const [league, setLeague] = useState("");
+  // The countries ticked on the country filter (as the feed names them); none means every country.
+  const [countries, setCountries] = useState<Set<string>>(() => new Set());
   const [search, setSearch] = useState("");
   /** "" = every day, "live" = playing now, otherwise a day's label (Today, Tomorrow, …). */
   const [day, setDay] = useState("");
@@ -245,6 +249,7 @@ function BetPage() {
     lists.current = { live: null, upcoming: null };
     setEvents(null);
     setLeague("");
+    setCountries(new Set());
     setDay("");
   }, [sport]);
 
@@ -465,6 +470,7 @@ function BetPage() {
       return;
     }
     setLeague("");
+    setCountries(new Set());
     setSearch("");
     setDay("");
     setFocused(found.id);
@@ -745,14 +751,48 @@ function BetPage() {
     [getToken, toast, t, tn, confirm],
   );
 
-  const leagues = useMemo(() => Array.from(new Set((events ?? []).map((e) => e.league))).sort(), [events]);
+  // Countries mean a country only where the sport has them: a tennis match's is its tour, an MMA fight's its weight class.
+  const hasCountries = sport !== "tennis" && sport !== "mma" && sport !== "greyhounds";
+  const countryOptions = useMemo<CountryOption[]>(() => {
+    if (!hasCountries) return [];
+    const byCountry = new Map<string, { flag: string | null; count: number }>();
+    for (const event of events ?? []) {
+      if (!event.country) continue;
+      const entry = byCountry.get(event.country) ?? { flag: null, count: 0 };
+      entry.count += 1;
+      entry.flag ??= event.countryFlag ?? null;
+      byCountry.set(event.country, entry);
+    }
+    const international = t("International");
+    const lang = i18n.lang === "sq" ? "sq" : "en";
+    return Array.from(byCountry.entries())
+      .map(([country, { flag, count }]) => ({ country, flag, count, label: countryLabel(country, flag, lang, international), emoji: countryEmoji(country, flag) }))
+      .sort((a, b) => countryRank(a.country) - countryRank(b.country) || a.label.localeCompare(b.label, lang));
+  }, [events, hasCountries, t, i18n.lang]);
+  const inCountries = useCallback((event: Pick<OddsEvent, "country">) => countries.size === 0 || countries.has(event.country ?? ""), [countries]);
+  // The leagues of the ticked countries: the top competitions first (lib/importance.ts), then the rest A–Z.
+  const leagueGroups = useMemo(() => {
+    const tiers = new Map<string, number>();
+    for (const event of events ?? []) {
+      if (!inCountries(event)) continue;
+      tiers.set(event.league, Math.min(tiers.get(event.league) ?? 3, leagueTier(event.league, event.country)));
+    }
+    const byName = (a: [string, number], b: [string, number]) => a[1] - b[1] || a[0].localeCompare(b[0]);
+    const all = Array.from(tiers.entries()).sort(byName);
+    return { top: all.filter(([, tier]) => tier < 3).map(([name]) => name), rest: all.filter(([, tier]) => tier === 3).map(([name]) => name).sort((a, b) => a.localeCompare(b)) };
+  }, [events, inCountries]);
+  const leagues = useMemo(() => [...leagueGroups.top, ...leagueGroups.rest], [leagueGroups]);
+  // A league the ticked countries no longer include is let go.
+  useEffect(() => {
+    if (league && events && !leagues.includes(league)) setLeague("");
+  }, [league, leagues, events]);
   const query = search.trim().toLowerCase();
   const liveLabel = t("Live now");
   const endedLabel = t("Just finished");
   // Worked out again only when the matches or the filters change: typing a stake leaves them as they are.
   const { shown, allGroups, starredCount } = useMemo(() => {
     const listed = merged.filter(
-      (event) => (finishedNow(event) || ((event.bettable || event.live) && event.markets.length > 0)) && (!league || event.league === league) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
+      (event) => (finishedNow(event) || ((event.bettable || event.live) && event.markets.length > 0)) && (!league || event.league === league) && inCountries(event) && (!query || event.name.toLowerCase().includes(query) || event.league.toLowerCase().includes(query)),
     );
     const starredCount = listed.filter((event) => favourites.has(event.id)).length;
     const matching = favouritesOnly ? listed.filter((event) => favourites.has(event.id)) : listed;
@@ -774,7 +814,7 @@ function BetPage() {
     // Within each heading the big matches come first: a big club playing, then the top leagues, then the rest.
     for (const group of allGroups) group[1] = byImportance(group[1]);
     return { shown: allGroups.flatMap(([, list]) => list), allGroups, starredCount };
-  }, [merged, league, query, liveLabel, endedLabel, i18n, favourites, favouritesOnly]);
+  }, [merged, league, inCountries, query, liveLabel, endedLabel, i18n, favourites, favouritesOnly]);
   // A match whose main market is paused offers another to bet on meanwhile: a live one taking bets (spread across the
   // paused ones), or failing that the next one before kick-off.
   const suggestions = useMemo(() => {
@@ -937,13 +977,33 @@ function BetPage() {
                 {leagues.length > 1 ? (
                   <select className="bet-league-select" value={league} onChange={(e) => filter(() => setLeague(e.target.value))} aria-label={t("League")}>
                     <option value="">{t("All leagues")}</option>
-                    {leagues.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
+                    {leagueGroups.top.length > 0 ? (
+                      <>
+                        <optgroup label={t("Top leagues")}>
+                          {leagueGroups.top.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label={t("Other leagues")}>
+                          {leagueGroups.rest.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      </>
+                    ) : (
+                      leagueGroups.rest.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))
+                    )}
                   </select>
                 ) : null}
+                {countryOptions.length > 1 ? <CountryFilter options={countryOptions} selected={countries} onChange={(next) => filter(() => setCountries(next))} /> : null}
               </div>
             </div>
             {allGroups.length > 1 || favourites.size > 0 || favouritesOnly ? (

@@ -15096,6 +15096,76 @@ button.is-blocked {
   display: none;
 }
 
+/* SportScore's live tracker, above a live match's markets. The frame keeps a
+   steady height (no jump when it loads) that suits a phone held either way. */
+.live-tracker-probe {
+  height: 1px;
+  margin-bottom: -1px;
+}
+
+.live-tracker {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.live-tracker-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 13.5rem;
+  max-height: 24rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--bg-elevated);
+}
+
+.live-tracker-frame:not(.is-loaded) {
+  background: linear-gradient(90deg, var(--bg-elevated) 0%, var(--border) 50%, var(--bg-elevated) 100%) 0 0 / 200% 100%;
+  animation: live-tracker-wait 1.4s linear infinite;
+}
+
+@keyframes live-tracker-wait {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-tracker-frame:not(.is-loaded) {
+    animation: none;
+  }
+}
+
+.live-tracker-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* A phone on its side: short screen, so the tracker takes most of its height and leaves room to scroll to the markets. */
+@media (orientation: landscape) and (max-height: 32rem) {
+  .live-tracker-frame {
+    aspect-ratio: auto;
+    height: 70vh;
+    min-height: 11rem;
+  }
+}
+
+.live-tracker-credit {
+  margin: 0;
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.live-tracker-credit a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
 .bm-detail .odds-market-group {
   display: grid;
   gap: 0.75rem;

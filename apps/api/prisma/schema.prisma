@@ -404,6 +404,7 @@ model Event {
   updatedAt          DateTime         @updatedAt
   markets            Market[]
   favourites         FavouriteEvent[]
+  trackerMapping     TrackerMapping?
 
   @@unique([provider, externalId])
   @@index([status, startsAt])
@@ -1024,4 +1025,36 @@ model CasinoBookFeature {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("casino_book_features")
+}
+
+/// A fixture from the live tracker provider's own list (SportScore), as a
+/// Super Admin imported it. Only used to find each match's tracker id.
+model TrackerFixture {
+  provider   String   @default("sportscore")
+  externalId String   @map("external_id")
+  homeTeam   String   @map("home_team")
+  awayTeam   String   @map("away_team")
+  kickoff    DateTime
+  importedAt DateTime @default(now()) @map("imported_at")
+
+  @@id([provider, externalId])
+  @@index([kickoff])
+  @@map("tracker_fixtures")
+}
+
+/// Which tracker fixture is the same match as one of our events. Display only:
+/// nothing in odds, pauses or bet acceptance reads it.
+model TrackerMapping {
+  eventId    String   @id @map("event_id")
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  provider   String   @default("sportscore")
+  /// The provider's match id; null when no confident match was found.
+  externalId String?  @map("external_id")
+  /// 0–1 from the matcher, or 1 for a manual mapping.
+  confidence Float    @default(0)
+  /// "auto", "manual" or "none".
+  method     String   @default("auto")
+  checkedAt  DateTime @default(now()) @updatedAt @map("checked_at")
+
+  @@map("tracker_mappings")
 }

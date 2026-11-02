@@ -574,4 +574,5 @@ export const betting: Record<string, string> = {
   "Your slip has {count} picks. This bet's picks take their place.": "Bileta jote ka {count} zgjedhje. Zgjedhjet e këtij basti zënë vendin e tyre.",
   "{count} pick was left out: it can't be bet on now.": "{count} zgjedhje u la jashtë: nuk mund të luhet tani.",
   "{count} picks were left out: they can't be bet on now.": "{count} zgjedhje u lanë jashtë: nuk mund të luhen tani.",
+  "Live tracker": "Ndjekja live",
 };

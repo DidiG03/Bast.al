@@ -700,6 +700,9 @@ export type Bet = {
 };
 
 /** "Bet again" (GET /bets/:id/again): a bet's picks at today's prices, whether each can be bet on now, and how the bet was made. */
+/** GET /tracker/events/:id: the live tracker to frame above a live match's markets, if any. */
+export type TrackerView = { show: false } | { show: true; provider: string; src: string; attributionUrl: string };
+
 export type BetAgain = {
   kind: Bet["kind"];
   stake: number;

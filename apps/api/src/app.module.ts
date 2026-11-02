@@ -17,6 +17,7 @@ import { OddsModule } from "./odds/odds.module";
 import { BetsModule } from "./bets/bets.module";
 import { CasinoModule } from "./casino/casino.module";
 import { MaintenanceModule } from "./maintenance/maintenance.module";
+import { TrackerModule } from "./tracker/tracker.module";
 import { ClientThrottlerGuard } from "./security/client-throttler.guard";
 
 @Module({
@@ -44,6 +45,7 @@ import { ClientThrottlerGuard } from "./security/client-throttler.guard";
     BetsModule,
     CasinoModule,
     MaintenanceModule,
+    TrackerModule,
   ],
   controllers: [HealthController, RootController],
   providers: [QueueService, { provide: APP_GUARD, useClass: ClientThrottlerGuard }],

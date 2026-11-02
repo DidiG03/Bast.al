@@ -7,6 +7,7 @@ import { FormEvent, Suspense, memo, useCallback, useEffect, useMemo, useRef, use
 import { BetLegs } from "../../../components/bet-legs";
 import { LineFamily, MarketHead, bundleLines, marketKind, resultHeads, visibleCountry } from "../../../components/line-market";
 import { MatchCentre, MatchStatsPanel } from "../../../components/match-centre";
+import { LiveTracker } from "../../../components/live-tracker";
 import { GreyhoundRaces } from "../../../components/greyhound-races";
 import { ListSkeleton, LoadingSpinner, PageLoading } from "../../../components/loading-spinner";
 import { useToast } from "../../../components/toaster";
@@ -1434,6 +1435,7 @@ const MatchCard = memo(function MatchCard({
       ) : null}
       {expanded ? (
         <div className="bm-detail">
+          {event.live && !over && (event.sport ?? "football") === "football" ? <LiveTracker eventId={event.id} name={event.name} /> : null}
           {inRow ? <p className="bm-detail-main">{ts(inRow.name)}</p> : null}
           {entries.length > 1 ? (
             <div className="bm-detail-tools">

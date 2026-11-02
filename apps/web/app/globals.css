@@ -15112,9 +15112,8 @@ button.is-blocked {
 .live-tracker-frame {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 10;
-  min-height: 13.5rem;
-  max-height: 24rem;
+  /* SportScore's tracker page needs 360px; 420px is their default height. */
+  height: clamp(22.5rem, 62vw, 26.25rem);
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.6rem;
@@ -15146,12 +15145,10 @@ button.is-blocked {
   border: 0;
 }
 
-/* A phone on its side: short screen, so the tracker takes most of its height and leaves room to scroll to the markets. */
+/* A phone on its side: a short screen, so the tracker takes most of it (scrolling inside if it needs more) and the markets are a scroll away. */
 @media (orientation: landscape) and (max-height: 32rem) {
   .live-tracker-frame {
-    aspect-ratio: auto;
-    height: 70vh;
-    min-height: 11rem;
+    height: max(15rem, 85vh);
   }
 }
 

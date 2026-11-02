@@ -1,9 +1,15 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { EventStatus, Role } from "@prisma/client";
 import type { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { TRACKER_ATTRIBUTION_URL, TRACKER_PROVIDER, trackerEmbedSrc, trackerEnabled } from "./tracker-embed";
 import { KICKOFF_TOLERANCE_MS, matchTrackerFixture } from "./tracker-match";
+import { fetchLiveFixtures } from "./sportscore-feed";
+
+/** How often SportScore's live list is read while one of our live football matches has no tracker yet (~720 calls a day at most; their free tier allows ~10,000). */
+const SYNC_MS = 2 * 60_000;
+/** Imported fixtures are kept this long. */
+const KEEP_FIXTURES_MS = 2 * 24 * 60 * 60_000;
 
 /** A match with no confident fixture is looked for again after this long (new fixtures may have come in). */
 const RECHECK_MS = 10 * 60_000;
@@ -23,10 +29,54 @@ export type TrackerView = { show: false } | { show: true; provider: string; src:
  * their state beyond whether a match is live.
  */
 @Injectable()
-export class TrackerService {
+export class TrackerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TrackerService.name);
+  private timer: NodeJS.Timeout | null = null;
+  private syncing = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fetcher: typeof fetch = fetch,
+  ) {}
+
+  onModuleInit() {
+    if (process.env.NODE_ENV === "test" || process.env.TRACKER_SYNC === "off") return;
+    this.timer = setInterval(() => void this.sync(), SYNC_MS);
+    this.timer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  /**
+   * Reads SportScore's live football fixtures and maps our live matches to
+   * them. Skipped while the tracker is off, or when every live football match
+   * already has a tracker (or a manual choice), so it only calls out when needed.
+   */
+  async sync(now = new Date()): Promise<{ fetched: number; matched: number } | null> {
+    if (this.syncing || !trackerEnabled()) return null;
+    this.syncing = true;
+    try {
+      const waiting = await this.prisma.event.count({
+        where: { sport: "football", status: EventStatus.LIVE, hidden: false, OR: [{ trackerMapping: null }, { trackerMapping: { externalId: null, method: { not: "manual" } } }] },
+      });
+      if (waiting === 0) return null;
+      // Their fixture days are UTC: just after midnight, matches that kicked off yesterday are still on.
+      const days = [now.toISOString().slice(0, 10)];
+      if (now.getUTCHours() < 3) days.push(new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10));
+      const fixtures = (await Promise.all(days.map((day) => fetchLiveFixtures(day, this.fetcher)))).flat();
+      await this.prisma.trackerFixture.deleteMany({ where: { kickoff: { lt: new Date(now.getTime() - KEEP_FIXTURES_MS) } } });
+      const { matched } = await this.importFixtures(fixtures);
+      return { fetched: fixtures.length, matched };
+    } catch (error) {
+      // SportScore being down only means no tracker; it never touches anything else.
+      this.logger.warn(`Tracker sync failed: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    } finally {
+      this.syncing = false;
+    }
+  }
 
   /** What a match page should frame, if anything. */
   async forEvent(actor: Actor, eventId: string, lang: "sq" | "en", theme: "light" | "dark"): Promise<TrackerView> {

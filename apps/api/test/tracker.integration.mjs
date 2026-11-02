@@ -35,6 +35,7 @@ test("setup", async () => {
   upcoming = await event({ status: "UPCOMING", name: "Leeds vs Everton", homeTeam: "Leeds", awayTeam: "Everton" });
   process.env.LIVE_TRACKER_ENABLED = "true";
   process.env.SPORTSCORE_EMBED_URL = "https://sportscore.com/embed/{id}?lang={lang}&theme={theme}";
+  process.env.NODE_ENV = "test";
 });
 
 test("import maps the matches it is sure about", async () => {
@@ -52,7 +53,7 @@ test("import maps the matches it is sure about", async () => {
 });
 
 test("a live football match with a confident mapping gets the embed and the attribution link", async () => {
-  assert.deepEqual(await tracker.forEvent(player, united.id, "sq", "dark"), { show: true, provider: "sportscore", src: "https://sportscore.com/embed/ss1?lang=sq&theme=dark", attributionUrl: "https://sportscore.com" });
+  assert.deepEqual(await tracker.forEvent(player, united.id, "sq", "dark"), { show: true, provider: "sportscore", src: "https://sportscore.com/embed/ss1?lang=sq&theme=dark", attributionUrl: "https://sportscore.com/" });
 });
 
 test("hidden otherwise", async () => {
@@ -63,21 +64,49 @@ test("hidden otherwise", async () => {
   assert.deepEqual(await tracker.forEvent(player, united.id, "en", "light"), { show: false }, "switched off");
   process.env.LIVE_TRACKER_ENABLED = "true";
   const saved = process.env.SPORTSCORE_EMBED_URL;
-  delete process.env.SPORTSCORE_EMBED_URL;
-  assert.deepEqual(await tracker.forEvent(player, united.id, "en", "light"), { show: false }, "no embed address");
+  process.env.SPORTSCORE_EMBED_URL = "https://elsewhere.example/{id}";
+  assert.deepEqual(await tracker.forEvent(player, united.id, "en", "light"), { show: false }, "an embed address off sportscore.com");
   process.env.SPORTSCORE_EMBED_URL = saved;
   await assert.rejects(tracker.forEvent(player, "nope", "en", "light"), /Match not found/);
 });
 
 test("manual mapping wins, and null keeps a match without a tracker", async () => {
-  await tracker.setManual(women.id, "ssW");
-  assert.equal((await tracker.forEvent(player, women.id, "en", "light")).src, "https://sportscore.com/embed/ssW?lang=en&theme=light");
+  await tracker.setManual(women.id, "ss-w");
+  assert.equal((await tracker.forEvent(player, women.id, "en", "light")).src, "https://sportscore.com/embed/ss-w?lang=en&theme=light");
   await tracker.setManual(united.id, null);
   assert.deepEqual(await tracker.forEvent(player, united.id, "en", "light"), { show: false });
   await tracker.importFixtures([{ id: "ss1", home: "Manchester Utd", away: "Wolverhampton", kickoff: kickoff.toISOString() }]);
   assert.equal((await prisma.trackerMapping.findUnique({ where: { eventId: united.id } })).method, "manual", "an import doesn't undo a manual choice");
   await tracker.clearManual(united.id);
   assert.equal((await tracker.forEvent(player, united.id, "en", "light")).show, true, "back to automatic");
+});
+
+test("sync: reads SportScore's live list only when a live football match still needs a tracker, and maps it", async () => {
+  await prisma.trackerMapping.deleteMany();
+  await prisma.trackerFixture.deleteMany();
+  const calls = [];
+  const body = { matches: [{ home: "Manchester Utd", away: "Wolverhampton", status: "live", time: kickoff.toISOString(), url: "/football/match/manchester-united-vs-wolverhampton/u1x/" }] };
+  const feed = new TrackerService(prisma, async (url) => (calls.push(url), { ok: true, json: async () => body }));
+  process.env.LIVE_TRACKER_ENABLED = "false";
+  assert.equal(await feed.sync(), null, "switched off: no call");
+  assert.equal(calls.length, 0);
+  process.env.LIVE_TRACKER_ENABLED = "true";
+  const result = await feed.sync(new Date("2026-11-02T18:00:00Z"));
+  assert.equal(calls.length, 1);
+  assert.equal(result.fetched, 1);
+  assert.equal((await prisma.trackerMapping.findUnique({ where: { eventId: united.id } })).externalId, "manchester-united-vs-wolverhampton");
+  // Just after midnight UTC it also reads yesterday's list.
+  await feed.sync(new Date("2026-11-03T00:30:00Z"));
+  assert.deepEqual(calls.slice(1).map((url) => new URL(url).searchParams.get("date")), ["2026-11-03", "2026-11-02"]);
+  // Every live football match settled (mapped, or kept without one by hand): no more calls.
+  await tracker.setManual(women.id, null);
+  calls.length = 0;
+  assert.equal(await feed.sync(), null);
+  assert.equal(calls.length, 0);
+  // SportScore failing is only logged.
+  await tracker.clearManual(women.id);
+  const down = new TrackerService(prisma, async () => ({ ok: false, status: 503 }));
+  assert.equal(await down.sync(), null);
 });
 
 test("teardown", async () => {

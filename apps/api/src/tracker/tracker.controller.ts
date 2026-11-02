@@ -9,9 +9,9 @@ import { MfaGuard } from "../auth/mfa.guard";
 import type { Actor } from "../auth/permissions";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { TRACKER_ID } from "./tracker-embed";
 import { TrackerService } from "./tracker.service";
 
-const TRACKER_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 class TrackerQueryDto {
   @IsOptional()

@@ -12,6 +12,7 @@ import { join } from "node:path";
 const require = createRequire(import.meta.url);
 const { matchTrackerFixture, teamScore } = require("../dist/tracker/tracker-match.js");
 const { trackerEmbedSrc, trackerEnabled } = require("../dist/tracker/tracker-embed.js");
+const { parseFixtures, slugFromUrl, fetchLiveFixtures } = require("../dist/tracker/sportscore-feed.js");
 
 const at = (iso) => new Date(iso);
 const fixture = (externalId, homeTeam, awayTeam, kickoff) => ({ externalId, homeTeam, awayTeam, kickoff: at(kickoff) });
@@ -62,16 +63,39 @@ test("switch: only LIVE_TRACKER_ENABLED=true turns it on", () => {
   assert.equal(trackerEnabled({ LIVE_TRACKER_ENABLED: " TRUE " }), true);
 });
 
-test("embed address: filled from the configured template, only https on sportscore.com", () => {
+test("embed address: SportScore's official per-match tracker by default, overridable, only https on sportscore.com", () => {
+  const slug = "botev-vratsa-vs-cherno-more-varna";
+  assert.equal(trackerEmbedSrc(slug, "en", "light", {}), `https://sportscore.com/embed/tracker/football/${slug}/?theme=light`);
+  assert.equal(trackerEmbedSrc(slug, "sq", "dark", {}), `https://sportscore.com/embed/tracker/football/${slug}/?theme=dark&lang=sq`);
   const env = (url) => ({ SPORTSCORE_EMBED_URL: url });
-  assert.equal(trackerEmbedSrc("123", "sq", "dark", env("https://sportscore.com/widget/{id}?lang={lang}&theme={theme}")), "https://sportscore.com/widget/123?lang=sq&theme=dark");
-  assert.equal(trackerEmbedSrc("123", "en", "light", env("https://widgets.sportscore.com/m/{id}")), "https://widgets.sportscore.com/m/123");
-  assert.equal(trackerEmbedSrc("123", "en", "light", {}), null);
-  assert.equal(trackerEmbedSrc("123", "en", "light", env("https://sportscore.com/widget")), null, "no {id} in the template");
-  assert.equal(trackerEmbedSrc("123", "en", "light", env("http://sportscore.com/{id}")), null);
-  assert.equal(trackerEmbedSrc("123", "en", "light", env("https://sportscore.com.evil.example/{id}")), null);
-  assert.equal(trackerEmbedSrc("123", "en", "light", env("https://evilsportscore.com/{id}")), null);
-  assert.equal(trackerEmbedSrc("1/../x", "en", "light", env("https://sportscore.com/{id}")), null);
+  assert.equal(trackerEmbedSrc("abc", "sq", "dark", env("https://widgets.sportscore.com/m/{id}?l={lang}&t={theme}")), "https://widgets.sportscore.com/m/abc?l=sq&t=dark");
+  assert.equal(trackerEmbedSrc("abc", "en", "light", env("https://sportscore.com/widget")), null, "no {id} in the template");
+  assert.equal(trackerEmbedSrc("abc", "en", "light", env("http://sportscore.com/{id}")), null);
+  assert.equal(trackerEmbedSrc("abc", "en", "light", env("https://sportscore.com.evil.example/{id}")), null);
+  assert.equal(trackerEmbedSrc("abc", "en", "light", env("https://evilsportscore.com/{id}")), null);
+  assert.equal(trackerEmbedSrc("1/../x", "en", "light", {}), null);
+  assert.equal(trackerEmbedSrc("Abc", "en", "light", {}), null);
+});
+
+test("SportScore fixtures: the slug comes from the match address; bad rows are dropped", async () => {
+  assert.equal(slugFromUrl("/football/match/botev-vratsa-vs-cherno-more-varna/x7lm7phjd731m2w/"), "botev-vratsa-vs-cherno-more-varna");
+  assert.equal(slugFromUrl("/basketball/match/a-vs-b/x1/"), null);
+  assert.equal(slugFromUrl("https://evil.example/football/match/a-vs-b/x1/"), null);
+  assert.equal(slugFromUrl(null), null);
+  const body = {
+    matches: [
+      { home: "Cherno More Varna", away: "Botev Vratsa", status: "live", time: "2026-11-02T16:30:00+00:00", url: "/football/match/botev-vratsa-vs-cherno-more-varna/x7lm7phjd731m2w/" },
+      { home: "No Url", away: "B", time: "2026-11-02T16:30:00+00:00" },
+      { home: "Bad Time", away: "B", time: "soon", url: "/football/match/x-vs-y/abc/" },
+    ],
+  };
+  assert.deepEqual(parseFixtures(body), [{ id: "botev-vratsa-vs-cherno-more-varna", home: "Cherno More Varna", away: "Botev Vratsa", kickoff: "2026-11-02T16:30:00.000Z" }]);
+  assert.deepEqual(parseFixtures(null), []);
+  let asked = "";
+  const fetcher = async (url) => ((asked = url), { ok: true, json: async () => body });
+  assert.equal((await fetchLiveFixtures("2026-11-02", fetcher)).length, 1);
+  assert.equal(asked, "https://sportscore.com/api/v1/fixtures/?sport=football&status=live&date=2026-11-02&limit=200&src=shtatat.al");
+  await assert.rejects(fetchLiveFixtures("2026-11-02", async () => ({ ok: false, status: 429 })), /HTTP 429/);
 });
 
 test("display only: odds, bets and realtime code never import the tracker", () => {

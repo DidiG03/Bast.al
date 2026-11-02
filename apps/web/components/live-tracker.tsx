@@ -14,9 +14,10 @@ const RECHECK_MS = 2 * 60_000;
  * Display only: nothing here feeds pauses, prices or bet acceptance. It loads
  * nothing until the panel is near the screen, and the API decides whether to
  * show it at all (the LIVE_TRACKER_ENABLED switch, a confident match id).
- * SportScore's terms ask for a visible, followed "Powered by SportScore" link
- * on every page with the widget: it is part of the panel and is shown
- * whenever the frame is.
+ * SportScore's terms (sportscore.com/developers/terms/) ask for a visible
+ * dofollow "Powered by SportScore" link on every page with the widget: it is
+ * part of the panel and is shown whenever the frame is. Their tracker fills
+ * the frame's height and needs at least 360px.
  */
 export function LiveTracker({ eventId, name }: { eventId: string; name: string }) {
   const { getToken } = useAuth();
@@ -75,7 +76,8 @@ export function LiveTracker({ eventId, name }: { eventId: string; name: string }
         />
       </div>
       <p className="live-tracker-credit">
-        <a href={view.attributionUrl} target="_blank" rel="noopener">
+        {/* SportScore's required badge, as their terms give it: a real dofollow link, never hidden. */}
+        <a href={view.attributionUrl} rel="dofollow noopener" target="_blank" title="Sports data by SportScore">
           Powered by SportScore
         </a>
       </p>

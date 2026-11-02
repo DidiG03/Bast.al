@@ -14877,6 +14877,62 @@ button.is-blocked {
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
 }
 
+/* A match's own page (the list's "N markets" button): a way back, the competition, then the match with every market. */
+.match-page {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.match-page-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.match-page-back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.5rem;
+  padding: 0 0.85rem 0 0.55rem;
+  border: 1px solid var(--hairline-strong, var(--border));
+  border-radius: var(--radius-control, 10px);
+  background: var(--surface-1, var(--bg-elevated));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.match-page-back svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.match-page-league {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.match-page-league-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bm-league-head {
   display: flex;
   align-items: baseline;

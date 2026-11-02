@@ -586,4 +586,5 @@ export const betting: Record<string, string> = {
   "International": "Ndërkombëtare",
   "Top leagues": "Kampionatet kryesore",
   "Other leagues": "Kampionatet e tjera",
+  "All matches": "Të gjitha ndeshjet",
 };

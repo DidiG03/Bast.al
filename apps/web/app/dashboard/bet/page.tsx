@@ -138,6 +138,8 @@ function BetPage() {
   const listed = sport !== "greyhounds";
   // Opened from a match on the Overview: scroll to it and light it up.
   const matchParam = params.get("match");
+  // A match's own page, with every market: the list's "N markets" button opens it (?event=<id>). The slip stays the same.
+  const eventParam = tab === "matches" ? params.get("event") : null;
   const [focused, setFocused] = useState<string | null>(null);
   // Greyhound racing only shows once its feed is connected: until then there are no races to bet on.
   const [greyhoundsOn, setGreyhoundsOn] = useState(false);
@@ -320,22 +322,32 @@ function BetPage() {
   // Read through refs, so the match cards keep the same handler and don't redraw on every keystroke in the slip.
   const detailsRef = useRef(details);
   detailsRef.current = details;
-  const toggleExpanded = useCallback(
+
+  const listAddress = sport === "football" ? "/dashboard/bet" : `/dashboard/bet?sport=${sport}`;
+  // Opened from the list in this visit: going back returns to it where it was. A link straight to a match goes to the list.
+  const openedFromList = useRef(false);
+  /** Opens a match's own page. */
+  const openMatchPage = useCallback(
     (id: string) => {
-      const opening = !expandedRef.current.has(id);
-      setExpanded((current) => {
-        const next = new Set(current);
-        if (opening) next.add(id);
-        else next.delete(id);
-        return next;
-      });
-      if (!opening) return;
-      if (!detailsRef.current[id]) void loadDetail(id).catch(() => toast.error(t("Couldn't load the matches")));
-      // Fetched ahead (see prefetchDetail) a while ago: shown at once, and fetched again behind it.
-      else if (Date.now() - (detailAt.current.get(id) ?? 0) > DETAIL_FRESH_MS) void loadDetail(id).catch(() => undefined);
+      openedFromList.current = true;
+      router.push(`/dashboard/bet?${sport === "football" ? "" : `sport=${sport}&`}event=${encodeURIComponent(id)}`, { scroll: false });
+      window.scrollTo({ top: 0 });
     },
-    [loadDetail, toast, t],
+    [router, sport],
   );
+  /** Back to the list: the browser's back when the list is where the Player came from, so it keeps its place. */
+  const closeMatchPage = useCallback(() => {
+    if (openedFromList.current) router.back();
+    else router.replace(listAddress, { scroll: false });
+    openedFromList.current = false;
+  }, [router, listAddress]);
+  // The open match's markets are the only ones kept loaded (and refreshed with the list); the list shows its main market alone.
+  useEffect(() => {
+    setExpanded(eventParam ? new Set([eventParam]) : new Set());
+    if (!eventParam) return;
+    if (!detailsRef.current[eventParam]) void loadDetail(eventParam).catch(() => toast.error(t("Couldn't load the matches")));
+    else if (Date.now() - (detailAt.current.get(eventParam) ?? 0) > DETAIL_FRESH_MS) void loadDetail(eventParam).catch(() => undefined);
+  }, [eventParam, loadDetail, toast, t]);
 
   /**
    * A finger or pointer on a match's "more markets" button: its markets start
@@ -465,22 +477,14 @@ function BetPage() {
     const found = events.find((event) => event.id === matchParam && (event.bettable || event.live) && event.markets.length > 0);
     // The link is used once; a refresh of the page shouldn't jump back to it. The sport stays in the address: without
     // it the page switched to football and the volleyball (or tennis…) match it had just opened was gone.
-    router.replace(sport === "football" ? "/dashboard/bet" : `/dashboard/bet?sport=${sport}`, { scroll: false });
     if (!found) {
+      router.replace(sport === "football" ? "/dashboard/bet" : `/dashboard/bet?sport=${sport}`, { scroll: false });
       toast.info(t("That match isn't open for bets any more."));
       return;
     }
-    setLeague("");
-    setCountries(new Set());
-    setSearch("");
-    setDay("");
-    setFocused(found.id);
-    // Far down the list: draw enough matches to reach it.
-    setLimit(Math.max(MATCHES_SHOWN, events.indexOf(found) + 10));
-    // The match someone came here for opens with every market showing.
-    setExpanded((current) => new Set(current).add(found.id));
-    void loadDetail(found.id).catch(() => undefined);
-  }, [matchParam, events, tab, sport, router, toast, t, loadDetail]);
+    // The match someone came here for opens on its own page, with every market.
+    router.replace(`/dashboard/bet?${sport === "football" ? "" : `sport=${sport}&`}event=${encodeURIComponent(found.id)}`, { scroll: false });
+  }, [matchParam, events, tab, sport, router, toast, t]);
 
   useEffect(() => {
     if (!focused) return;
@@ -973,6 +977,37 @@ function BetPage() {
           </div>
 
         </div>
+      ) : tab === "matches" && eventParam ? (
+        <div className="bet-layout">
+          <div className="stack bet-matches is-reading">
+            <MatchPage
+              event={merged.find((event) => event.id === eventParam) ?? null}
+              loaded={events !== null && lists.current.upcoming !== null}
+              loading={!details[eventParam]}
+              onBack={closeMatchPage}
+              card={(event) => (
+                <MatchCard
+                  event={event}
+                  selected={selected}
+                  onPick={toggle}
+                  focused={false}
+                  moves={moves}
+                  expanded
+                  loading={!details[event.id]}
+                  onToggle={closeMatchPage}
+                  onPrefetch={prefetchDetail}
+                  starred={favourites.has(event.id)}
+                  onStar={toggleFavourite}
+                  favouriteMarkets={favouriteMarkets}
+                  onStarMarket={toggleFavouriteMarket}
+                  suggestion={suggestions.get(event.id)}
+                  onGoTo={openMatchPage}
+                  page
+                />
+              )}
+            />
+          </div>
+        </div>
       ) : tab === "matches" ? (
         <div className="bet-layout">
           <div className={`stack bet-matches${focused ? " is-jumping" : ""}${expanded.size > 0 ? " is-reading" : ""}`}>
@@ -1107,9 +1142,9 @@ function BetPage() {
                             onPick={toggle}
                             focused={focused === event.id}
                             moves={moves}
-                            expanded={expanded.has(event.id)}
-                            loading={expanded.has(event.id) && !details[event.id]}
-                            onToggle={toggleExpanded}
+                            expanded={false}
+                            loading={false}
+                            onToggle={openMatchPage}
                             onPrefetch={prefetchDetail}
                             starred={favourites.has(event.id)}
                             onStar={toggleFavourite}
@@ -1217,6 +1252,48 @@ const SCORERS_SHOWN = 12;
 const STATS_BEFORE_MS = 90 * 60_000;
 
 /** Drawn again only when its own props change: a list of 240 matches redrawing on every keystroke made typing a stake lag. */
+/**
+ * A match's own page: its competition, a way back to the list, and the match
+ * with every market (MatchCard). Picks go on the same slip as the list's.
+ */
+function MatchPage({ event, loaded, loading, onBack, card }: { event: OddsEvent | null; loaded: boolean; loading: boolean; onBack: () => void; card: (event: OddsEvent) => React.ReactNode }) {
+  const { t } = useI18n();
+  return (
+    <section className="match-page" aria-label={event?.name ?? t("Match")}>
+      <div className="match-page-bar">
+        <button type="button" className="match-page-back" onClick={onBack}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m15 6-6 6 6 6" />
+          </svg>
+          {t("All matches")}
+        </button>
+        {event ? (
+          <span className="match-page-league">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {event.leagueLogo ? <img className="league-crest" src={event.leagueLogo} alt="" /> : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {event.countryFlag ? <img className="country-flag" src={event.countryFlag} alt={event.country ?? ""} /> : null}
+            <span className="match-page-league-name">{event.league}</span>
+          </span>
+        ) : null}
+      </div>
+      {event ? (
+        <div className="bm-league match-page-card">{card(event)}</div>
+      ) : loaded ? (
+        <div className="card">
+          <p className="muted" style={{ margin: 0 }}>
+            {t("That match isn't open for bets any more.")}
+          </p>
+        </div>
+      ) : (
+        <div className="loading-state">
+          <LoadingSpinner label="Loading matches" />
+        </div>
+      )}
+    </section>
+  );
+}
+
 const MatchCard = memo(function MatchCard({
   event,
   selected,
@@ -1233,6 +1310,7 @@ const MatchCard = memo(function MatchCard({
   onStarMarket,
   suggestion,
   onGoTo,
+  page = false,
 }: {
   event: OddsEvent;
   selected: Set<string>;
@@ -1254,6 +1332,8 @@ const MatchCard = memo(function MatchCard({
   /** While its main market is paused: another match to bet on meanwhile, shown in that row instead of locked prices. */
   suggestion?: Suggestion;
   onGoTo: (eventId: string) => void;
+  /** On the match's own page: every market showing, no button to open or close them. */
+  page?: boolean;
 }) {
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;
@@ -1416,7 +1496,7 @@ const MatchCard = memo(function MatchCard({
   };
 
   return (
-    <article id={`match-${event.id}`} className={`bm-match${playing ? " is-live" : ""}${over ? " is-over" : ""}${focused ? " is-focused" : ""}${expanded ? " is-expanded" : ""}`}>
+    <article id={`match-${event.id}`} className={`bm-match${playing ? " is-live" : ""}${over ? " is-over" : ""}${focused ? " is-focused" : ""}${expanded ? " is-expanded" : ""}${page ? " is-page" : ""}`}>
       <div className="bm-row">
         <button type="button" className={`match-star${starred ? " is-starred" : ""}`} onClick={() => onStar(event.id)} aria-pressed={starred} aria-label={starred ? t("Remove {match} from favourites", { match: event.name }) : t("Add {match} to favourites", { match: event.name })}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1477,7 +1557,7 @@ const MatchCard = memo(function MatchCard({
             inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick"))
           ) : null}
         </div>
-        {more > 0 ? (
+        {more > 0 && !page ? (
           <button type="button" className={`bm-more${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} onPointerEnter={() => !expanded && onPrefetch(event.id)} onTouchStart={() => !expanded && onPrefetch(event.id)} onFocus={() => !expanded && onPrefetch(event.id)} aria-expanded={expanded} aria-label={toggleLabel} title={toggleLabel}>
             {expanded ? (
               <svg viewBox="0 0 24 24" aria-hidden="true">

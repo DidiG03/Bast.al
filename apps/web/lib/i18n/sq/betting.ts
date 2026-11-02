@@ -575,4 +575,5 @@ export const betting: Record<string, string> = {
   "{count} pick was left out: it can't be bet on now.": "{count} zgjedhje u la jashtë: nuk mund të luhet tani.",
   "{count} picks were left out: they can't be bet on now.": "{count} zgjedhje u lanë jashtë: nuk mund të luhen tani.",
   "Live tracker": "Ndjekja live",
+  "Extra time & penalties": "Koha shtesë dhe penalltitë",
 };

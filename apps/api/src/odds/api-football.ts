@@ -25,7 +25,12 @@ export type RawFixture = {
   teams: { home: { id?: number; name: string; logo?: string | null }; away: { id?: number; name: string; logo?: string | null } };
   goals: { home: number | null; away: number | null };
   /** `fulltime` is the score after 90 minutes, before any extra time. */
-  score?: { halftime?: { home: number | null; away: number | null }; fulltime?: { home: number | null; away: number | null } };
+  score?: {
+    halftime?: { home: number | null; away: number | null };
+    fulltime?: { home: number | null; away: number | null };
+    extratime?: { home: number | null; away: number | null };
+    penalty?: { home: number | null; away: number | null };
+  };
 };
 
 export type RawOdds = {
@@ -108,6 +113,10 @@ export type FeedFixture = {
   halfTime: { home: number; away: number } | null;
   /** Went to extra time or penalties. Match statistics then include extra time, so corner and card bets can't settle from them. */
   extraTime: boolean;
+  /** Goals in extra time alone, once a match that had extra time has finished. */
+  extraTimeScore: { home: number; away: number } | null;
+  /** The penalty shootout's score, once a match decided on penalties has finished. */
+  penalties: { home: number; away: number } | null;
 };
 
 export type FeedMarket = {
@@ -171,11 +180,28 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     awayScore: raw.goals.away,
     result: status === EventStatus.COMPLETED && home !== null && away !== null ? { home, away } : null,
     extraTime: raw.fixture.status.short === "AET" || raw.fixture.status.short === "PEN",
+    ...extraTimeOf(raw, status, home, away),
     halfTime:
       status === EventStatus.COMPLETED && raw.score?.halftime?.home != null && raw.score.halftime.away != null
         ? { home: raw.score.halftime.home, away: raw.score.halftime.away }
         : null,
   };
+}
+
+/**
+ * Extra time's own goals and the shootout, for a finished match that had them.
+ * Extra-time goals are the final score less the 90-minute one (the feed's
+ * `goals` include extra time), which is the same as its `score.extratime`.
+ */
+function extraTimeOf(raw: RawFixture, status: EventStatus, home: number | null, away: number | null): Pick<FeedFixture, "extraTimeScore" | "penalties"> {
+  const short = raw.fixture.status.short;
+  if (status !== EventStatus.COMPLETED || (short !== "AET" && short !== "PEN") || home === null || away === null) return { extraTimeScore: null, penalties: null };
+  const sent = raw.score?.extratime;
+  const fromGoals = raw.goals.home !== null && raw.goals.away !== null ? { home: raw.goals.home - home, away: raw.goals.away - away } : null;
+  const extraTimeScore = fromGoals && fromGoals.home >= 0 && fromGoals.away >= 0 ? fromGoals : sent?.home != null && sent.away != null ? { home: sent.home, away: sent.away } : null;
+  const pen = raw.score?.penalty;
+  const penalties = short === "PEN" && pen?.home != null && pen.away != null && pen.home !== pen.away ? { home: pen.home, away: pen.away } : null;
+  return { extraTimeScore, penalties };
 }
 
 export type Namer = (home: string, away: string) => string;
@@ -609,10 +635,14 @@ type LiveValue = RawLiveOdds["odds"][number]["values"][number];
  * - lines: over/under, one `{prefix}_X_5` market per .5 line;
  * - scores: correct score, every scoreline the feed prices.
  */
-type LiveSpec =
+type LiveSpec = (
   | { kind: "fixed"; key: string; name: Namer; order: string; values: Array<[aliases: string[], key: string, name: Namer]>; partial?: boolean }
   | { kind: "lines"; prefix: string; name: (home: string, away: string, line: string) => string; order: string }
-  | { kind: "scores"; key: string; name: string; order: string };
+  | { kind: "scores"; key: string; name: string; order: string }
+) & {
+  /** Sort position when there's no pre-match bet to sit with (the extra-time markets: first, as they're the only ones open then). */
+  rank?: number;
+};
 
 const SIDE_ALIASES: Record<string, string[]> = { home: ["home", "1"], draw: ["draw", "x"], away: ["away", "2"] };
 const liveOutcomes: Array<[string[], string, Namer]> = [
@@ -694,6 +724,14 @@ const LIVE_MARKETS: Record<string, LiveSpec> = {
   "home total corners": { kind: "lines", prefix: "home_corners", name: (home, _a, line) => `${home} corners ${line}`, order: "Home Corners Over/Under" },
   "away total corners": { kind: "lines", prefix: "away_corners", name: (_h, away, line) => `${away} corners ${line}`, order: "Away Corners Over/Under" },
   "total cards": { kind: "lines", prefix: "cards", name: (_h, _a, line) => `Total cards ${line}`, order: "Cards Over/Under" },
+  // Extra time and penalties (see extra-time.ts): open only once extra time starts. The extra-time markets
+  // settle on extra time's own goals; To qualify on extra time, then the shootout; the shootout winner on the shootout.
+  "1x2 extra time": { kind: "fixed", key: "et_winner", name: () => "Extra time result", order: "", values: liveOutcomes, rank: -60 },
+  "double chance extra time": { kind: "fixed", key: "et_double_chance", name: () => "Extra time double chance", order: "", values: liveDoubleChance, rank: -50 },
+  "over/under extra time": { kind: "lines", prefix: "et_goals", name: (_h, _a, line) => `Extra time goals ${line}`, order: "", rank: -40 },
+  "extra time over/under line": { kind: "lines", prefix: "et_goals", name: (_h, _a, line) => `Extra time goals ${line}`, order: "", rank: -40 },
+  "to qualify": { kind: "fixed", key: "to_qualify", name: () => "To qualify", order: "", values: liveEitherTeam, rank: -70 },
+  "penalties shootout winner": { kind: "fixed", key: "pen_winner", name: () => "Penalty shootout winner", order: "", values: liveEitherTeam, rank: -30 },
 };
 
 /** Lower case, no spaces, "&" and " or " as "/", so "Home or Draw", "Home & Yes" and "home/yes" compare alike. */
@@ -720,7 +758,7 @@ function outcomeHeld(value?: LiveValue): boolean {
 }
 
 function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: string): FeedLiveMarket[] {
-  const base = (MARKET_INDEX.get(spec.order)?.index ?? MARKETS.length) * 10;
+  const base = spec.rank ?? (MARKET_INDEX.get(spec.order)?.index ?? MARKETS.length) * 10;
   if (spec.kind === "fixed") {
     const selections = spec.values.map(([aliases, key, name], sortOrder) => {
       const found = values.find((v) => aliases.includes(normalize(v.value)));

@@ -1096,6 +1096,8 @@ function BetPage() {
 
 /** The headings an opened match's markets sit under, in this order. */
 const MARKET_GROUPS = [
+  // Only on the board during extra time, when they're the markets still open (the 90-minute ones are decided).
+  ["extra", msg("Extra time & penalties")],
   ["main", msg("Main")],
   ["goals", msg("Goals")],
   ["teams", msg("Teams")],
@@ -1130,6 +1132,7 @@ function marketGroup(key: string): MarketGroup {
   // MMA: who wins, then the rounds lines.
   if (key.startsWith("fight_")) return "main";
   if (/^rounds_\d+_5$/.test(key)) return "rounds";
+  if (key.startsWith("et_") || key === "to_qualify" || key === "pen_winner") return "extra";
   if (["match_winner", "double_chance", "draw_no_bet", "btts"].includes(key)) return "main";
   if (/^(ah|eh)_/.test(key)) return "handicap";
   if (/^(home_|away_)?(corners|cards)_/.test(key)) return "corners";

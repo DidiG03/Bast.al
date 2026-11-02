@@ -739,4 +739,9 @@ export const server: Record<string, string> = {
   "{name} must be a date like 2026-10-31": "{name} duhet të jetë një datë si 2026-10-31",
   "Kind must be all, topups, bets or casino": "Lloji duhet të jetë: të gjitha, rimbushje, baste ose kazino",
   "Direction must be all, in or out": "Drejtimi duhet të jetë: të gjitha, hyrje ose dalje",
+  "Extra time result": "Rezultati në kohën shtesë",
+  "Extra time double chance": "Shans i dyfishtë në kohën shtesë",
+  "Extra time goals {line}": "Golat në kohën shtesë {line}",
+  "To qualify": "Kualifikohet",
+  "Penalty shootout winner": "Fituesi i penalltive",
 };

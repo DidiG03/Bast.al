@@ -273,10 +273,10 @@ export function goalsHelp(marketKey: string, selectionKey: string | undefined, b
   const was = before.home - before.away;
   const now = home - away;
   const key = selectionKey;
-  if (/^(match_winner|h1_winner|h2_winner)$/.test(marketKey)) return key === "home" ? now > was : key === "away" ? now < was : key === "draw" ? Math.abs(now) < Math.abs(was) : true;
-  if (/^(h1_)?double_chance$/.test(marketKey)) return key === "home_draw" ? now > was : key === "draw_away" ? now < was : key === "home_away" ? Math.abs(now) > Math.abs(was) : true;
-  if (marketKey === "draw_no_bet" || /^(h1_|h2_)?(ah|eh)_/.test(marketKey)) return key === "home" ? now > was : key === "away" ? now < was : true;
-  if (/^(h1_|h2_)?goals_\d+_5$/.test(marketKey)) return key === "over";
+  if (/^(match_winner|h1_winner|h2_winner|et_winner)$/.test(marketKey)) return key === "home" ? now > was : key === "away" ? now < was : key === "draw" ? Math.abs(now) < Math.abs(was) : true;
+  if (/^(h1_|et_)?double_chance$/.test(marketKey)) return key === "home_draw" ? now > was : key === "draw_away" ? now < was : key === "home_away" ? Math.abs(now) > Math.abs(was) : true;
+  if (marketKey === "draw_no_bet" || marketKey === "to_qualify" || /^(h1_|h2_)?(ah|eh)_/.test(marketKey)) return key === "home" ? now > was : key === "away" ? now < was : true;
+  if (/^(h1_|h2_|et_)?goals_\d+_5$/.test(marketKey)) return key === "over";
   if (/^home_goals_\d+_5$/.test(marketKey)) return key === "over" && home > before.home;
   if (/^away_goals_\d+_5$/.test(marketKey)) return key === "over" && away > before.away;
   if (/^(h1_|h2_)?btts$/.test(marketKey)) return key === "yes" && ((before.home === 0 && home > 0) || (before.away === 0 && away > 0));

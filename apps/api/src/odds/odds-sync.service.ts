@@ -9,7 +9,8 @@ import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdd
 import { feedDelay, goalForScore, goalLag } from "./feed-delay";
 import { savedCrests, savedMarks } from "./crest";
 import { PREMATCH_REFRESH_MS, RICH_PLAN, isDailyLimitError, msUntilReset, pacedInterval, quotaReserve } from "./feed-budget";
-import { EVENT_PAUSES, GOAL_COOLDOWN_MS, LIVE_CUTOFF_MINUTE, type CooldownReason, type MarketPause, type MarketPauseReason, bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, hitBy, laterCooldown, marketGroup, mergePause, sameScorePause, scoreChanged } from "./live-guard";
+import { liveCutoffReached } from "./extra-time";
+import { EVENT_PAUSES, GOAL_COOLDOWN_MS, type CooldownReason, type MarketPause, type MarketPauseReason, bigSwing, cooldownFor, eventPause, freshBlocker, freshUntil, hitBy, laterCooldown, marketGroup, mergePause, sameScorePause, scoreChanged } from "./live-guard";
 import { marketStale } from "./pricing";
 import { mockFetchJson } from "./mock-feed";
 import { LIVE_HOT_MS, PollingStats, hotMatches, minuteRoom } from "./live-polling";
@@ -1472,7 +1473,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const caughtUp = !ahead || (scored && odds.homeScore! + odds.awayScore! >= ahead.home + ahead.away);
     const goal = scoreChanged(saved, after);
     const elapsed = odds.elapsed ?? null;
-    const matchOpen = !stopped && !before.liveSlowFeed && !(LIVE_CUTOFF_MINUTE > 0 && (elapsed ?? 0) >= LIVE_CUTOFF_MINUTE);
+    const matchOpen = !stopped && !before.liveSlowFeed && !liveCutoffReached(elapsed, before.period);
     // The event's pause on the markets it changes (the reading brought it, so a market it prices was made after it), and the
     // paused markets this reading is fresh for reopened.
     const markets = await this.pauseMarkets(
@@ -1651,18 +1652,25 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   private async recordResult(provider: string, fixture: FeedFixture) {
     if (!fixture.result) return;
     const where = { provider, externalId: fixture.externalId, OR: [{ resultSource: null }, { resultSource: "feed" }] };
-    const saved = await this.prisma.event.findFirst({ where, select: { resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true } });
+    const saved = await this.prisma.event.findFirst({ where, select: { resultHome: true, resultAway: true, resultHalfHome: true, resultHalfAway: true, resultEtHome: true, resultEtAway: true, resultPenHome: true, resultPenAway: true } });
     if (!saved) return;
     const next = {
       resultHome: fixture.result.home,
       resultAway: fixture.result.away,
       resultHalfHome: fixture.halfTime?.home ?? null,
       resultHalfAway: fixture.halfTime?.away ?? null,
+      // Extra time's own goals and the shootout, for the extra-time markets (extra-time.ts).
+      resultEtHome: fixture.extraTimeScore?.home ?? null,
+      resultEtAway: fixture.extraTimeScore?.away ?? null,
+      resultPenHome: fixture.penalties?.home ?? null,
+      resultPenAway: fixture.penalties?.away ?? null,
     };
     // A score arriving for the first time (the half-time one can come later) is news, not a change.
     const changed =
       (saved.resultHome !== null && (saved.resultHome !== next.resultHome || saved.resultAway !== next.resultAway)) ||
-      (saved.resultHalfHome !== null && next.resultHalfHome !== null && (saved.resultHalfHome !== next.resultHalfHome || saved.resultHalfAway !== next.resultHalfAway));
+      (saved.resultHalfHome !== null && next.resultHalfHome !== null && (saved.resultHalfHome !== next.resultHalfHome || saved.resultHalfAway !== next.resultHalfAway)) ||
+      (saved.resultEtHome !== null && (saved.resultEtHome !== next.resultEtHome || saved.resultEtAway !== next.resultEtAway)) ||
+      (saved.resultPenHome !== null && (saved.resultPenHome !== next.resultPenHome || saved.resultPenAway !== next.resultPenAway));
     if (changed) this.logger.warn(`The feed changed match ${fixture.externalId} from ${saved.resultHome}-${saved.resultAway} to ${next.resultHome}-${next.resultAway}`);
     await this.prisma.event.updateMany({
       where,

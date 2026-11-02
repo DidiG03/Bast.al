@@ -1,4 +1,5 @@
-import { EVENT_HITS, LIVE_CUTOFF_MINUTE, fallbackMs, marketGroup, pauseDeadline, type LivePause, type MarketPauseReason } from "./live-guard";
+import { liveCutoffReached, marketInPhase } from "./extra-time";
+import { EVENT_HITS, fallbackMs, marketGroup, pauseDeadline, type LivePause, type MarketPauseReason } from "./live-guard";
 
 const envMs = (name: string, fallback: number) => (process.env[name] !== undefined && process.env[name] !== "" && Number(process.env[name]) >= 0 ? Number(process.env[name]) : fallback);
 
@@ -178,7 +179,8 @@ export function livePause(event: LiveEventState, now: Date = new Date()): LivePa
   // The bookmaker blocking the match, or not having priced it in the opening minutes. Not "a moment".
   if (event.liveStopped) return "bookmaker";
   if (event.liveSlowFeed) return "feed";
-  if (LIVE_CUTOFF_MINUTE > 0 && (event.elapsed ?? 0) >= LIVE_CUTOFF_MINUTE) return "late";
+  // Minute 89 in the 90 minutes, near the end of extra time, and the whole shootout (extra-time.ts).
+  if (liveCutoffReached(event.elapsed, event.period)) return "late";
   if (event.liveOddsAt === null) {
     const sinceKick = now.getTime() - event.startsAt.getTime();
     if (sinceKick < 3 * 60_000 || (event.elapsed ?? 99) <= 2) return "bookmaker";
@@ -231,7 +233,9 @@ export function selectionQuote(input: {
     return { price, bettable: open && !withdrawn, live, suspended: withdrawn };
   }
   // Paused after a goal or a card, or not priced during play for a while: off the board too.
-  const suspended = input.market.liveSuspended || input.selection.liveOdds === null || marketPause(input.market, input.now) !== null || marketStale(input.event, input.market, input.now, input.selection.liveOdds !== null);
+  // In extra time only its own markets take bets; the 90-minute ones are decided (extra-time.ts).
+  const outOfPhase = (input.event.sport ?? "football") === "football" && input.market.key !== undefined && !marketInPhase(input.market.key, input.event.period);
+  const suspended = outOfPhase || input.market.liveSuspended || input.selection.liveOdds === null || marketPause(input.market, input.now) !== null || marketStale(input.event, input.market, input.now, input.selection.liveOdds !== null);
   const price = applyMargin(input.selection.liveOdds ?? input.selection.feedOdds, teamMargin(input.baseMargin, input.ownerMargin));
   return { price, bettable: open && !suspended, live, suspended };
 }

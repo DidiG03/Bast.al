@@ -1,3 +1,4 @@
+import { gradeExtraTime, isExtraTimeMarket, type ExtraTimeResult } from "../odds/extra-time";
 import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import { BalanceTransactionType, BetKind, BetStatus, EventStatus, NotificationSeverity, NotificationType, Prisma, Role, SelectionResult } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
@@ -458,6 +459,8 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
         else if (event.sport === "volleyball") grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeVolleyball(market.key, selection.key, event.resultHome, event.resultAway, volleyballResultOf(event.fightResult)) : null;
         // Basketball and the NFL settle on the final score, overtime included.
         else if (POINTS_SPORTS.has(event.sport)) grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeBasketball(market.key, selection.key, event.resultHome, event.resultAway, periodsResultOf(event.fightResult)) : null;
+        // Extra time and penalties settle on extra time's own goals and the shootout (extra-time.ts).
+        else if (isExtraTimeMarket(market.key)) grade = event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null ? gradeExtraTime(market.key, selection.key, extraTimeResultOf(event)) : null;
         else if (event.status === EventStatus.COMPLETED && event.resultHome !== null && event.resultAway !== null) {
           const half = event.resultHalfHome !== null && event.resultHalfAway !== null ? { home: event.resultHalfHome, away: event.resultHalfAway } : null;
           grade = gradeSelection(market.key, selection.key, event.resultHome, event.resultAway, half, statsOf(event), { record, selectionName: selection.name, marketNames });
@@ -1346,4 +1349,13 @@ function statsOf(event: { resultCornersHome: number | null; resultCornersAway: n
   const { resultCornersHome, resultCornersAway, resultCardsHome, resultCardsAway } = event;
   if (resultCornersHome === null || resultCornersAway === null || resultCardsHome === null || resultCardsAway === null) return null;
   return { cornersHome: resultCornersHome, cornersAway: resultCornersAway, cardsHome: resultCardsHome, cardsAway: resultCardsAway };
+}
+
+/** What a finished match's extra-time markets settle on. */
+function extraTimeResultOf(event: { extraTime: boolean; resultEtHome: number | null; resultEtAway: number | null; resultPenHome: number | null; resultPenAway: number | null }): ExtraTimeResult {
+  return {
+    extraTime: event.extraTime,
+    extraTimeScore: event.resultEtHome !== null && event.resultEtAway !== null ? { home: event.resultEtHome, away: event.resultEtAway } : null,
+    penalties: event.resultPenHome !== null && event.resultPenAway !== null ? { home: event.resultPenHome, away: event.resultPenAway } : null,
+  };
 }

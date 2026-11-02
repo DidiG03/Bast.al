@@ -361,6 +361,12 @@ model Event {
   resultHalfAway     Int?             @map("result_half_away")
   /// Went to extra time or penalties: match statistics include extra time then, so corner and card bets wait for Super Admin.
   extraTime          Boolean          @default(false) @map("extra_time")
+  /// Goals scored in extra time alone (not the 90 minutes), for the extra-time markets. Null when there was none.
+  resultEtHome       Int?             @map("result_et_home")
+  resultEtAway       Int?             @map("result_et_away")
+  /// The penalty shootout's score, for To qualify and the shootout winner. Null when there was none.
+  resultPenHome      Int?             @map("result_pen_home")
+  resultPenAway      Int?             @map("result_pen_away")
   /// Corners and cards (every yellow and red counts as one) the corner and card markets settle on.
   resultCornersHome  Int?             @map("result_corners_home")
   resultCornersAway  Int?             @map("result_corners_away")

@@ -1,3 +1,4 @@
+import { EXTRA_TIME_PERIODS, SHOOTOUT_PERIOD, isExtraTimeMarket, marketInPhase } from "./extra-time";
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { EventStatus, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
@@ -64,12 +65,24 @@ const FINISHED_PAGE = 120;
  * such count, so its lines couldn't be checked against the count.
  */
 function liveCountHidden(
-  event: { status: string; matchCentre: unknown; matchCentreAt: Date | null; startsAt: Date },
+  event: { status: string; matchCentre: unknown; matchCentreAt: Date | null; startsAt: Date; sport?: string; period?: string | null },
   market: { key: string; livePausedAt?: Date | null; livePausedUntil?: Date | null; livePauseReason?: string | null; selections: Array<{ liveOdds: unknown }> },
   now: Date,
 ): boolean {
+  if (phaseHidden(event, market.key)) return true;
   if (event.status !== EventStatus.LIVE || !isCountFamily(market.key) || marketPause({ ...market, liveSuspended: false }, now) !== null) return false;
   return liveSideUnpriced(market.key, market.selections.some((selection) => selection.liveOdds !== null)) || countAvailability(event, market.key, now) === "none";
+}
+
+/**
+ * A live football market off the board for this phase of the match: the
+ * extra-time markets until extra time starts, and the 90-minute ones (decided
+ * by then) during extra time and the shootout (extra-time.ts).
+ */
+function phaseHidden(event: { status: string; sport?: string; period?: string | null }, marketKey: string): boolean {
+  if (event.status !== EventStatus.LIVE || (event.sport ?? "football") !== "football") return false;
+  if (event.period === SHOOTOUT_PERIOD) return !isExtraTimeMarket(marketKey);
+  return !marketInPhase(marketKey, event.period);
 }
 
 /** An over/under line market ("corners_11_5"): its family ("corners_") and line (11.5); null for any other market. */
@@ -732,8 +745,15 @@ export class OddsService {
     if (limits) {
       const liveEvents = events.filter((event) => event.status === EventStatus.LIVE);
       if (liveEvents.length > 0) {
+        // In extra time every 90-minute market is off the board too (phaseHidden), so all of those matches' markets are counted.
+        const extraTime = liveEvents.filter((event) => event.period === SHOOTOUT_PERIOD || EXTRA_TIME_PERIODS.has(event.period ?? "")).map((event) => event.id);
         const keys = await this.prisma.market.findMany({
-          where: { eventId: { in: liveEvents.map((event) => event.id) }, OR: ["cards_", "home_cards_", "away_cards_", "corners_", "home_corners_", "away_corners_"].map((prefix) => ({ key: { startsWith: prefix } })) },
+          where: {
+            OR: [
+              { eventId: { in: liveEvents.map((event) => event.id) }, OR: ["cards_", "home_cards_", "away_cards_", "corners_", "home_corners_", "away_corners_", "et_", "to_qualify", "pen_winner"].map((prefix) => ({ key: { startsWith: prefix } })) },
+              ...(extraTime.length > 0 ? [{ eventId: { in: extraTime } }] : []),
+            ],
+          },
           select: { eventId: true, key: true, livePausedAt: true, livePausedUntil: true, livePauseReason: true, selections: { select: { liveOdds: true } } },
         });
         const byId = new Map(liveEvents.map((event) => [event.id, { event, view: this.liveView(event, limits) }]));

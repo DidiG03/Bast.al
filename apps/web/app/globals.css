@@ -15409,6 +15409,14 @@ button.is-blocked {
 }
 
 /* A phone on its side: a short screen, so the tracker takes most of it (scrolling inside if it needs more) and the markets are a scroll away. */
+/* A phone held upright: SportScore's scoreboard, timeline and buttons take a fixed ~13rem, and its pitch
+   scales with the width, so the frame grows with the screen's width rather than squeezing the pitch. */
+@media (max-width: 640px) and (orientation: portrait) {
+  .live-tracker-frame {
+    height: min(calc(13rem + 60vw), 36rem);
+  }
+}
+
 @media (orientation: landscape) and (max-height: 32rem) {
   .live-tracker-frame {
     height: max(15rem, 85vh);

@@ -407,7 +407,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         fireFrame = 0;
         if (burningCells.length > 0) slotSound.ignite();
         // Bake the rest of the winning symbols' frames a bit at a time — never all symbols up front, never on the ticker.
-        const toBake = [...new Set(burningCells.map((cell) => cell.symbol))].flatMap((symbol) =>
+        const toBake = Array.from(new Set(burningCells.map((cell) => cell.symbol))).flatMap((symbol) =>
           Array.from({ length: burn.frames - 1 }, (_, i) => [symbol, i + 1] as const),
         );
         const bakeNext = () => {

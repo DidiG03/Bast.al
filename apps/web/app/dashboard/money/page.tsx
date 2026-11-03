@@ -183,7 +183,7 @@ export default function MoneyPage() {
             <HelpTip text="Green is money that came in: top-ups from your Manager or Owner, and wins. Stakes on your bets are in plain text. Red is money lost or taken back: a day's casino loss, or money your Manager or Owner took back. The newest is at the top." />
           </span>
         </div>
-        <div className="bet-chips" role="group" aria-label={t("Show")}>
+        <div className="bet-chips money-kind-tabs" role="group" aria-label={t("Show")}>
           {(
             [
               ["all", t("All")],
@@ -210,27 +210,12 @@ export default function MoneyPage() {
               maxLength={100}
             />
           </label>
-          <div className="bet-chips money-ranges" role="group" aria-label={t("Days")}>
-            {(
-              [
-                ["all", t("All time")],
-                ["today", t("Today")],
-                ["week", t("Last 7 days")],
-                ["month30", t("Last 30 days")],
-                ["thisMonth", t("This month")],
-              ] as Array<[Range, string]>
-            ).map(([key, label]) => (
-              <button key={key} type="button" className={`bet-chip${range === key ? " is-active" : ""}`} onClick={() => chooseRange(key)} aria-pressed={range === key}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <select className="money-direction" value={direction} onChange={(event) => setDirection(event.target.value as Direction)} aria-label={t("Money in or out")}>
+            <option value="all">{t("In and out")}</option>
+            <option value="in">{t("Money in")}</option>
+            <option value="out">{t("Money out")}</option>
+          </select>
           <div className="money-dates">
-            <select className="money-direction" value={direction} onChange={(event) => setDirection(event.target.value as Direction)} aria-label={t("Money in or out")}>
-              <option value="all">{t("In and out")}</option>
-              <option value="in">{t("Money in")}</option>
-              <option value="out">{t("Money out")}</option>
-            </select>
             <label>
               <span className="muted">{t("From")}</span>
               <input
@@ -257,6 +242,22 @@ export default function MoneyPage() {
               />
             </label>
           </div>
+        </div>
+
+        <div className="bet-chips money-ranges" role="group" aria-label={t("Days")}>
+          {(
+            [
+              ["all", t("All time")],
+              ["today", t("Today")],
+              ["week", t("Last 7 days")],
+              ["month30", t("Last 30 days")],
+              ["thisMonth", t("This month")],
+            ] as Array<[Range, string]>
+          ).map(([key, label]) => (
+            <button key={key} type="button" className={`bet-chip${range === key ? " is-active" : ""}`} onClick={() => chooseRange(key)} aria-pressed={range === key}>
+              {label}
+            </button>
+          ))}
         </div>
 
         {filtered ? (

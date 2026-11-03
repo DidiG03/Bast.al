@@ -23,7 +23,8 @@ export type SlotReelsHandle = {
   /** Book of Ra's free spins: `symbol` grows to fill each of these reels. Resolves once it has; `clear` or the next spin takes it away. */
   expand(reels: number[], symbol: string): Promise<void>;
   /**
-   * Shows the wins one after another, again and again until `clear`: each
+   * Shows the wins one after another for a single pass, then freezes on the
+   * first (overview or sole win) so the phone isn't redrawing forever: each
    * win's cells pulse, and a line is drawn in its colour from the left edge
    * to the right one, so it joins the line's numbers at the sides. Nothing
    * else is dimmed. `onShow` gets the index of the win now showing, and
@@ -213,12 +214,14 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       const reels = grid.length;
       const rows = grid[0]?.length ?? 3;
       const app = new Application();
+      // Phones overheat if every frame is at full retina while fire and wins run; keep them sharper on desktop only.
+      const phone = typeof window !== "undefined" && (window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 760);
       await app.init({
         width: reels * CELL + (reels - 1) * GAP,
         height: rows * CELL,
         backgroundAlpha: 0,
-        antialias: true,
-        resolution: Math.min(window.devicePixelRatio || 1, 2),
+        antialias: !phone,
+        resolution: Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 2),
         autoDensity: true,
       });
       if (disposed) {
@@ -347,7 +350,11 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       let fireFrame = 0;
       let fireAt = 0;
       const paintFire = () => {
-        for (const cell of burningCells) cell.sprite.texture = fireTexture(cell.symbol, fireFrame, litCells.has(cell.key));
+        // Only swap onto textures already baked (warm-up or lightFire). Building burn canvases here freezes phones.
+        for (const cell of burningCells) {
+          const ready = fireTextures.get(`${cell.symbol}:${fireFrame}:${litCells.has(cell.key)}`);
+          if (ready) cell.sprite.texture = ready;
+        }
       };
       const flicker = () => {
         const now = performance.now();
@@ -364,12 +371,16 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         warming = null;
         const next = toWarm.shift();
         if (!next || disposed) return;
+        // Only the noise layers here — full burn canvases are baked for winning symbols when a win lands.
         burn?.warm(next[0], CELL * SHARPNESS, next[1]);
-        warming = setTimeout(warmNext, 60);
+        warming = setTimeout(warmNext, phone ? 120 : 60);
       };
-      if (burn) warming = setTimeout(warmNext, 1500);
+      if (burn) warming = setTimeout(warmNext, phone ? 2500 : 1500);
+      let baking: ReturnType<typeof setTimeout> | null = null;
       const putOut = () => {
         app.ticker.remove(flicker);
+        if (baking) clearTimeout(baking);
+        baking = null;
         for (const child of fire.removeChildren()) child.destroy();
         burningCells.length = 0;
         litCells = new Set();
@@ -395,6 +406,19 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         }
         fireFrame = 0;
         if (burningCells.length > 0) slotSound.ignite();
+        // Bake the rest of the winning symbols' frames a bit at a time — never all symbols up front, never on the ticker.
+        const toBake = [...new Set(burningCells.map((cell) => cell.symbol))].flatMap((symbol) =>
+          Array.from({ length: burn.frames - 1 }, (_, i) => [symbol, i + 1] as const),
+        );
+        const bakeNext = () => {
+          baking = null;
+          const next = toBake.shift();
+          if (!next || disposed || burningCells.length === 0) return;
+          fireTexture(next[0], next[1], false);
+          fireTexture(next[0], next[1], true);
+          if (toBake.length > 0) baking = setTimeout(bakeNext, phone ? 48 : 24);
+        };
+        if (toBake.length > 0 && !instantRef.current) baking = setTimeout(bakeNext, 24);
         if (!instantRef.current) app.ticker.add(flicker);
       };
 
@@ -458,7 +482,8 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       };
       const presenter = new WinPresenter(reelSet, {
         dimLosers: false,
-        cycles: -1,
+        // One pass only: looping forever kept the Pixi ticker (and Sizzling Hot's fire) running until the next spin and overheated phones.
+        cycles: 1,
         sortByValue: false,
         // A sweep from the left reel, so the eye follows the line.
         stagger: instantRef.current ? 0 : 70,
@@ -468,7 +493,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         symbolAnim: instantRef.current
           ? async () => undefined
           : burn
-          ? () => new Promise<void>((resolve) => setTimeout(resolve, 900))
+          ? () => new Promise<void>((resolve) => setTimeout(resolve, phone ? 650 : 900))
           : async (symbol) => {
               // Not once the reels are gone (the page was left mid-win): the symbol has nothing left to animate.
               for (let pulse = 0; pulse < 2 && !disposed; pulse += 1) await Promise.race([symbol.playWin(), new Promise((resolve) => setTimeout(resolve, 400))]);
@@ -484,15 +509,30 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
           paintFire();
         }
         showing.current.onShow?.(index);
-        // The first win again: the last one has been shown in full, so the round is done.
+        // Every win has been shown once: the round is done (cycles: 1 ends after this pass).
         showing.current.shown += 1;
-        if (showing.current.shown === showing.current.wins.length + 1) {
+        if (showing.current.shown === showing.current.wins.length) {
           const done = showing.current.onRound;
           showing.current.onRound = undefined;
           done?.();
         }
       });
-      reelSet.events.on("win:end", wipe);
+      // After the single pass: keep the overview (or sole win) drawn with a still fire frame, and stop the ticker.
+      reelSet.events.on("win:end", () => {
+        app.ticker.remove(flicker);
+        const wins = showing.current.wins;
+        if (wins.length > 0) {
+          const keep = wins[0];
+          draw(keep);
+          litCells = new Set(keep.path && keep.cells.length === reels ? keep.cells.map(([reel, row]) => `${reel}:${row}`) : []);
+          paintFire();
+          showing.current.onShow?.(0);
+        } else {
+          wipe();
+        }
+        motion.showing = false;
+        motion.settle();
+      });
       // A thunk as each reel lands, a chime for a star, and the ticking stops when they're all down.
       reelSet.events.on("spin:reelLanded", (reel, landed) => {
         slotSound.reelStop(reel);
@@ -522,11 +562,14 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
       };
       // The first frame is drawn, then the reels wait still for the first spin.
       motion.settle();
-      // Back on the page: drawn again, in case the phone dropped the drawing while it was away.
+      // Away from the page: stop drawing. Back: one frame, then still again unless a spin is mid-flight.
       const onVisible = () => {
-        if (document.visibilityState !== "visible") return;
+        if (document.visibilityState !== "visible") {
+          app.ticker.stop();
+          return;
+        }
         motion.wake();
-        motion.settle();
+        if (!motion.spinning && !motion.showing && motion.expanding === 0) motion.settle();
       };
       document.addEventListener("visibilitychange", onVisible);
       teardown = () => {
@@ -537,6 +580,7 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
         spinTextures.destroy();
         putOut();
         if (warming) clearTimeout(warming);
+        if (baking) clearTimeout(baking);
         fireTextures.forEach((texture) => texture.destroy(true));
         app.destroy(true, { children: true, texture: true });
       };
@@ -603,11 +647,10 @@ export const SlotReels = forwardRef<SlotReelsHandle, Props>(function SlotReels({
           return;
         }
         showing.current = { wins, onShow, onRound, shown: 0 };
-        // Wins cycle until the next spin or clear(): the reels draw all that time.
+        // One pass of wins, then win:end freezes the frame and stops the ticker.
         current.motion.showing = true;
         current.motion.wake();
         current.lightFire(wins);
-        // show() cycles until aborted; it settles then, and nothing waits on it.
         current.presenter.show(wins.map((win, id) => ({ id, cells: win.cells.map(([reelIndex, cellIndex]) => ({ reelIndex, cellIndex })) }))).catch(() => undefined);
       },
       clear() {

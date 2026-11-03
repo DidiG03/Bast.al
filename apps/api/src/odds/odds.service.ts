@@ -13,6 +13,7 @@ import { LATE_REASONS, timelineOf } from "../bets/late";
 import { liveConfirmConfig } from "../bets/live-delay";
 import { countAvailability, countSelectionDead, countStatsStale, isCountFamily } from "./count-guard";
 import { pauseDeadline } from "./live-guard";
+import { homeImportance } from "./home-importance";
 import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseJustEnded, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
@@ -442,18 +443,22 @@ export class OddsService {
   }
 
   /**
-   * The matches a Player's home page leads with: live ones, then the ones
-   * starting in the next two days with the most to bet on (the big leagues
-   * have the most markets), soonest first when that's equal. Picked here, so
-   * the page doesn't download the whole week's list for four matches.
+   * The matches a Player's home page leads with: live ones, then the most
+   * important upcoming ones in the next week (big clubs / top leagues first,
+   * then most markets, then soonest). Picked here, so the page doesn't
+   * download the whole week's list for a few cards.
    */
   async topEvents(actor: Actor, count = 4, sport: Sport = "football") {
     const now = new Date();
     if (sport === "greyhounds") return this.nextRaces(actor, count, now);
-    const soon = now.getTime() + 2 * 86_400_000;
-    const rows = await this.kept(`top:${sport}`, LIST_TTL_MS.top, () =>
+    const week = now.getTime() + 7 * 86_400_000;
+    const rows = await this.kept(`top:${sport}:v2`, LIST_TTL_MS.top, () =>
       this.prisma.event.findMany({
-        where: { sport, OR: [stillLive(sport, now), { status: { in: FILTER_STATUSES.upcoming }, startsAt: { gte: new Date(now.getTime() - UPCOMING_GRACE_MS) } }], hidden: false },
+        where: {
+          sport,
+          OR: [stillLive(sport, now), { status: { in: FILTER_STATUSES.upcoming }, startsAt: { gte: new Date(now.getTime() - UPCOMING_GRACE_MS), lte: new Date(week) } }],
+          hidden: false,
+        },
         orderBy: { startsAt: "asc" },
         take: LIST_LIMIT,
         include: COUNT_MARKETS,
@@ -461,12 +466,14 @@ export class OddsService {
     );
     // Only football is bet on once it starts: another sport's match in play can't be opened on the Bet page, so it isn't listed.
     const open = rows.filter((event) => ((sport === "football" && event.status === EventStatus.LIVE) || eventOpen(event, now)) && event._count.markets > 0);
-    const byMarkets = (a: (typeof rows)[number], b: (typeof rows)[number]) => b._count.markets - a._count.markets || a.startsAt.getTime() - b.startsAt.getTime();
-    const live = open.filter((event) => event.status === EventStatus.LIVE).sort(byMarkets);
-    const upcoming = open.filter((event) => event.status !== EventStatus.LIVE);
-    const next = upcoming.filter((event) => event.startsAt.getTime() <= soon).sort(byMarkets);
-    const later = upcoming.filter((event) => event.startsAt.getTime() > soon);
-    const top = [...live.slice(0, 2), ...next, ...live.slice(2), ...later].slice(0, Math.min(Math.max(count, 1), 12));
+    const byHome = (a: (typeof rows)[number], b: (typeof rows)[number]) =>
+      homeImportance(a) - homeImportance(b) || b._count.markets - a._count.markets || a.startsAt.getTime() - b.startsAt.getTime();
+    const live = open.filter((event) => event.status === EventStatus.LIVE).sort(byHome);
+    const upcoming = open.filter((event) => event.status !== EventStatus.LIVE).sort(byHome);
+    // Coerce in case a bad query param slipped past validation — `slice(0, NaN)` is `[]` and emptied the home page.
+    const take = Math.min(12, Math.max(1, Number(count) || 4));
+    const top = [...live.slice(0, 2), ...upcoming, ...live.slice(2)].slice(0, take);
+    if (top.length === 0) this.logger.warn(`topEvents(${sport}): rows=${rows.length} open=${open.length} live=${live.length} upcoming=${upcoming.length}`);
     return this.priced(actor, await this.withMainMarket(top), undefined, now);
   }
 

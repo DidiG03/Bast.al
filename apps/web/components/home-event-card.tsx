@@ -38,7 +38,8 @@ export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; s
   const router = useRouter();
   const toast = useToast();
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const href = `/dashboard/bet?${sport === "football" ? "" : `sport=${sport}&`}match=${encodeURIComponent(event.id)}`;
+  // Open the match markets page directly (same as Bast → Tregjet), not the list stop with ?match=.
+  const href = `/dashboard/bet?${sport === "football" ? "" : `sport=${sport}&`}event=${encodeURIComponent(event.id)}`;
   const playing = event.status === "LIVE";
   const scored = event.homeScore !== null && event.awayScore !== null && (playing || event.status === "COMPLETED");
   const market = event.markets[0];

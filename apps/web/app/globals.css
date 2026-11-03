@@ -3402,7 +3402,7 @@ button.odds-selection:hover,
 }
 
 .bet-quick {
-  align-items: center;
+  align-items: stretch;
   flex-wrap: nowrap;
 }
 
@@ -3424,6 +3424,46 @@ button.odds-selection:hover,
 .bet-chips::-webkit-scrollbar,
 .bet-quick::-webkit-scrollbar {
   display: none;
+}
+
+/* Slip quick stakes: same underline tabs as bet type / section nav. */
+.role-player .bet-quick {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  border-radius: 0;
+  background: transparent;
+}
+
+.role-player .bet-quick button.bet-chip {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.25rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.role-player .bet-quick button.bet-chip:not(.is-active):hover {
+  background: transparent;
+  color: var(--text);
+}
+
+.role-player .bet-quick button.bet-chip.is-active {
+  background: transparent;
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+  color: var(--accent);
 }
 
 .bet-chip {
@@ -3463,21 +3503,33 @@ button.odds-selection:hover,
 }
 
 .bet-slip-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
 }
 
 .bet-slip-header h2 {
   margin: 0;
   font-size: 1.1rem;
+  min-width: 0;
+}
+
+.bet-slip-clear,
+.bet-slip-clear-spacer {
+  justify-self: center;
+  text-align: center;
+}
+
+.bet-slip-header .bet-slip-close {
+  justify-self: end;
 }
 
 .bet-slip-header-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  justify-self: end;
 }
 
 .bet-slip-close,
@@ -3488,6 +3540,20 @@ button.odds-selection:hover,
   place-items: center;
   padding: 0;
   flex: 0 0 auto;
+}
+
+.role-player button.secondary.bet-slip-close,
+.role-player button.secondary.bet-slip-remove {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.role-player button.secondary.bet-slip-close:hover,
+.role-player button.secondary.bet-slip-remove:hover {
+  background: transparent;
+  color: var(--text);
 }
 
 .bet-slip-items,
@@ -3696,14 +3762,15 @@ button.odds-selection:hover,
 }
 
 .bet-slip-item-bottom {
-  display: grid;
-  grid-template-columns: auto minmax(0, 8rem) 1fr;
+  display: flex;
   align-items: center;
   gap: 0.6rem;
+  min-width: 0;
 }
 
 .bet-slip-odds {
   display: flex;
+  flex: 0 0 auto;
   gap: 0.35rem;
   align-items: baseline;
   font-variant-numeric: tabular-nums;
@@ -3715,9 +3782,12 @@ button.odds-selection:hover,
 
 .bet-slip .bet-stake {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: row;
   align-items: center;
   gap: 0.3rem;
+  margin-left: auto;
+  width: 8.5rem;
 }
 
 .bet-stake input {
@@ -3728,8 +3798,10 @@ button.odds-selection:hover,
 }
 
 .bet-slip-return {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 0.8rem;
-  text-align: right;
+  text-align: left;
 }
 
 .bet-slip-totals,
@@ -3944,13 +4016,6 @@ button.odds-selection:hover,
   background: color-mix(in srgb, var(--bg-elevated) 92%, var(--bg));
 }
 
-/* The live rule under the Place button, when the slip has a live pick. */
-.bet-slip-live-rule {
-  margin: 0;
-  font-size: 0.78rem;
-  line-height: 1.35;
-}
-
 .bet-slip-summary {
   display: grid;
   gap: 0.7rem;
@@ -4127,10 +4192,9 @@ button.odds-selection:hover,
   cursor: not-allowed;
 }
 
-/* Singles / Accumulator switch and accumulator picks */
+/* Singles / Accumulator / System switch (player underline tabs override further down). */
 .bet-mode {
   display: grid;
-  /* One row, however many bet types: Singles, Accumulator and System side by side. */
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 0.25rem;
@@ -4165,8 +4229,11 @@ button.odds-selection:hover,
 }
 
 .bet-acca-stake .bet-slip-item-bottom {
-  grid-template-columns: auto minmax(0, 10rem);
-  justify-content: space-between;
+  justify-content: flex-start;
+}
+
+.bet-acca-stake .bet-stake {
+  width: 8.5rem;
 }
 
 .bet-legs {
@@ -4447,8 +4514,21 @@ button.odds-selection:hover,
 /* Player controls: the panels' squared corners, not pills (the Bet page's language). */
 .role-player .odds-selection,
 .role-player .bet-chip,
-.role-player button:not(.secondary):not(.text-button) {
+.role-player button:not(.secondary):not(.text-button):not(.tab-button):not(.sport-option):not(.bet-mode-option):not(.bet-chip):not(.match-centre-tab) {
   border-radius: var(--radius-control, 10px);
+}
+
+/* Player odds: no outline — background alone marks idle, hover, and selected. */
+.role-player .odds-selection,
+.role-player .bet-pick,
+.role-player .player-top-pick {
+  border: none;
+}
+
+.role-player .bet-pick.is-selected,
+.role-player button.odds-selection:hover,
+.role-player .bet-page .bet-pick:not(:disabled):hover {
+  border: none;
 }
 
 .role-player input,
@@ -4624,7 +4704,7 @@ button.odds-selection:hover,
   min-width: 0;
   height: 2.25rem;
   padding: 0 0.55rem;
-  border: 1px solid var(--hairline);
+  border: none;
   border-radius: 8px;
   background: var(--surface-1);
   color: var(--text);
@@ -4646,7 +4726,6 @@ button.odds-selection:hover,
 
 .player-top-pick.is-selected,
 .player-top-pick.is-selected .odds-selection-name {
-  border-color: transparent;
   background: var(--accent-fill, var(--accent));
   color: #0b1300;
 }
@@ -4658,17 +4737,50 @@ button.odds-selection:hover,
   font-weight: 700;
 }
 
-/* Top events: a chip for each sport, a red count where matches are live. */
+/* Top events: sports row — same underline tabs as the Bet page. */
 .player-sport-switch {
   margin-bottom: 0.15rem;
 }
 
-/* Like the Bet page's sports row: the frame's corners follow the chosen chip's, its radius plus the gap around it. */
-.role-player .player-sport-switch {
-  padding: 0.25rem;
-  border-color: var(--hairline);
-  border-radius: calc(var(--radius-control, 10px) + 0.25rem);
-  background: var(--surface-1);
+.role-player .sport-switch.player-sport-switch {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  overflow-x: auto;
+  border: none;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  border-radius: 0;
+  background: transparent;
+}
+
+.role-player .player-sport-switch button.sport-option {
+  flex: 0 0 auto;
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-2, var(--muted));
+  font-size: 0.875rem;
+}
+
+.role-player .player-sport-switch button.sport-option:not(.is-active):hover {
+  background: transparent;
+  color: var(--text);
+}
+
+.role-player .player-sport-switch button.sport-option.is-active {
+  background: transparent;
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+  color: var(--accent);
+}
+
+.role-player .player-sport-switch button.sport-option svg {
+  width: 1.3rem;
+  height: 1.3rem;
 }
 
 .sport-option-live {
@@ -5363,6 +5475,13 @@ button.is-blocked {
   border-radius: var(--radius-control, 10px);
 }
 
+@media (max-width: 720px) {
+  .money-hero .money-topup {
+    width: 100%;
+    justify-self: stretch;
+  }
+}
+
 .money-day {
   display: grid;
   gap: 0.4rem;
@@ -5662,31 +5781,81 @@ button.is-blocked {
   margin: 0;
 }
 
-/* Matches / Open bets / Settled: one segmented control instead of underlined tabs. */
+/* Matches / Open bets / Settled: plain tabs, active one underlined. */
 .role-player .bet-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.25rem;
+  gap: 0;
   margin: 0;
-  padding: 0.25rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-elevated);
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  border-radius: 0;
+  background: transparent;
 }
 
 .role-player .bet-tabs .tab-button {
   min-height: 2.5rem;
   padding: 0.4rem 0.6rem;
   border: none;
-  border-radius: 999px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: var(--muted);
   font-weight: 700;
   line-height: 1.15;
 }
 
 .role-player .bet-tabs .tab-button.is-active {
-  background: var(--accent-fill);
-  color: #0b1300;
+  background: transparent;
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+  color: var(--accent);
+}
+
+/* Slip: Singles / Bet builder|Accumulator / System — same underline tabs. */
+.role-player .bet-mode {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  border-radius: 0;
+  background: transparent;
+}
+
+.role-player .bet-mode button.bet-mode-option {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: inherit;
+  line-height: 1.15;
+  box-shadow: none;
+}
+
+.role-player .bet-mode button.bet-mode-option:not(.is-active):not(:disabled):hover {
+  background: transparent;
+  color: var(--text);
+}
+
+.role-player .bet-mode button.bet-mode-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.role-player .bet-mode button.bet-mode-option.is-active {
+  background: transparent;
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+  color: var(--accent);
 }
 
 /* Filters */
@@ -9569,9 +9738,18 @@ button.is-blocked {
   color: #031208;
 }
 
-.role-player .sport-option.is-active {
-  background: var(--accent-fill, var(--accent));
-  color: var(--player-on-accent, #031208);
+.role-player button.sport-option {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.role-player button.sport-option.is-active {
+  background: transparent;
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+  color: var(--accent);
 }
 
 .race-intro {
@@ -14149,44 +14327,110 @@ button.is-blocked {
   border-top: 1px solid var(--border);
 }
 
-.match-centre-tabs {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.45rem 0.5rem 0;
-  overflow-x: auto;
+/* Home left, away right — always visible when the stats panel is open. */
+.match-centre-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 0.85rem 0.65rem;
+  border-bottom: 1px solid var(--hairline, var(--border));
 }
 
-.match-centre-tabs button {
+.match-centre-side {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.match-centre-side > span:last-child,
+.match-centre-side.is-away > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-centre-side.is-away {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.match-centre-side .team-crest,
+.match-centre-side .team-badge {
   flex: none;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+/* Summary / Stats / Line-ups: same underline tabs as Bet sections. */
+.match-centre-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  border-radius: 0;
+  background: transparent;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.match-centre-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.match-centre-tabs button,
+.role-player .match-centre-tabs button.match-centre-tab {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.8125rem;
   font-weight: 700;
+  line-height: 1.15;
+  box-shadow: none;
   cursor: pointer;
 }
 
-.match-centre-tabs button.is-active {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+.match-centre-tabs button:not(.is-active):hover,
+.role-player .match-centre-tabs button.match-centre-tab:not(.is-active):hover {
+  background: transparent;
   color: var(--text);
+}
+
+.match-centre-tabs button.is-active,
+.role-player .match-centre-tabs button.match-centre-tab.is-active {
+  border-bottom-color: var(--accent);
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
 }
 
 /* Every number as two bars meeting in the middle, home on the left. */
 .match-stats {
-  padding: 0.5rem 0.7rem 0.7rem;
+  padding: 0.75rem 0.85rem 1rem;
 }
 
 .match-stats-teams {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.3rem;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 700;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  color: var(--text-2, var(--muted));
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .match-stats-teams span {
@@ -14197,24 +14441,27 @@ button.is-blocked {
 
 .match-stats dl {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.85rem;
   margin: 0;
 }
 
 .match-stat dt {
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.25rem;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   text-align: center;
+  text-transform: uppercase;
 }
 
 .match-stat dd {
   display: grid;
-  grid-template-columns: 2.6rem 1fr 2.6rem;
+  grid-template-columns: 2.85rem 1fr 2.85rem;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -14229,12 +14476,12 @@ button.is-blocked {
 .match-stat-bars {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3px;
+  gap: 4px;
 }
 
 .match-stat-bar {
   display: flex;
-  height: 6px;
+  height: 0.55rem;
   overflow: hidden;
   border-radius: 999px;
   background: color-mix(in srgb, var(--muted) 18%, transparent);
@@ -14257,9 +14504,9 @@ button.is-blocked {
 .match-lineups {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.8rem;
-  padding: 0.5rem 0.7rem 0.7rem;
-  font-size: 0.8rem;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem 1rem;
+  font-size: 0.8125rem;
 }
 
 .match-lineup {
@@ -14268,24 +14515,26 @@ button.is-blocked {
 
 .match-lineup h4,
 .match-lineup h5 {
-  margin: 0 0 0.3rem;
+  margin: 0 0 0.45rem;
   overflow: hidden;
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .match-lineup h5 {
-  margin-top: 0.6rem;
+  margin-top: 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--hairline, var(--border));
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .match-lineup ol {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.35rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -14295,7 +14544,8 @@ button.is-blocked {
   display: grid;
   grid-template-columns: 1.6rem 1fr auto;
   align-items: baseline;
-  gap: 0.3rem;
+  gap: 0.35rem;
+  min-height: 1.35rem;
 }
 
 .match-lineup-number {
@@ -14322,23 +14572,43 @@ button.is-blocked {
 
 /* A match's stats, opened from its card on the Bet page. */
 .match-stats-panel {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--bg) 55%, var(--bg-elevated));
+  min-height: 18rem;
+  border: 1px solid var(--hairline, var(--border));
+  border-radius: var(--radius-panel, 14px);
+  background: var(--surface-1, color-mix(in srgb, var(--bg) 55%, var(--bg-elevated)));
+  overflow: hidden;
 }
 
 .match-stats-panel > .match-centre-body {
+  display: grid;
+  grid-template-rows: auto auto minmax(12rem, 1fr);
+  min-height: 18rem;
   border-top: none;
+}
+
+.match-stats-panel > .match-centre-sides {
+  border-bottom: 1px solid var(--hairline, var(--border));
+}
+
+.match-stats-panel .match-stats,
+.match-stats-panel .match-lineups,
+.match-stats-panel .match-centre-moments {
+  min-height: 14rem;
+  max-height: min(28rem, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .match-stats-panel > .muted {
   margin: 0;
-  padding: 0.7rem;
-  font-size: 0.85rem;
+  padding: 1.25rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
 .match-stats-panel > .loading-state {
-  padding: 0.8rem;
+  min-height: 18rem;
+  padding: 1.25rem;
 }
 
 .bet-match-stats {
@@ -14408,9 +14678,9 @@ button.is-blocked {
 
 .match-centre-moments {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.2rem;
   margin: 0;
-  padding: 0.3rem 0.5rem 0.6rem;
+  padding: 0.55rem 0.75rem 0.85rem;
   list-style: none;
   max-height: 16rem;
   overflow-y: auto;
@@ -14420,8 +14690,8 @@ button.is-blocked {
   display: grid;
   grid-template-columns: 3rem 1.6rem 1fr;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.2rem;
+  gap: 0.4rem;
+  padding: 0.4rem 0.35rem;
   font-size: 0.85rem;
 }
 
@@ -14528,53 +14798,53 @@ button.is-blocked {
 
 .role-player .bet-page-head .bet-tabs {
   width: min(100%, 27rem);
-  padding: 0.2rem;
-  border-color: var(--hairline-strong);
-  border-radius: var(--radius-control, 10px);
-  background: var(--surface-1);
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  border-radius: 0;
+  background: transparent;
 }
 
 .role-player .bet-page-head .bet-tabs .tab-button {
   min-height: 2.25rem;
-  border-radius: var(--radius-inner, 8px);
+  border-radius: 0;
   font-size: 0.875rem;
 }
 
 .role-player .bet-page-head .bet-tabs .tab-button.is-active {
-  box-shadow: 0 1px 0 rgb(255 255 255 / 25%) inset, 0 4px 14px rgb(214 255 63 / 18%);
+  background: transparent;
+  box-shadow: none;
 }
 
-/* Sports: a quiet strip; the chosen one is lit. */
+/* Sports: plain underlined tabs, no boxed strip. */
 .role-player .bet-page .sport-switch-wrap {
-  --sport-fade: var(--surface-1);
+  --sport-fade: var(--bg);
   justify-self: stretch;
 }
 
-.role-player .bet-page .sport-switch-wrap::before {
-  border-radius: var(--radius-control, 10px) 0 0 var(--radius-control, 10px);
-}
-
+.role-player .bet-page .sport-switch-wrap::before,
 .role-player .bet-page .sport-switch-wrap::after {
-  border-radius: 0 var(--radius-control, 10px) var(--radius-control, 10px) 0;
+  border-radius: 0;
 }
 
 .role-player .bet-page .sport-switch {
   justify-self: stretch;
-  padding: 0.2rem;
-  border-color: var(--hairline);
-  border-radius: var(--radius-control, 10px);
-  background: var(--surface-1);
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  border-radius: 0;
+  background: transparent;
 }
 
 .role-player .bet-page button.sport-option {
   min-height: 2.25rem;
   padding: 0 0.9rem;
-  border-radius: var(--radius-inner, 8px);
+  border-radius: 0;
   font-size: 0.875rem;
 }
 
 .role-player .bet-page button.sport-option:not(.is-active):hover {
-  background: var(--surface-3);
+  background: transparent;
   color: var(--text);
 }
 
@@ -14583,58 +14853,120 @@ button.is-blocked {
   height: 1.3rem;
 }
 
-/* Search and competition on one line, the days under them. */
+/* Search + icon filters on one line, the days under them. */
 .bet-filters-row {
+  --bet-filter-h: 2.25rem;
   display: flex;
-  gap: 0.5rem;
+  align-items: stretch;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .bet-filters-row input[type="search"] {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
-}
-
-.role-player .bet-page .bet-filters input[type="search"],
-.role-player .bet-page .bet-league-select {
-  height: 2.6rem;
-  padding: 0 0.9rem;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-control, 10px);
-  background-color: var(--surface-1);
-  color: var(--text);
-  font-size: 0.875rem;
+  max-width: 14rem;
 }
 
 .role-player .bet-page .bet-filters input[type="search"] {
-  padding-left: 2.4rem;
+  box-sizing: border-box;
+  height: var(--bet-filter-h);
+  min-height: var(--bet-filter-h);
+  max-height: var(--bet-filter-h);
+  padding: 0 0.7rem 0 2rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-control, 10px);
+  background-color: var(--surface-1);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa189' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
-  background-position: 0.85rem center;
+  background-position: 0.6rem center;
   background-repeat: no-repeat;
-  background-size: 1rem;
+  background-size: 0.9rem;
+  color: var(--text);
+  font-size: 0.8125rem;
+  line-height: 1;
 }
 
-.role-player .bet-page .bet-filters input[type="search"]:focus,
-/* The country filter beside the league one: a button opening a list of flags and names to tick. */
-.country-filter {
+.role-player .bet-page .bet-filters input[type="search"]:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft, rgb(214 255 63 / 10%));
+}
+
+/* League: trophy icon; the native select sits invisible on top. */
+.role-player .bet-page .bet-league-filter {
   position: relative;
-  flex: 0 1 12rem;
-  min-width: 0;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--bet-filter-h);
+  height: var(--bet-filter-h);
+  min-width: var(--bet-filter-h);
+  min-height: var(--bet-filter-h);
+  max-height: var(--bet-filter-h);
+  padding: 0;
+  border: 1px solid var(--hairline-strong, var(--border));
+  border-radius: var(--radius-control, 10px);
+  background: var(--surface-1, var(--bg-elevated));
+  color: var(--muted);
+  cursor: pointer;
 }
 
-.country-filter-button {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
+.role-player .bet-page .bet-league-filter.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+
+.bet-league-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.role-player .bet-page .bet-league-select {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 2.6rem;
-  padding: 0 0.8rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* Country filter: globe (or flags) only. */
+.role-player .bet-page .country-filter {
+  position: relative;
+  flex: none;
+  width: var(--bet-filter-h);
+  min-width: var(--bet-filter-h);
+  height: var(--bet-filter-h);
+}
+
+.role-player .bet-page .country-filter-button {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--bet-filter-h);
+  height: var(--bet-filter-h);
+  min-width: var(--bet-filter-h);
+  min-height: var(--bet-filter-h);
+  max-height: var(--bet-filter-h);
+  padding: 0;
   border: 1px solid var(--hairline-strong, var(--border));
   border-radius: var(--radius-control, 10px);
   background: var(--surface-1, var(--bg-elevated));
   color: var(--text);
   font: inherit;
-  font-size: 0.875rem;
-  text-align: left;
+  font-weight: 650;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -14659,14 +14991,11 @@ button.is-blocked {
 .country-filter-flags {
   display: inline-flex;
   flex: none;
-  gap: 0.2rem;
+  gap: 0.1rem;
 }
 
 .country-filter-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
 }
 
 .country-flag {
@@ -14709,7 +15038,8 @@ button.is-blocked {
   border-radius: 8px;
   background: var(--surface-1, var(--bg));
   color: var(--text);
-  font-size: 0.85rem;
+  /* 16px: iOS Safari zooms into focused fields smaller than this. */
+  font-size: 1rem;
 }
 
 .country-filter-list {
@@ -14789,19 +15119,14 @@ button.is-blocked {
   cursor: pointer;
 }
 
-/* A phone: the search on its own line, the league and country filters side by side under it. */
 @media (max-width: 560px) {
   .bet-filters-row {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .bet-filters-row input[type="search"] {
-    flex-basis: 100%;
-  }
-
-  .role-player .bet-page .bet-filters-row .bet-league-select,
-  .bet-filters-row .country-filter {
     flex: 1 1 0;
+    max-width: none;
   }
 
   .country-filter-panel {
@@ -14809,22 +15134,9 @@ button.is-blocked {
   }
 }
 
-.role-player .bet-page .bet-league-select:focus {
+.bet-league-filter:focus-within {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.role-player .bet-page .bet-league-select {
-  flex: 0 1 15rem;
-  min-width: 0;
-  padding-right: 2.2rem;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa189' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-position: right 0.75rem center;
-  background-repeat: no-repeat;
-  background-size: 1rem;
-  text-overflow: ellipsis;
+  box-shadow: 0 0 0 3px var(--accent-soft, rgb(214 255 63 / 10%));
 }
 
 .role-player button.bet-chip {
@@ -14854,6 +15166,36 @@ button.is-blocked {
   color: #0b1300;
 }
 
+/* Day filters (All / Live / Today / …): underline tabs, not chips. */
+.role-player .bet-page .bet-day-chips button.bet-chip {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.55rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-2);
+  box-shadow: none;
+}
+
+.role-player .bet-page .bet-day-chips button.bet-chip:not(.is-active):hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+}
+
+.role-player .bet-page .bet-day-chips button.bet-chip.is-active {
+  border-color: transparent;
+  border-bottom-color: var(--accent);
+  background: transparent;
+  color: var(--accent);
+}
+
+.role-player .bet-page .bet-day-chips .bet-chip.is-active .bet-chip-count {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
 /* The day's heading: small capitals over the competitions. */
 .bet-page .odds-day.stack {
   gap: 0.75rem;
@@ -14868,13 +15210,29 @@ button.is-blocked {
   text-transform: uppercase;
 }
 
-/* A competition: one panel, its name once at the top. */
+/* A competition: one soft panel, its name once at the top. */
 .bm-league {
   overflow: hidden;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-panel, 14px);
   background: var(--surface-1);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
+  box-shadow: var(--player-card-shadow, 0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px rgb(0 0 0 / 10%));
+}
+
+.role-player .bet-page .bm-league {
+  border-color: color-mix(in srgb, var(--hairline-strong) 70%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 55%, transparent), transparent 2.6rem),
+    var(--surface-1);
+  box-shadow: var(--player-card-shadow, 0 1px 2px rgb(20 28 16 / 4%), 0 10px 28px rgb(20 28 16 / 6%));
+}
+
+.role-player .bet-page .odds-day.stack {
+  gap: 0.85rem;
+}
+
+.role-player .bet-page .odds-day.stack > .bm-league {
+  margin: 0;
 }
 
 /* A match's own page (the list's "N markets" button): a way back, the competition, then the match with every market. */
@@ -14884,9 +15242,38 @@ button.is-blocked {
   min-width: 0;
 }
 
+/* Match markets page: no empty slip clearance at the end. Only reserve room when the slip bar is up. */
+.role-player .dashboard-content:has(.match-page) {
+  padding-bottom: 1rem;
+}
+
+.role-player .bet-page:has(.match-page) {
+  padding-bottom: 0;
+}
+
+.role-player .bet-page:has(.match-page):has(.bet-slip-bar) {
+  padding-bottom: 5rem;
+}
+
+@media (max-width: 760px) {
+  .role-player .dashboard-content:has(.match-page),
+  .role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content:has(.match-page) {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .role-player .bet-page:has(.match-page) {
+    padding-bottom: 0;
+  }
+
+  .role-player .bet-page:has(.match-page):has(.bet-slip-bar) {
+    padding-bottom: 3.5rem;
+  }
+}
+
 .match-page-bar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
   min-width: 0;
 }
@@ -14898,9 +15285,9 @@ button.is-blocked {
   gap: 0.3rem;
   min-height: 2.5rem;
   padding: 0 0.85rem 0 0.55rem;
-  border: 1px solid var(--hairline-strong, var(--border));
+  border: none;
   border-radius: var(--radius-control, 10px);
-  background: var(--surface-1, var(--bg-elevated));
+  background: transparent;
   color: var(--text);
   font: inherit;
   font-size: 0.875rem;
@@ -14921,8 +15308,10 @@ button.is-blocked {
 .match-page-league {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.45rem;
   min-width: 0;
+  text-align: right;
   font-size: 0.875rem;
   font-weight: 700;
 }
@@ -14931,6 +15320,52 @@ button.is-blocked {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* One match's page: no league card — teams, prices and markets sit on the page itself. */
+.bm-match.is-page,
+.bm-match.is-page.is-expanded {
+  background: transparent;
+}
+
+.bm-match.is-page.is-live::before {
+  display: none;
+}
+
+.bm-match.is-page .bm-row {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.bm-match.is-page .bm-more-spacer {
+  display: none;
+}
+
+.bm-match.is-page .bm-detail {
+  gap: 0.75rem;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--hairline);
+  background: transparent;
+}
+
+.bm-match.is-page .bm-stats {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.bm-match.is-page .odds-market-group-title {
+  margin-top: 0.85rem;
+  padding-top: 0.55rem;
+}
+
+.bm-match.is-page .odds-market-group:first-child .odds-market-group-title {
+  margin-top: 0;
+}
+
+@media (min-width: 721px) {
+  .bm-match.is-page .bm-row {
+    grid-template-columns: 2rem 3.25rem minmax(0, 1fr) minmax(12rem, 20.5rem);
+  }
 }
 
 .bm-league-head {
@@ -14945,11 +15380,28 @@ button.is-blocked {
   font-weight: 700;
 }
 
+.role-player .bet-page .bm-league-head {
+  align-items: center;
+  min-height: 2.6rem;
+  padding: 0.55rem 1rem;
+  border-bottom-color: var(--hairline);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 .bm-league-name {
   overflow: hidden;
   color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.role-player .bet-page .bm-league-name {
+  color: var(--text);
+  font-weight: 800;
 }
 
 .bm-league-country {
@@ -14958,12 +15410,29 @@ button.is-blocked {
   font-weight: 500;
 }
 
+.role-player .bet-page .bm-league-country {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
 .bm-league-count {
   flex: none;
   margin-left: auto;
   color: var(--muted);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
+}
+
+.role-player .bet-page .bm-league-count {
+  min-width: 1.45rem;
+  height: 1.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  color: var(--text-2);
+  font-weight: 800;
+  line-height: 1.35rem;
+  text-align: center;
 }
 
 /* A match: one row. */
@@ -14995,8 +15464,8 @@ button.is-blocked {
 
 .bm-row {
   display: grid;
-  grid-template-areas: "star when teams odds more";
-  grid-template-columns: 2rem 3.25rem minmax(0, 1fr) 20.5rem 6.75rem;
+  grid-template-areas: "star when teams odds";
+  grid-template-columns: 2rem 3.25rem minmax(0, 1fr) minmax(18rem, 27.25rem);
   align-items: center;
   gap: 0.75rem;
   min-height: 4rem;
@@ -15006,6 +15475,19 @@ button.is-blocked {
 
 .bm-match:not(.is-expanded) .bm-row:hover {
   background: rgb(255 255 255 / 2%);
+}
+
+.role-player .bet-page .bm-match + .bm-match {
+  border-top-color: color-mix(in srgb, var(--hairline) 85%, transparent);
+}
+
+.role-player .bet-page .bm-match:not(.is-expanded):not(.is-page) .bm-row {
+  min-height: 4.15rem;
+  padding-block: 0.65rem;
+}
+
+.role-player .bet-page .bm-match:not(.is-expanded):not(.is-page) .bm-row:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .bm-row > .match-star {
@@ -15153,12 +15635,14 @@ button.is-blocked {
   color: var(--accent);
 }
 
-/* The main market's prices: aligned columns, the same width on every row. */
+/* The main market's prices + markets count: one inline row (1 / X / 2 / N tregje). */
 .bm-odds {
   display: grid;
   grid-area: odds;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.375rem;
+  align-items: stretch;
+  min-width: 0;
 }
 
 .bm-odds.has-2 {
@@ -15169,20 +15653,43 @@ button.is-blocked {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.bm-odds.has-more {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 2.75rem;
+}
+
+.bm-odds.has-2.has-more {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) 2.75rem;
+}
+
+.bm-odds.has-1.has-more {
+  grid-template-columns: minmax(0, 1fr) 2.75rem;
+}
+
+/* No 1/X/2 (paused / Meanwhile): arrow spans the full row. */
+.bm-odds.has-more:not(:has(.bm-pick)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.role-player .bet-page button.bm-pick,
+.role-player .bet-page button.bm-more {
+  box-sizing: border-box;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.55rem;
+  border: none;
+  border-radius: var(--radius-control, 10px);
+  background: var(--player-pick, var(--surface-3));
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
 .role-player .bet-page button.bm-pick {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.3rem;
   min-width: 0;
-  height: 2.75rem;
-  padding: 0 0.55rem;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-control, 10px);
-  background: var(--player-pick, var(--surface-3));
   color: var(--text);
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
 }
 
 .role-player .bet-page button.bm-pick .odds-selection-name {
@@ -15202,7 +15709,6 @@ button.is-blocked {
 }
 
 .role-player .bet-page button.bm-pick:not(:disabled):not(.is-selected):hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   background: var(--player-pick-hover, var(--surface-4));
 }
 
@@ -15217,7 +15723,6 @@ button.is-blocked {
 }
 
 .role-player .bet-page button.bm-pick.is-selected {
-  border-color: transparent;
   background: var(--accent-fill, var(--accent));
   box-shadow: 0 4px 14px rgb(214 255 63 / 22%);
 }
@@ -15229,36 +15734,31 @@ button.is-blocked {
 }
 
 .role-player .bet-page button.bm-more {
-  display: inline-flex;
-  flex-direction: row;
-  grid-area: more;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
   width: 100%;
   min-width: 0;
-  height: 2.75rem;
-  padding: 0 0.4rem;
-  white-space: nowrap;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-control, 10px);
-  background: transparent;
+  padding: 0;
   color: var(--text-2);
-  font-size: 0.78rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.05;
-  cursor: pointer;
 }
 
-.bm-more-word {
-  font-size: 0.75rem;
-  font-weight: 700;
+.bm-more-word,
+.bm-more-count {
+  display: none;
 }
 
-.role-player .bet-page button.bm-more:hover,
+.role-player .bet-page button.bm-more:hover {
+  background: var(--player-pick-hover, var(--surface-4));
+  color: var(--text);
+}
+
+.role-player .bet-page button.bm-more:active {
+  transform: scale(0.97);
+}
+
 .role-player .bet-page button.bm-more.is-open {
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft, color-mix(in srgb, var(--accent) 18%, transparent));
   color: var(--accent);
 }
 
@@ -15273,10 +15773,10 @@ button.is-blocked {
 }
 
 .bm-more-spacer {
-  grid-area: more;
+  display: none;
 }
 
-/* While the main market is paused: another match to bet on, in its place. */
+/* While the main market is paused: another match to bet on, in its place (arrow stays beside it). */
 .role-player .bet-page button.bm-suggest {
   display: flex;
   grid-column: 1 / -1;
@@ -15284,6 +15784,7 @@ button.is-blocked {
   gap: 0.45rem;
   min-width: 0;
   height: 2.75rem;
+  min-height: 2.75rem;
   padding: 0 0.75rem;
   border: 1px dashed var(--hairline-strong);
   border-radius: var(--radius-control, 10px);
@@ -15293,6 +15794,10 @@ button.is-blocked {
   text-align: left;
   cursor: pointer;
   transition: border-color 120ms ease, background 120ms ease;
+}
+
+.bm-odds.has-more:not(:has(.bm-pick)) .bm-suggest {
+  grid-column: 1;
 }
 
 .role-player .bet-page button.bm-suggest:hover {
@@ -15335,7 +15840,23 @@ button.is-blocked {
 }
 
 .bm-stats {
-  padding: 0 1rem 0.85rem;
+  padding: 0.15rem 1rem 1rem;
+}
+
+.role-player .bet-page .match-stats-panel {
+  border-color: var(--hairline);
+  background: var(--surface-1);
+  box-shadow: none;
+}
+
+.role-player .bet-page .match-centre-tabs {
+  border-bottom: 1px solid var(--hairline, var(--border));
+  background: transparent;
+}
+
+.role-player .bet-page .match-centre-tabs button.match-centre-tab {
+  border-radius: 0;
+  background: transparent;
 }
 
 /* An opened match: every market, on a recessed surface. */
@@ -15561,18 +16082,16 @@ button.is-blocked {
 
 .role-player .bet-page .bm-detail button.bet-pick {
   min-height: 2.75rem;
-  border: 1px solid var(--hairline-strong);
+  border: none;
   border-radius: var(--radius-control, 10px);
   background: var(--player-pick, var(--surface-3));
 }
 
 .role-player .bet-page .bm-detail button.bet-pick:not(:disabled):not(.is-selected):hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--player-pick-border, transparent));
   background: var(--player-pick-hover, var(--surface-4));
 }
 
 .role-player .bet-page .bm-detail button.bet-pick.is-selected {
-  border-color: transparent;
   background: var(--accent-fill, var(--accent));
 }
 
@@ -15591,7 +16110,7 @@ button.is-blocked {
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px rgb(0 0 0 / 28%);
 }
 
-/* Phones: the clock beside the teams, the prices on the next line, other markets under those. */
+/* Phones: the clock beside the teams; 1 / X / 2 / markets on the next line together. */
 @media (max-width: 720px) {
   .bm-row {
     grid-template-areas:
@@ -15606,28 +16125,8 @@ button.is-blocked {
     justify-content: flex-start;
   }
 
-  .bm-more-spacer {
-    display: none;
-  }
-
   .bm-odds-legend {
     display: none;
-  }
-
-  .role-player .bet-page button.bm-more {
-    grid-area: auto;
-    grid-column: 1 / -1;
-    grid-row: 3;
-    display: inline-flex;
-    flex-direction: row;
-    gap: 0.35rem;
-    width: 100%;
-    min-width: 0;
-    height: 2rem;
-  }
-
-  .bm-more-word {
-    font-size: 0.75rem;
   }
 
   .bm-settled {
@@ -15648,9 +16147,6 @@ button.is-blocked {
     padding-inline: 0.85rem;
   }
 
-  .role-player .bet-page .bet-league-select {
-    flex-basis: 9.5rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -16095,6 +16591,42 @@ html[data-theme="light"] .role-player {
   background: var(--player-hero-bg, linear-gradient(135deg, rgb(214 255 63 / 9%), var(--surface-1) 60%));
 }
 
+/* Overview: live CTA above the Top events sport tabs. */
+.role-player .player-live-banner {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--hairline, var(--border));
+  border-radius: var(--radius-panel, 14px);
+  background: #0a0b07;
+  box-shadow: var(--player-card-shadow, 0 1px 2px rgb(20 28 16 / 4%), 0 6px 18px rgb(20 28 16 / 5%));
+  line-height: 0;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.role-player .player-live-banner:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--hairline, var(--border)));
+}
+
+.role-player .player-live-banner:active {
+  transform: scale(0.99);
+}
+
+.role-player .player-live-banner img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2.4 / 1;
+  object-fit: cover;
+  object-position: center 22%;
+}
+
+@media (min-width: 761px) {
+  .role-player .player-live-banner,
+  .role-player .player-casino-banner {
+    display: none;
+  }
+}
+
 .role-player .player-home h2,
 .role-player .page-title-row h2 {
   font-size: 1.05rem;
@@ -16143,9 +16675,9 @@ html[data-theme="light"] .role-player {
   z-index: 6;
   margin-top: 0;
   padding: 0.4rem 0.15rem;
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: none;
   background: var(--bg);
-  box-shadow: 0 8px 12px -10px rgb(0 0 0 / 40%);
+  box-shadow: none;
 }
 
 /* An open match is what you're reading: the day chips scroll away with the filters. */
@@ -16164,12 +16696,9 @@ html[data-theme="light"] .role-player {
   border-radius: 10px;
 }
 
-.role-player .bet-page button.bet-chip:not(.is-active) {
-  color: var(--text-2);
-}
-
 .role-player .bet-page .bet-day-chips {
   flex-wrap: nowrap;
+  gap: 0.15rem;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -16210,18 +16739,9 @@ html[data-theme="light"] .role-player {
   content: "";
 }
 
-.bm-league {
-  box-shadow: 0 1px 0 rgb(255 255 255 / 4%) inset;
-}
-
 .bm-league-count {
   display: inline-grid;
   place-items: center;
-  min-width: 1.4rem;
-  height: 1.35rem;
-  padding: 0 0.35rem;
-  border-radius: 999px;
-  background: var(--surface-4);
 }
 
 .role-player .bm-match.is-live .bm-when,
@@ -16269,7 +16789,7 @@ html[data-theme="light"] .role-player {
 @media (min-width: 721px) {
   .bm-league-head {
     display: grid;
-    grid-template-columns: 2rem 3.25rem minmax(0, 1fr) 20.5rem 6.75rem;
+    grid-template-columns: 2rem 3.25rem minmax(0, 1fr) minmax(18rem, 27.25rem);
     gap: 0.75rem;
     align-items: center;
   }
@@ -16280,7 +16800,7 @@ html[data-theme="light"] .role-player {
 
   .bm-odds-legend {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 2.75rem;
     gap: 0.375rem;
     color: var(--text-2);
     font-size: 0.75rem;
@@ -16289,6 +16809,7 @@ html[data-theme="light"] .role-player {
   }
 
   .bm-league-count {
+    display: none;
     justify-self: center;
     margin-left: 0;
   }
@@ -16812,8 +17333,27 @@ html[data-theme="light"] .role-player .bet-status-lost {
     height: 2.75rem;
   }
 
-  .role-player .bet-page button.bm-pick {
+  .role-player .bet-page button.bm-pick,
+  .role-player .bet-page button.bm-more,
+  .role-player .bet-page button.bm-suggest {
     height: 3rem;
+    min-height: 3rem;
+  }
+
+  .bm-odds.has-more {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 3rem;
+  }
+
+  .bm-odds.has-2.has-more {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 3rem;
+  }
+
+  .bm-odds.has-1.has-more {
+    grid-template-columns: minmax(0, 1fr) 3rem;
+  }
+
+  .bm-odds.has-more:not(:has(.bm-pick)) {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .slot-fullscreen::after,
@@ -17249,22 +17789,65 @@ html[data-theme="light"] .role-player .bet-status-lost {
   color: var(--accent-strong);
 }
 
-/* A Player asking for a top-up: how much (optional), then Send. */
+/* A Player asking for a top-up: modal with amount (optional), then Send or Cancel. */
+.top-up-modal {
+  width: min(22rem, calc(100vw - 2rem));
+}
+
+@media (max-width: 760px) {
+  /* Stay centred on a phone; other modals still open as bottom sheets. */
+  .modal-backdrop:has(.top-up-modal) {
+    align-items: center;
+    justify-items: center;
+    padding: 1rem;
+  }
+
+  .modal.top-up-modal {
+    width: min(22rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    border-radius: var(--radius-panel, 14px);
+    padding: 1.1rem;
+    animation: fade-in 160ms ease-out;
+  }
+
+  .modal.top-up-modal .modal-header {
+    position: static;
+    margin: 0;
+    padding: 0;
+    border-bottom: 0;
+    background: transparent;
+  }
+}
+
 .top-up-ask {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.5rem;
+  display: grid;
+  gap: 1rem;
 }
 
 .top-up-ask label {
   display: grid;
-  gap: 0.25rem;
-  font-size: 0.85rem;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--text-2, var(--muted));
 }
 
 .top-up-ask input {
-  width: 8rem;
+  box-sizing: border-box;
+  width: 100%;
+  height: 2.6rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--hairline-strong, var(--border));
+  border-radius: var(--radius-control, 10px);
+  background: var(--surface-1, var(--bg));
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.top-up-ask .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .top-up-short {
@@ -18108,63 +18691,125 @@ button.cab-field-box:disabled {
   cursor: pointer;
 }
 
-/* My money: search, days and money in or out over the history, and what the filtered lines add up to. */
-.money-direction {
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 999px;
+/* My money: underline filter tabs, search and dates on one row. */
+.role-player .money-page .money-kind-tabs,
+.role-player .money-page .money-ranges {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.15rem;
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--hairline, var(--border));
+}
+
+.role-player .money-page .money-kind-tabs::-webkit-scrollbar,
+.role-player .money-page .money-ranges::-webkit-scrollbar {
+  display: none;
+}
+
+.role-player .money-page .money-kind-tabs button.bet-chip,
+.role-player .money-page .money-ranges button.bet-chip {
+  flex: 0 0 auto;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.7rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-2, var(--muted));
+  font-size: 0.8125rem;
+  box-shadow: none;
+}
+
+.role-player .money-page .money-kind-tabs button.bet-chip:not(.is-active):hover,
+.role-player .money-page .money-ranges button.bet-chip:not(.is-active):hover {
+  border-color: transparent;
   background: transparent;
   color: var(--text);
+}
+
+.role-player .money-page .money-kind-tabs button.bet-chip.is-active,
+.role-player .money-page .money-ranges button.bet-chip.is-active {
+  border-color: transparent;
+  border-bottom-color: var(--accent);
+  background: transparent;
+  color: var(--accent);
+}
+
+.money-direction {
+  flex: none;
+  height: 2.25rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-control, 10px);
+  background: var(--surface-1, transparent);
+  color: var(--text);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
 }
 
 .money-filters {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.6rem 1rem;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .money-search {
-  grid-column: 1 / -1;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .money-search input {
+  box-sizing: border-box;
   width: 100%;
-  padding: 0.6rem 0.8rem;
+  height: 2.25rem;
+  padding: 0 0.7rem 0 2rem;
   border: 1px solid var(--hairline-strong);
-  border-radius: 10px;
-  background: var(--bg);
+  border-radius: var(--radius-control, 10px);
+  background-color: var(--surface-1, var(--bg));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa189' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+  background-position: 0.6rem center;
+  background-repeat: no-repeat;
+  background-size: 0.9rem;
   color: var(--text);
   font: inherit;
+  font-size: 0.8125rem;
 }
 
 .money-ranges {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .money-dates {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
+  flex: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .money-filters .money-dates label {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .money-dates input {
-  padding: 0.35rem 0.5rem;
+  box-sizing: border-box;
+  height: 2.25rem;
+  padding: 0 0.45rem;
   border: 1px solid var(--hairline-strong);
-  border-radius: 8px;
-  background: var(--bg);
+  border-radius: var(--radius-control, 10px);
+  background: var(--surface-1, var(--bg));
   color: var(--text);
   font: inherit;
+  font-size: 0.8125rem;
   color-scheme: dark light;
 }
 
@@ -18184,11 +18829,23 @@ button.cab-field-box:disabled {
   font-size: inherit;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
   .money-filters {
-    grid-template-columns: minmax(0, 1fr);
+    flex-wrap: wrap;
   }
 
+  .money-search {
+    flex: 1 1 100%;
+  }
+
+  .money-direction,
+  .money-dates {
+    flex: 1 1 auto;
+  }
+
+  .money-dates {
+    justify-content: flex-start;
+  }
 }
 
 /* "Bet again" under a settled bet. */

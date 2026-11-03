@@ -633,11 +633,17 @@ type LiveValue = RawLiveOdds["odds"][number]["values"][number];
  * - fixed: known outcomes; `partial` markets (many outcomes, some of which
  *   become impossible) stay open with just the outcomes still priced;
  * - lines: over/under, one `{prefix}_X_5` market per .5 line;
+ * - handicaps: Asian (half lines, home/away) or European (whole lines, 1X2);
+ * - exact: a team's exact goal count ("No goal", "1", "3 or more");
+ * - scorers: one outcome per player the feed prices;
  * - scores: correct score, every scoreline the feed prices.
  */
 type LiveSpec = (
   | { kind: "fixed"; key: string; name: Namer; order: string; values: Array<[aliases: string[], key: string, name: Namer]>; partial?: boolean }
   | { kind: "lines"; prefix: string; name: (home: string, away: string, line: string) => string; order: string }
+  | { kind: "handicaps"; prefix: string; name: (home: string, away: string, line: string) => string; order: string; european: boolean; max?: number }
+  | { kind: "exact"; key: string; name: Namer; order: string; top: number }
+  | { kind: "scorers"; key: string; name: string; order: string }
   | { kind: "scores"; key: string; name: string; order: string }
 ) & {
   /** Sort position when there's no pre-match bet to sit with (the extra-time markets: first, as they're the only ones open then). */
@@ -678,6 +684,20 @@ const liveResultBtts: Array<[string[], string, Namer]> = sides.flatMap((side) =>
     (home, away) => `${sideName(side, home, away)} / ${cap(btts)}`,
   ]),
 );
+const liveOddEven: Array<[string[], string, Namer]> = [
+  [["odd"], "odd", () => "Odd"],
+  [["even"], "even", () => "Even"],
+];
+const liveTeamOrNone: Array<[string[], string, Namer]> = [
+  [SIDE_ALIASES.home, "home", (home) => home],
+  [SIDE_ALIASES.away, "away", (_home, away) => away],
+  [["nogoal", "none"], "none", () => "No goal"],
+];
+const liveHalves: Array<[string[], string, Namer]> = [
+  [["1sthalf", "first", "1"], "first", () => "1st half"],
+  [["2ndhalf", "second", "2"], "second", () => "2nd half"],
+  [["equal", "draw", "x"], "equal", () => "Equal"],
+];
 
 /**
  * In-play markets use different bet names from pre-match ones (see
@@ -692,38 +712,71 @@ const LIVE_MARKETS: Record<string, LiveSpec> = {
   "match goals": { kind: "lines", prefix: "goals", name: (_h, _a, line) => `Total goals ${line}`, order: "Goals Over/Under" },
   "both teams to score": { kind: "fixed", key: "btts", name: () => "Both teams score", order: "Both Teams Score", values: liveYesNo },
   "draw no bet": { kind: "fixed", key: "draw_no_bet", name: () => "Draw no bet", order: "Home/Away", values: liveEitherTeam },
+  "asian handicap": { kind: "handicaps", prefix: "ah", name: (home, _a, line) => `Asian handicap ${home} ${line}`, order: "Asian Handicap", european: false },
+  "3-way handicap": { kind: "handicaps", prefix: "eh", name: (home, _a, line) => `Handicap ${home} ${line}`, order: "Handicap Result", european: true },
   "1x2 (1st half)": { kind: "fixed", key: "h1_winner", name: () => "1st half result", order: "First Half Winner", values: liveOutcomes },
   "half time/full time": { kind: "fixed", key: "ht_ft", name: () => "Half time / full time", order: "HT/FT Double", values: liveHtFt, partial: true },
   "result / both teams to score": { kind: "fixed", key: "result_btts", name: () => "Result and both teams score", order: "Results/Both Teams Score", values: liveResultBtts, partial: true },
   "final score": { kind: "scores", key: "correct_score", name: "Correct score", order: "Exact Score" },
   "home team goals": { kind: "lines", prefix: "home_goals", name: (home, _a, line) => `${home} goals ${line}`, order: "Total - Home" },
   "away team goals": { kind: "lines", prefix: "away_goals", name: (_h, away, line) => `${away} goals ${line}`, order: "Total - Away" },
-  "goals odd/even": {
-    kind: "fixed",
-    key: "odd_even",
-    name: () => "Total goals odd/even",
-    order: "Odd/Even",
-    values: [
-      [["odd"], "odd", () => "Odd"],
-      [["even"], "even", () => "Even"],
-    ],
-  },
+  "how many goals will home team score?": { kind: "exact", key: "home_exact_goals", name: (home) => `${home} exact goals`, order: "Home Team Exact Goals Number", top: 3 },
+  "how many goals will away team score?": { kind: "exact", key: "away_exact_goals", name: (_h, away) => `${away} exact goals`, order: "Away Team Exact Goals Number", top: 3 },
+  "goals odd/even": { kind: "fixed", key: "odd_even", name: () => "Total goals odd/even", order: "Odd/Even", values: liveOddEven },
+  "home odd/even": { kind: "fixed", key: "home_odd_even", name: (home) => `${home} goals odd/even`, order: "Home Odd/Even", values: liveOddEven },
+  "away odd/even": { kind: "fixed", key: "away_odd_even", name: (_h, away) => `${away} goals odd/even`, order: "Away Odd/Even", values: liveOddEven },
   "home team clean sheet": { kind: "fixed", key: "clean_sheet_home", name: (home) => `${home} clean sheet`, order: "Clean Sheet - Home", values: liveYesNo },
   "away team clean sheet": { kind: "fixed", key: "clean_sheet_away", name: (_h, away) => `${away} clean sheet`, order: "Clean Sheet - Away", values: liveYesNo },
+  "home team score a goal": { kind: "fixed", key: "home_scores", name: (home) => `${home} to score`, order: "Home Team Score a Goal", values: liveYesNo },
+  "away team score a goal": { kind: "fixed", key: "away_scores", name: (_h, away) => `${away} to score`, order: "Away Team Score a Goal", values: liveYesNo },
+  "home team score a goal (1st half)": { kind: "fixed", key: "h1_home_scores", name: (home) => `${home} to score (1st half)`, order: "Home Team Total Goals(1st Half)", values: liveYesNo },
+  "away team score a goal (1st half)": { kind: "fixed", key: "h1_away_scores", name: (_h, away) => `${away} to score (1st half)`, order: "Away Team Total Goals(1st Half)", values: liveYesNo },
+  "home team score a goal (2nd half)": { kind: "fixed", key: "h2_home_scores", name: (home) => `${home} to score (2nd half)`, order: "Home Team Total Goals(2nd Half)", values: liveYesNo },
+  "away team score a goal (2nd half)": { kind: "fixed", key: "h2_away_scores", name: (_h, away) => `${away} to score (2nd half)`, order: "Away Team Total Goals(2nd Half)", values: liveYesNo },
+  "win to nil": { kind: "fixed", key: "win_to_nil", name: () => "Win to nil", order: "Win To Nil", values: liveEitherTeam },
+  "win to nil - home": { kind: "fixed", key: "win_to_nil_home", name: (home) => `${home} to win to nil`, order: "Win to Nil - Home", values: liveYesNo },
+  "win to nil - away": { kind: "fixed", key: "win_to_nil_away", name: (_h, away) => `${away} to win to nil`, order: "Win to Nil - Away", values: liveYesNo },
+  "last team to score (3 way)": { kind: "fixed", key: "last_team_score", name: () => "Last team to score", order: "Team To Score Last", values: liveTeamOrNone },
+  "team to score first": { kind: "fixed", key: "first_team_score", name: () => "First team to score", order: "Team To Score First", values: liveTeamOrNone },
+  "first team to score": { kind: "fixed", key: "first_team_score", name: () => "First team to score", order: "Team To Score First", values: liveTeamOrNone },
+  "to win from behind": { kind: "fixed", key: "win_from_behind", name: () => "Win from behind", order: "To Win From Behind", values: liveEitherTeam },
+  "anytime goal scorer": { kind: "scorers", key: "scorer_anytime", name: "Anytime goalscorer", order: "Anytime Goal Scorer" },
+  "goal scorer": { kind: "scorers", key: "scorer_first", name: "First goalscorer", order: "First Goal Scorer" },
+  "first goal scorer": { kind: "scorers", key: "scorer_first", name: "First goalscorer", order: "First Goal Scorer" },
+  "last goal scorer": { kind: "scorers", key: "scorer_last", name: "Last goalscorer", order: "Last Goal Scorer" },
   "double chance (1st half)": { kind: "fixed", key: "h1_double_chance", name: () => "1st half double chance", order: "Double Chance - First Half", values: liveDoubleChance },
+  "asian handicap (1st half)": { kind: "handicaps", prefix: "h1_ah", name: (home, _a, line) => `1st half Asian handicap ${home} ${line}`, order: "Asian Handicap First Half", european: false },
+  "european handicap (1st half)": { kind: "handicaps", prefix: "h1_eh", name: (home, _a, line) => `1st half handicap ${home} ${line}`, order: "Handicap Result - First Half", european: true },
   "over/under line (1st half)": { kind: "lines", prefix: "h1_goals", name: (_h, _a, line) => `1st half goals ${line}`, order: "Goals Over/Under First Half" },
   "over/under (1st half)": { kind: "lines", prefix: "h1_goals", name: (_h, _a, line) => `1st half goals ${line}`, order: "Goals Over/Under First Half" },
   "both teams to score (1st half)": { kind: "fixed", key: "h1_btts", name: () => "1st half both teams score", order: "Both Teams Score - First Half", values: liveYesNo },
   "correct score (1st half)": { kind: "scores", key: "h1_correct_score", name: "1st half correct score", order: "Correct Score - First Half" },
   "to win 2nd half": { kind: "fixed", key: "h2_winner", name: () => "2nd half result", order: "Second Half Winner", values: liveOutcomes },
+  "double chance (2nd half)": { kind: "fixed", key: "h2_double_chance", name: () => "2nd half double chance", order: "Double Chance - Second Half", values: liveDoubleChance },
+  "asian handicap (2nd half)": { kind: "handicaps", prefix: "h2_ah", name: (home, _a, line) => `2nd half Asian handicap ${home} ${line}`, order: "Second Half Winner", european: false },
   "over/under (2nd half)": { kind: "lines", prefix: "h2_goals", name: (_h, _a, line) => `2nd half goals ${line}`, order: "Goals Over/Under - Second Half" },
   "both teams to score (2nd half)": { kind: "fixed", key: "h2_btts", name: () => "2nd half both teams score", order: "Both Teams To Score - Second Half", values: liveYesNo },
+  "highest scoring half": { kind: "fixed", key: "highest_half", name: () => "Highest scoring half", order: "Highest Scoring Half", values: liveHalves },
+  "win both halves": { kind: "fixed", key: "win_both_halves", name: () => "Win both halves", order: "Win Both Halves", values: liveEitherTeam },
+  "to win either half": { kind: "fixed", key: "win_either_half", name: () => "Win either half", order: "To Win Either Half", values: liveEitherTeam },
+  "home team will win either half": { kind: "fixed", key: "home_win_either_half", name: (home) => `${home} to win either half`, order: "To Win Either Half", values: liveYesNo },
+  "away team will win either half": { kind: "fixed", key: "away_win_either_half", name: (_h, away) => `${away} to win either half`, order: "To Win Either Half", values: liveYesNo },
+  "home win both halves": { kind: "fixed", key: "home_win_both_halves", name: (home) => `${home} to win both halves`, order: "Home win both halves", values: liveYesNo },
+  "away win both halves": { kind: "fixed", key: "away_win_both_halves", name: (_h, away) => `${away} to win both halves`, order: "Away win both halves", values: liveYesNo },
+  "to score in both halves by teams": { kind: "fixed", key: "score_both_halves", name: () => "Score in both halves", order: "To Score In Both Halves By Teams", values: liveEitherTeam },
+  "home team to score in both halves": { kind: "fixed", key: "home_score_both_halves", name: (home) => `${home} to score in both halves`, order: "To Score In Both Halves By Teams", values: liveYesNo },
+  "away team to score in both halves": { kind: "fixed", key: "away_score_both_halves", name: (_h, away) => `${away} to score in both halves`, order: "To Score In Both Halves By Teams", values: liveYesNo },
   // Corners and cards settle from the match statistics fetched after full time.
   "total corners": { kind: "lines", prefix: "corners", name: (_h, _a, line) => `Total corners ${line}`, order: "Corners Over Under" },
   "match corners": { kind: "lines", prefix: "corners", name: (_h, _a, line) => `Total corners ${line}`, order: "Corners Over Under" },
+  "asian corners": { kind: "lines", prefix: "corners", name: (_h, _a, line) => `Total corners ${line}`, order: "Corners Over Under" },
   "home total corners": { kind: "lines", prefix: "home_corners", name: (home, _a, line) => `${home} corners ${line}`, order: "Home Corners Over/Under" },
   "away total corners": { kind: "lines", prefix: "away_corners", name: (_h, away, line) => `${away} corners ${line}`, order: "Away Corners Over/Under" },
+  "corners 1x2": { kind: "fixed", key: "corners_1x2", name: () => "Most corners", order: "Corners 1x2", values: liveOutcomes },
+  "corners asian handicap": { kind: "handicaps", prefix: "corners_ah", name: (home, _a, line) => `Corners handicap ${home} ${line}`, order: "Corners Asian Handicap", european: false },
   "total cards": { kind: "lines", prefix: "cards", name: (_h, _a, line) => `Total cards ${line}`, order: "Cards Over/Under" },
+  "home team total cards": { kind: "lines", prefix: "home_cards", name: (home, _a, line) => `${home} cards ${line}`, order: "Home Team Total Cards" },
+  "away team total cards": { kind: "lines", prefix: "away_cards", name: (_h, away, line) => `${away} cards ${line}`, order: "Away Team Total Cards" },
   // Extra time and penalties (see extra-time.ts): open only once extra time starts. The extra-time markets
   // settle on extra time's own goals; To qualify on extra time, then the shootout; the shootout winner on the shootout.
   "1x2 extra time": { kind: "fixed", key: "et_winner", name: () => "Extra time result", order: "", values: liveOutcomes, rank: -60 },
@@ -779,8 +832,14 @@ function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: st
       .map((v, sortOrder) => ({ key: `${v.match[1]}-${v.match[2]}`, name: `${v.match[1]}–${v.match[2]}`, odds: v.odds, sortOrder }));
     return selections.length > 0 ? [{ key: spec.key, name: spec.name, sortOrder: base, selections, suspended: false }] : [];
   }
+  if (spec.kind === "handicaps") return liveHandicaps(values, spec.prefix, (line) => spec.name(home, away, line), home, away, spec.european, spec.max ?? 3, base);
+  if (spec.kind === "exact") return liveExact(values, spec.key, spec.name(home, away), spec.top, base);
+  if (spec.kind === "scorers") return liveScorers(values, spec.key, spec.name, base);
   return liveLines(values, spec.prefix, (line) => spec.name(home, away, line), base);
 }
+
+/** Collapses spaces so "Home Team  to Score…" matches the same key as a single-spaced name. */
+const liveBetName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
 
 /**
  * The in-play prices for one match. Markets the feed suspends, or two- and
@@ -791,7 +850,7 @@ function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: st
 export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: string): FeedLiveOdds {
   const markets = new Map<string, FeedLiveMarket>();
   for (const bet of raw.odds ?? []) {
-    const spec = LIVE_MARKETS[bet.name.trim().toLowerCase()];
+    const spec = LIVE_MARKETS[liveBetName(bet.name)];
     if (!spec) continue;
     for (const market of liveMarkets(spec, bet.values, homeTeam, awayTeam)) if (!markets.has(market.key)) markets.set(market.key, market);
   }
@@ -846,6 +905,103 @@ function liveLines(values: LiveValue[], prefix: string, name: (line: string) => 
     })
     .filter((market) => market.selections.some((selection) => selection.odds > 0))
     .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/** Live handicap lines send Home/Away (and Draw) with mirrored handicaps; the home team's line is the market key. */
+function liveHandicaps(
+  values: LiveValue[],
+  prefix: string,
+  name: (line: string) => string,
+  home: string,
+  away: string,
+  european: boolean,
+  max: number,
+  base: number,
+): FeedLiveMarket[] {
+  const sideOf = (value: LiveValue): "home" | "draw" | "away" | null => {
+    const n = normalize(value.value);
+    if (SIDE_ALIASES.home.includes(n)) return "home";
+    if (SIDE_ALIASES.draw.includes(n)) return "draw";
+    if (SIDE_ALIASES.away.includes(n)) return "away";
+    return null;
+  };
+  const lineOf = (value: LiveValue): number | null => {
+    const raw = String(value.handicap ?? "").trim();
+    if (!raw) return null;
+    const line = Number(raw);
+    return Number.isFinite(line) ? line : null;
+  };
+  const byHomeLine = new Map<number, { home?: LiveValue; draw?: LiveValue; away?: LiveValue }>();
+  for (const value of values) {
+    const side = sideOf(value);
+    const line = lineOf(value);
+    if (!side || line === null) continue;
+    // Home's handicap is the market line; Draw/Away carry the opposite sign (or 0 with Home on a 0 line).
+    const homeLine = side === "home" ? line : -line;
+    const half = Math.abs((Math.abs(homeLine) % 1) - 0.5) < 1e-9;
+    if (european ? !Number.isInteger(homeLine) || homeLine === 0 : !half) continue;
+    const entry = byHomeLine.get(homeLine) ?? {};
+    entry[side] ??= value;
+    byHomeLine.set(homeLine, entry);
+  }
+  const sides = european ? (["home", "draw", "away"] as const) : (["home", "away"] as const);
+  const priced = [...byHomeLine.entries()].filter(([, prices]) => sides.every((side) => liveOdd(prices[side]) > 1));
+  if (priced.length === 0) return [];
+  const spread = (prices: { home?: LiveValue; away?: LiveValue }) => Math.abs(liveOdd(prices.home) - liveOdd(prices.away));
+  const even = priced.reduce((best, entry) => (spread(entry[1]) < spread(best[1]) ? entry : best))[0];
+  return priced
+    .sort(([a], [b]) => Math.abs(a - even) - Math.abs(b - even))
+    .slice(0, max)
+    .sort(([a], [b]) => a - b)
+    .map(([line, prices], index) => {
+      const selections = sides.map((side, sortOrder) => {
+        const value = prices[side];
+        return {
+          key: side,
+          name: side === "home" ? `${home} ${signedLine(line)}` : side === "away" ? `${away} ${signedLine(-line)}` : `Draw (${signedLine(line)})`,
+          odds: liveOdd(value),
+          sortOrder,
+        };
+      });
+      return {
+        key: `${prefix}_${handicapKey(line)}`,
+        name: name(signedLine(line)),
+        sortOrder: base + index,
+        selections,
+        suspended: sides.some((side) => outcomeHeld(prices[side])),
+      };
+    });
+}
+
+/** Exact goal counts: "No goal"/"0", "1", "2", "3 or more"/"more 3" → "0"…"N+". (`normalize` turns "or" into "/", so "3 or more" is "3/more".) */
+function liveExact(values: LiveValue[], key: string, name: string, top: number, base: number): FeedLiveMarket[] {
+  const pick = (aliases: string[]) => values.find((v) => aliases.includes(normalize(v.value)));
+  const selections = [
+    ...Array.from({ length: top }, (_, n) => {
+      const aliases = n === 0 ? ["0", "nogoal", "nogoals"] : [String(n)];
+      const found = pick(aliases);
+      return { key: String(n), name: `${n} goals`, odds: liveOdd(found), held: outcomeHeld(found), sortOrder: n };
+    }),
+    (() => {
+      const found = pick([`more${top}`, `${top}ormore`, `${top}/more`, `${top}+`]);
+      return { key: `${top}+`, name: `${top}+ goals`, odds: liveOdd(found), held: outcomeHeld(found), sortOrder: top };
+    })(),
+  ];
+  if (selections.some((selection) => selection.held)) return [];
+  return [{ key, name, sortOrder: base, selections: selections.map(({ key: k, name: n, odds, sortOrder }) => ({ key: k, name: n, odds, sortOrder })), suspended: false }];
+}
+
+/** Goalscorer lists: every priced player, shortest price first, plus "No goalscorer" when offered. */
+function liveScorers(values: LiveValue[], key: string, name: string, base: number): FeedLiveMarket[] {
+  const seen = new Set<string>();
+  const players = values
+    .map((v) => ({ value: String(v.value).trim(), odds: v.suspended ? 0 : liveOdd(v) }))
+    .filter((v) => v.value.length > 0 && v.odds > 1)
+    .map((v) => (/^no goal ?scorer$/i.test(v.value) ? { key: "none", name: "No goalscorer", odds: v.odds } : { key: playerKey(v.value), name: v.value, odds: v.odds }))
+    .filter((v) => v.key.length > 0 && !seen.has(v.key) && Boolean(seen.add(v.key)))
+    .sort((a, b) => (a.key === "none" ? 1 : 0) - (b.key === "none" ? 1 : 0) || a.odds - b.odds || a.name.localeCompare(b.name))
+    .map((v, sortOrder) => ({ ...v, sortOrder }));
+  return players.filter((p) => p.key !== "none").length >= 2 ? [{ key, name, sortOrder: base, selections: players, suspended: false }] : [];
 }
 
 /** One team's numbers from `/fixtures/statistics`. A count the feed has no events for comes back null, meaning 0. */

@@ -189,6 +189,91 @@ test("live double chance comes as \"Home or Draw\" and \"Away or Draw\"", () => 
   assert.equal(market.suspended, false);
 });
 
+test("live handicaps, exact goals and team-to-score markets map onto settleable keys", () => {
+  const odds = [
+    {
+      id: 33,
+      name: "Asian Handicap",
+      values: [
+        { value: "Home", odd: "2.725", handicap: "-0.5" },
+        { value: "Away", odd: "1.4", handicap: "0.5" },
+        { value: "Home", odd: "1.5", handicap: "0.5" },
+        { value: "Away", odd: "2.4", handicap: "-0.5" },
+        { value: "Home", odd: "1.9", handicap: "-0.25" },
+        { value: "Away", odd: "1.9", handicap: "0.25" },
+      ],
+    },
+    {
+      id: 21,
+      name: "3-Way Handicap",
+      values: [
+        { value: "Home", odd: "8", handicap: "-1", main: true },
+        { value: "Draw", odd: "3.6", handicap: "1", main: true },
+        { value: "Away", odd: "1.3", handicap: "1", main: true },
+        { value: "Home", odd: "1.142", handicap: "1" },
+        { value: "Draw", odd: "5.5", handicap: "-1" },
+        { value: "Away", odd: "11", handicap: "-1" },
+      ],
+    },
+    {
+      id: 67,
+      name: "How many goals will Home Team score?",
+      values: [
+        { value: "No goal", odd: "1.571" },
+        { value: "1", odd: "2.75" },
+        { value: "2", odd: "9" },
+        { value: "3 or more", odd: "15" },
+      ],
+    },
+    {
+      id: 62,
+      name: "Last Team to Score (3 way)",
+      values: [
+        { value: "1", odd: "2.6" },
+        { value: "No goal", odd: "2.1" },
+        { value: "2", odd: "4" },
+      ],
+    },
+    {
+      id: 28,
+      name: "Home Team  to Score in Both Halves",
+      values: [
+        { value: "Yes", odd: "10" },
+        { value: "No", odd: "1.062" },
+      ],
+    },
+    {
+      id: 70,
+      name: "Away Team Score a Goal (2nd Half)",
+      values: [
+        { value: "Yes", odd: "3.4" },
+        { value: "No", odd: "1.3" },
+      ],
+    },
+    {
+      id: 32,
+      name: "Asian Corners",
+      values: [
+        { value: "Over", odd: "1.75", handicap: "7.5" },
+        { value: "Under", odd: "2.05", handicap: "7.5" },
+      ],
+    },
+  ];
+  const parsed = parseLiveOdds(liveRaw({ odds }), "Tirana", "Partizani");
+  const byKey = Object.fromEntries(parsed.markets.map((m) => [m.key, m]));
+  assert.ok(byKey.ah_m0_5, "asian −0.5");
+  assert.ok(byKey.ah_p0_5, "asian +0.5");
+  assert.equal(byKey.ah_m0_25, undefined, "quarter lines stay off (no push)");
+  assert.deepEqual(byKey.ah_m0_5.selections.map((s) => [s.key, s.odds]), [["home", 2.725], ["away", 1.4]]);
+  assert.ok(byKey.eh_m1 && byKey.eh_p1, "european lines from mirrored handicaps");
+  assert.deepEqual(byKey.eh_m1.selections.map((s) => s.key), ["home", "draw", "away"]);
+  assert.deepEqual(byKey.home_exact_goals.selections.map((s) => [s.key, s.odds]), [["0", 1.571], ["1", 2.75], ["2", 9], ["3+", 15]]);
+  assert.deepEqual(byKey.last_team_score.selections.map((s) => [s.key, s.odds]), [["home", 2.6], ["away", 4], ["none", 2.1]]);
+  assert.equal(byKey.home_score_both_halves.name, "Tirana to score in both halves");
+  assert.equal(byKey.h2_away_scores.name, "Partizani to score (2nd half)");
+  assert.ok(byKey.corners_7_5, "Asian Corners is total corners over/under");
+});
+
 test("the mock feed prices live matches and suspends them just after a goal", async () => {
   const start = Date.parse("2026-01-01T12:00:00Z");
   let now = start + 70 * 60_000; // Tirana (kick-off 50 min before start) is in the second half

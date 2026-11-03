@@ -1248,7 +1248,8 @@ function marketGroup(key: string): MarketGroup {
   if (key.startsWith("fight_")) return "main";
   if (/^rounds_\d+_5$/.test(key)) return "rounds";
   if (key.startsWith("et_") || key === "to_qualify" || key === "pen_winner") return "extra";
-  if (["match_winner", "double_chance", "draw_no_bet", "btts"].includes(key)) return "main";
+  // Gol rradhe (next goal) sits with the match result — the live board players open first.
+  if (["match_winner", "double_chance", "draw_no_bet", "btts"].includes(key) || /^nth_goal_\d+$/.test(key)) return "main";
   if (/^(ah|eh)_/.test(key)) return "handicap";
   if (/^(home_|away_)?(corners|cards)_/.test(key)) return "corners";
   if (key.startsWith("scorer_")) return "scorers";
@@ -1503,7 +1504,7 @@ const MatchCard = memo(function MatchCard({
         ) : scorers ? (
           <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, your stake comes back.")}</p>
         ) : null}
-        {market.key === "first_team_score" || market.key === "last_team_score" ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
+        {market.key === "first_team_score" || market.key === "last_team_score" || /^nth_goal_\d+$/.test(market.key) ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
       </>
     );
   };

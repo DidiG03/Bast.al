@@ -842,6 +842,31 @@ function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: st
 const liveBetName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
 
 /**
+ * Live "which team scores the Nth goal" (gol rradhe). Skips extra-time variants;
+ * those need their own clock. N from 1 to 15 covers what the feed prices.
+ */
+const NTH_GOAL_LIVE = /^which team will score the (\d+)(?:st|nd|rd|th) goal\??$/;
+
+function liveSpecFor(name: string): LiveSpec | undefined {
+  const key = liveBetName(name);
+  const known = LIVE_MARKETS[key];
+  if (known) return known;
+  const nth = NTH_GOAL_LIVE.exec(key);
+  if (!nth) return undefined;
+  const n = Number(nth[1]);
+  if (!Number.isInteger(n) || n < 1 || n > 15) return undefined;
+  const first = MARKET_INDEX.get("Team To Score First")?.index ?? MARKETS.length;
+  return {
+    kind: "fixed",
+    key: `nth_goal_${n}`,
+    name: () => `Next goal (${n})`,
+    order: "Team To Score First",
+    values: liveTeamOrNone,
+    rank: first * 10 + n,
+  };
+}
+
+/**
  * The in-play prices for one match. Markets the feed suspends, or two- and
  * three-way markets missing an outcome, come back suspended with the prices
  * they do have; a market the feed doesn't send at all is left out, which
@@ -850,7 +875,7 @@ const liveBetName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, 
 export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: string): FeedLiveOdds {
   const markets = new Map<string, FeedLiveMarket>();
   for (const bet of raw.odds ?? []) {
-    const spec = LIVE_MARKETS[liveBetName(bet.name)];
+    const spec = liveSpecFor(bet.name);
     if (!spec) continue;
     for (const market of liveMarkets(spec, bet.values, homeTeam, awayTeam)) if (!markets.has(market.key)) markets.set(market.key, market);
   }

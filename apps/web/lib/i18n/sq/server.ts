@@ -163,6 +163,7 @@ export const server: Record<string, string> = {
   "Score in both halves": "Shënon në të dyja pjesët",
   "First team to score": "Skuadra që shënon e para",
   "Last team to score": "Skuadra që shënon e fundit",
+  "Next goal ({n})": "Gol rradhe ({n})",
   "No goal": "Pa gol",
   "Win from behind": "Përmbys rezultatin dhe fiton",
   "Anytime goalscorer": "Shënon gol në ndeshje",

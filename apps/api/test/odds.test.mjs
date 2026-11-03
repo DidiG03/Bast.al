@@ -144,9 +144,10 @@ test("the wider in-play markets map onto the markets we already settle", () => {
   ];
   const parsed = parseLiveOdds(liveRaw({ odds }), "Tirana", "Partizani");
   const byKey = Object.fromEntries(parsed.markets.map((m) => [m.key, m]));
-  assert.deepEqual(Object.keys(byKey).sort(), ["corners_9_5", "correct_score", "draw_no_bet", "h1_winner", "h2_goals_0_5", "h2_winner", "home_goals_1_5", "ht_ft", "odd_even", "result_btts"]);
+  assert.deepEqual(Object.keys(byKey).sort(), ["corners_9_5", "correct_score", "draw_no_bet", "h1_winner", "h2_goals_0_5", "h2_winner", "home_goals_1_5", "ht_ft", "nth_goal_2", "odd_even", "result_btts"]);
   assert.deepEqual(byKey.h1_winner.selections.map((s) => [s.key, s.odds]), [["home", 3], ["draw", 1.8], ["away", 5]], "1X2 symbols count as Home/Draw/Away");
   assert.equal(byKey.h2_winner.suspended, true, "a three-way market is off while one outcome is");
+  assert.equal(byKey.nth_goal_2.suspended, true, "next-goal needs home, away and no goal");
   assert.equal(byKey.home_goals_1_5.name, "Tirana goals 1.5");
   assert.deepEqual(byKey.correct_score.selections.map((s) => s.key), ["1-0", "2-1"], "a suspended scoreline is left out");
   assert.equal(byKey.correct_score.suspended, false);
@@ -272,6 +273,45 @@ test("live handicaps, exact goals and team-to-score markets map onto settleable 
   assert.equal(byKey.home_score_both_halves.name, "Tirana to score in both halves");
   assert.equal(byKey.h2_away_scores.name, "Partizani to score (2nd half)");
   assert.ok(byKey.corners_7_5, "Asian Corners is total corners over/under");
+});
+
+test("live next-goal (gol rradhe) markets map onto nth_goal keys", () => {
+  const odds = [
+    {
+      id: 73,
+      name: "Which team will score the 1st goal?",
+      values: [
+        { value: "1", odd: "2.6" },
+        { value: "No goal", odd: "2.1" },
+        { value: "2", odd: "4" },
+      ],
+    },
+    {
+      id: 92,
+      name: "Which team will score the 3rd goal?",
+      values: [
+        { value: "1", odd: "2.25" },
+        { value: "No goal", odd: "4.333" },
+        { value: "2", odd: "2.3" },
+      ],
+    },
+    {
+      id: 6,
+      name: "Which team will score the 1st goal in extra time?",
+      values: [
+        { value: "1", odd: "2" },
+        { value: "2", odd: "2" },
+        { value: "No goal", odd: "3" },
+      ],
+    },
+  ];
+  const parsed = parseLiveOdds(liveRaw({ odds }), "Tirana", "Partizani");
+  const byKey = Object.fromEntries(parsed.markets.map((m) => [m.key, m]));
+  assert.equal(byKey.nth_goal_1.name, "Next goal (1)");
+  assert.deepEqual(byKey.nth_goal_1.selections.map((s) => [s.key, s.odds]), [["home", 2.6], ["away", 4], ["none", 2.1]]);
+  assert.equal(byKey.nth_goal_3.name, "Next goal (3)");
+  assert.equal(byKey.nth_goal_1_et, undefined, "extra-time next goal stays off for now");
+  assert.ok(parsed.markets.findIndex((m) => m.key === "nth_goal_1") < parsed.markets.findIndex((m) => m.key === "nth_goal_3"));
 });
 
 test("the mock feed prices live matches and suspends them just after a goal", async () => {

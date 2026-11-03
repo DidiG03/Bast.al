@@ -1344,7 +1344,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         OR: [{ goalsCheckedAt: null }, { goalsCheckedAt: { lt: new Date(now - 10 * 60_000) } }],
         markets: {
           some: {
-            key: { in: GOAL_MARKET_KEYS },
+            OR: [{ key: { in: GOAL_MARKET_KEYS } }, { key: { startsWith: "nth_goal_" } }],
             selections: { some: { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null } } }] } },
           },
         },

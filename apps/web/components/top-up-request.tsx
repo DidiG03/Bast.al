@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type Ref } from "react";
 import { apiFetch } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { useI18n } from "./i18n-provider";
@@ -88,7 +88,7 @@ function TopUpRequestModal({
 }: {
   amount: string;
   setAmount: (value: string) => void;
-  inputRef: RefObject<HTMLInputElement | null>;
+  inputRef: Ref<HTMLInputElement>;
   busy: boolean;
   onClose: () => void;
   onSend: () => void;

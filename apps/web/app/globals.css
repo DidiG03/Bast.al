@@ -15888,8 +15888,8 @@ button.is-blocked {
 .live-tracker-frame {
   position: relative;
   width: 100%;
-  /* SportScore's tracker page needs 360px; 420px is their default height. */
-  height: clamp(22.5rem, 62vw, 26.25rem);
+  /* Taller so the pitch reads clearly; SportScore's page needs at least 360px. */
+  height: clamp(28rem, 78vw, 40rem);
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.6rem;
@@ -15915,7 +15915,7 @@ button.is-blocked {
 
 /* SportScore's frame opens with a strip of its own (team names and a red
    "LIVE · minute" chip) that repeats our match row: it sits above the panel's
-   top edge, out of sight. Their attribution at the bottom stays in view. */
+   top edge, out of sight. */
 .live-tracker-frame {
   --tracker-head: 2.25rem;
 }
@@ -15934,17 +15934,6 @@ button.is-blocked {
   .live-tracker-frame {
     height: max(15rem, 85vh);
   }
-}
-
-.live-tracker-credit {
-  margin: 0;
-  font-size: 0.75rem;
-  text-align: right;
-}
-
-.live-tracker-credit a {
-  color: var(--muted);
-  text-decoration: underline;
 }
 
 .bm-detail .odds-market-group {

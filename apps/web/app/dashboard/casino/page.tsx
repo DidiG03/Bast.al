@@ -8,7 +8,6 @@ import { HelpTip } from "../../../components/help-tip";
 import { useConfirm } from "../../../components/confirm-dialog";
 import { useI18n } from "../../../components/i18n-provider";
 import { PageLoading } from "../../../components/loading-spinner";
-import { PenaltyScene } from "../../../components/penalty-scene";
 import { Stat } from "../../../components/commission-views";
 import { useToast } from "../../../components/toaster";
 import { apiFetch, type CasinoAdmin, type CasinoGame, type CasinoState, type MeResponse } from "../../../lib/api";
@@ -127,9 +126,9 @@ function CasinoLobby() {
             </Link>
           ) : null}
           {has("penalty") ? (
-            <Link className="casino-tile is-penalty" href="/dashboard/casino/penalty">
+            <Link className="casino-tile is-penalty has-cover" href="/dashboard/casino/penalty">
               <span className="casino-tile-art" aria-hidden="true">
-                <PenaltyTileArt />
+                <CoverArt src="/casino/penalty.webp" fit="cover" position="50% 30%" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Penalty")}</strong>
@@ -187,9 +186,9 @@ function CasinoLobby() {
             </Link>
           ) : null}
           {has("scratch") ? (
-            <Link className="casino-tile is-scratch" href="/dashboard/casino/scratch">
+            <Link className="casino-tile is-scratch has-cover" href="/dashboard/casino/scratch">
               <span className="casino-tile-art" aria-hidden="true">
-                <ScratchTileArt />
+                <CoverArt src="/casino/scratch.webp" fit="cover" position="50% 30%" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Scratch Cards")}</strong>
@@ -222,60 +221,6 @@ function BookTileArt() {
   const [drawn, setDrawn] = useState<string | null>(null);
   // eslint-disable-next-line @next/next/no-img-element -- a picture made in the browser, or one from the art folder
   return drawn ? <img className="casino-tile-cover is-book" src={drawn} alt="" /> : <img className="casino-tile-cover is-book is-photo" src={BOOK_COVER} alt="" onError={() => setDrawn(bookSymbolImage("BOOK", 220))} />;
-}
-
-/** The Penalty tile: the game's own scene, waiting for the kick. */
-function PenaltyTileArt() {
-  return <PenaltyScene last={null} fresh={false} call={null} canShoot={false} onShoot={() => undefined} still />;
-}
-
-/** The Scratch Cards tile: a ticket half scratched, three bells showing and the rest still under silver foil. */
-function ScratchTileArt() {
-  const cells: Array<string | null> = ["🔔", null, "🍒", null, "🔔", null, "🍋", null, "🔔"];
-  return (
-    <svg viewBox="0 0 300 150" className="scratch-tile-scene">
-      <defs>
-        <linearGradient id="st-foil" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#b9c0ca" />
-          <stop offset="0.4" stopColor="#eef1f5" />
-          <stop offset="1" stopColor="#9aa3b0" />
-        </linearGradient>
-        <linearGradient id="st-ticket" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff6d8" />
-          <stop offset="1" stopColor="#f3dc97" />
-        </linearGradient>
-      </defs>
-      <g transform="rotate(-6 150 75)">
-        <rect x="70" y="10" width="160" height="132" rx="10" fill="url(#st-ticket)" stroke="#c8961c" strokeWidth="3" />
-        <rect x="70" y="10" width="160" height="22" rx="10" fill="#d8402f" />
-        <rect x="70" y="22" width="160" height="10" fill="#d8402f" />
-        <text x="150" y="26" textAnchor="middle" fontSize="12" fontWeight="900" fill="#fff4cc">
-          3 × 🔔
-        </text>
-        {cells.map((cell, index) => {
-          const x = 86 + (index % 3) * 44;
-          const y = 40 + Math.floor(index / 3) * 33;
-          return cell ? (
-            <g key={index}>
-              <rect x={x} y={y} width="40" height="29" rx="5" fill={cell === "🔔" ? "#fff2b8" : "#fffaf0"} stroke={cell === "🔔" ? "#e2a514" : "#e6d6a8"} strokeWidth="1.5" />
-              <text x={x + 20} y={y + 20} textAnchor="middle" fontSize="16">
-                {cell}
-              </text>
-            </g>
-          ) : (
-            <g key={index}>
-              <rect x={x} y={y} width="40" height="29" rx="5" fill="url(#st-foil)" />
-              <text x={x + 20} y={y + 20} textAnchor="middle" fontSize="15" fontWeight="900" fill="rgba(70,78,92,0.45)">
-                ?
-              </text>
-            </g>
-          );
-        })}
-      </g>
-      <circle cx="252" cy="104" r="15" fill="#e8c35a" stroke="#a8740c" strokeWidth="2" />
-      <path d="M232 92 q-10 -6 -20 4" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 /** A small wheel for the roulette tile. */

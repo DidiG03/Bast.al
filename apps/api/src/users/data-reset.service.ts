@@ -78,6 +78,7 @@ export class DataResetService {
         await tx.blackjackHand.deleteMany({});
         await tx.minesRound.deleteMany({});
         await tx.penaltyRound.deleteMany({});
+        await tx.casinoRound.deleteMany({});
         await tx.casinoBookFeature.deleteMany({});
         const spins = await tx.casinoSpin.deleteMany({});
         const ledger = await tx.balanceTransaction.deleteMany({});

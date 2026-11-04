@@ -1,3 +1,4 @@
+import { HOUSE_GAMES, HOUSE_KINDS, type HouseGame } from "./house.service";
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { randomInt } from "crypto";
 import { CasinoPlayKind, Prisma, Role } from "@prisma/client";
@@ -108,10 +109,15 @@ const GAME_OF_KIND: Record<CasinoPlayKind, LastGame["game"]> = {
   KENO: "keno",
   COIN_FLIP: "coinflip",
   SCRATCH: "scratch",
+  WHEEL: "wheel",
+  BACCARAT: "baccarat",
+  HILO: "hilo",
+  TOWER: "tower",
+  CRASH: "crash",
 };
 
 export type LastGame = {
-  game: "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch";
+  game: "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch" | HouseGame;
   /** The game's own name for the slots ("Sizzling Hot", "Book of Ra"); null for the others. */
   name: string | null;
   /** Something left to finish: a round in play, free spins, or a win to double or collect. Null when the last game is done. */
@@ -161,7 +167,7 @@ export class CasinoService {
     if (game === "slot") where.OR = [{ kind: "SPIN" }, { kind: "GAMBLE", NOT: { gamble: bookGuess } }];
     else if (game === "book") where.OR = [{ kind: "BOOK" }, { kind: "GAMBLE", gamble: bookGuess }];
     else {
-      const kinds: Record<string, CasinoPlayKind> = { blackjack: "BLACKJACK", roulette: "ROULETTE", mines: "MINES", penalty: "PENALTY", plinko: "PLINKO", dice: "DICE", keno: "KENO", coinflip: "COIN_FLIP", scratch: "SCRATCH" };
+      const kinds: Record<string, CasinoPlayKind> = { blackjack: "BLACKJACK", roulette: "ROULETTE", mines: "MINES", penalty: "PENALTY", plinko: "PLINKO", dice: "DICE", keno: "KENO", coinflip: "COIN_FLIP", scratch: "SCRATCH", ...HOUSE_KINDS };
       if (!kinds[game]) throw new BadRequestException("Unknown game");
       where.kind = kinds[game];
     }
@@ -191,19 +197,21 @@ export class CasinoService {
    */
   async lastGame(actor: Actor): Promise<LastGame | null> {
     const playerId = actor.id;
-    const [blackjack, mines, penalty, freeSpins, gamble, last] = await Promise.all([
+    const [blackjack, mines, penalty, freeSpins, gamble, last, house] = await Promise.all([
       this.prisma.blackjackHand.findUnique({ where: { playerId }, select: { staked: true, updatedAt: true } }),
       this.prisma.minesRound.findUnique({ where: { playerId }, select: { staked: true, updatedAt: true } }),
       this.prisma.penaltyRound.findUnique({ where: { playerId }, select: { staked: true, updatedAt: true } }),
       this.prisma.casinoBookFeature.findUnique({ where: { playerId }, select: { remaining: true, bet: true, updatedAt: true } }),
       this.prisma.casinoGamble.findUnique({ where: { playerId }, select: { game: true, amount: true, updatedAt: true } }),
       this.prisma.casinoSpin.findFirst({ where: { playerId }, orderBy: { createdAt: "desc" }, select: { kind: true, bet: true, createdAt: true } }),
+      this.prisma.casinoRound.findUnique({ where: { playerId }, select: { game: true, staked: true, updatedAt: true } }),
     ]);
     const nameOf = (game: LastGame["game"]) => (game === "slot" ? GAME_NAME : game === "book" ? BOOK_NAME : null);
     const open = (game: LastGame["game"], waiting: NonNullable<LastGame["waiting"]>, amount: Prisma.Decimal, at: Date): LastGame => ({ game, name: nameOf(game), waiting, amount: Number(amount), at });
     if (blackjack) return open("blackjack", "round", blackjack.staked, blackjack.updatedAt);
     if (mines) return open("mines", "round", mines.staked, mines.updatedAt);
     if (penalty) return open("penalty", "round", penalty.staked, penalty.updatedAt);
+    if (house) return open(house.game as HouseGame, "round", house.staked, house.updatedAt);
     if (freeSpins && freeSpins.remaining > 0) return { ...open("book", "freeSpins", freeSpins.bet, freeSpins.updatedAt), freeSpins: freeSpins.remaining };
     if (gamble) return open(gamble.game === "book" ? "book" : "slot", "gamble", gamble.amount, gamble.updatedAt);
     if (!last) return null;
@@ -534,6 +542,21 @@ export class CasinoService {
       WHERE ${scope} AND s.created_at >= ${period.from} AND s.created_at < ${period.to}
       GROUP BY s.player_id, u.username
     `;
+    // Money Wheel, Baccarat, Hi-Lo, Tower and Crash, per Player and game.
+    const houseRows = await this.prisma.$queryRaw<Array<{ player_id: string; kind: string; rounds: bigint; staked: Prisma.Decimal | null; won: Prisma.Decimal | null }>>`
+      SELECT s.player_id, s.kind::text AS kind, COUNT(*) AS rounds, SUM(s.stake) AS staked, SUM(s.win) AS won
+      FROM casino_spins s
+      WHERE ${scope} AND s.created_at >= ${period.from} AND s.created_at < ${period.to} AND s.kind::text IN ('WHEEL', 'BACCARAT', 'HILO', 'TOWER', 'CRASH')
+      GROUP BY s.player_id, s.kind
+    `;
+    const gameOfKind = Object.fromEntries(Object.entries(HOUSE_KINDS).map(([game, kind]) => [kind, game as HouseGame]));
+    const houseOf = new Map<string, Record<HouseGame, { rounds: number; staked: number; won: number }>>();
+    for (const row of houseRows) {
+      const entry = houseOf.get(row.player_id) ?? (Object.fromEntries(HOUSE_GAMES.map((game) => [game, { rounds: 0, staked: 0, won: 0 }])) as Record<HouseGame, { rounds: number; staked: number; won: number }>);
+      entry[gameOfKind[row.kind]] = { rounds: Number(row.rounds), staked: Number(row.staked ?? 0), won: Number(row.won ?? 0) };
+      houseOf.set(row.player_id, entry);
+    }
+    const emptyHouse = () => Object.fromEntries(HOUSE_GAMES.map((game) => [game, { rounds: 0, staked: 0, won: 0 }])) as Record<HouseGame, { rounds: number; staked: number; won: number }>;
     const players = rows
       .map((row) => {
         const staked = Number(row.staked);
@@ -548,7 +571,8 @@ export class CasinoService {
         const keno = { rounds: Number(row.keno_spins), staked: Number(row.keno_staked ?? 0), won: Number(row.keno_won ?? 0) };
         const coinFlip = { flips: Number(row.coin_spins), staked: Number(row.coin_staked ?? 0), won: Number(row.coin_won ?? 0) };
         const scratch = { cards: Number(row.scratch_spins), staked: Number(row.scratch_staked ?? 0), won: Number(row.scratch_won ?? 0) };
-        return { id: row.player_id, username: row.username, spins: Number(row.spins), freeSpins: Number(row.free_spins), roulette, blackjack, book, mines, penalty, plinko, dice, keno, coinFlip, scratch, staked, won, net: Math.round((staked - won) * 100) / 100 };
+        const house = houseOf.get(row.player_id) ?? emptyHouse();
+        return { id: row.player_id, username: row.username, spins: Number(row.spins), freeSpins: Number(row.free_spins), roulette, blackjack, book, mines, penalty, plinko, dice, keno, coinFlip, scratch, house, staked, won, net: Math.round((staked - won) * 100) / 100 };
       })
       .sort((a, b) => b.staked - a.staked || a.username.localeCompare(b.username));
     const totals = players.reduce((sum, player) => ({ spins: sum.spins + player.spins, freeSpins: sum.freeSpins + player.freeSpins, staked: sum.staked + player.staked, won: sum.won + player.won }), { spins: 0, freeSpins: 0, staked: 0, won: 0 });
@@ -565,8 +589,13 @@ export class CasinoService {
     const kenoTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.keno.rounds, staked: sum.staked + player.keno.staked, won: sum.won + player.keno.won }), { spins: 0, staked: 0, won: 0 });
     const coinTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.coinFlip.flips, staked: sum.staked + player.coinFlip.staked, won: sum.won + player.coinFlip.won }), { spins: 0, staked: 0, won: 0 });
     const scratchTotals = players.reduce((sum, player) => ({ spins: sum.spins + player.scratch.cards, staked: sum.staked + player.scratch.staked, won: sum.won + player.scratch.won }), { spins: 0, staked: 0, won: 0 });
-    const slotStaked = totals.staked - rouletteTotals.staked - blackjackTotals.staked - bookTotals.staked - minesTotals.staked - penaltyTotals.staked - plinkoTotals.staked - diceTotals.staked - kenoTotals.staked - coinTotals.staked - scratchTotals.staked;
-    const slotWon = totals.won - rouletteTotals.won - blackjackTotals.won - bookTotals.won - minesTotals.won - penaltyTotals.won - plinkoTotals.won - diceTotals.won - kenoTotals.won - coinTotals.won - scratchTotals.won;
+    const houseTotals = Object.fromEntries(
+      HOUSE_GAMES.map((game) => [game, players.reduce((sum, player) => ({ spins: sum.spins + player.house[game].rounds, staked: sum.staked + player.house[game].staked, won: sum.won + player.house[game].won }), { spins: 0, staked: 0, won: 0 })]),
+    ) as Record<HouseGame, { spins: number; staked: number; won: number }>;
+    const houseStaked = HOUSE_GAMES.reduce((sum, game) => sum + houseTotals[game].staked, 0);
+    const houseWon = HOUSE_GAMES.reduce((sum, game) => sum + houseTotals[game].won, 0);
+    const slotStaked = -houseStaked + totals.staked - rouletteTotals.staked - blackjackTotals.staked - bookTotals.staked - minesTotals.staked - penaltyTotals.staked - plinkoTotals.staked - diceTotals.staked - kenoTotals.staked - coinTotals.staked - scratchTotals.staked;
+    const slotWon = -houseWon + totals.won - rouletteTotals.won - blackjackTotals.won - bookTotals.won - minesTotals.won - penaltyTotals.won - plinkoTotals.won - diceTotals.won - kenoTotals.won - coinTotals.won - scratchTotals.won;
     const games = {
       slot: { spins: totals.spins, freeSpins: totals.freeSpins, staked: round(slotStaked), won: round(slotWon), payoutRate: rate(slotStaked, slotWon) },
       roulette: { spins: rouletteTotals.spins, staked: round(rouletteTotals.staked), won: round(rouletteTotals.won), payoutRate: rate(rouletteTotals.staked, rouletteTotals.won) },
@@ -579,6 +608,7 @@ export class CasinoService {
       keno: { spins: kenoTotals.spins, staked: round(kenoTotals.staked), won: round(kenoTotals.won), payoutRate: rate(kenoTotals.staked, kenoTotals.won) },
       coinflip: { spins: coinTotals.spins, staked: round(coinTotals.staked), won: round(coinTotals.won), payoutRate: rate(coinTotals.staked, coinTotals.won) },
       scratch: { spins: scratchTotals.spins, staked: round(scratchTotals.staked), won: round(scratchTotals.won), payoutRate: rate(scratchTotals.staked, scratchTotals.won) },
+      ...(Object.fromEntries(HOUSE_GAMES.map((game) => [game, { spins: houseTotals[game].spins, staked: round(houseTotals[game].staked), won: round(houseTotals[game].won), payoutRate: rate(houseTotals[game].staked, houseTotals[game].won) }])) as Record<HouseGame, { spins: number; staked: number; won: number; payoutRate: number | null }>),
     };
 
     const platform = await this.prisma.platformSettings.findUnique({ where: { id: "default" }, select: { casinoEnabled: true, casinoGamesOff: true } });

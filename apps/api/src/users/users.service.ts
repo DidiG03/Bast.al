@@ -686,7 +686,7 @@ export class UsersService {
    * `lineId` is that line's id, `{game}_{playerId}_{day}`.
    */
   async casinoLineRounds(actor: Actor, id: string, lineId: string) {
-    const match = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch)_(.+)_(\d{4}-\d{2}-\d{2})$/.exec(lineId ?? "");
+    const match = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch|wheel|baccarat|hilo|tower|crash)_(.+)_(\d{4}-\d{2}-\d{2})$/.exec(lineId ?? "");
     if (!match || match[2] !== id) throw new NotFoundException("That line isn't on this account");
     const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
     if (!target) throw new NotFoundException("User not found");
@@ -703,7 +703,7 @@ export class UsersService {
     if (prefix === "casino") where.OR = [{ kind: "SPIN" }, { kind: "GAMBLE", NOT: { gamble: bookGuess } }];
     else if (prefix === "book") where.OR = [{ kind: "BOOK" }, { kind: "GAMBLE", gamble: bookGuess }];
     else {
-      const kind = { blackjack: "BLACKJACK", roulette: "ROULETTE", mines: "MINES", penalty: "PENALTY", plinko: "PLINKO", dice: "DICE", keno: "KENO", coinflip: "COIN_FLIP", scratch: "SCRATCH" } as const;
+      const kind = { blackjack: "BLACKJACK", roulette: "ROULETTE", mines: "MINES", penalty: "PENALTY", plinko: "PLINKO", dice: "DICE", keno: "KENO", coinflip: "COIN_FLIP", scratch: "SCRATCH", wheel: "WHEEL", baccarat: "BACCARAT", hilo: "HILO", tower: "TOWER", crash: "CRASH" } as const;
       const played = kind[prefix as keyof typeof kind];
       if (!played) throw new NotFoundException("That line isn't on this account");
       where.kind = played;
@@ -2005,24 +2005,26 @@ async function lockAccounts(tx: Prisma.TransactionClient, ids: Array<string | nu
 }
 
 /** Casino rounds a Player is in the middle of, whose winnings would otherwise land with a new team. */
-async function inPlay(db: Pick<Prisma.TransactionClient, "blackjackHand" | "casinoBookFeature" | "casinoFreeSpins" | "minesRound" | "penaltyRound">, playerId: string) {
-  const [hands, rounds, slotFreeSpins, mines, penalty] = await Promise.all([
+async function inPlay(db: Pick<Prisma.TransactionClient, "blackjackHand" | "casinoBookFeature" | "casinoFreeSpins" | "minesRound" | "penaltyRound" | "casinoRound">, playerId: string) {
+  const [hands, rounds, slotFreeSpins, mines, penalty, house] = await Promise.all([
     db.blackjackHand.count({ where: { playerId } }),
     db.casinoBookFeature.count({ where: { playerId } }),
     // Free spins the fruit slot still owes from its old rules: they'd pay out under the new team.
     db.casinoFreeSpins.count({ where: { playerId, remaining: { gt: 0 } } }),
     db.minesRound.count({ where: { playerId } }),
     db.penaltyRound.count({ where: { playerId } }),
+    db.casinoRound.count({ where: { playerId } }),
   ]);
-  return { blackjack: hands > 0, freeSpins: rounds > 0, slotFreeSpins: slotFreeSpins > 0, mines: mines > 0, penalty: penalty > 0 };
+  return { blackjack: hands > 0, freeSpins: rounds > 0, slotFreeSpins: slotFreeSpins > 0, mines: mines > 0, penalty: penalty > 0, house: house > 0 };
 }
 
-function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, playing: { blackjack: boolean; freeSpins: boolean; slotFreeSpins: boolean; mines: boolean; penalty: boolean } = { blackjack: false, freeSpins: false, slotFreeSpins: false, mines: false, penalty: false }): string | null {
+function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number, playing: { blackjack: boolean; freeSpins: boolean; slotFreeSpins: boolean; mines: boolean; penalty: boolean; house?: boolean } = { blackjack: false, freeSpins: false, slotFreeSpins: false, mines: false, penalty: false }): string | null {
   if (playing.blackjack) return `${username} is in the middle of a blackjack hand. Move them once it's over.`;
   if (playing.freeSpins) return `${username} is in the middle of Book of Ra free spins. Move them once they're over.`;
   if (playing.slotFreeSpins) return `${username} still has free spins to play on the fruit slot. Move them once they're played.`;
   if (playing.mines) return `${username} is in the middle of a Mines round. Move them once it's over.`;
   if (playing.penalty) return `${username} is in the middle of a Penalty round. Move them once it's over.`;
+  if (playing.house) return `${username} is in the middle of a Casino round. Move them once it's over.`;
   if (openBets === 1) return `${username} still has 1 open bet. Move them once it's settled.`;
   if (openBets > 1) return `${username} still has ${openBets} open bets. Move them once they're settled.`;
   if (balance.isNegative()) return `${username}'s balance is below zero (-${formatAll(balance.abs())}). Give them credit to clear it before moving them.`;

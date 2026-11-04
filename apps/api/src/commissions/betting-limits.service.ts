@@ -129,13 +129,14 @@ export class BettingLimitsService {
 
   /** Money still riding: stakes on bets placed today that are still open, and on a blackjack, Mines or Penalty round still being played. */
   private async openStakes(playerId: string, db: Db = this.prisma): Promise<number> {
-    const [open, blackjack, mines, penalty] = await Promise.all([
+    const [open, blackjack, mines, penalty, house] = await Promise.all([
       db.bet.aggregate({ where: { playerId, status: BetStatus.OPEN, placedAt: { gte: startOfDay(new Date()) } }, _sum: { stake: true } }),
       db.blackjackHand.findUnique({ where: { playerId }, select: { staked: true } }),
       db.minesRound.findUnique({ where: { playerId }, select: { staked: true } }),
       db.penaltyRound.findUnique({ where: { playerId }, select: { staked: true } }),
+      db.casinoRound.findUnique({ where: { playerId }, select: { staked: true } }),
     ]);
-    return Number(open._sum.stake ?? 0) + Number(blackjack?.staked ?? 0) + Number(mines?.staked ?? 0) + Number(penalty?.staked ?? 0);
+    return Number(open._sum.stake ?? 0) + Number(blackjack?.staked ?? 0) + Number(mines?.staked ?? 0) + Number(penalty?.staked ?? 0) + Number(house?.staked ?? 0);
   }
 
   /**

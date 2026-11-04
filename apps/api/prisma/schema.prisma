@@ -154,6 +154,7 @@ model User {
   blackjackHand          BlackjackHand?
   bookFeature            CasinoBookFeature?
   minesRound             MinesRound?
+  casinoRound            CasinoRound?
   penaltyRound           PenaltyRound?
   diceSeeds              DiceSeed[]
   favouriteEvents        FavouriteEvent[]
@@ -871,6 +872,8 @@ model CasinoSpin {
   coin         Json?
   /// A scratch card: its 9 boxes, the winning symbol (or none), the multiplier, and the seed pair and nonce it came from.
   scratch      Json?
+  /// Money Wheel, Baccarat, Hi-Lo, Tower and Crash (house-games.ts): the round as it was played, the game in `game`.
+  house        Json?
   createdAt    DateTime          @default(now()) @map("created_at")
   settlements  SettlementEntry[]
 
@@ -901,6 +904,16 @@ enum CasinoPlayKind {
   COIN_FLIP
   /// One scratch card.
   SCRATCH
+  /// One spin of the Money Wheel.
+  WHEEL
+  /// One hand of Baccarat.
+  BACCARAT
+  /// A round of Hi-Lo, cashed out or lost.
+  HILO
+  /// A climb of the Tower, cashed out or lost.
+  TOWER
+  /// A round of Crash, cashed out or crashed.
+  CRASH
 }
 
 /// A Player's provably fair seed pair, for Dice, Keno, Coin Flip and Scratch Cards. Each roll is the HMAC-SHA256
@@ -1063,4 +1076,28 @@ model TrackerMapping {
   checkedAt  DateTime @default(now()) @updatedAt @map("checked_at")
 
   @@map("tracker_mappings")
+}
+
+/// A Hi-Lo, Tower or Crash round still being played: one per Player at most.
+/// The stake already left the balance; the round is recorded as a CasinoSpin
+/// when it ends, and this row goes. Hidden parts (the tower's traps, the crash
+/// point) are drawn when the round starts and never sent until it ends. The
+/// team and rates are taken when the round starts.
+model CasinoRound {
+  playerId    String   @id @map("player_id")
+  player      User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  /// "hilo", "tower" or "crash".
+  game        String
+  ownerId     String?  @map("owner_id")
+  managerId   String?  @map("manager_id")
+  ownerRate   Decimal  @default(0) @map("owner_rate") @db.Decimal(5, 2)
+  managerRate Decimal  @default(0) @map("manager_rate") @db.Decimal(5, 2)
+  /// What the round took from the balance.
+  staked      Decimal  @db.Decimal(12, 2)
+  state       Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("casino_rounds")
 }

@@ -24,6 +24,11 @@ const GAME_OF_KIND: Record<string, string> = {
   KENO: "keno",
   COIN_FLIP: "coinflip",
   SCRATCH: "scratch",
+  WHEEL: "wheel",
+  BACCARAT: "baccarat",
+  HILO: "hilo",
+  TOWER: "tower",
+  CRASH: "crash",
 };
 
 function round(value: number): number {
@@ -110,17 +115,19 @@ export class PlayerActivityService {
 
   /** The casino rounds the Player has started and not finished: a blackjack hand, a Mines or Penalty round, free spins. */
   private async casinoInPlay(playerId: string) {
-    const [blackjack, mines, penalty, book, slot] = await Promise.all([
+    const [blackjack, mines, penalty, book, slot, house] = await Promise.all([
       this.prisma.blackjackHand.findUnique({ where: { playerId }, select: { staked: true, createdAt: true } }),
       this.prisma.minesRound.findUnique({ where: { playerId }, select: { staked: true, createdAt: true } }),
       this.prisma.penaltyRound.findUnique({ where: { playerId }, select: { staked: true, createdAt: true } }),
       this.prisma.casinoBookFeature.findUnique({ where: { playerId }, select: { bet: true, remaining: true, createdAt: true } }),
       this.prisma.casinoFreeSpins.findUnique({ where: { playerId }, select: { bet: true, remaining: true, updatedAt: true } }),
+      this.prisma.casinoRound.findUnique({ where: { playerId }, select: { game: true, staked: true, createdAt: true } }),
     ]);
     const rounds: Array<{ game: string; staked: number; freeSpins: number | null; startedAt: Date }> = [];
     if (blackjack) rounds.push({ game: "blackjack", staked: Number(blackjack.staked), freeSpins: null, startedAt: blackjack.createdAt });
     if (mines) rounds.push({ game: "mines", staked: Number(mines.staked), freeSpins: null, startedAt: mines.createdAt });
     if (penalty) rounds.push({ game: "penalty", staked: Number(penalty.staked), freeSpins: null, startedAt: penalty.createdAt });
+    if (house) rounds.push({ game: house.game, staked: Number(house.staked), freeSpins: null, startedAt: house.createdAt });
     if (book) rounds.push({ game: "book", staked: 0, freeSpins: book.remaining, startedAt: book.createdAt });
     if (slot && slot.remaining > 0) rounds.push({ game: "slot", staked: 0, freeSpins: slot.remaining, startedAt: slot.updatedAt });
     return rounds;

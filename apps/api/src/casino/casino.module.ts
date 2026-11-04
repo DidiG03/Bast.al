@@ -15,11 +15,14 @@ import { DiceService } from "./dice.service";
 import { KenoService } from "./keno.service";
 import { CoinFlipService } from "./coin-flip.service";
 import { ScratchService } from "./scratch.service";
+import { HouseService } from "./house.service";
+import { HouseGamesService } from "./house-games.service";
+import { HouseGamesController } from "./house-games.controller";
 
 @Module({
   imports: [AuthModule, SecurityModule, UsersModule, CommissionsModule],
-  controllers: [CasinoController],
-  providers: [CasinoService, RouletteService, BlackjackService, BookService, MinesService, PenaltyService, PlinkoService, DiceService, KenoService, CoinFlipService, ScratchService],
+  controllers: [CasinoController, HouseGamesController],
+  providers: [CasinoService, RouletteService, BlackjackService, BookService, MinesService, PenaltyService, PlinkoService, DiceService, KenoService, CoinFlipService, ScratchService, HouseService, HouseGamesService],
   exports: [CasinoService, RouletteService, BlackjackService, BookService, MinesService, PenaltyService, PlinkoService, DiceService, KenoService, CoinFlipService, ScratchService],
 })
 export class CasinoModule {}

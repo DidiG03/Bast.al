@@ -5,8 +5,8 @@
  * They can also set an automatic cash-out, which the server applies.
  *
  * The crash point is drawn when the round starts: from a uniform u in (0, 1],
- * it's 0.85/u floored to the cent, so it reaches x with probability 0.85/x
- * (so about 16% of rounds, all those that would land below 1.01×, crash at 1.00× at once). Cashing out at any x pays back 85%
+ * it's 0.75/u floored to the cent, so it reaches x with probability 0.75/x
+ * (so about 26% of rounds, all those that would land below 1.01×, crash at 1.00× at once). Cashing out at any x pays back 75%
  * on average. It's capped at 5,000×.
  *
  * The multiplier at t milliseconds after the start is e^(0.00006·t), floored
@@ -17,7 +17,7 @@
 
 export const GAME_NAME = "Crash";
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
-export const PAYOUT_RATE = 85;
+export const PAYOUT_RATE = 75;
 export const MAX_MULTIPLIER = 5000;
 /** How fast it climbs: the multiplier is e^(GROWTH · ms). */
 export const GROWTH = 0.00006;

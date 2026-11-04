@@ -1461,13 +1461,13 @@ export type PlayingCard = { rank: number; suit: number };
 
 export type WheelRisk = "LOW" | "MEDIUM" | "HIGH";
 export type WheelRecord = { game: "wheel"; risk: WheelRisk; segment: number; multiplier: number };
-export type WheelState = HouseBasics<WheelRecord> & { game: { name: string; bets: number[]; risks: WheelRisk[]; wheels: Record<WheelRisk, number[]>; payoutRate: number } };
+export type WheelState = HouseBasics<WheelRecord> & { game: { name: string; bets: number[]; risks: WheelRisk[]; wheels: Record<WheelRisk, number[]> } };
 export type WheelSpin = { id: string; balance: number; risk: WheelRisk; segment: number; multiplier: number; bet: number; win: number };
 
 export type BaccaratSide = "PLAYER" | "BANKER" | "TIE";
 export type BaccaratHand = { player: PlayingCard[]; banker: PlayingCard[]; playerTotal: number; bankerTotal: number; winner: BaccaratSide };
 export type BaccaratRecord = BaccaratHand & { game: "baccarat"; side: BaccaratSide };
-export type BaccaratState = HouseBasics<BaccaratRecord> & { game: { name: string; bets: number[]; sides: BaccaratSide[]; payoutRates: Record<BaccaratSide, number> } };
+export type BaccaratState = HouseBasics<BaccaratRecord> & { game: { name: string; bets: number[]; sides: BaccaratSide[] } };
 export type BaccaratDeal = { id: string; balance: number; side: BaccaratSide; hand: BaccaratHand; bet: number; win: number };
 
 export type HiloGuess = "HIGHER" | "LOWER" | "SKIP";
@@ -1483,7 +1483,7 @@ export type HiloRound = {
   payout: number;
 };
 export type HiloRecord = { game: "hilo"; phase: "WON" | "LOST"; steps: HiloRound["steps"]; payout: number };
-export type HiloState = HouseBasics<HiloRecord> & { round: HiloRound | null; game: { name: string; bets: number[]; payoutRate: number; maxWin: number } };
+export type HiloState = HouseBasics<HiloRecord> & { round: HiloRound | null; game: { name: string; bets: number[]; maxWin: number } };
 export type HiloMove = { round: HiloRound; balance: number };
 
 export type TowerLevel = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
@@ -1501,11 +1501,11 @@ export type TowerRound = {
 };
 export type TowerState = HouseBasics<TowerRound> & {
   round: TowerRound | null;
-  game: { name: string; bets: number[]; floors: number; levels: TowerLevel[]; shapes: Record<TowerLevel, { doors: number; traps: number }>; ladders: Record<TowerLevel, number[]>; payoutRate: number; maxWin: number };
+  game: { name: string; bets: number[]; floors: number; levels: TowerLevel[]; shapes: Record<TowerLevel, { doors: number; traps: number }>; ladders: Record<TowerLevel, number[]>; maxWin: number };
 };
 export type TowerMove = { round: TowerRound; balance: number };
 
 export type CrashRound = { bet: number; phase: "PLAY" | "WON" | "LOST"; startedAt: string; serverNow: string; auto: number | null; multiplier: number; crash: number | null; at: number | null; payout: number };
 export type CrashRecord = { game: "crash"; phase: "WON" | "LOST"; crash: number; at: number | null; auto: number | null; payout: number };
-export type CrashState = HouseBasics<CrashRecord> & { round: CrashRound | null; game: { name: string; bets: number[]; growth: number; minAuto: number; maxMultiplier: number; payoutRate: number } };
+export type CrashState = HouseBasics<CrashRecord> & { round: CrashRound | null; game: { name: string; bets: number[]; growth: number; minAuto: number; maxMultiplier: number } };
 export type CrashMove = { round: CrashRound; balance: number };

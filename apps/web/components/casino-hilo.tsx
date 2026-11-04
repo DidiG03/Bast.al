@@ -169,7 +169,7 @@ export function HiloGame() {
             <p>{t("Start a round and a card is turned. Guess whether the next card is higher or the same, or lower or the same. Aces are low, kings high.")}</p>
             <p>{t("Every card is drawn as from an endless deck: each of the 13 ranks is as likely every time. The fewer ranks your guess wins on, the more it raises the multiplier.")}</p>
             <p>{t("A wrong guess loses the stake. After a right guess you can cash out: you're paid the stake times the multiplier. You can skip a card for free.")}</p>
-            <p>{t("The multiplier is {rate}% of the fair price of your right guesses, so a round pays back {rate}% on average whatever you do. A round pays at most {max}× the stake.", { rate: state.game.payoutRate, max: state.game.maxWin })}</p>
+            <p>{t("A round pays at most {max}× the stake.", { max: state.game.maxWin })}</p>
             <p>{t("A round left alone for 30 minutes is cashed out, or the stake comes back if no right guess was made.")}</p>
           </RulesSheet>
         ) : null

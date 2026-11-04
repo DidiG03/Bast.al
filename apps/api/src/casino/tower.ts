@@ -6,16 +6,16 @@
  * cashes out by itself.
  *
  * The difficulty sets each floor: Easy is 4 doors with 1 trap, Medium 3 with
- * 1, Hard 2 with 1, Expert 3 with 2. The multiplier after k floors is 85% of
+ * 1, Hard 2 with 1, Expert 3 with 2. The multiplier after k floors is 75% of
  * the fair price of surviving them, floored to the cent, so cashing out pays
- * back 85% on average at any floor. A climb pays at most 5,000 times the
+ * back 75% on average at any floor. A climb pays at most 5,000 times the
  * stake. The traps are placed when the climb starts and shown when it ends.
  * This file is the game's whole definition, used by the API and the tests.
  */
 
 export const GAME_NAME = "Tower";
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
-export const PAYOUT_RATE = 85;
+export const PAYOUT_RATE = 75;
 export const MAX_WIN = 5000;
 export const FLOORS = 8;
 
@@ -42,12 +42,12 @@ export type Round = {
 
 export class TowerError extends Error {}
 
-/** The multiplier after `floors` safe floors, in hundredths: 85% of the fair price, floored, at most MAX_WIN. */
+/** The multiplier after `floors` safe floors, in hundredths: 75% of the fair price, floored, at most MAX_WIN. */
 export function multiplierHundredths(level: Level, floors: number): number {
   if (floors === 0) return 0;
   const { doors, traps } = LEVEL_SHAPE[level];
   const safe = doors - traps;
-  // 85 × (doors/safe)^floors, in exact whole numbers.
+  // 75 × (doors/safe)^floors, in exact whole numbers.
   const value = (BigInt(PAYOUT_RATE) * BigInt(doors) ** BigInt(floors)) / BigInt(safe) ** BigInt(floors);
   return value >= BigInt(MAX_WIN * 100) ? MAX_WIN * 100 : Number(value);
 }

@@ -165,7 +165,7 @@ export function WheelGame() {
         rules ? (
           <RulesSheet onClose={() => setRules(false)}>
             <p>{t("Pick a risk and a stake, then spin. The wheel has 30 segments, each as likely; you're paid your stake times the multiplier the pointer stops on. 0 loses the stake.")}</p>
-            <p>{t("Low risk wins small and often, high risk rarely and big. Every risk pays back {rate}% of what's staked on average.", { rate: state.game.payoutRate })}</p>
+            <p>{t("Low risk wins small and often, high risk rarely and big.")}</p>
             {state.game.risks.map((value) => (
               <p key={value}>
                 <strong>{riskName(value)}:</strong>{" "}

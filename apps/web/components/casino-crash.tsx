@@ -219,7 +219,7 @@ export function CrashGame() {
           <RulesSheet onClose={() => setRules(false)}>
             <p>{t("Place a bet and the multiplier starts climbing from 1.00×. It crashes at a point nobody can see. Cash out before it crashes and you're paid your stake times the multiplier at that moment; if it crashes first, the stake is lost.")}</p>
             <p>{t("You can set an automatic cash-out: the round cashes out by itself as soon as it reaches that multiplier, if it gets there.")}</p>
-            <p>{t("The crash point is drawn when the round starts, so it reaches 2× in about 42% of rounds, 10× in about 8.5%, and about 16% crash at 1.00× straight away. Cashing out at any multiplier pays back {rate}% on average. It goes up to {max}×.", { rate: state.game.payoutRate, max: state.game.maxMultiplier })}</p>
+            <p>{t("The crash point is drawn when the round starts, and it can crash at 1.00× straight away. It goes up to {max}×.", { max: state.game.maxMultiplier })}</p>
             <p>{t("The server's clock decides: a cash-out pays the multiplier when it reaches the server. A round left alone plays itself out.")}</p>
           </RulesSheet>
         ) : null

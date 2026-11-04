@@ -78,13 +78,13 @@ test("setup", async () => {
 test("Money Wheel: the segment's multiplier is paid, in one go, with the ledger and the journal", async () => {
   house.draw = scripted([7]);
   const spin = await games.wheelSpin(ana, 100, "HIGH");
-  assert.deepEqual([spin.segment, spin.multiplier, spin.win], [7, 20, 2000]);
-  assert.equal(spin.balance, 10000 - 100 + 2000);
-  assert.equal(await balanceOf(ana), 11900);
-  assert.equal(Number((await line("wheel", ana)).amount), 1900);
+  assert.deepEqual([spin.segment, spin.multiplier, spin.win], [7, 15, 1500]);
+  assert.equal(spin.balance, 10000 - 100 + 1500);
+  assert.equal(await balanceOf(ana), 11400);
+  assert.equal(Number((await line("wheel", ana)).amount), 1400);
   assert.equal((await line("wheel", ana)).reason, "Money Wheel: 1 spin");
   const entry = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpin: { kind: "WHEEL" } } });
-  assert.deepEqual([Number(entry.stake), Number(entry.payout), entry.ownerId, entry.managerId], [100, 2000, owner.id, manager.id]);
+  assert.deepEqual([Number(entry.stake), Number(entry.payout), entry.ownerId, entry.managerId], [100, 1500, owner.id, manager.id]);
   await assert.rejects(games.wheelSpin(ana, 75, "LOW"), /costs 50.00, 100.00/);
   assert.equal(await ledgerTotal(ana), await balanceOf(ana));
 });
@@ -94,7 +94,7 @@ test("Baccarat: a hand is dealt by the rules and paid by the side", async () => 
   const before = await balanceOf(ana);
   const hand = await games.baccaratDeal(ana, 250, "BANKER");
   const { winner } = hand.hand;
-  const expected = winner === "BANKER" ? 487.5 : winner === "TIE" ? 250 : 0;
+  const expected = winner === "BANKER" ? 357.5 : winner === "TIE" ? 250 : 0;
   assert.equal(hand.win, expected);
   assert.equal(await balanceOf(ana), before - 250 + expected);
   assert.equal(await ledgerTotal(ana), await balanceOf(ana));
@@ -115,7 +115,7 @@ test("Hi-Lo: the stake leaves at the start, a right guess and a cash-out pay, on
   assert.equal(guessed.round.phase, "PLAY");
   const done = await games.hiloCashOut(ana);
   assert.equal(done.round.phase, "WON");
-  const pays = Math.floor(100 * Math.floor((85 * 13) / 7)) / 100;
+  const pays = Math.floor(100 * Math.floor((75 * 13) / 7)) / 100;
   assert.equal(done.balance, before - 100 + pays);
   assert.equal(await prisma.casinoRound.count(), 0);
   assert.equal(await ledgerTotal(ana), await balanceOf(ana));
@@ -139,29 +139,29 @@ test("Crash: cash out on the server's clock, before the crash point", async () =
   // A minute back, so the rounds it records are in the past for the stats below.
   let clock = Date.now() - 60_000;
   house.now = () => clock;
-  // u = (high·65536 + low + 1)/2^32 with high = 32767, low = 65535: exactly 0.5, so a crash point of 0.85/0.5 = 1.70×.
+  // u = (high·65536 + low + 1)/2^32 with high = 32767, low = 65535: exactly 0.5, so a crash point of 0.75/0.5 = 1.50×.
   house.draw = scripted([32767, 65535]);
   const start = await games.crashStart(ana, 100, null);
   assert.equal(start.round.phase, "PLAY");
   assert.equal(start.round.crash, null, "the crash point isn't sent while it climbs");
-  clock += Crash.msToReach(150) + 5;
+  clock += Crash.msToReach(130) + 5;
   const check = await games.crashCheck(ana);
   assert.equal(check.round.phase, "PLAY");
   const cashed = await games.crashCashOut(ana);
-  assert.deepEqual([cashed.round.phase, cashed.round.at, cashed.round.crash], ["WON", 1.5, 1.7]);
-  assert.equal(await balanceOf(ana), before - 100 + 150);
+  assert.deepEqual([cashed.round.phase, cashed.round.at, cashed.round.crash], ["WON", 1.3, 1.5]);
+  assert.equal(await balanceOf(ana), before - 100 + 130);
 
   // Too late: it crashed first.
   house.draw = scripted([32767, 65535]);
   await games.crashStart(ana, 100, null);
-  clock += Crash.msToReach(171) + 5;
+  clock += Crash.msToReach(151) + 5;
   const late = await games.crashCashOut(ana);
-  assert.deepEqual([late.round.phase, late.round.at, late.round.payout], ["LOST", 1.7, 0]);
+  assert.deepEqual([late.round.phase, late.round.at, late.round.payout], ["LOST", 1.5, 0]);
 
   // The automatic cash-out, applied by the server even if the page never asks.
   house.draw = scripted([32767, 65535]);
   await games.crashStart(ana, 100, 1.25);
-  clock += Crash.msToReach(160);
+  clock += Crash.msToReach(140);
   const auto = await games.crashCheck(ana);
   assert.deepEqual([auto.round.phase, auto.round.at, auto.round.payout], ["WON", 1.25, 125]);
   assert.equal(await ledgerTotal(ana), await balanceOf(ana));

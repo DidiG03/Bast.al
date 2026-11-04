@@ -28,7 +28,7 @@ export class HouseGamesService {
   // ——— Money Wheel ———
 
   async wheelState(actor: Actor) {
-    return { ...(await this.house.basics(actor, "wheel", Wheel.BETS)), game: { name: Wheel.GAME_NAME, bets: Wheel.BETS, risks: Wheel.RISKS, wheels: Object.fromEntries(Wheel.RISKS.map((risk) => [risk, Wheel.WHEELS[risk].map((value) => value / 100)])), payoutRate: Wheel.PAYOUT_RATE } };
+    return { ...(await this.house.basics(actor, "wheel", Wheel.BETS)), game: { name: Wheel.GAME_NAME, bets: Wheel.BETS, risks: Wheel.RISKS, wheels: Object.fromEntries(Wheel.RISKS.map((risk) => [risk, Wheel.WHEELS[risk].map((value) => value / 100)])) } };
   }
 
   async wheelSpin(actor: Actor, bet: number, risk: string) {
@@ -44,7 +44,7 @@ export class HouseGamesService {
   // ——— Baccarat ———
 
   async baccaratState(actor: Actor) {
-    return { ...(await this.house.basics(actor, "baccarat", Baccarat.BETS)), game: { name: Baccarat.GAME_NAME, bets: Baccarat.BETS, sides: Baccarat.SIDES, payoutRates: Baccarat.PAYOUT_RATES } };
+    return { ...(await this.house.basics(actor, "baccarat", Baccarat.BETS)), game: { name: Baccarat.GAME_NAME, bets: Baccarat.BETS, sides: Baccarat.SIDES } };
   }
 
   async baccaratDeal(actor: Actor, bet: number, side: string) {
@@ -63,7 +63,7 @@ export class HouseGamesService {
 
   async hiloState(actor: Actor) {
     const [basics, open] = await Promise.all([this.house.basics(actor, "hilo", Hilo.BETS), this.house.openRound(actor.id, "hilo")]);
-    return { ...basics, round: open ? Hilo.publicView(open.state as unknown as Hilo.Round) : null, game: { name: Hilo.GAME_NAME, bets: Hilo.BETS, payoutRate: Hilo.PAYOUT_RATE, maxWin: Hilo.MAX_WIN } };
+    return { ...basics, round: open ? Hilo.publicView(open.state as unknown as Hilo.Round) : null, game: { name: Hilo.GAME_NAME, bets: Hilo.BETS, maxWin: Hilo.MAX_WIN } };
   }
 
   async hiloStart(actor: Actor, bet: number) {
@@ -96,7 +96,7 @@ export class HouseGamesService {
       ...basics,
       recent: basics.recent.map((row) => ({ ...row, round: row.round ? publicRecord(row.round as unknown as Tower.Round & { game: string }) : null })),
       round: open ? Tower.publicView(open.state as unknown as Tower.Round) : null,
-      game: { name: Tower.GAME_NAME, bets: Tower.BETS, floors: Tower.FLOORS, levels: Tower.LEVELS, shapes: Tower.LEVEL_SHAPE, ladders: Object.fromEntries(Tower.LEVELS.map((level) => [level, Tower.ladder(level)])), payoutRate: Tower.PAYOUT_RATE, maxWin: Tower.MAX_WIN },
+      game: { name: Tower.GAME_NAME, bets: Tower.BETS, floors: Tower.FLOORS, levels: Tower.LEVELS, shapes: Tower.LEVEL_SHAPE, ladders: Object.fromEntries(Tower.LEVELS.map((level) => [level, Tower.ladder(level)])), maxWin: Tower.MAX_WIN },
     };
   }
 
@@ -132,7 +132,7 @@ export class HouseGamesService {
     return {
       ...basics,
       round: open ? Crash.publicView(open.state as unknown as Crash.Round, now) : null,
-      game: { name: Crash.GAME_NAME, bets: Crash.BETS, growth: Crash.GROWTH, minAuto: Crash.MIN_AUTO, maxMultiplier: Crash.MAX_MULTIPLIER, payoutRate: Crash.PAYOUT_RATE },
+      game: { name: Crash.GAME_NAME, bets: Crash.BETS, growth: Crash.GROWTH, minAuto: Crash.MIN_AUTO, maxMultiplier: Crash.MAX_MULTIPLIER },
     };
   }
 

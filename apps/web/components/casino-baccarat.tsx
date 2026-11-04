@@ -13,7 +13,7 @@ import { formatMoney } from "../lib/format";
 const CARD_MS = 520;
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 /** What a side pays on a win, in times the stake, stake included. */
-const PAYS: Record<BaccaratSide, string> = { PLAYER: "1:1", BANKER: "0.95:1", TIE: "8:1" };
+const PAYS: Record<BaccaratSide, string> = { PLAYER: "0.47:1", BANKER: "0.43:1", TIE: "7:1" };
 
 /** Baccarat for a Player: bet on Player, Banker or Tie, and the cards are dealt by the rules. */
 export function BaccaratGame() {
@@ -142,8 +142,7 @@ export function BaccaratGame() {
             <p>{t("Bet on Player, Banker or Tie, then deal. Two hands are dealt from a fresh 8-deck shoe; the one whose total is closer to 9 wins.")}</p>
             <p>{t("Aces count 1, 2 to 9 their number, tens and pictures 0, and a hand counts only its last digit: 7 and 8 make 5.")}</p>
             <p>{t("A third card is drawn by the standard rules, nobody chooses: with 8 or 9 on two cards both stand; otherwise Player draws on 0 to 5, and Banker draws by its total and Player's third card.")}</p>
-            <p>{t("Player pays 1 to 1, Banker 0.95 to 1 (5% commission), Tie 8 to 1. On a tie, Player and Banker bets get their stake back.")}</p>
-            <p>{t("On average Player pays back {player}%, Banker {banker}% and Tie {tie}% of what's staked.", { player: state.game.payoutRates.PLAYER, banker: state.game.payoutRates.BANKER, tie: state.game.payoutRates.TIE })}</p>
+            <p>{t("Player pays 0.47 to 1, Banker 0.43 to 1, Tie 7 to 1. On a tie, Player and Banker bets get their stake back.")}</p>
           </RulesSheet>
         ) : null
       }

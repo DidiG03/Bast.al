@@ -156,7 +156,7 @@ export function TowerGame() {
             <p>{t("Pick a difficulty and a stake, then climb. Each floor has doors with traps behind some; open one door per floor, from the bottom up.")}</p>
             <p>{t("Easy: 4 doors, 1 trap. Medium: 3 doors, 1 trap. Hard: 2 doors, 1 trap. Expert: 3 doors, 2 traps.")}</p>
             <p>{t("A safe door takes you a floor higher and raises the multiplier; a trap loses the stake. Cash out after any floor; the top floor cashes out by itself.")}</p>
-            <p>{t("The multiplier is {rate}% of the fair price of the floors climbed, so a climb pays back {rate}% on average. The traps are placed when you start and shown when the climb ends. A climb pays at most {max}× the stake.", { rate: state.game.payoutRate, max: state.game.maxWin })}</p>
+            <p>{t("The traps are placed when you start and shown when the climb ends. A climb pays at most {max}× the stake.", { max: state.game.maxWin })}</p>
             <p>{t("A climb left alone for 30 minutes is cashed out, or the stake comes back if no floor was climbed.")}</p>
           </RulesSheet>
         ) : null

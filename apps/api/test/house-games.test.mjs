@@ -30,13 +30,13 @@ const scripted = (values) => {
   return () => values[i++];
 };
 
-test("Money Wheel: every risk has 30 segments paying back exactly 85%", () => {
+test("Money Wheel: every risk has 30 segments paying back exactly 75%", () => {
   for (const risk of Wheel.RISKS) {
     const wheel = Wheel.WHEELS[risk];
     assert.equal(wheel.length, 30, risk);
-    assert.equal(wheel.reduce((a, b) => a + b, 0) / wheel.length, 85, risk);
+    assert.equal(wheel.reduce((a, b) => a + b, 0) / wheel.length, 75, risk);
   }
-  assert.deepEqual(Wheel.spin("HIGH", () => 7), { segment: 7, multiplier: 2000 });
+  assert.deepEqual(Wheel.spin("HIGH", () => 7), { segment: 7, multiplier: 1500 });
   assert.equal(Wheel.winCents(10_000, 150), 15_000);
 });
 
@@ -54,10 +54,10 @@ test("Baccarat: the third-card tableau", () => {
   assert.equal(Baccarat.bankerDraws(6, c(6)), true);
   assert.equal(Baccarat.bankerDraws(6, c(5)), false);
   assert.equal(Baccarat.bankerDraws(7, c(6)), false);
-  assert.equal(Baccarat.payoutCents(10_000, "PLAYER", "PLAYER"), 20_000);
-  assert.equal(Baccarat.payoutCents(10_000, "BANKER", "BANKER"), 19_500);
+  assert.equal(Baccarat.payoutCents(10_000, "PLAYER", "PLAYER"), 14_700);
+  assert.equal(Baccarat.payoutCents(10_000, "BANKER", "BANKER"), 14_300);
   assert.equal(Baccarat.payoutCents(10_000, "BANKER", "TIE"), 10_000, "a tie returns the stake");
-  assert.equal(Baccarat.payoutCents(10_000, "TIE", "TIE"), 90_000);
+  assert.equal(Baccarat.payoutCents(10_000, "TIE", "TIE"), 80_000);
   assert.equal(Baccarat.payoutCents(10_000, "TIE", "PLAYER"), 0);
 });
 
@@ -72,16 +72,16 @@ test("Baccarat: pays back about what the rules say (200,000 hands)", () => {
   for (const side of Baccarat.SIDES) assert.ok(Math.abs(paid[side] / hands - Baccarat.PAYOUT_RATES[side]) < (side === "TIE" ? 2 : 0.6), `${side}: ${paid[side] / hands}`);
 });
 
-test("Hi-Lo: a right guess raises the multiplier by its odds; 85% on the first", () => {
+test("Hi-Lo: a right guess raises the multiplier by its odds; 75% on the first", () => {
   // A 7 showing, guess higher-or-same (7/13), the next card a king.
   let round = Hilo.startRound(10_000, scripted([6, 0]));
   assert.equal(round.steps[0].card.rank, 7);
   round = Hilo.guess(round, "HIGHER", scripted([12, 1]));
   assert.equal(round.phase, "PLAY");
-  assert.equal(Hilo.multiplierHundredths(round.num, round.den), Math.floor((85 * 13) / 7));
+  assert.equal(Hilo.multiplierHundredths(round.num, round.den), Math.floor((75 * 13) / 7));
   const won = Hilo.cashOut(round);
   assert.equal(won.phase, "WON");
-  assert.equal(won.payout, Math.floor((10_000 * Math.floor((85 * 13) / 7)) / 100));
+  assert.equal(won.payout, Math.floor((10_000 * Math.floor((75 * 13) / 7)) / 100));
   assert.throws(() => Hilo.cashOut(won), Hilo.HiloError);
 });
 
@@ -96,7 +96,7 @@ test("Hi-Lo: a wrong guess loses; skip is free; no cash-out before a right guess
   assert.equal(lost.payout, 0);
 });
 
-test("Hi-Lo: cashing out after any number of guesses pays back about 85% (simulated)", () => {
+test("Hi-Lo: cashing out after any number of guesses pays back about 75% (simulated)", () => {
   const draw = seeded(11);
   let staked = 0;
   let paid = 0;
@@ -114,15 +114,15 @@ test("Hi-Lo: cashing out after any number of guesses pays back about 85% (simula
     paid += round.payout;
   }
   const rate = (paid / staked) * 100;
-  assert.ok(rate > 83 && rate < 86, `paid back ${rate}%`);
+  assert.ok(rate > 73 && rate < 76, `paid back ${rate}%`);
 });
 
 test("Hi-Lo: the exact odds stay exact over a long round, and the cap ends it", () => {
-  assert.equal(Hilo.multiplierHundredths(13n ** 30n, 12n ** 30n), Math.floor(Number((85n * 13n ** 30n) / 12n ** 30n)));
+  assert.equal(Hilo.multiplierHundredths(13n ** 30n, 12n ** 30n), Math.floor(Number((75n * 13n ** 30n) / 12n ** 30n)));
   assert.equal(Hilo.multiplierHundredths("1000000000", "1"), Hilo.MAX_WIN * 100);
 });
 
-test("Tower: the ladder is 85% of the fair price; cashing out at any floor pays back about 85%", () => {
+test("Tower: the ladder is 75% of the fair price; cashing out at any floor pays back about 75%", () => {
   for (const level of Tower.LEVELS) {
     const { doors, traps } = Tower.LEVEL_SHAPE[level];
     const survive = (doors - traps) / doors;
@@ -130,10 +130,10 @@ test("Tower: the ladder is 85% of the fair price; cashing out at any floor pays 
       const multiplier = Tower.multiplierHundredths(level, k) / 100;
       if (multiplier >= Tower.MAX_WIN) continue;
       const rate = survive ** k * multiplier;
-      assert.ok(rate <= 0.85 + 1e-9 && rate > 0.84, `${level} floor ${k}: ${rate}`);
+      assert.ok(rate <= 0.75 + 1e-9 && rate > 0.74, `${level} floor ${k}: ${rate}`);
     }
   }
-  assert.equal(Tower.multiplierHundredths("EXPERT", 8), Tower.MAX_WIN * 100, "capped");
+  assert.equal(Tower.multiplierHundredths("EXPERT", 8), Math.floor(75 * 3 ** 8), "the top of Expert: 4,920.75×");
 });
 
 test("Tower: a trap loses, the top floor cashes out by itself, the traps stay hidden while climbing", () => {
@@ -149,17 +149,17 @@ test("Tower: a trap loses, the top floor cashes out by itself, the traps stay hi
   assert.throws(() => Tower.climb(Tower.startRound(100, "EASY", () => 0), 4), Tower.TowerError);
 });
 
-test("Crash: the crash point reaches x with chance 0.85/x; about 16% crash at once", () => {
+test("Crash: the crash point reaches x with chance 0.75/x; about 26% crash at once", () => {
   // Over a fine grid of u, the share of crash points at or above x.
   const n = 200_000;
   const points = Array.from({ length: n }, (_, i) => Crash.crashPointFor((i + 1) / n));
   for (const x of [100, 101, 150, 200, 500, 1000]) {
     const share = points.filter((p) => p >= x).length / n;
-    const expected = x === 100 ? 1 : 85 / x;
+    const expected = x === 100 ? 1 : 75 / x;
     assert.ok(Math.abs(share - expected) < 0.003, `x=${x}: ${share} vs ${expected}`);
   }
-  // Anything that would land below 1.01× crashes at 1.00× at once: 1 − 0.85/1.01, about 15.8% of rounds.
-  assert.ok(Math.abs(points.filter((p) => p === 100).length / n - (1 - 85 / 101)) < 0.003);
+  // Anything that would land below 1.01× crashes at 1.00× at once: 1 − 0.75/1.01, about 25.7% of rounds.
+  assert.ok(Math.abs(points.filter((p) => p === 100).length / n - (1 - 75 / 101)) < 0.003);
   assert.equal(Crash.crashPointFor(1e-9), Crash.MAX_MULTIPLIER * 100, "capped");
 });
 

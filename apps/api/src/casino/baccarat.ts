@@ -5,9 +5,9 @@
  * pictures 0, and a hand counts its last digit (7 + 8 = 5). A third card is
  * drawn by the fixed tableau below; nobody chooses.
  *
- * Pays: Player 1 to 1, Banker 0.95 to 1 (5% commission), Tie 8 to 1. A tie
- * returns Player and Banker stakes. Like roulette and blackjack this is the
- * table game's own edge: Player pays back about 98.8%, Banker 98.9%, Tie 85.6%.
+ * Pays: Player 0.47 to 1, Banker 0.43 to 1, Tie 7 to 1. A tie returns Player
+ * and Banker stakes. With the standard drawing rules that pays back about 75%
+ * on every side (Player 75.5%, Banker 75.1%, Tie 76.1%).
  * This file is the game's whole definition, used by the API and the tests.
  */
 
@@ -62,11 +62,11 @@ export function deal(draw: (below: number) => number): Hand {
 
 /** What a bet on `side` pays back, in cents (stake included), for the hand's winner. */
 export function payoutCents(stakeCents: number, side: Side, winner: Side): number {
-  if (side === "TIE") return winner === "TIE" ? stakeCents * 9 : 0;
+  if (side === "TIE") return winner === "TIE" ? stakeCents * 8 : 0;
   if (winner === "TIE") return stakeCents;
   if (side !== winner) return 0;
-  return side === "PLAYER" ? stakeCents * 2 : stakeCents + Math.floor((stakeCents * 95) / 100);
+  return stakeCents + Math.floor((stakeCents * (side === "PLAYER" ? 47 : 43)) / 100);
 }
 
 /** What each side pays back on average, in percent, with these rules (for the rules sheet). */
-export const PAYOUT_RATES: Record<Side, number> = { PLAYER: 98.76, BANKER: 98.94, TIE: 85.64 };
+export const PAYOUT_RATES: Record<Side, number> = { PLAYER: 75.51, BANKER: 75.1, TIE: 76.12 };

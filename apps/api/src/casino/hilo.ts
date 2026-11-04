@@ -6,16 +6,16 @@
  *
  * Cards are drawn as from an endless deck: each of the 13 ranks (ace low,
  * king high) as likely every time. On rank r, "higher or same" wins with
- * (14 − r)/13, "lower or same" with r/13. The multiplier is 85% of the fair
+ * (14 − r)/13, "lower or same" with r/13. The multiplier is 75% of the fair
  * price of every right guess so far, floored to the cent, so cashing out pays
- * back 85% on average whatever the Player does; a sure guess (higher or same
+ * back 75% on average whatever the Player does; a sure guess (higher or same
  * on an ace) adds nothing. A round pays at most 5,000 times the stake. This
  * file is the game's whole definition, used by the API and the tests.
  */
 
 export const GAME_NAME = "Hi-Lo";
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
-export const PAYOUT_RATE = 85;
+export const PAYOUT_RATE = 75;
 export const MAX_WIN = 5000;
 /** A round has at most this many guesses. */
 export const MAX_GUESSES = 30;
@@ -42,7 +42,7 @@ export class HiloError extends Error {}
 /** In how many of the 13 ranks the guess wins, on rank r. */
 export const winningRanks = (rank: number, guess: Exclude<Guess, "SKIP">) => (guess === "HIGHER" ? 14 - rank : rank);
 
-/** The multiplier, in hundredths, for a fair price num/den: 85% of it, floored, at most MAX_WIN. */
+/** The multiplier, in hundredths, for a fair price num/den: 75% of it, floored, at most MAX_WIN. */
 export function multiplierHundredths(num: string | bigint, den: string | bigint): number {
   const value = (BigInt(num) * BigInt(PAYOUT_RATE)) / BigInt(den);
   return value >= BigInt(MAX_WIN * 100) ? MAX_WIN * 100 : Number(value);

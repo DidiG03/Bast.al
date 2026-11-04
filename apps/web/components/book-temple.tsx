@@ -1,11 +1,12 @@
 /**
  * Book of Ra's temple, after the original: the dark carved stone wall behind
- * the reels and the buttons, and a column each side of the reels, behind the
- * numbered boxes. Drawn here in SVG, with no image files: the stone's grain
+ * the reels and the buttons (a picture, public/casino/book-of-ra/wall.webp),
+ * and a column each side of the reels, behind the numbered boxes. The columns
+ * and the reels' backdrop are drawn here in SVG: the stone's grain
  * is a tile of lit noise made once in the browser (book-textures; SVG noise
  * filters were slow to redraw), and the hieroglyphs are cut into it (a
  * shadow on their upper edge, light on the lower). BookTempleDefs holds what
- * the wall, the columns and the reels' backdrop share, once on the page.
+ * the columns and the reels' backdrop share, once on the page.
  */
 
 import { memo, useEffect, useState } from "react";
@@ -62,15 +63,6 @@ function TempleDefs() {
         <pattern id="bk-grain" patternUnits="userSpaceOnUse" width="256" height="256">
           {stone ? <image href={stone} width="256" height="256" /> : null}
         </pattern>
-        <radialGradient id="bk-vignette" cx="0.5" cy="0.55" r="0.75">
-          <stop offset="0.35" stopColor="#000" stopOpacity="0" />
-          <stop offset="1" stopColor="#000" stopOpacity="0.92" />
-        </radialGradient>
-        <radialGradient id="bk-lamp" cx="0.5" cy="1.08" r="0.62" gradientTransform="translate(0.5 1.08) scale(1.6 1) translate(-0.5 -1.08)">
-          <stop offset="0" stopColor="#ff9a3a" stopOpacity="0.5" />
-          <stop offset="0.45" stopColor="#c0561a" stopOpacity="0.18" />
-          <stop offset="1" stopColor="#c0561a" stopOpacity="0" />
-        </radialGradient>
         <linearGradient id="bk-lamp-up" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0.55" stopColor="#ff9a3a" stopOpacity="0" />
           <stop offset="1" stopColor="#ff9a3a" stopOpacity="0.4" />
@@ -87,41 +79,10 @@ function TempleDefs() {
   );
 }
 
-/** A recessed panel of carved hieroglyphs: shadow on its top and left inner edges, light on the bottom and right. */
-function Panel({ x, y, w, h, rows, seed, glyph = 26 }: { x: number; y: number; w: number; h: number; rows: number; seed: number; glyph?: number }) {
-  const across = Math.max(1, Math.floor((w - 20) / (glyph * 1.4)));
-  const step = (w - 20 - glyph) / Math.max(1, across - 1);
-  const down = (h - 20 - glyph * 1.2) / Math.max(1, rows - 1);
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} fill="#000" fillOpacity="0.16" />
-      <path d={`M${x} ${y + h}V${y}H${x + w}`} fill="none" stroke="#000" strokeOpacity="0.6" strokeWidth="3" />
-      <path d={`M${x + w} ${y}V${y + h}H${x}`} fill="none" stroke="#e0aa6a" strokeOpacity="0.14" strokeWidth="2" />
-      {Array.from({ length: rows }, (_, r) =>
-        row(across, seed + r * 3).map((name, i) => <Carved key={`${r}:${i}`} name={name} x={x + 10 + i * step} y={y + 10 + r * down} w={glyph} depth={0.4} />),
-      )}
-    </g>
-  );
-}
-
-/** The temple wall: big carved panels in rough stone, darker towards the edges. Fills its box. */
+/** The temple wall: a picture of the carved stone wall, cut to the box's shape from the middle. */
 function Wall() {
-  // Laid out on a fixed 1600 × 900 wall, cut to the box's shape from the middle.
-  return (
-    <svg className="book-wall" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <rect width="1600" height="900" fill="#050201" />
-      <rect width="1600" height="900" fill="url(#bk-grain)" opacity="0.2" />
-      {[0, 1, 2, 3].map((column) =>
-        [0, 1].map((band) => (
-          <Panel key={`${column}:${band}`} x={30 + column * 395} y={36 + band * 430} w={365} h={400} rows={4} seed={column * 4 + band * 7} glyph={56} />
-        )),
-      )}
-      <rect width="1600" height="900" fill="#c06a1c" opacity="0.18" style={{ mixBlendMode: "overlay" }} />
-      <rect width="1600" height="900" fill="url(#bk-vignette)" />
-      {/* A warm light from below. */}
-      <rect width="1600" height="900" fill="url(#bk-lamp)" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element -- a static picture that fills the hall
+  return <img className="book-wall" src="/casino/book-of-ra/wall.webp" alt="" draggable={false} />;
 }
 
 /**

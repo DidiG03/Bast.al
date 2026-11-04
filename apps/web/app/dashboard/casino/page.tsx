@@ -117,14 +117,9 @@ function CasinoLobby() {
             </Link>
           ) : null}
           {has("blackjack") ? (
-            <Link className="casino-tile is-blackjack" href="/dashboard/casino/blackjack">
+            <Link className="casino-tile is-blackjack has-cover" href="/dashboard/casino/blackjack">
               <span className="casino-tile-art" aria-hidden="true">
-                <span className="casino-tile-card">
-                  A<br />♠
-                </span>
-                <span className="casino-tile-card is-red">
-                  K<br />♥
-                </span>
+                <CoverArt src="/casino/blackjack.webp" fit="contain" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Blackjack")}</strong>
@@ -142,9 +137,9 @@ function CasinoLobby() {
             </Link>
           ) : null}
           {has("mines") ? (
-            <Link className="casino-tile is-mines" href="/dashboard/casino/mines">
+            <Link className="casino-tile is-mines has-cover" href="/dashboard/casino/mines">
               <span className="casino-tile-art" aria-hidden="true">
-                <MinesTileArt />
+                <CoverArt src="/casino/mines.webp" fit="cover" position="50% 62%" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Mines")}</strong>
@@ -152,9 +147,9 @@ function CasinoLobby() {
             </Link>
           ) : null}
           {has("plinko") ? (
-            <Link className="casino-tile is-plinko" href="/dashboard/casino/plinko">
+            <Link className="casino-tile is-plinko has-cover" href="/dashboard/casino/plinko">
               <span className="casino-tile-art" aria-hidden="true">
-                <PlinkoTileArt />
+                <CoverArt src="/casino/plinko.webp" fit="cover" />
               </span>
               <span className="casino-tile-body">
                 <strong>Plinko</strong>
@@ -162,9 +157,9 @@ function CasinoLobby() {
             </Link>
           ) : null}
           {has("dice") ? (
-            <Link className="casino-tile is-dice" href="/dashboard/casino/dice">
+            <Link className="casino-tile is-dice has-cover" href="/dashboard/casino/dice">
               <span className="casino-tile-art" aria-hidden="true">
-                <DiceTileArt />
+                <CoverArt src="/casino/dice.webp" fit="cover" position="50% 55%" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Dice")}</strong>
@@ -172,9 +167,9 @@ function CasinoLobby() {
             </Link>
           ) : null}
           {has("keno") ? (
-            <Link className="casino-tile is-keno" href="/dashboard/casino/keno">
+            <Link className="casino-tile is-keno has-cover" href="/dashboard/casino/keno">
               <span className="casino-tile-art" aria-hidden="true">
-                <KenoTileArt />
+                <CoverArt src="/casino/keno.webp" fit="cover" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Keno")}</strong>
@@ -182,9 +177,9 @@ function CasinoLobby() {
             </Link>
           ) : null}
           {has("coinflip") ? (
-            <Link className="casino-tile is-coin" href="/dashboard/casino/coin-flip">
+            <Link className="casino-tile is-coin has-cover" href="/dashboard/casino/coin-flip">
               <span className="casino-tile-art" aria-hidden="true">
-                <CoinTileArt />
+                <CoverArt src="/casino/coin-flip.webp" fit="contain" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Coin Flip")}</strong>
@@ -207,6 +202,21 @@ function CasinoLobby() {
   );
 }
 
+/**
+ * A game's cover picture filling its tile. A picture shaped unlike the tile (a square logo on a wide tile) is
+ * shown whole ("contain") over a blurred copy of itself, so nothing of it is cut off and there are no bare edges.
+ */
+function CoverArt({ src, fit, position }: { src: string; fit: "cover" | "contain"; position?: string }) {
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element -- small static pictures, already sized for the tile */}
+      {fit === "contain" ? <img className="casino-tile-cover-backdrop" src={src} alt="" /> : null}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className={`casino-tile-cover${fit === "contain" ? " is-contain" : ""}`} src={src} alt="" style={position ? { objectPosition: position } : undefined} />
+    </>
+  );
+}
+
 /** Book of Ra's tile: the cover picture from its art folder at once (not after the whole folder loads), or the book drawn in code if it's missing. */
 function BookTileArt() {
   const [drawn, setDrawn] = useState<string | null>(null);
@@ -217,158 +227,6 @@ function BookTileArt() {
 /** The Penalty tile: the game's own scene, waiting for the kick. */
 function PenaltyTileArt() {
   return <PenaltyScene last={null} fresh={false} call={null} canShoot={false} onShoot={() => undefined} still />;
-}
-
-/** A small field for the Mines tile: gems, one mine, the rest still covered. */
-function MinesTileArt() {
-  const cells = ["gem", "hidden", "hidden", "mine", "hidden", "hidden", "gem", "hidden", "hidden", "gem", "hidden", "hidden", "gem", "hidden", "hidden", "hidden", "hidden", "hidden", "gem", "hidden", "hidden", "mine", "hidden", "hidden", "gem"];
-  return (
-    <span className="mines-tile-preview">
-      {cells.map((cell, index) => (
-        <span key={index} className={`mines-tile-cell is-${cell}`} />
-      ))}
-    </span>
-  );
-}
-
-/** The Plinko tile: a small board of pegs, a ball on its way down, and the buckets glowing from gold to red. */
-function PlinkoTileArt() {
-  const rows = 8;
-  const gap = 22;
-  const rise = 13.5;
-  const cx = 150;
-  const top = 18;
-  const pays = [29, 4, 1.4, 0.3, 0.2, 0.3, 1.4, 4, 29];
-  // The ball's way down so far: right, left, right, right.
-  const path = [1, 0, 1, 1];
-  const ballAt = (row: number) => {
-    const rights = path.slice(0, row).reduce((sum, side) => sum + side, 0);
-    return [cx + (rights - row / 2) * gap, top + row * rise - 7.5] as const;
-  };
-  const [bx, by] = ballAt(path.length);
-  return (
-    <svg viewBox="0 0 300 150" className="plinko-tile-scene">
-      <defs>
-        <radialGradient id="pt-ball" cx="35%" cy="30%" r="70%">
-          <stop offset="0" stopColor="#fff7d6" />
-          <stop offset="0.5" stopColor="#ff5d8f" />
-          <stop offset="1" stopColor="#b0174a" />
-        </radialGradient>
-      </defs>
-      {Array.from({ length: rows }, (_, row) =>
-        Array.from({ length: row + 3 }, (_, peg) => {
-          const x = cx + (peg - (row + 2) / 2) * gap;
-          const y = top + row * rise;
-          // The pegs the ball has already bounced off.
-          const lit = row < path.length && Math.abs(ballAt(row)[0] - x) < 1;
-          return <circle key={`${row}-${peg}`} cx={x} cy={y} r={lit ? 3 : 2.4} fill={lit ? "#ffe39a" : "#dfe7f2"} />;
-        }),
-      )}
-      {path.map((_, step) => {
-        const [x, y] = ballAt(step);
-        return <circle key={step} cx={x} cy={y} r={6.5 - (path.length - step) * 0.9} fill="#ff5d8f" opacity={0.12 + step * 0.06} />;
-      })}
-      <circle cx={bx} cy={by} r="6.5" fill="url(#pt-ball)" />
-      {pays.map((pay, bucket) => {
-        const hue = 46 - (Math.abs(bucket - rows / 2) / (rows / 2)) * 56;
-        const x = cx + (bucket - rows / 2) * gap;
-        return (
-          <g key={bucket}>
-            <rect x={x - gap / 2 + 1.5} y={top + rows * rise - 2} width={gap - 3} height="15" rx="3.5" fill={`hsl(${hue} 92% 55%)`} />
-            <text x={x} y={top + rows * rise + 8.6} textAnchor="middle" fontSize="7.2" fontWeight="800" fill="#1d1206">
-              {pay}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-/** The Dice tile: two of the game's white pip dice seen from a corner, over its slider, the roll landing in the green. */
-function DiceTileArt() {
-  const pipCells: Record<number, Array<[number, number]>> = {
-    2: [[0.78, 0.22], [0.22, 0.78]],
-    3: [[0.78, 0.22], [0.5, 0.5], [0.22, 0.78]],
-    5: [[0.22, 0.22], [0.78, 0.22], [0.5, 0.5], [0.22, 0.78], [0.78, 0.78]],
-    6: [[0.22, 0.22], [0.22, 0.5], [0.22, 0.78], [0.78, 0.22], [0.78, 0.5], [0.78, 0.78]],
-  };
-  // A cube drawn from above one corner: k is half an edge's rise. Each face is the unit square mapped onto it, so its pips foreshorten with it.
-  const die = (cx: number, cy: number, k: number, faces: [number, number, number], id: string) => {
-    const w = 1.732 * k;
-    const face = (ox: number, oy: number, ux: number, uy: number, vx: number, vy: number, pips: number, fill: string) => (
-      <g>
-        <path d={`M${ox} ${oy} l${ux} ${uy} l${vx} ${vy} l${-ux} ${-uy} Z`} fill={fill} stroke="#cfd5de" strokeWidth="1.2" strokeLinejoin="round" />
-        <g transform={`matrix(${ux} ${uy} ${vx} ${vy} ${ox} ${oy})`}>
-          {pipCells[pips].map(([u, v], index) => (
-            <circle key={index} cx={u} cy={v} r="0.1" fill="#0b0c0e" />
-          ))}
-        </g>
-      </g>
-    );
-    return (
-      <g>
-        <ellipse cx={cx + 4} cy={cy + 2 * k + 5} rx={w * 1.05} ry={k * 0.55} fill="rgba(0,0,0,0.38)" />
-        {face(cx - w, cy - k, w, k, 0, 2 * k, faces[1], `url(#${id}-left)`)}
-        {face(cx, cy, w, -k, 0, 2 * k, faces[2], `url(#${id}-right)`)}
-        {face(cx - w, cy - k, w, -k, w, k, faces[0], "#ffffff")}
-      </g>
-    );
-  };
-  return (
-    <svg viewBox="0 0 300 150" className="dice-tile-scene">
-      <defs>
-        <linearGradient id="dt-a-left" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#f2f4f7" />
-          <stop offset="1" stopColor="#d9dee6" />
-        </linearGradient>
-        <linearGradient id="dt-a-right" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#e1e5ec" />
-          <stop offset="1" stopColor="#c3cad5" />
-        </linearGradient>
-      </defs>
-      {die(118, 50, 15, [6, 5, 3], "dt-a")}
-      {die(186, 46, 13, [5, 2, 6], "dt-a")}
-      <g transform="translate(30 110)">
-        <rect width="240" height="12" rx="6" fill="#ff4d5e" />
-        <rect width="132" height="12" rx="6" fill="#2fd47e" />
-        <rect x="126" y="-5" width="12" height="22" rx="3" fill="#f4f7fb" stroke="#1b2433" strokeWidth="0.8" />
-      </g>
-    </svg>
-  );
-}
-
-/** The Coin Flip tile: a gold coin in the air, crown up, turning over above a silver one lying star up. */
-function CoinTileArt() {
-  return (
-    <svg viewBox="0 0 300 150" className="coin-tile-scene">
-      <defs>
-        <radialGradient id="ct-gold" cx="0.4" cy="0.35" r="0.75">
-          <stop offset="0" stopColor="#fff2b0" />
-          <stop offset="0.55" stopColor="#f2c13b" />
-          <stop offset="1" stopColor="#a8740c" />
-        </radialGradient>
-        <radialGradient id="ct-silver" cx="0.4" cy="0.35" r="0.75">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.6" stopColor="#c9d1dc" />
-          <stop offset="1" stopColor="#7d8796" />
-        </radialGradient>
-      </defs>
-      <path d="M92 118 C 104 70, 128 40, 150 30" fill="none" stroke="rgba(255,230,160,0.35)" strokeWidth="3" strokeDasharray="2 7" strokeLinecap="round" />
-      <ellipse cx="96" cy="128" rx="40" ry="9" fill="rgba(0,0,0,0.35)" />
-      <ellipse cx="96" cy="120" rx="40" ry="12" fill="#6b7482" />
-      <ellipse cx="96" cy="116" rx="40" ry="12" fill="url(#ct-silver)" />
-      <path d="M96 108 l3 6 l7 0.6 l-5.4 4.4 l1.7 6.6 l-6.3 -3.6 l-6.3 3.6 l1.7 -6.6 l-5.4 -4.4 l7 -0.6 Z" fill="#8a94a3" transform="translate(0 -1)" />
-      <g transform="translate(184 62) rotate(-18)">
-        <ellipse cx="0" cy="5" rx="42" ry="36" fill="#7d5508" />
-        <ellipse cx="0" cy="0" rx="42" ry="36" fill="url(#ct-gold)" />
-        <ellipse cx="0" cy="0" rx="34" ry="29" fill="none" stroke="#b9860f" strokeWidth="2" />
-        <path d="M-18 10 L-21 -10 L-10 -2 L0 -16 L10 -2 L21 -10 L18 10 Z" fill="#9a6a06" />
-        <rect x="-18" y="13" width="36" height="5" rx="2" fill="#9a6a06" />
-      </g>
-      <path d="M232 36 l8 -8 M240 54 l12 -3 M226 22 l2 -11" stroke="#ffe58a" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 /** The Scratch Cards tile: a ticket half scratched, three bells showing and the rest still under silver foil. */
@@ -416,55 +274,6 @@ function ScratchTileArt() {
       </g>
       <circle cx="252" cy="104" r="15" fill="#e8c35a" stroke="#a8740c" strokeWidth="2" />
       <path d="M232 92 q-10 -6 -20 4" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/** The Keno tile: a corner of the board, the picked numbers gold, the drawn ones lit, and a few balls rolling out. */
-function KenoTileArt() {
-  const picked = new Set([3, 7, 12, 15, 19, 26]);
-  const drawn = new Set([3, 5, 9, 12, 19, 22, 28, 30]);
-  return (
-    <svg viewBox="0 0 300 150" className="keno-tile-scene">
-      {Array.from({ length: 30 }, (_, index) => {
-        const number = index + 1;
-        const x = 18 + (index % 10) * 27;
-        const y = 14 + Math.floor(index / 10) * 27;
-        const hit = picked.has(number) && drawn.has(number);
-        const fill = hit ? "#ffcf3f" : picked.has(number) ? "#7a5a12" : drawn.has(number) ? "#2b6cb0" : "rgba(255,255,255,0.08)";
-        return (
-          <g key={number}>
-            <rect x={x} y={y} width="23" height="23" rx="5" fill={fill} stroke={hit ? "#fff3c4" : "none"} strokeWidth="1.5" />
-            <text x={x + 11.5} y={y + 15.5} textAnchor="middle" fontSize="10" fontWeight="800" fill={hit ? "#3a2600" : "#e8eef6"}>
-              {number}
-            </text>
-          </g>
-        );
-      })}
-      {[
-        [62, 3, true],
-        [104, 12, true],
-        [146, 22, false],
-        [188, 19, true],
-        [230, 28, false],
-      ].map(([cx, number, hit]) => (
-        <g key={String(number)}>
-          <circle cx={Number(cx)} cy="122" r="15" fill={hit ? "url(#kt-gold)" : "url(#kt-white)"} />
-          <text x={Number(cx)} y="126.5" textAnchor="middle" fontSize="12" fontWeight="900" fill="#1b2433">
-            {String(number)}
-          </text>
-        </g>
-      ))}
-      <defs>
-        <radialGradient id="kt-gold" cx="0.35" cy="0.3" r="0.8">
-          <stop offset="0" stopColor="#fff6cf" />
-          <stop offset="1" stopColor="#e2a514" />
-        </radialGradient>
-        <radialGradient id="kt-white" cx="0.35" cy="0.3" r="0.8">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="1" stopColor="#b9c3d1" />
-        </radialGradient>
-      </defs>
     </svg>
   );
 }

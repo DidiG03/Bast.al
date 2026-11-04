@@ -7762,6 +7762,31 @@ button.is-blocked {
   overflow: hidden;
 }
 
+/* Games with a cover picture: it fills the art area edge to edge. */
+.casino-lobby .casino-tile.has-cover .casino-tile-art {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  background: #111;
+}
+
+/* A square logo on the wide tile: shown whole, over a blurred, darkened copy of itself. */
+.casino-tile-cover-backdrop {
+  position: absolute;
+  inset: -12%;
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  filter: blur(18px) brightness(0.6) saturate(1.2);
+}
+
+.casino-tile-cover.is-contain {
+  position: relative;
+  object-fit: contain;
+  animation: none;
+  background: none;
+}
+
 /* A picture still loading shows a shimmer (an image's background shows until it has drawn). */
 .casino-tile-cover {
   display: block;

@@ -119,7 +119,7 @@ function CasinoLobby() {
           {has("blackjack") ? (
             <Link className="casino-tile is-blackjack has-cover" href="/dashboard/casino/blackjack">
               <span className="casino-tile-art" aria-hidden="true">
-                <CoverArt src="/casino/blackjack.webp" fit="contain" />
+                <CoverArt src="/casino/blackjack.webp" fit="cover" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Blackjack")}</strong>
@@ -179,7 +179,7 @@ function CasinoLobby() {
           {has("coinflip") ? (
             <Link className="casino-tile is-coin has-cover" href="/dashboard/casino/coin-flip">
               <span className="casino-tile-art" aria-hidden="true">
-                <CoverArt src="/casino/coin-flip.webp" fit="contain" />
+                <CoverArt src="/casino/coin-flip.webp" fit="cover" position="50% 70%" />
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Coin Flip")}</strong>

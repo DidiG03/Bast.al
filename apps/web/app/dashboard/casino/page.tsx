@@ -36,13 +36,13 @@ export default function CasinoPage() {
   return me.role === "PLAYER" ? <CasinoLobby /> : <CasinoOverview me={me} />;
 }
 
-/** The new games' tiles: key, page, name and icon. */
+/** The new games' tiles: key, page, name and where their cover picture is centred. */
 const NEW_GAMES: Array<[CasinoGame, string, string, string]> = [
-  ["crash", "/dashboard/casino/crash", "Crash", "🚀"],
-  ["baccarat", "/dashboard/casino/baccarat", "Baccarat", "🂡"],
-  ["hilo", "/dashboard/casino/hilo", "Hi-Lo", "⇅"],
-  ["wheel", "/dashboard/casino/wheel", msg("Money Wheel"), "🎡"],
-  ["tower", "/dashboard/casino/tower", msg("Tower"), "🗼"],
+  ["crash", "/dashboard/casino/crash", "Crash", "50% 45%"],
+  ["baccarat", "/dashboard/casino/baccarat", "Baccarat", "50% 30%"],
+  ["hilo", "/dashboard/casino/hilo", "Hi-Lo", "50% 30%"],
+  ["wheel", "/dashboard/casino/wheel", msg("Money Wheel"), "50% 30%"],
+  ["tower", "/dashboard/casino/tower", msg("Tower"), "50% 30%"],
 ];
 
 /** Crash, Baccarat, Hi-Lo, Money Wheel and Tower, in the lobby's order. */
@@ -202,14 +202,11 @@ function CasinoLobby() {
               </span>
             </Link>
           ) : null}
-          {/* Crash, Baccarat, Hi-Lo, Money Wheel and Tower: drawn covers until they have pictures of their own. */}
-          {NEW_GAMES.filter(([key]) => has(key)).map(([key, href, name, icon]) => (
+          {/* Crash, Baccarat, Hi-Lo, Money Wheel and Tower. */}
+          {NEW_GAMES.filter(([key]) => has(key)).map(([key, href, name, position]) => (
             <Link key={key} className={`casino-tile is-${key} has-cover`} href={href}>
               <span className="casino-tile-art" aria-hidden="true">
-                <span className={`casino-drawn-cover is-${key}`}>
-                  <span className="casino-drawn-icon">{icon}</span>
-                  <span className="casino-drawn-name">{key === "wheel" || key === "tower" ? t(name) : name}</span>
-                </span>
+                <CoverArt src={`/casino/${key}.webp`} fit="cover" position={position} />
               </span>
               <span className="casino-tile-body">
                 <strong>{key === "wheel" || key === "tower" ? t(name) : name}</strong>

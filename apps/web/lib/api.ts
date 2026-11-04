@@ -832,7 +832,9 @@ export type CasinoFreeSpins = { remaining: number; bet: number };
 
 /** The Player's Casino: whether they can play (`closed` says why not), the rules, and where they stand. */
 /** Every Casino game, by the key its switches use (the API's CASINO_GAMES). */
-export type CasinoGame = "slot" | "book" | "roulette" | "blackjack" | "penalty" | "mines" | "plinko" | "dice" | "keno" | "coinflip" | "scratch";
+export type CasinoGame = "slot" | "book" | "roulette" | "blackjack" | "penalty" | "mines" | "plinko" | "dice" | "keno" | "coinflip" | "scratch" | HouseGameKey;
+/** Crash, Baccarat, Hi-Lo, Money Wheel and Tower. */
+export type HouseGameKey = "crash" | "baccarat" | "hilo" | "wheel" | "tower";
 
 export type CasinoState = {
   /** Why the slot can't be played (the Casino's reason, or the slot being off), or null. */
@@ -921,7 +923,7 @@ export type CasinoAdmin = {
   teamGamesOff: CasinoGame[] | null;
   totals: { spins: number; staked: number; won: number; net: number; payoutRate: number | null };
   /** Each game on its own: the slot (spins and double or nothing), roulette, blackjack (`spins` are its hands), Mines and Penalty (`spins` are their rounds), Plinko (`spins` are its balls), Dice (`spins` are its rolls), Keno (`spins` are its rounds), Coin Flip (`spins` are its flips) and Scratch Cards (`spins` are its cards). */
-  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch", { spins: number; freeSpins?: number; staked: number; won: number; payoutRate: number | null }> & {
+  games: Record<"slot" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch" | HouseGameKey, { spins: number; freeSpins?: number; staked: number; won: number; payoutRate: number | null }> & {
     /** Book of Ra: paid spins and free ones, with double or nothing on its wins. */
     book: { spins: number; freeSpins: number; staked: number; won: number; payoutRate: number | null };
   };
@@ -939,6 +941,8 @@ export type CasinoAdmin = {
     keno: { rounds: number; staked: number; won: number };
     coinFlip: { flips: number; staked: number; won: number };
     scratch: { cards: number; staked: number; won: number };
+    /** Crash, Baccarat, Hi-Lo, Money Wheel and Tower. Missing from an API older than the website. */
+    house?: Record<HouseGameKey, { rounds: number; staked: number; won: number }>;
     staked: number;
     won: number;
     net: number;
@@ -1067,7 +1071,7 @@ export type BlackjackState = {
 
 export type BlackjackMoveResult = { round: BlackjackRoundView; balance: number };
 
-export type CasinoGameKey = "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch";
+export type CasinoGameKey = "slot" | "book" | "roulette" | "blackjack" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch" | HouseGameKey;
 
 /** The home page's "Continue playing": a round still in play, or the game played last. */
 export type CasinoLastGame = {
@@ -1448,3 +1452,60 @@ export type ScratchBuyResult = {
   balance: number;
   seed: DiceSeed;
 };
+
+/** A round of Crash, Baccarat, Hi-Lo, Money Wheel or Tower as kept in the history; `round` is the game's record. */
+export type HouseRecent<R> = { id: string; bet: number; win: number; round: R | null; createdAt: string };
+export type HouseBasics<R> = { closed: string | null; balance: number; tableMax: number; recent: Array<HouseRecent<R>> };
+
+export type PlayingCard = { rank: number; suit: number };
+
+export type WheelRisk = "LOW" | "MEDIUM" | "HIGH";
+export type WheelRecord = { game: "wheel"; risk: WheelRisk; segment: number; multiplier: number };
+export type WheelState = HouseBasics<WheelRecord> & { game: { name: string; bets: number[]; risks: WheelRisk[]; wheels: Record<WheelRisk, number[]>; payoutRate: number } };
+export type WheelSpin = { id: string; balance: number; risk: WheelRisk; segment: number; multiplier: number; bet: number; win: number };
+
+export type BaccaratSide = "PLAYER" | "BANKER" | "TIE";
+export type BaccaratHand = { player: PlayingCard[]; banker: PlayingCard[]; playerTotal: number; bankerTotal: number; winner: BaccaratSide };
+export type BaccaratRecord = BaccaratHand & { game: "baccarat"; side: BaccaratSide };
+export type BaccaratState = HouseBasics<BaccaratRecord> & { game: { name: string; bets: number[]; sides: BaccaratSide[]; payoutRates: Record<BaccaratSide, number> } };
+export type BaccaratDeal = { id: string; balance: number; side: BaccaratSide; hand: BaccaratHand; bet: number; win: number };
+
+export type HiloGuess = "HIGHER" | "LOWER" | "SKIP";
+export type HiloRound = {
+  bet: number;
+  phase: "PLAY" | "WON" | "LOST";
+  steps: Array<{ card: PlayingCard; guess: HiloGuess | null; correct: boolean | null }>;
+  multiplier: number;
+  canCashOut: boolean;
+  cashOutNow: number;
+  higher: { chance: number; multiplier: number };
+  lower: { chance: number; multiplier: number };
+  payout: number;
+};
+export type HiloRecord = { game: "hilo"; phase: "WON" | "LOST"; steps: HiloRound["steps"]; payout: number };
+export type HiloState = HouseBasics<HiloRecord> & { round: HiloRound | null; game: { name: string; bets: number[]; payoutRate: number; maxWin: number } };
+export type HiloMove = { round: HiloRound; balance: number };
+
+export type TowerLevel = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
+export type TowerRound = {
+  bet: number;
+  level: TowerLevel;
+  phase: "PLAY" | "WON" | "LOST";
+  picks: number[];
+  traps: number[][] | null;
+  floors: number;
+  multiplier: number;
+  nextMultiplier: number | null;
+  cashOutNow: number;
+  payout: number;
+};
+export type TowerState = HouseBasics<TowerRound> & {
+  round: TowerRound | null;
+  game: { name: string; bets: number[]; floors: number; levels: TowerLevel[]; shapes: Record<TowerLevel, { doors: number; traps: number }>; ladders: Record<TowerLevel, number[]>; payoutRate: number; maxWin: number };
+};
+export type TowerMove = { round: TowerRound; balance: number };
+
+export type CrashRound = { bet: number; phase: "PLAY" | "WON" | "LOST"; startedAt: string; serverNow: string; auto: number | null; multiplier: number; crash: number | null; at: number | null; payout: number };
+export type CrashRecord = { game: "crash"; phase: "WON" | "LOST"; crash: number; at: number | null; auto: number | null; payout: number };
+export type CrashState = HouseBasics<CrashRecord> & { round: CrashRound | null; game: { name: string; bets: number[]; growth: number; minAuto: number; maxMultiplier: number; payoutRate: number } };
+export type CrashMove = { round: CrashRound; balance: number };

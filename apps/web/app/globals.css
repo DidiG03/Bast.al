@@ -18879,3 +18879,246 @@ button.cab-field-box:disabled {
   justify-self: start;
   align-self: start;
 }
+
+/* ——— Crash, Baccarat, Hi-Lo, Money Wheel and Tower (components/house-game.tsx and casino-*.tsx) ——— */
+
+.house-cabinet.is-crash { background: radial-gradient(ellipse at 50% 0%, #2d2350, #15122a 60%, #0b0a16); }
+.house-cabinet.is-crash .house-marquee { background: linear-gradient(180deg, #4b3a86, #241b48 60%, #15122a); }
+.house-cabinet.is-baccarat { background: radial-gradient(ellipse at 50% 20%, #13734a, #0b4a2f 60%, #062818); }
+.house-cabinet.is-baccarat .house-marquee { background: linear-gradient(180deg, #1c8a59, #0e5537 60%, #0b4a2f); }
+.house-cabinet.is-hilo { background: radial-gradient(ellipse at 50% 10%, #3b2a52, #1d1530 60%, #0f0b1a); }
+.house-cabinet.is-hilo .house-marquee { background: linear-gradient(180deg, #5b3f85, #2d1f47 60%, #1d1530); }
+.house-cabinet.is-wheel { background: radial-gradient(ellipse at 50% 30%, #3a2a10, #1c150a 60%, #0e0a05); }
+.house-cabinet.is-wheel .house-marquee { background: linear-gradient(180deg, #7a5a14, #3d2c0b 60%, #1c150a); }
+.house-cabinet.is-tower { background: radial-gradient(ellipse at 50% 0%, #1f3b4d, #102230 60%, #08121a); }
+.house-cabinet.is-tower .house-marquee { background: linear-gradient(180deg, #2c5a73, #163346 60%, #102230); }
+
+.house-stage { align-items: stretch; }
+
+.house-result {
+  min-height: 1.5em;
+  margin: 0;
+  color: #c4cfdf;
+  font-weight: 800;
+  text-align: center;
+}
+
+.house-result.is-win { color: var(--dice-win); }
+.house-result.is-loss { color: var(--dice-loss); }
+
+.house-choices {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: 12px;
+  background: rgba(4, 7, 12, 0.55);
+}
+
+.house-choices button {
+  min-height: 44px;
+  padding: 0.45rem 0.3rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #b8c4d6;
+  font-weight: 800;
+}
+
+.house-choices button.is-on { background: #33445f; color: #fff; }
+
+.house-choice-two { display: grid; gap: 0.1rem; }
+.house-choice-two small { color: #f2c230; font-size: 0.75rem; }
+
+.dice-go.is-cashout {
+  background: linear-gradient(180deg, #ffd45c, #f0a020);
+  box-shadow: 0 6px 18px rgba(240, 160, 32, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  color: #2a1a00;
+}
+
+/* A playing card. */
+.house-card {
+  display: inline-grid;
+  place-items: center;
+  align-content: center;
+  width: 4.2rem;
+  height: 5.9rem;
+  border-radius: 0.55rem;
+  background: linear-gradient(180deg, #ffffff, #eef0f4);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  color: #11131a;
+  font-weight: 900;
+  line-height: 1;
+  animation: house-card-in 260ms ease-out;
+}
+
+.house-card.is-red { color: #d4202f; }
+.house-card-rank { font-size: 1.5rem; }
+.house-card-suit { font-size: 1.6rem; }
+.house-card.is-small { width: 2.3rem; height: 3.2rem; border-radius: 0.35rem; }
+.house-card.is-small .house-card-rank { font-size: 0.85rem; }
+.house-card.is-small .house-card-suit { font-size: 0.9rem; }
+.house-card.is-back { background: repeating-linear-gradient(45deg, #2a3b78 0 6px, #1d2a58 6px 12px); border: 3px solid #fff; animation: none; }
+.house-card.is-win { box-shadow: 0 0 0 3px var(--dice-win), 0 6px 14px rgba(0, 0, 0, 0.35); }
+.house-card.is-loss { box-shadow: 0 0 0 3px var(--dice-loss), 0 6px 14px rgba(0, 0, 0, 0.35); }
+
+@keyframes house-card-in {
+  from { transform: translateY(-14px) rotate(-4deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .house-card { animation: none; }
+}
+
+/* Money Wheel. */
+.wheel-stage { display: grid; justify-items: center; gap: 0.8rem; }
+.wheel-scene { position: relative; width: min(19rem, 78vw); aspect-ratio: 1; }
+.wheel-svg { width: 100%; height: 100%; transition-property: transform; transition-timing-function: cubic-bezier(0.12, 0.7, 0.15, 1); }
+.wheel-pointer {
+  position: absolute;
+  top: -0.35rem;
+  left: 50%;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  border-right: 0.8rem solid transparent;
+  border-left: 0.8rem solid transparent;
+  border-top: 1.4rem solid #f2c230;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+  transform: translateX(-50%);
+}
+.wheel-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; }
+.wheel-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.wheel-legend i { width: 0.6rem; height: 0.6rem; border-radius: 50%; }
+.wheel-legend small { color: #9aa6ba; }
+
+/* Baccarat. */
+.baccarat-table { display: grid; gap: 0.8rem; }
+.baccarat-hand {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.baccarat-hand.is-winner { border-color: #f2c230; box-shadow: 0 0 18px rgba(242, 194, 48, 0.35); }
+.baccarat-hand-head { display: flex; align-items: center; justify-content: space-between; }
+.baccarat-total {
+  display: grid;
+  place-items: center;
+  min-width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  background: #f2c230;
+  color: #2a1a00;
+  font-weight: 900;
+}
+.baccarat-cards { display: flex; gap: 0.45rem; min-height: 5.9rem; }
+
+/* Hi-Lo. */
+.hilo-stage { display: grid; justify-items: center; gap: 0.7rem; }
+.hilo-trail { display: flex; gap: 0.3rem; min-height: 3.2rem; opacity: 0.85; }
+.hilo-current .house-card { width: 6.2rem; height: 8.6rem; }
+.hilo-current .house-card-rank { font-size: 2.2rem; }
+.hilo-current .house-card-suit { font-size: 2.4rem; }
+.hilo-multiplier { display: grid; justify-items: center; }
+.hilo-multiplier small { color: #9aa6ba; }
+.hilo-multiplier strong { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.hilo-guesses { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.hilo-guess {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 64px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 900;
+}
+.hilo-guess small { opacity: 0.85; font-weight: 700; }
+.hilo-guess.is-higher { background: linear-gradient(180deg, #34c47c, #1d8a52); }
+.hilo-guess.is-lower { background: linear-gradient(180deg, #e0505e, #a82a37); }
+.hilo-guess:disabled { opacity: 0.45; }
+.hilo-skip { min-height: 44px; }
+
+/* Tower. */
+.tower-stage { display: grid; gap: 0.7rem; }
+.tower-grid { display: grid; gap: 0.35rem; }
+.tower-floor {
+  display: grid;
+  grid-template-columns: 4.2rem repeat(var(--doors), 1fr);
+  align-items: center;
+  gap: 0.35rem;
+  opacity: 0.6;
+}
+.tower-floor.is-current, .tower-floor.is-climbed { opacity: 1; }
+.tower-pay { color: #9fd6ff; font-size: 0.85rem; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; }
+.tower-door {
+  height: 2.5rem;
+  border: 0;
+  border-radius: 9px;
+  background: #24384a;
+  color: #fff;
+  font-size: 1.15rem;
+}
+.tower-floor.is-current .tower-door:not(:disabled) { background: linear-gradient(180deg, #3d6b8a, #2a4d66); box-shadow: 0 0 0 2px #9fd6ff inset; cursor: pointer; }
+.tower-door.is-safe { background: #1d8a52; }
+.tower-door.is-trap { background: #a82a37; }
+.tower-door.is-trap-shown { background: rgba(168, 42, 55, 0.45); }
+.tower-door.is-safe-shown { background: rgba(29, 138, 82, 0.25); }
+
+/* Crash. */
+.crash-stage { display: grid; gap: 0.6rem; }
+.crash-history { display: flex; flex-wrap: wrap; gap: 0.3rem; min-height: 1.6rem; }
+.crash-history span { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.crash-history .is-high { background: rgba(47, 212, 126, 0.18); color: #6ff0aa; }
+.crash-history .is-low { background: rgba(255, 77, 94, 0.18); color: #ff8a95; }
+.crash-screen {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: clamp(13rem, 42vw, 18rem);
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.25)), repeating-linear-gradient(0deg, transparent 0 39px, rgba(255, 255, 255, 0.05) 39px 40px);
+}
+.crash-curve { position: absolute; inset: 0.5rem; width: calc(100% - 1rem); height: calc(100% - 1rem); }
+.crash-curve polyline { stroke: #8b6cff; filter: drop-shadow(0 0 6px rgba(139, 108, 255, 0.7)); }
+.crash-curve.is-crashed polyline { stroke: #ff4d5e; filter: drop-shadow(0 0 6px rgba(255, 77, 94, 0.7)); }
+.crash-multiplier { position: relative; display: grid; justify-items: center; gap: 0.25rem; text-align: center; }
+.crash-multiplier strong { font-size: clamp(2.6rem, 11vw, 4.2rem); font-variant-numeric: tabular-nums; text-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
+.crash-multiplier span { color: #c4cfdf; font-weight: 700; }
+.crash-screen.is-crashed .crash-multiplier strong { color: var(--dice-loss); }
+.crash-screen.is-won .crash-multiplier strong { color: var(--dice-win); }
+.crash-cashout { min-height: 64px; font-size: 1.2rem; }
+
+/* The lobby's drawn covers for the new games. */
+.casino-drawn-cover {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.2rem;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+  text-align: center;
+}
+.casino-drawn-icon { font-size: clamp(2rem, 7vw, 2.8rem); line-height: 1; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4)); }
+.casino-drawn-name { font-size: clamp(1.3rem, 4.5vw, 1.9rem); font-weight: 900; letter-spacing: 0.02em; text-shadow: 0 3px 10px rgba(0, 0, 0, 0.5); }
+.casino-drawn-cover.is-crash { background: radial-gradient(circle at 30% 70%, #ff6a3d, transparent 45%), linear-gradient(135deg, #2b1a6b, #6a2bd1); }
+.casino-drawn-cover.is-baccarat { background: radial-gradient(circle at 50% 40%, #1fae62, #0b4a2f 70%); }
+.casino-drawn-cover.is-hilo { background: linear-gradient(135deg, #5b2bd1, #d12b7a); }
+.casino-drawn-cover.is-wheel { background: conic-gradient(#f2c230, #f08a24, #8b4fe0, #2f7de1, #2fb36b, #f2c230); }
+.casino-drawn-cover.is-wheel .casino-drawn-name { padding: 0.15rem 0.7rem; border-radius: 10px; background: rgba(0, 0, 0, 0.55); }
+.casino-drawn-cover.is-tower { background: linear-gradient(180deg, #0f2a40, #2c5a73 60%, #9fd6ff); }

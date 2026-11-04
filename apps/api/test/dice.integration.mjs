@@ -245,14 +245,14 @@ test("single games switch off: Super Admin's for the whole site (hidden from Own
   await assert.rejects(casino.setGame({ id: dan.id, role: "PLAYER", parentId: dan.parentId }, "keno", false), /Only Super Admin and Owners/);
 
   // Every game off: the Casino tab goes away.
-  for (const game of ["book", "roulette", "blackjack", "penalty", "mines", "plinko", "keno", "coinflip", "scratch"]) await casino.setGame(ownerActor, game, false);
+  for (const game of ["book", "roulette", "blackjack", "penalty", "mines", "plinko", "keno", "coinflip", "scratch", "crash", "baccarat", "hilo", "wheel", "tower"]) await casino.setGame(ownerActor, game, false);
   assert.deepEqual((await casino.state(actor)).games, []);
   assert.equal((await users.me(actor, false)).casinoOpen, false);
 
   // Back on.
-  for (const game of ["slot", "book", "roulette", "blackjack", "penalty", "mines", "plinko", "keno", "coinflip", "scratch"]) await casino.setGame(ownerActor, game, true);
+  for (const game of ["slot", "book", "roulette", "blackjack", "penalty", "mines", "plinko", "keno", "coinflip", "scratch", "crash", "baccarat", "hilo", "wheel", "tower"]) await casino.setGame(ownerActor, game, true);
   await casino.setGame(saActor, "dice", true);
-  assert.equal((await casino.state(actor)).games.length, 11);
+  assert.equal((await casino.state(actor)).games.length, 16);
   assert.equal((await dice.state(dan)).closed, null);
 });
 

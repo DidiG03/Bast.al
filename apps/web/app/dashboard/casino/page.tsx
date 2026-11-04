@@ -36,6 +36,18 @@ export default function CasinoPage() {
   return me.role === "PLAYER" ? <CasinoLobby /> : <CasinoOverview me={me} />;
 }
 
+/** The new games' tiles: key, page, name and icon. */
+const NEW_GAMES: Array<[CasinoGame, string, string, string]> = [
+  ["crash", "/dashboard/casino/crash", "Crash", "🚀"],
+  ["baccarat", "/dashboard/casino/baccarat", "Baccarat", "🂡"],
+  ["hilo", "/dashboard/casino/hilo", "Hi-Lo", "⇅"],
+  ["wheel", "/dashboard/casino/wheel", msg("Money Wheel"), "🎡"],
+  ["tower", "/dashboard/casino/tower", msg("Tower"), "🗼"],
+];
+
+/** Crash, Baccarat, Hi-Lo, Money Wheel and Tower, in the lobby's order. */
+const HOUSE_KEYS = ["crash", "baccarat", "hilo", "wheel", "tower"] as const;
+
 /** The games' names on the staff switches; the slots keep their own names. */
 const GAME_LABELS: Record<CasinoGame, string> = {
   slot: "Sizzling Hot",
@@ -49,6 +61,11 @@ const GAME_LABELS: Record<CasinoGame, string> = {
   keno: msg("Keno"),
   coinflip: msg("Coin Flip"),
   scratch: msg("Scratch Cards"),
+  crash: "Crash",
+  baccarat: "Baccarat",
+  hilo: "Hi-Lo",
+  wheel: msg("Money Wheel"),
+  tower: msg("Tower"),
 };
 
 /** The Player's lobby: one tile per game. */
@@ -185,6 +202,20 @@ function CasinoLobby() {
               </span>
             </Link>
           ) : null}
+          {/* Crash, Baccarat, Hi-Lo, Money Wheel and Tower: drawn covers until they have pictures of their own. */}
+          {NEW_GAMES.filter(([key]) => has(key)).map(([key, href, name, icon]) => (
+            <Link key={key} className={`casino-tile is-${key} has-cover`} href={href}>
+              <span className="casino-tile-art" aria-hidden="true">
+                <span className={`casino-drawn-cover is-${key}`}>
+                  <span className="casino-drawn-icon">{icon}</span>
+                  <span className="casino-drawn-name">{key === "wheel" || key === "tower" ? t(name) : name}</span>
+                </span>
+              </span>
+              <span className="casino-tile-body">
+                <strong>{key === "wheel" || key === "tower" ? t(name) : name}</strong>
+              </span>
+            </Link>
+          ))}
           {has("scratch") ? (
             <Link className="casino-tile is-scratch has-cover" href="/dashboard/casino/scratch">
               <span className="casino-tile-art" aria-hidden="true">
@@ -406,7 +437,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
       </nav>
 
       <div className="report-grid">
-        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins + data.games.dice.spins + data.games.keno.spins + data.games.coinflip.spins + data.games.scratch.spins)} hint={tn(players.length, "{count} Player", "{count} Players")} />
+        <Stat label={t("Spins and rounds")} value={String(data.totals.spins + data.games.roulette.spins + data.games.blackjack.spins + data.games.book.spins + data.games.mines.spins + data.games.penalty.spins + data.games.plinko.spins + data.games.dice.spins + data.games.keno.spins + data.games.coinflip.spins + data.games.scratch.spins + HOUSE_KEYS.reduce((sum, key) => sum + (data.games[key]?.spins ?? 0), 0))} hint={tn(players.length, "{count} Player", "{count} Players")} />
         <Stat label={t("Staked")} value={formatMoney(data.totals.staked)} hint={t("What spins and rounds cost")} />
         <Stat label={t("Paid out")} value={formatMoney(data.totals.won)} hint={data.totals.payoutRate === null ? t("No spins yet") : t("{rate}% of what was staked", { rate: data.totals.payoutRate })} />
         <Stat label={t("Casino profit")} help="What Players lost in the Casino minus what they won. It's part of the team's profit in Commissions." value={formatSignedMoney(data.totals.net)} highlight={data.totals.net < 0 ? "bad" : "good"} />
@@ -428,9 +459,14 @@ function CasinoOverview({ me }: { me: MeResponse }) {
               ["keno", t("Keno"), tn(data.games.keno.spins, "{count} round", "{count} rounds")],
               ["coinflip", t("Coin Flip"), tn(data.games.coinflip.spins, "{count} flip", "{count} flips")],
               ["scratch", t("Scratch Cards"), tn(data.games.scratch.spins, "{count} card", "{count} cards")],
+              ["crash", "Crash", tn(data.games.crash?.spins ?? 0, "{count} round", "{count} rounds")],
+              ["baccarat", "Baccarat", tn(data.games.baccarat?.spins ?? 0, "{count} hand", "{count} hands")],
+              ["hilo", "Hi-Lo", tn(data.games.hilo?.spins ?? 0, "{count} round", "{count} rounds")],
+              ["wheel", t("Money Wheel"), tn(data.games.wheel?.spins ?? 0, "{count} spin", "{count} spins")],
+              ["tower", t("Tower"), tn(data.games.tower?.spins ?? 0, "{count} climb", "{count} climbs")],
             ] as const
           ).map(([key, name, count]) => {
-            const game = data.games[key];
+            const game = data.games[key] ?? { spins: 0, staked: 0, won: 0, payoutRate: null };
             const profit = Math.round((game.staked - game.won) * 100) / 100;
             return (
               <div className="report-list-row" key={key}>
@@ -469,7 +505,8 @@ function CasinoOverview({ me }: { me: MeResponse }) {
                     {player.dice.rolls > 0 ? ` · ${tn(player.dice.rolls, "{count} dice roll", "{count} dice rolls")}` : ""}
                     {player.keno.rounds > 0 ? ` · ${tn(player.keno.rounds, "{count} Keno round", "{count} Keno rounds")}` : ""}
                     {player.coinFlip.flips > 0 ? ` · ${tn(player.coinFlip.flips, "{count} coin flip", "{count} coin flips")}` : ""}
-                    {player.scratch.cards > 0 ? ` · ${tn(player.scratch.cards, "{count} scratch card", "{count} scratch cards")}` : ""} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
+                    {player.scratch.cards > 0 ? ` · ${tn(player.scratch.cards, "{count} scratch card", "{count} scratch cards")}` : ""}
+                    {HOUSE_KEYS.map((key) => (player.house?.[key].rounds ? ` · ${t(GAME_LABELS[key])}: ${player.house[key].rounds}` : "")).join("")} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
                   </span>
                 </div>
                 <strong className={player.net < 0 ? "is-bad" : undefined}>{formatSignedMoney(player.net)}</strong>

@@ -14,10 +14,7 @@ const RECHECK_MS = 2 * 60_000;
  * Display only: nothing here feeds pauses, prices or bet acceptance. It loads
  * nothing until the panel is near the screen, and the API decides whether to
  * show it at all (the LIVE_TRACKER_ENABLED switch, a confident match id).
- * SportScore's terms (sportscore.com/developers/terms/) ask for a visible
- * dofollow "Powered by SportScore" link on every page with the widget: it is
- * part of the panel and is shown whenever the frame is. Their tracker fills
- * the frame's height and needs at least 360px.
+ * Their tracker fills the frame's height and needs at least 360px.
  */
 export function LiveTracker({ eventId, name }: { eventId: string; name: string }) {
   const { getToken } = useAuth();
@@ -63,7 +60,6 @@ export function LiveTracker({ eventId, name }: { eventId: string; name: string }
   if (!view?.show) return view ? null : <div ref={box} className="live-tracker-probe" aria-hidden="true" />;
   return (
     <section className="live-tracker" aria-label={t("Live tracker")}>
-      <h3 className="odds-market-group-title live-tracker-title">{t("Live tracker")}</h3>
       <div className={`live-tracker-frame${loaded ? " is-loaded" : ""}`}>
         <iframe
           key={view.src}
@@ -75,12 +71,6 @@ export function LiveTracker({ eventId, name }: { eventId: string; name: string }
           onLoad={() => setLoaded(true)}
         />
       </div>
-      <p className="live-tracker-credit">
-        {/* SportScore's required badge, as their terms give it: a real dofollow link, never hidden. */}
-        <a href={view.attributionUrl} rel="dofollow noopener" target="_blank" title="Sports data by SportScore">
-          Powered by SportScore
-        </a>
-      </p>
     </section>
   );
 }

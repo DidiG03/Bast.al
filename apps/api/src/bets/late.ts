@@ -282,7 +282,13 @@ export function goalsHelp(marketKey: string, selectionKey: string | undefined, b
   if (/^(h1_|h2_)?btts$/.test(marketKey)) return key === "yes" && ((before.home === 0 && home > 0) || (before.away === 0 && away > 0));
   if (marketKey === "clean_sheet_home") return key === "no" && away > before.away;
   if (marketKey === "clean_sheet_away") return key === "no" && home > before.home;
-  if (marketKey === "odd_even") return key === ((home + away) % 2 === 1 ? "odd" : "even");
+  if (marketKey === "home_scores" || marketKey === "h2_home_scores") return key === "yes" && home > before.home;
+  if (marketKey === "away_scores" || marketKey === "h2_away_scores") return key === "yes" && away > before.away;
+  if (marketKey === "odd_even" || marketKey === "home_odd_even" || marketKey === "away_odd_even") {
+    if (marketKey === "home_odd_even") return key === (home % 2 === 1 ? "odd" : "even") && home !== before.home;
+    if (marketKey === "away_odd_even") return key === (away % 2 === 1 ? "odd" : "even") && away !== before.away;
+    return key === ((home + away) % 2 === 1 ? "odd" : "even");
+  }
   return true;
 }
 

@@ -8,6 +8,7 @@ import { liveMinute } from "../lib/live";
 import { usePolling } from "../lib/use-polling";
 import { useI18n } from "./i18n-provider";
 import { LoadingSpinner } from "./loading-spinner";
+import { TeamCrest } from "./team-crest";
 
 const ICON: Record<MatchMoment["kind"], string> = {
   goal: "⚽",
@@ -90,7 +91,19 @@ type CentreTab = "summary" | "stats" | "lineups";
  * (newest first), every number the feed has as bars, home against away, and
  * the line-ups once they're out. A tab with nothing in it isn't offered.
  */
-export function MatchCentreBody({ centre, homeName, awayName }: { centre: MatchCentreData; homeName: string; awayName: string }) {
+export function MatchCentreBody({
+  centre,
+  homeName,
+  awayName,
+  homeLogo,
+  awayLogo,
+}: {
+  centre: MatchCentreData;
+  homeName: string;
+  awayName: string;
+  homeLogo?: string | null;
+  awayLogo?: string | null;
+}) {
   const { t } = useI18n();
   const stats = statsOf(centre);
   const tabs = (
@@ -105,10 +118,20 @@ export function MatchCentreBody({ centre, homeName, awayName }: { centre: MatchC
   if (!tab) return null;
   return (
     <div className="match-centre-body">
+      <div className="match-centre-sides" aria-hidden="true">
+        <span className="match-centre-side is-home">
+          <TeamCrest name={homeName} logo={homeLogo} />
+          <span>{homeName}</span>
+        </span>
+        <span className="match-centre-side is-away">
+          <span>{awayName}</span>
+          <TeamCrest name={awayName} logo={awayLogo} />
+        </span>
+      </div>
       {tabs.length > 1 ? (
         <div className="match-centre-tabs" role="tablist" aria-label={t("Match updates")}>
           {tabs.map(([key, label]) => (
-            <button key={key} type="button" role="tab" aria-selected={tab === key} className={tab === key ? "is-active" : undefined} onClick={() => setChosen(key)}>
+            <button key={key} type="button" role="tab" aria-selected={tab === key} className={`match-centre-tab${tab === key ? " is-active" : ""}`} onClick={() => setChosen(key)}>
               {label}
             </button>
           ))}
@@ -162,10 +185,6 @@ function StatBars({ stats, homeName, awayName }: { stats: Array<{ type: string; 
   const shown = (type: string, value: number) => (type === "expected_goals" ? value.toFixed(2) : `${value}${PERCENT.has(type) ? "%" : ""}`);
   return (
     <div className="match-stats">
-      <div className="match-stats-teams" aria-hidden="true">
-        <span>{homeName}</span>
-        <span>{awayName}</span>
-      </div>
       <dl>
         {stats.map(({ type, home, away }) => {
           const total = home + away;
@@ -276,7 +295,19 @@ export function MatchCentre({ event, compact = false }: { event: BetEvent; compa
  * A football match's stats, loaded when opened from its card: the timeline,
  * every number and the team sheets. Kept up to date while the match is live.
  */
-export function MatchStatsPanel({ eventId, name, live }: { eventId: string; name: string; live: boolean }) {
+export function MatchStatsPanel({
+  eventId,
+  name,
+  live,
+  homeLogo,
+  awayLogo,
+}: {
+  eventId: string;
+  name: string;
+  live: boolean;
+  homeLogo?: string | null;
+  awayLogo?: string | null;
+}) {
   const { getToken } = useAuth();
   const { t } = useI18n();
   const [data, setData] = useState<MatchCentreResponse | null>(null);
@@ -300,6 +331,16 @@ export function MatchStatsPanel({ eventId, name, live }: { eventId: string; name
   if (!data) {
     return (
       <div className="match-stats-panel">
+        <div className="match-centre-sides" aria-hidden="true">
+          <span className="match-centre-side is-home">
+            <TeamCrest name={homeName} logo={homeLogo} />
+            <span>{homeName}</span>
+          </span>
+          <span className="match-centre-side is-away">
+            <span>{awayName}</span>
+            <TeamCrest name={awayName} logo={awayLogo} />
+          </span>
+        </div>
         {failed ? (
           <p className="muted">{t("Couldn't load the stats. Try again in a moment.")}</p>
         ) : (
@@ -313,9 +354,21 @@ export function MatchStatsPanel({ eventId, name, live }: { eventId: string; name
   return (
     <div className="match-stats-panel">
       {hasAnything(data.centre) ? (
-        <MatchCentreBody centre={data.centre} homeName={homeName} awayName={awayName} />
+        <MatchCentreBody centre={data.centre} homeName={homeName} awayName={awayName} homeLogo={homeLogo} awayLogo={awayLogo} />
       ) : (
-        <p className="muted">{data.status === "UPCOMING" ? t("Stats show here once the match starts. Line-ups come about an hour before kick-off.") : t("No stats for this match yet.")}</p>
+        <>
+          <div className="match-centre-sides" aria-hidden="true">
+            <span className="match-centre-side is-home">
+              <TeamCrest name={homeName} logo={homeLogo} />
+              <span>{homeName}</span>
+            </span>
+            <span className="match-centre-side is-away">
+              <span>{awayName}</span>
+              <TeamCrest name={awayName} logo={awayLogo} />
+            </span>
+          </div>
+          <p className="muted">{data.status === "UPCOMING" ? t("Stats show here once the match starts. Line-ups come about an hour before kick-off.") : t("No stats for this match yet.")}</p>
+        </>
       )}
     </div>
   );

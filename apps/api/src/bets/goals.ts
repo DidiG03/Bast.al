@@ -54,7 +54,10 @@ export type GoalRecord = {
 
 export const GOAL_MARKET_KEYS = ["first_team_score", "last_team_score", "win_from_behind", "scorer_anytime", "scorer_first", "scorer_last"];
 
-export const isGoalMarket = (marketKey: string) => GOAL_MARKET_KEYS.includes(marketKey);
+/** Next-goal live markets ("gol rradhe"): `nth_goal_2` is who scores the 2nd goal, and so on. */
+export const isNthGoalMarket = (marketKey: string) => /^nth_goal_\d+$/.test(marketKey);
+
+export const isGoalMarket = (marketKey: string) => GOAL_MARKET_KEYS.includes(marketKey) || isNthGoalMarket(marketKey);
 
 /** The goals add up to the score the match settles on; otherwise the record can't be trusted (a goal ruled out, a corrected score). */
 export function matchesScore(record: GoalRecord, home: number, away: number): boolean {
@@ -78,14 +81,16 @@ export function gradeGoalMarket(
   const won = (yes: boolean) => (yes ? SelectionResult.WON : SelectionResult.LOST);
   const { goals } = record;
 
+  const nth = /^nth_goal_(\d+)$/.exec(marketKey);
+  if (nth || marketKey === "first_team_score" || marketKey === "last_team_score") {
+    const goal =
+      marketKey === "last_team_score" ? goals[goals.length - 1] : marketKey === "first_team_score" ? goals[0] : goals[Number(nth![1]) - 1];
+    if (selectionKey === "none") return won(!goal);
+    if (selectionKey !== "home" && selectionKey !== "away") return null;
+    return won(goal?.side === selectionKey);
+  }
+
   switch (marketKey) {
-    case "first_team_score":
-    case "last_team_score": {
-      const goal = marketKey === "first_team_score" ? goals[0] : goals[goals.length - 1];
-      if (selectionKey === "none") return won(!goal);
-      if (selectionKey !== "home" && selectionKey !== "away") return null;
-      return won(goal?.side === selectionKey);
-    }
     case "win_from_behind": {
       if (selectionKey !== "home" && selectionKey !== "away") return null;
       const other = selectionKey === "home" ? "away" : "home";

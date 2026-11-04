@@ -48,7 +48,7 @@ const DETAIL_FRESH_MS = 10_000;
 type PriceMove = { up: boolean; until: number };
 /** How long a live slip's checks with the feed usually take after its wait (the API allows more, rarely needed). */
 const CHECK_TYPICAL_MS = 1_000;
-/** One tap fills the stake on the ticket, in ALL. */
+/** One tap fills that stake (ALL) on every line of the ticket. */
 const QUICK_STAKES = [10, 50, 100, 500, 1000];
 /** Matches the API's cap on an accumulator's combined odds. */
 const MAX_ACCUMULATOR_ODDS = 5000;
@@ -192,7 +192,8 @@ function BetPage() {
   const [countries, setCountries] = useState<Set<string>>(() => new Set());
   const [search, setSearch] = useState("");
   /** "" = every day, "live" = playing now, otherwise a day's label (Today, Tomorrow, …). */
-  const [day, setDay] = useState("");
+  const [day, setDay] = useState(() => (params.get("day") === "live" ? "live" : ""));
+  const sportSeen = useRef(sport);
   /** The matches this account starred, and whether only those are showing. */
   const [favourites, setFavourites] = useState<Set<string>>(new Set());
   const [favouritesOnly, setFavouritesOnly] = useState(false);
@@ -247,8 +248,10 @@ function BetPage() {
     [getToken, sport],
   );
 
-  // Another sport: its own list, from scratch.
+  // Another sport: its own list, from scratch. Skip the first paint so ?day=live from Overview survives.
   useEffect(() => {
+    if (sportSeen.current === sport) return;
+    sportSeen.current = sport;
     lists.current = { live: null, upcoming: null };
     setEvents(null);
     setLeague("");
@@ -1016,33 +1019,43 @@ function BetPage() {
               <div className="bet-filters-row">
                 <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => filter(() => setSearch(e.target.value))} aria-label={t("Search matches")} />
                 {leagues.length > 1 ? (
-                  <select className="bet-league-select" value={league} onChange={(e) => filter(() => setLeague(e.target.value))} aria-label={t("League")}>
-                    <option value="">{t("All leagues")}</option>
-                    {leagueGroups.top.length > 0 ? (
-                      <>
-                        <optgroup label={t("Top leagues")}>
-                          {leagueGroups.top.map((name) => (
-                            <option key={name} value={name}>
-                              {name}
-                            </option>
-                          ))}
-                        </optgroup>
-                        <optgroup label={t("Other leagues")}>
-                          {leagueGroups.rest.map((name) => (
-                            <option key={name} value={name}>
-                              {name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      </>
-                    ) : (
-                      leagueGroups.rest.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                  <label className={`bet-league-filter${league ? " is-active" : ""}`} title={league || t("All leagues")}>
+                    <svg className="bet-league-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                      <path d="M4 22h16" />
+                      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+                      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+                      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                    </svg>
+                    <select className="bet-league-select" value={league} onChange={(e) => filter(() => setLeague(e.target.value))} aria-label={t("League")}>
+                      <option value="">{t("All leagues")}</option>
+                      {leagueGroups.top.length > 0 ? (
+                        <>
+                          <optgroup label={t("Top leagues")}>
+                            {leagueGroups.top.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </optgroup>
+                          <optgroup label={t("Other leagues")}>
+                            {leagueGroups.rest.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        </>
+                      ) : (
+                        leagueGroups.rest.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
                 ) : null}
                 {countryOptions.length > 1 ? <CountryFilter options={countryOptions} selected={countries} onChange={(next) => filter(() => setCountries(next))} /> : null}
               </div>
@@ -1132,6 +1145,7 @@ function BetPage() {
                             {resultHeads(group.events[0]?.markets[0]?.selections).map((label) => (
                               <span key={label}>{label}</span>
                             ))}
+                            <span />
                           </span>
                           <span className="bm-league-count">{group.events.length}</span>
                         </h3>
@@ -1234,7 +1248,8 @@ function marketGroup(key: string): MarketGroup {
   if (key.startsWith("fight_")) return "main";
   if (/^rounds_\d+_5$/.test(key)) return "rounds";
   if (key.startsWith("et_") || key === "to_qualify" || key === "pen_winner") return "extra";
-  if (["match_winner", "double_chance", "draw_no_bet", "btts"].includes(key)) return "main";
+  // Gol rradhe (next goal) sits with the match result — the live board players open first.
+  if (["match_winner", "double_chance", "draw_no_bet", "btts"].includes(key) || /^nth_goal_\d+$/.test(key)) return "main";
   if (/^(ah|eh)_/.test(key)) return "handicap";
   if (/^(home_|away_)?(corners|cards)_/.test(key)) return "corners";
   if (key.startsWith("scorer_")) return "scorers";
@@ -1279,13 +1294,11 @@ function MatchPage({ event, loaded, loading, onBack, card }: { event: OddsEvent 
         ) : null}
       </div>
       {event ? (
-        <div className="bm-league match-page-card">{card(event)}</div>
+        card(event)
       ) : loaded ? (
-        <div className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            {t("That match isn't open for bets any more.")}
-          </p>
-        </div>
+        <p className="muted" style={{ margin: 0 }}>
+          {t("That match isn't open for bets any more.")}
+        </p>
       ) : (
         <div className="loading-state">
           <LoadingSpinner label="Loading matches" />
@@ -1491,7 +1504,7 @@ const MatchCard = memo(function MatchCard({
         ) : scorers ? (
           <p className="muted odds-market-rule">{t("Own goals don't count. If your player doesn't play, your stake comes back.")}</p>
         ) : null}
-        {market.key === "first_team_score" || market.key === "last_team_score" ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
+        {market.key === "first_team_score" || market.key === "last_team_score" || /^nth_goal_\d+$/.test(market.key) ? <p className="muted odds-market-rule">{t("An own goal counts for the team it's given to.")}</p> : null}
       </>
     );
   };
@@ -1545,7 +1558,7 @@ const MatchCard = memo(function MatchCard({
             ) : null}
           </div>
         </div>
-        <div className={`bm-odds${inRow ? ` has-${inRow.selections.length}` : ""}`}>
+        <div className={`bm-odds${inRow ? ` has-${inRow.selections.length}` : ""}${more > 0 && !page ? " has-more" : ""}`}>
           {over ? (
             <span className="bm-settled">{t("Settling")}</span>
           ) : suggest ? (
@@ -1557,29 +1570,20 @@ const MatchCard = memo(function MatchCard({
           ) : inRow ? (
             inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick"))
           ) : null}
-        </div>
-        {more > 0 && !page ? (
-          <button type="button" className={`bm-more${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} onPointerEnter={() => !expanded && onPrefetch(event.id)} onTouchStart={() => !expanded && onPrefetch(event.id)} onFocus={() => !expanded && onPrefetch(event.id)} aria-expanded={expanded} aria-label={toggleLabel} title={toggleLabel}>
-            {expanded ? (
+          {more > 0 && !page ? (
+            <button type="button" className={`bm-more${expanded ? " is-open" : ""}`} onClick={() => onToggle(event.id)} onPointerEnter={() => !expanded && onPrefetch(event.id)} onTouchStart={() => !expanded && onPrefetch(event.id)} onFocus={() => !expanded && onPrefetch(event.id)} aria-expanded={expanded} aria-label={toggleLabel} title={toggleLabel}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m6 15 6-6 6 6" />
+                {expanded ? <path d="m6 15 6-6 6 6" /> : <path d="m9 6 6 6-6 6" />}
               </svg>
-            ) : (
-              <>
-                <span className="bm-more-count">{more}</span>
-                <span className="bm-more-word">{tn(more, "market", "markets")}</span>
-              </>
-            )}
-          </button>
-        ) : (
-          <span className="bm-more-spacer" aria-hidden="true" />
-        )}
+            </button>
+          ) : null}
+        </div>
       </div>
       {pause ? <p className={`bet-paused bm-note${pause.tone}`}>{t(pause.text)}</p> : null}
       {!over && event.live && event.marketPause ? <PauseBanner pause={event.marketPause} /> : null}
       {statsOpen ? (
         <div className="bm-stats">
-          <MatchStatsPanel eventId={event.id} name={event.name} live={event.live} />
+          <MatchStatsPanel eventId={event.id} name={event.name} live={event.live} homeLogo={event.homeLogo} awayLogo={event.awayLogo} />
         </div>
       ) : null}
       {expanded ? (
@@ -2093,6 +2097,8 @@ function BetSlip({
   else if (overMax) blocker = t("The most you can stake on one bet is {amount}.", { amount: formatMoney(info!.maxStake!) });
   else if (tooLittle) blocker = t("Your balance is too low for this slip. Tap here to ask for a top-up.");
   const needsMoney = Boolean(blocker) && !info?.blocked && closed.length === 0 && paused.length === 0 && !(acca && (hasSp || sameMatch || accaOdds > MAX_ACCUMULATOR_ODDS)) && !(builder && !quote?.odds) && !missingStake && !overMax && tooLittle;
+  // Same-match / missing stake already warn on Place (and same-match on each line); don't repeat them here.
+  const summaryBlocker = (acca && sameMatch) || missingStake ? null : blocker;
 
   // A moved price shows on the slip itself (the old price struck through); a toast only says so when a bet is refused for it.
   useEffect(() => {
@@ -2198,6 +2204,7 @@ function BetSlip({
       <div className="card stack bet-slip is-receipt">
         <div className="bet-slip-header">
           <h2>{t("Bets placed")}<HelpTip text="Your bets went through. The money was taken from your balance. You can follow them in Open bets." /></h2>
+          <span className="bet-slip-clear-spacer" aria-hidden="true" />
           <button type="button" className="secondary bet-slip-close" onClick={onClose} aria-label={t("Close bet slip")}>
             ✕
           </button>
@@ -2233,16 +2240,16 @@ function BetSlip({
         <h2>
           {t("Bet slip")} {items.length > 0 ? <span className="muted">({items.length})</span> : null}<HelpTip text="The picks you tapped. Type how much to bet on each, then press Place. “Singles” are separate bets. “Accumulator” joins them into one bet that pays much more but only wins if every pick wins." />
         </h2>
-        <span className="bet-slip-header-actions">
-          {items.length > 0 ? (
-            <button type="button" className="text-button" onClick={() => onChange(() => [])}>
-              {t("Clear")}
-            </button>
-          ) : null}
-          <button type="button" className="secondary bet-slip-close" onClick={onClose} aria-label={t("Close bet slip")}>
-            ✕
+        {items.length > 0 ? (
+          <button type="button" className="text-button bet-slip-clear" onClick={() => onChange(() => [])}>
+            {t("Clear")}
           </button>
-        </span>
+        ) : (
+          <span className="bet-slip-clear-spacer" aria-hidden="true" />
+        )}
+        <button type="button" className="secondary bet-slip-close" onClick={onClose} aria-label={t("Close bet slip")}>
+          ✕
+        </button>
       </div>
 
       {items.length === 0 ? (
@@ -2284,9 +2291,7 @@ function BetSlip({
               </select>
             </label>
           ) : null}
-          <div className="bet-quick" role="group" aria-label={`${system ? t("Stake per bet") : builder ? t("Bet builder stake") : acca ? t("Accumulator stake") : t("Same stake on every bet")} (ALL)`}>
-            {/* The currency once, so the five amounts fit across a phone's slip without scrolling. */}
-            <span className="bet-quick-unit" aria-hidden="true">ALL</span>
+          <div className="bet-quick" role="group" aria-label={system ? t("Stake per bet") : builder ? t("Bet builder stake") : acca ? t("Accumulator stake") : t("Same stake on every bet")}>
             {QUICK_STAKES.map((amount) => {
               const chosen = combined || system ? accaStakeValue === amount : items.length > 0 && items.every((item) => stakeValue(item.stake) === amount);
               return (
@@ -2297,7 +2302,7 @@ function BetSlip({
                   aria-pressed={chosen}
                   onClick={() => (combined || system ? onAccaStake(String(amount)) : onChange((list) => list.map((item) => ({ ...item, stake: String(amount) }))))}
                 >
-                  {amount.toLocaleString("en-US")}
+                  {amount.toLocaleString("en-US")} ALL
                 </button>
               );
             })}
@@ -2338,25 +2343,25 @@ function BetSlip({
                     {builder || system ? null : acca ? (
                       <span className="bet-slip-return muted">{sameMatch && items.some((other) => other !== item && other.eventId === item.eventId) ? t("Same match as another pick") : ""}</span>
                     ) : (
-                    <label className="bet-stake">
-                      <span className="muted">ALL</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min={1}
-                        step="0.01"
-                        placeholder={t("Stake")}
-                        value={item.stake}
-                        onChange={(e) => setStake(item.selectionId, e.target.value)}
-                        aria-label={t("Stake on {pick}", { pick: pickLabel(item.name, i18n) })}
-                        disabled={item.closed}
-                      />
-                    </label>
-                    )}
-                    {combined || system ? null : (
                       <span className="bet-slip-return muted">
                         {item.closed || item.paused ? t("Not counted") : item.sp ? t("Paid at the starting price") : stake > 0 ? t("Returns {amount}", { amount: formatMoney(returns(stake, item.odds)) }) : ""}
                       </span>
+                    )}
+                    {builder || system || acca ? null : (
+                      <label className="bet-stake">
+                        <span className="muted">ALL</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={1}
+                          step="0.01"
+                          placeholder={t("Stake")}
+                          value={item.stake}
+                          onChange={(e) => setStake(item.selectionId, e.target.value)}
+                          aria-label={t("Stake on {pick}", { pick: pickLabel(item.name, i18n) })}
+                          disabled={item.closed}
+                        />
+                      </label>
                     )}
                   </div>
                   {item.closed ? (
@@ -2457,13 +2462,13 @@ function BetSlip({
                   />
                 </label>
               </div>
-              <p className="muted bet-slip-note" style={{ margin: 0 }}>
-                {builder
-                  ? quote?.error
+              {builder ? (
+                <p className="muted bet-slip-note" style={{ margin: 0 }}>
+                  {quote?.error
                     ? <span className="error-text">{quote.error}</span>
-                    : t("Picks from one match, priced together: they often happen together, so this pays less than multiplying them. Every pick has to win. If a pick is void, the bet is refunded.")
-                  : t("Every pick has to win. A pick on a match that is called off drops out and the rest still count.")}
-              </p>
+                    : t("Picks from one match, priced together: they often happen together, so this pays less than multiplying them. Every pick has to win. If a pick is void, the bet is refunded.")}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -2471,11 +2476,19 @@ function BetSlip({
           <div className="bet-slip-dock">
             <div className="bet-slip-summary">
               <div className="bet-slip-summary-lead">
-                <strong>{summaryTitle}</strong>
-                {blocker && needsMoney ? (
-                  <button type="button" className="text-button bet-slip-flag" onClick={() => void topUp.request(shortfall)}>{blocker}</button>
+                <strong>
+                  {summaryTitle}
+                  {hasLive ? (
+                    <HelpTip
+                      text="Live: a bet placed after a goal, a corner or a card that hadn't shown here yet, and that helped it, is void and the stake comes back, even after it has settled. Live corners bets are capped for each match. This slip takes about {seconds} seconds to confirm."
+                      vars={{ seconds: liveSeconds ?? (info?.liveWait?.usual ?? 8) + 1 }}
+                    />
+                  ) : null}
+                </strong>
+                {summaryBlocker && needsMoney ? (
+                  <button type="button" className="text-button bet-slip-flag" onClick={() => void topUp.request(shortfall)}>{summaryBlocker}</button>
                 ) : (
-                  <p className={blocker ? "bet-slip-flag" : "muted"}>{blocker ?? summaryHint}</p>
+                  <p className={summaryBlocker ? "bet-slip-flag" : "muted"}>{summaryBlocker ?? summaryHint}</p>
                 )}
               </div>
               <dl>
@@ -2534,14 +2547,7 @@ function BetSlip({
                   ? t("Place accumulator · {amount}", { amount: formatMoney(totalStake) })
                   : tn(valid.length, "Place bet · {amount}", "Place {count} bets · {amount}", { amount: formatMoney(totalStake) })}
             </button>
-            {hasLive ? <p className="muted bet-price-setting-note">{t("Live bets are only placed at the price on your slip.")}</p> : null}
             {info ? <SlipLimits info={info} staking={totalStake} /> : null}
-            {hasLive ? (
-              <p className="muted bet-slip-live-rule">
-                {t("Live: a bet placed after a goal, a corner or a card that hadn't shown here yet, and that helped it, is void and the stake comes back, even after it has settled. Live corners bets are capped for each match.")}{" "}
-                {t("This slip takes about {seconds} seconds to confirm.", { seconds: liveSeconds ?? (info?.liveWait?.usual ?? 8) + 1 })}
-              </p>
-            ) : null}
           </div>
         </>
       )}

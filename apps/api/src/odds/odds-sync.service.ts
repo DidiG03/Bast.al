@@ -44,6 +44,13 @@ const DEFAULT_LEAGUES = [
   253, 71, 72, 128, 262, 239, 265, 13, 11,
   // Africa, Asia and Oceania
   233, 200, 307, 98, 292, 169, 188, 17,
+  // More important competitions (odds-covered) that the core list above still skipped
+  // Domestic tops: Russia, Finland, Ireland, Uruguay, Peru, India, UAE, Qatar, Iran, South Africa
+  235, 244, 357, 268, 281, 323, 301, 305, 290, 288,
+  // Second tiers / cups players often bet: Austria 2. Liga, Swiss Challenge, Superettan, KNVB Beker, Turkish Cup, Taça da Liga, Copa do Brasil, Copa Argentina, Scottish cups
+  219, 208, 114, 90, 206, 97, 73, 130, 181, 185,
+  // Continental / world: CAF CL + Confed, CONCACAF CL + Gold Cup, Club World Cup, Intercontinental, Recopa, AFC CL Two, club friendlies
+  12, 20, 16, 22, 15, 1168, 541, 18, 667,
 ];
 const DEFAULT_COUNTRIES = ["Albania", "Kosovo"];
 
@@ -1337,7 +1344,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         OR: [{ goalsCheckedAt: null }, { goalsCheckedAt: { lt: new Date(now - 10 * 60_000) } }],
         markets: {
           some: {
-            key: { in: GOAL_MARKET_KEYS },
+            OR: [{ key: { in: GOAL_MARKET_KEYS } }, { key: { startsWith: "nth_goal_" } }],
             selections: { some: { OR: [{ bets: { some: { status: BetStatus.OPEN } } }, { legs: { some: { result: null, voidReason: null } } }] } },
           },
         },

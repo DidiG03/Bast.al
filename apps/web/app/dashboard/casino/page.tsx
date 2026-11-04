@@ -78,10 +78,6 @@ function CasinoLobby() {
     <div className="stack">
       <div>
         <h1 style={{ margin: 0 }}>{t("Casino")}</h1>
-        <p className="muted" style={{ margin: "0.35rem 0 0" }}>
-          {t("Play for fun. Your max stake and daily loss limit apply here too. Take a break if a session runs long.")}{" "}
-          <Link href="/dashboard/security">{t("My account")}</Link>
-        </p>
       </div>
       {casinoClosed || games?.length === 0 ? (
         <div className="card">
@@ -97,7 +93,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{state.game.name}</strong>
-                <span>{t("Hot fruits and blazing sevens! The classic fruit slot with 5 reels and 5 lines, where the star pays anywhere on the screen.")}</span>
               </span>
             </Link>
           ) : null}
@@ -108,7 +103,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>Book of Ra</strong>
-                <span>{t("Explore the pyramids for the book. 3 books open 10 free spins, where one special symbol fills whole reels and pays on all 10 lines.")}</span>
               </span>
             </Link>
           ) : null}
@@ -119,7 +113,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Roulette")}</strong>
-                <span>{t("The classic European roulette with a single zero. Place your chips, spin the wheel and watch where the ball lands.")}</span>
               </span>
             </Link>
           ) : null}
@@ -135,7 +128,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Blackjack")}</strong>
-                <span>{t("Get as close to 21 as you can without going over, and beat the dealer's hand. Blackjack pays 3 to 2.")}</span>
               </span>
             </Link>
           ) : null}
@@ -146,7 +138,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Penalty")}</strong>
-                <span>{t("Aim left, center or right. The keeper dives. Every goal raises the payout. Cash out before a save.")}</span>
               </span>
             </Link>
           ) : null}
@@ -157,7 +148,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Mines")}</strong>
-                <span>{t("A field of 25 tiles hides the mines you choose. Every coin raises the payout. Cash out before one blows.")}</span>
               </span>
             </Link>
           ) : null}
@@ -168,7 +158,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>Plinko</strong>
-                <span>{t("Drop the ball through the pegs. The middle pays a little, the edges pay up to 900 times the stake.")}</span>
               </span>
             </Link>
           ) : null}
@@ -179,7 +168,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Dice")}</strong>
-                <span>{t("Set your own odds: roll over or under a target, for up to 85 times the stake. Every roll can be checked.")}</span>
               </span>
             </Link>
           ) : null}
@@ -190,7 +178,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Keno")}</strong>
-                <span>{t("Pick up to 10 numbers, 20 of 80 are drawn. Catch them all for up to 2,000 times the stake. Every draw can be checked.")}</span>
               </span>
             </Link>
           ) : null}
@@ -201,7 +188,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Coin Flip")}</strong>
-                <span>{t("Call heads or tails. A right call pays 1.7 times the stake. Every flip can be checked.")}</span>
               </span>
             </Link>
           ) : null}
@@ -212,7 +198,6 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>{t("Scratch Cards")}</strong>
-                <span>{t("Scratch 9 boxes and find three of a kind, for up to 1,000 times the price. Every card can be checked.")}</span>
               </span>
             </Link>
           ) : null}

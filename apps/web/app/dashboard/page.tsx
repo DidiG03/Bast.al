@@ -18,7 +18,6 @@ import {
   type BarPoint,
 } from "../../components/overview";
 import {
-  type CasinoLastGame,
   type CommissionDaily,
   type CommissionHistory,
   type ManagerCommissions,
@@ -37,6 +36,7 @@ import {
 } from "../../lib/api";
 import { getMe, serverApiFetch } from "../../lib/api-server";
 import { formatMoney, formatSignedMoney } from "../../lib/format";
+import { byImportance, importance } from "../../lib/importance";
 import { getT } from "../../lib/i18n/server";
 import { addDays, startOfDay, startOfMonth, startOfWeek } from "../../lib/time";
 
@@ -714,47 +714,59 @@ const HOME_SPORTS: Array<[Sport, string]> = [
   ["mma", "MMA"],
 ];
 
-/** Each Casino game's page and its sign on the Continue card. */
-const CASINO_GAMES: Record<CasinoLastGame["game"], { href: string; icon: string; name: string }> = {
-  slot: { href: "/dashboard/casino/slot", icon: "🍒", name: "Sizzling Hot" },
-  book: { href: "/dashboard/casino/book", icon: "📖", name: "Book of Ra" },
-  roulette: { href: "/dashboard/casino/roulette", icon: "🎡", name: "Roulette" },
-  blackjack: { href: "/dashboard/casino/blackjack", icon: "🃏", name: "Blackjack" },
-  mines: { href: "/dashboard/casino/mines", icon: "💎", name: "Mines" },
-  penalty: { href: "/dashboard/casino/penalty", icon: "settlement", name: "Penalty" },
-  plinko: { href: "/dashboard/casino/plinko", icon: "🔴", name: "Plinko" },
-  dice: { href: "/dashboard/casino/dice", icon: "🎲", name: "Dice" },
-  keno: { href: "/dashboard/casino/keno", icon: "🔢", name: "Keno" },
-  coinflip: { href: "/dashboard/casino/coin-flip", icon: "🪙", name: "Coin Flip" },
-  scratch: { href: "/dashboard/casino/scratch", icon: "🎟️", name: "Scratch Cards" },
-};
-
-const LAST_PLAYED: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
+/** Top events for one sport: the dedicated API first, then live + upcoming lists if that comes back empty. */
+async function loadHomeEvents(sport: Sport, token: string, count: number): Promise<OddsEvent[]> {
+  try {
+    const top = await serverApiFetch<OddsEvent[]>(`/odds/top-events?count=${count}&sport=${sport}`, token);
+    if (Array.isArray(top) && top.length > 0) return top;
+  } catch (err) {
+    console.error(`[home] top-events ${sport} failed`, err instanceof Error ? err.message : err);
+  }
+  // Fallback: same matches the Bet page lists, then pick live + the most important upcoming.
+  try {
+    const [live, upcoming] = await Promise.all([
+      serverApiFetch<OddsEvent[]>(`/odds/events?filter=live&view=list&sport=${sport}`, token).catch(() => [] as OddsEvent[]),
+      serverApiFetch<OddsEvent[]>(`/odds/events?filter=upcoming&view=list&sport=${sport}`, token).catch(() => [] as OddsEvent[]),
+    ]);
+    const open = [...live, ...upcoming].filter((event) => event.marketCount > 0 || (event.markets?.length ?? 0) > 0);
+    const liveOnes = open.filter((event) => event.status === "LIVE");
+    const soon = byImportance(open.filter((event) => event.status !== "LIVE"));
+    return [...liveOnes.slice(0, 2), ...soon, ...liveOnes.slice(2)].slice(0, count);
+  } catch (err) {
+    console.error(`[home] events fallback ${sport} failed`, err instanceof Error ? err.message : err);
+    return [];
+  }
+}
 
 async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
   const { t, tn, ts, date } = getT();
-  // Live first, then the next two days' matches with the most to bet on: picked by the API, for each sport.
-  const [bySport, nextRaces, slip, bets, lastGame] = me.parent
+  // Live first, then the most important upcoming matches in the next week: picked by the API, for each sport.
+  const [bySport, nextRaces, slip, bets] = me.parent
     ? await Promise.all([
-        Promise.all(HOME_SPORTS.map(([sport]) => serverApiFetch<OddsEvent[]>(`/odds/top-events?count=4&sport=${sport}`, token).catch(() => [] as OddsEvent[]))),
-        serverApiFetch<OddsEvent[]>("/odds/top-events?count=3&sport=greyhounds", token).catch(() => []),
+        Promise.all(HOME_SPORTS.map(([sport]) => loadHomeEvents(sport, token, 6))),
+        serverApiFetch<OddsEvent[]>("/odds/top-events?count=3&sport=greyhounds", token).catch(() => [] as OddsEvent[]),
         serverApiFetch<SlipInfo>("/bets/slip", token).catch(() => null),
         serverApiFetch<MyBets>("/bets/mine?status=open", token).catch(() => null),
-        me.casinoOpen ? serverApiFetch<{ last: CasinoLastGame | null }>("/casino/last-game", token).then((answer) => answer.last).catch(() => null) : Promise.resolve(null),
       ])
-    : [[], [], null, null, null];
+    : [[], [], null, null];
   // Why this account can't bet (a suspended Manager, no team yet): a warning toast, and no Top events.
   const blocked = me.status === "SUSPENDED" ? t("Your account is suspended. Ask your Manager or Owner.") : slip?.blocked ? ts(slip.blocked) : null;
   const week = bets?.week;
   const weekNet = week ? Math.round((week.returned - week.staked) * 100) / 100 : 0;
 
-  const sports = HOME_SPORTS.map(([sport, label], index) => ({ sport, label: t(label), events: bySport[index] ?? [] })).filter((entry) => entry.events.length > 0);
-  // All sports together: every match playing now first, then the soonest to start.
+  const sports = HOME_SPORTS.map(([sport, label], index) => ({
+    sport,
+    label: t(label),
+    events: byImportance(bySport[index] ?? []),
+  })).filter((entry) => entry.events.length > 0);
+  // All sports together: live first, then the most important upcoming.
   const everything = sports.flatMap(({ sport, events }) => events.map((event) => ({ sport, event })));
   const all = [
     ...everything.filter(({ event }) => event.status === "LIVE"),
-    ...everything.filter(({ event }) => event.status !== "LIVE").sort((a, b) => a.event.startsAt.localeCompare(b.event.startsAt)),
-  ].slice(0, 6);
+    ...everything
+      .filter(({ event }) => event.status !== "LIVE")
+      .sort((a, b) => importance(a.event) - importance(b.event) || a.event.startsAt.localeCompare(b.event.startsAt)),
+  ].slice(0, 8);
   const liveCount = (events: OddsEvent[]) => events.filter((event) => event.status === "LIVE").length;
 
   const tabs: SportTab[] =
@@ -767,8 +779,6 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
           ...sports.map(({ sport, label, events }) => ({ key: sport, label, live: liveCount(events), panel: <div className="player-top-events">{events.map((event) => <HomeEventCard key={event.id} event={event} sport={sport} showSport={false} />)}</div> })),
         ];
 
-  const continueGame = lastGame ? CASINO_GAMES[lastGame.game] : null;
-
   return (
     <div className="stack player-home">
       {blocked ? <ToastOnMount kind="warning" message={blocked} /> : null}
@@ -776,11 +786,18 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
 
       {me.parent && !blocked ? <RefreshEvery ms={60_000} /> : null}
       {me.parent && !blocked ? (
+        <Link href="/dashboard/bet?day=live" className="player-live-banner" aria-label={t("Open live matches")}>
+          {/* Decorative promo: the label is on the link; the picture already carries the Albanian copy. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/home/live-banner.png" alt="" width={1024} height={571} />
+        </Link>
+      ) : null}
+      {me.parent && !blocked ? (
         <section className="stack">
           <div className="page-title-row">
             <h2 style={{ margin: 0 }}>
               {t("Top events")}
-              <HelpTip text="Matches playing now first, then the matches of the next two days with the most ways to bet, for each sport. Tap one to go straight to its prices." />
+              <HelpTip text="Matches playing now first, then the most important upcoming matches in the next week, for each sport. Tap one to go straight to its prices." />
             </h2>
             <Link href="/dashboard/bet">{t("View all")} →</Link>
           </div>
@@ -794,27 +811,12 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
         </section>
       ) : null}
 
-      {me.parent && !blocked && lastGame && continueGame ? (
-        <section className="stack">
-          <Link href={continueGame.href} className={`card player-continue${lastGame.waiting ? " is-waiting" : ""}`}>
-            <span className="player-continue-icon" aria-hidden="true">
-              {continueGame.icon}
-            </span>
-            <span className="player-continue-body">
-              <strong>{lastGame.name ?? t(continueGame.name)}</strong>
-              <span className="muted">
-                {lastGame.waiting === "round"
-                  ? t("Your round is still in play: {amount} on the table.", { amount: formatMoney(lastGame.amount) })
-                  : lastGame.waiting === "freeSpins"
-                    ? tn(lastGame.freeSpins ?? 0, "{count} free spin waiting, at {amount}.", "{count} free spins waiting, at {amount}.", { amount: formatMoney(lastGame.amount) })
-                    : lastGame.waiting === "gamble"
-                      ? t("A {amount} win is waiting: double it or take it.", { amount: formatMoney(lastGame.amount) })
-                      : t("Last played {when}, at {amount}.", { when: date(lastGame.at, LAST_PLAYED), amount: formatMoney(lastGame.amount) })}
-              </span>
-            </span>
-            <span className="player-continue-go">{lastGame.waiting ? t("Continue") : t("Play")} →</span>
-          </Link>
-        </section>
+      {me.parent && !blocked && me.casinoOpen ? (
+        <Link href="/dashboard/casino" className="player-live-banner player-casino-banner" aria-label={t("Open the Casino")}>
+          {/* Decorative promo: the label is on the link; the picture already carries the Albanian copy. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/home/casino-banner.png" alt="" width={1024} height={571} />
+        </Link>
       ) : null}
 
       {me.parent && !blocked && nextRaces.length > 0 ? (

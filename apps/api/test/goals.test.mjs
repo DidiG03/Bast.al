@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { gradeGoalMarket, matchPlayer } from "../dist/bets/goals.js";
+import { gradeGoalMarket, isGoalMarket, matchPlayer } from "../dist/bets/goals.js";
 import { gradeSelection } from "../dist/bets/grading.js";
 import { parseGoalRecord, parseMarkets } from "../dist/odds/api-football.js";
 
@@ -64,6 +64,18 @@ test("first and last team to score, and no goal", () => {
   // An own goal counts for the team it's given to.
   const own = parseGoalRecord(flamengo, { home: 2, away: 1 });
   assert.equal(gradeGoalMarket("last_team_score", "away", own, { home: 2, away: 1 }), "WON");
+});
+
+test("nth goal (gol rradhe) settles on that goal in order", () => {
+  // Away, home, away, away (Corinthians 1–3 Fluminense).
+  const record = parseGoalRecord(corinthians, { home: 1, away: 3 });
+  const score = { home: 1, away: 3 };
+  assert.equal(gradeGoalMarket("nth_goal_1", "away", record, score), "WON");
+  assert.equal(gradeGoalMarket("nth_goal_2", "home", record, score), "WON");
+  assert.equal(gradeGoalMarket("nth_goal_4", "away", record, score), "WON");
+  assert.equal(gradeGoalMarket("nth_goal_5", "none", record, score), "WON");
+  assert.equal(gradeGoalMarket("nth_goal_5", "home", record, score), "LOST");
+  assert.equal(isGoalMarket("nth_goal_3"), true);
 });
 
 test("win from behind needs the team to trail at some point and still win", () => {

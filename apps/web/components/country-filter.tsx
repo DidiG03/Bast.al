@@ -64,10 +64,10 @@ export function CountryFilter({ options, selected, onChange }: { options: Countr
 
   return (
     <div className="country-filter" ref={box}>
-      <button type="button" className={`country-filter-button${picked.length > 0 ? " is-active" : ""}`} onClick={() => setOpen((was) => !was)} aria-expanded={open} aria-controls={listId} aria-label={picked.length === 0 ? t("All countries") : `${t("Countries")}: ${label}`}>
+      <button type="button" className={`country-filter-button${picked.length > 0 ? " is-active" : ""}`} onClick={() => setOpen((was) => !was)} aria-expanded={open} aria-controls={listId} aria-label={picked.length === 0 ? t("All countries") : `${t("Countries")}: ${label}`} title={label}>
         {picked.length > 0 ? (
           <span className="country-filter-flags" aria-hidden="true">
-            {picked.slice(0, 3).map((option) => (
+            {picked.slice(0, 2).map((option) => (
               <Flag key={option.country} option={option} />
             ))}
           </span>
@@ -77,11 +77,20 @@ export function CountryFilter({ options, selected, onChange }: { options: Countr
             <path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z" />
           </svg>
         )}
-        <span className="country-filter-label">{label}</span>
       </button>
       {open ? (
         <div className="country-filter-panel" id={listId} role="group" aria-label={t("Countries")}>
-          {options.length > 10 ? <input type="search" className="country-filter-search" placeholder={t("Search countries")} value={query} onChange={(event) => setQuery(event.target.value)} aria-label={t("Search countries")} autoFocus /> : null}
+          {options.length > 10 ? (
+            <input
+              type="search"
+              className="country-filter-search"
+              placeholder={t("Search countries")}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label={t("Search countries")}
+              // No autoFocus: on phones that would open the keyboard and zoom the page.
+            />
+          ) : null}
           <ul className="country-filter-list">
             {shown.map((option) => {
               const on = selected.has(option.country);

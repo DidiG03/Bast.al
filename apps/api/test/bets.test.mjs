@@ -127,6 +127,13 @@ test("half extras: exact goals and odd/even per half, scoring in both halves, ea
   assert.equal(gradeSelection("h2_odd_even", "even", 2, 1, half), "WON");
   assert.equal(gradeSelection("score_both_halves", "home", 2, 1, half), "WON");
   assert.equal(gradeSelection("score_both_halves", "away", 2, 1, half), "LOST");
+  assert.equal(gradeSelection("home_score_both_halves", "yes", 2, 1, half), "WON");
+  assert.equal(gradeSelection("away_score_both_halves", "yes", 2, 1, half), "LOST");
+  assert.equal(gradeSelection("h1_home_scores", "yes", 2, 1, half), "WON");
+  assert.equal(gradeSelection("h2_away_scores", "yes", 2, 1, half), "WON");
+  assert.equal(gradeSelection("h2_away_scores", "no", 2, 0, half), "WON");
+  assert.equal(gradeSelection("home_win_either_half", "yes", 2, 1, half), "WON");
+  assert.equal(gradeSelection("away_win_either_half", "yes", 2, 1, half), "LOST");
   assert.equal(gradeSelection("home_highest_half", "equal", 2, 1, half), "WON");
   assert.equal(gradeSelection("away_highest_half", "second", 2, 1, half), "WON");
   assert.equal(gradeSelection("h1_exact_goals", "1", 2, 1), null, "waits for the half-time score");

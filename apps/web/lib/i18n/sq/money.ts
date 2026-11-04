@@ -245,6 +245,7 @@ export const money: Record<string, string> = {
   "Your Manager: {name}": "Menaxheri yt: {name}",
   "Not yet assigned to a Manager or Owner.": "Ende pa u caktuar te një Menaxher ose Pronar.",
   "Top events": "Ngjarjet kryesore",
+  "Open live matches": "Hap ndeshjet live",
   "Continue playing": "Vazhdo lojën",
   "Play again": "Luaj përsëri",
   "Your round is still in play: {amount} on the table.": "Raundi yt është ende në lojë: {amount} në tavolinë.",

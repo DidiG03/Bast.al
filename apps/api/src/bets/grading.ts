@@ -121,6 +121,16 @@ export function gradeSelection(
       return yesNo(selectionKey, home > 0);
     case "away_scores":
       return yesNo(selectionKey, away > 0);
+    case "home_win_either_half":
+    case "away_win_either_half":
+    case "home_score_both_halves":
+    case "away_score_both_halves":
+    case "h1_home_scores":
+    case "h1_away_scores":
+    case "h2_home_scores":
+    case "h2_away_scores":
+      // Graded below once the half-time score is known.
+      break;
     case "win_to_nil_home":
       return yesNo(selectionKey, home > away && away === 0);
     case "win_to_nil_away":
@@ -201,6 +211,18 @@ export function gradeSelection(
     case "score_both_halves":
       if (selectionKey !== "home" && selectionKey !== "away") return null;
       return won(half[selectionKey] > 0 && second[selectionKey] > 0);
+    case "home_score_both_halves":
+      return yesNo(selectionKey, half.home > 0 && second.home > 0);
+    case "away_score_both_halves":
+      return yesNo(selectionKey, half.away > 0 && second.away > 0);
+    case "h1_home_scores":
+      return yesNo(selectionKey, half.home > 0);
+    case "h1_away_scores":
+      return yesNo(selectionKey, half.away > 0);
+    case "h2_home_scores":
+      return yesNo(selectionKey, second.home > 0);
+    case "h2_away_scores":
+      return yesNo(selectionKey, second.away > 0);
     case "home_highest_half":
     case "away_highest_half": {
       const side = marketKey === "home_highest_half" ? "home" : "away";
@@ -219,6 +241,10 @@ export function gradeSelection(
     case "win_either_half":
       if (selectionKey !== "home" && selectionKey !== "away") return null;
       return won(sideOf(half) === selectionKey || sideOf(second) === selectionKey);
+    case "home_win_either_half":
+      return yesNo(selectionKey, sideOf(half) === "home" || sideOf(second) === "home");
+    case "away_win_either_half":
+      return yesNo(selectionKey, sideOf(half) === "away" || sideOf(second) === "away");
     default:
       return null;
   }

@@ -1,4 +1,5 @@
 import { liveCutoffReached, marketInPhase } from "./extra-time";
+import { liveScoreBlocked } from "./live-score-guard";
 import { EVENT_HITS, fallbackMs, marketGroup, pauseDeadline, type LivePause, type MarketPauseReason } from "./live-guard";
 
 const envMs = (name: string, fallback: number) => (process.env[name] !== undefined && process.env[name] !== "" && Number(process.env[name]) >= 0 ? Number(process.env[name]) : fallback);
@@ -70,6 +71,9 @@ type LiveEventState = {
   elapsed?: number | null;
   /** The feed's phase while live ("HT" at half-time). */
   period?: string | null;
+  /** The score now, for the live markets it decides or skews (live-score-guard.ts). */
+  homeScore?: number | null;
+  awayScore?: number | null;
   /** A goal on the match reached the site too long after it went in (Event.liveSlowFeed): no more live bets on it. */
   liveSlowFeed?: boolean;
   /** Its competition's feed is too slow for live betting (OddsService.liveLimits): pre-match only. */
@@ -234,8 +238,11 @@ export function selectionQuote(input: {
   }
   // Paused after a goal or a card, or not priced during play for a while: off the board too.
   // In extra time only its own markets take bets; the 90-minute ones are decided (extra-time.ts).
-  const outOfPhase = (input.event.sport ?? "football") === "football" && input.market.key !== undefined && !marketInPhase(input.market.key, input.event.period);
-  const suspended = outOfPhase || input.market.liveSuspended || input.selection.liveOdds === null || marketPause(input.market, input.now) !== null || marketStale(input.event, input.market, input.now, input.selection.liveOdds !== null);
+  const football = (input.event.sport ?? "football") === "football" && input.market.key !== undefined;
+  const outOfPhase = football && !marketInPhase(input.market.key!, input.event.period);
+  // Decided by the goals already in, or priced for the rest of the match while we settle on all of it (live-score-guard.ts).
+  const scoreBlocked = football && liveScoreBlocked(input.market.key!, { home: input.event.homeScore, away: input.event.awayScore }, input.event.period);
+  const suspended = outOfPhase || scoreBlocked || input.market.liveSuspended || input.selection.liveOdds === null || marketPause(input.market, input.now) !== null || marketStale(input.event, input.market, input.now, input.selection.liveOdds !== null);
   const price = applyMargin(input.selection.liveOdds ?? input.selection.feedOdds, teamMargin(input.baseMargin, input.ownerMargin));
   return { price, bettable: open && !suspended, live, suspended };
 }

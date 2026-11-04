@@ -745,4 +745,9 @@ export const server: Record<string, string> = {
   "Extra time goals {line}": "Golat në kohën shtesë {line}",
   "To qualify": "Kualifikohet",
   "Penalty shootout winner": "Fituesi i penalltive",
+  "{team} to score (1st half)": "{team} shënon në pjesën e parë",
+  "{team} to score (2nd half)": "{team} shënon në pjesën e dytë",
+  "{team} to win either half": "{team} fiton njërën nga pjesët",
+  "{team} to score in both halves": "{team} shënon në të dyja pjesët",
+  "{count}+ goals": "{count}+ gola",
 };

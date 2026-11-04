@@ -10271,12 +10271,15 @@ button.is-blocked {
   height: 100%;
 }
 
-/* The title keeps its shape in the middle of the bar, clear of the buttons at either end. */
+/* The logo keeps its shape in the middle of the bar, clear of the buttons at either end. */
 .book-marquee-logo {
   position: absolute;
   inset: 0.15rem 2.8rem;
   width: calc(100% - 5.6rem);
   height: calc(100% - 0.3rem);
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45));
 }
 
 .slot-cabinet.is-book .book-marquee .slot-exit,

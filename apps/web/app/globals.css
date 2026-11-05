@@ -7834,12 +7834,13 @@ button.is-blocked {
 .casino-tile-body {
   display: grid;
   align-content: start;
-  gap: 0.25rem;
-  padding: 0.9rem 1rem 1rem;
+  gap: 0.2rem;
+  padding: 0.6rem 0.85rem 0.7rem;
 }
 
 .casino-tile-body strong {
-  font-size: 1.15rem;
+  font-size: 0.95rem;
+  line-height: 1.25;
 }
 
 /* Two lines at most; the game's own page has the rest. */

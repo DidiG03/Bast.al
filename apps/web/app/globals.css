@@ -19635,3 +19635,25 @@ button.cab-field-box:disabled {
   pointer-events: none;
   user-select: none;
 }
+
+/*
+ * The card backs used across the card games (public/casino/cards/): the red one in Blackjack and for the earlier
+ * cards on Sizzling Hot's gamble screen, the blue one in Baccarat, Hi-Lo and for Sizzling Hot's card in play.
+ * Book of Ra keeps its own Eye of Horus backs. Each picture carries its white border, so the card drops its own.
+ */
+.playing-card.is-back,
+.gamble-card.is-back,
+.slot-gamble.is-sizzling .book-gamble-mini.is-back {
+  border: 0;
+  outline: 0;
+  background: url("/casino/cards/back-red.webp") center / 100% 100% no-repeat;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.house-card.is-back,
+.slot-gamble.is-sizzling .gamble-card.is-back {
+  border: 0;
+  outline: 0;
+  background: url("/casino/cards/back-blue.webp") center / 100% 100% no-repeat;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 6px 14px rgba(0, 0, 0, 0.45);
+}

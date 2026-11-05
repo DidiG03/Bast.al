@@ -19615,3 +19615,23 @@ button.cab-field-box:disabled {
   background: linear-gradient(180deg, #d3201b, #8e0b08);
   color: #fff;
 }
+
+/* Coin Flip's faces are pictures of the coin (the pharaoh is heads, the winged scarab tails): each fills its face. */
+.coin-face.is-heads,
+.coin-face.is-tails,
+.coin-mini.is-heads,
+.coin-mini.is-tails {
+  overflow: hidden;
+  background: #b8861c;
+  box-shadow: none;
+}
+
+.coin-picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}

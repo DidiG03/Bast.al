@@ -42,21 +42,10 @@ const streakOf = (rows: CoinFlipRound[]) => {
   return first === -1 ? rows.length : first;
 };
 
-/** A face's emblem: a crown for heads, a star for tails. */
+/** A face of the coin: the pharaoh for heads, the winged scarab for tails (pictures in public/casino/coin-flip/). */
 function Emblem({ side }: { side: CoinSide }) {
-  return side === "HEADS" ? (
-    <svg viewBox="0 0 64 64" aria-hidden="true" className="coin-emblem">
-      <path d="M14 44 L10 20 L23 30 L32 14 L41 30 L54 20 L50 44 Z" />
-      <rect x="14" y="47" width="36" height="5" rx="2" />
-      <circle cx="10" cy="19" r="3" />
-      <circle cx="32" cy="12" r="3" />
-      <circle cx="54" cy="19" r="3" />
-    </svg>
-  ) : (
-    <svg viewBox="0 0 64 64" aria-hidden="true" className="coin-emblem">
-      <path d="M32 9 L38.6 24.6 L55.5 26.1 L42.7 37.2 L46.5 53.7 L32 45 L17.5 53.7 L21.3 37.2 L8.5 26.1 L25.4 24.6 Z" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element -- a small static picture, the coin's face
+  return <img className="coin-picture" src={side === "HEADS" ? "/casino/coin-flip/heads.webp" : "/casino/coin-flip/tails.webp"} alt="" draggable={false} />;
 }
 
 /** A small coin showing one side, for the call buttons and the history. */

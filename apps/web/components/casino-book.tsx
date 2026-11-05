@@ -647,6 +647,7 @@ export function BookGame() {
                     </div>
                   ) : ((gamble && !auto && !playingFree) || card) && gambleShown ? (
                     <GamblePanel
+                      look="book"
                       gamble={gamble}
                       card={card}
                       cardKey={`${drawn.length}`}

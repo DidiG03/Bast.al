@@ -7209,71 +7209,71 @@ button.is-blocked {
 }
 
 @container gamble (max-height: 300px) {
-  .slot-gamble .gamble-screen {
+  .slot-gamble:not(.is-book) .gamble-screen {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 0.3rem 0.8rem;
     padding: 0.45rem 0.7rem;
   }
 
-  .slot-gamble .gamble-top {
+  .slot-gamble:not(.is-book) .gamble-top {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .slot-gamble .gamble-table {
+  .slot-gamble:not(.is-book) .gamble-table {
     grid-column: 1;
     grid-row: 1 / -1;
   }
 
-  .slot-gamble .gamble-card {
+  .slot-gamble:not(.is-book) .gamble-card {
     height: min(100%, 7.5rem);
     min-height: 0;
   }
 
-  .slot-gamble .gamble-message {
+  .slot-gamble:not(.is-book) .gamble-message {
     grid-column: 2;
     grid-row: 2;
     align-self: center;
   }
 
-  .slot-gamble .gamble-buttons {
+  .slot-gamble:not(.is-book) .gamble-buttons {
     grid-column: 2;
     grid-row: 3;
     gap: 0.35rem;
   }
 
   /* Room for what matters: the earlier cards go, and the two amounts sit side by side on one line each. */
-  .slot-gamble .gamble-history {
+  .slot-gamble:not(.is-book) .gamble-history {
     display: none;
   }
 
-  .slot-gamble .gamble-top,
-  .slot-gamble .gamble-amounts {
+  .slot-gamble:not(.is-book) .gamble-top,
+  .slot-gamble:not(.is-book) .gamble-amounts {
     width: 100%;
   }
 
-  .slot-gamble .gamble-amounts {
+  .slot-gamble:not(.is-book) .gamble-amounts {
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
   }
 
-  .slot-gamble .gamble-amounts dt {
+  .slot-gamble:not(.is-book) .gamble-amounts dt {
     font-size: 0.56rem;
     white-space: nowrap;
   }
 
-  .slot-gamble .gamble-amounts dd {
+  .slot-gamble:not(.is-book) .gamble-amounts dd {
     font-size: 0.85rem;
     white-space: nowrap;
   }
 
-  .slot-gamble .gamble-message strong {
+  .slot-gamble:not(.is-book) .gamble-message strong {
     font-size: 0.72rem;
   }
 
-  .slot-gamble .gamble-pick,
-  .slot-gamble .gamble-take {
+  .slot-gamble:not(.is-book) .gamble-pick,
+  .slot-gamble:not(.is-book) .gamble-take {
     min-height: 36px;
     padding: 0.25rem 0.4rem;
     font-size: 0.7rem;
@@ -19255,5 +19255,303 @@ button.cab-field-box:disabled {
 @container (max-width: 759.98px) {
   .scratch-ticket {
     --scratch-rest: 32rem;
+  }
+}
+
+/*
+ * Book of Ra's double or nothing, after the original: gold papyrus inside a
+ * painted Egyptian border, the amounts in the top corners, six earlier cards
+ * under "Gamble to win" (backs until they're drawn), and the card, its back an
+ * Eye of Horus on red papyrus, between two oval buttons with silver rims, Red
+ * on the left and Black on the right. Sized from the reel window it covers
+ * (the gamble container), so it fits however short the reels are.
+ */
+.slot-gamble.is-book {
+  --book-eye: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 70'%3E%3Cdefs%3E%3ClinearGradient id='p' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23f4826a'/%3E%3Cstop offset='.5' stop-color='%23e0452f'/%3E%3Cstop offset='1' stop-color='%23c42a1c'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='50' height='70' rx='3' fill='%23170905'/%3E%3Crect x='1.6' y='1.6' width='46.8' height='66.8' rx='2' fill='none' stroke='%23f2dca0' stroke-width='2.2' stroke-dasharray='1.6 2.2'/%3E%3Crect x='4.5' y='4.5' width='41' height='61' fill='url(%23p)'/%3E%3Cpath d='M4.5 20h41M4.5 50h41' stroke='%23ffffff' stroke-opacity='.12' stroke-width='6'/%3E%3Cpath d='M9 25.5Q25 17 42 23.5l-.4 3Q25 21.5 9.5 28.6Z' fill='%23401008'/%3E%3Cpath d='M10 35Q25 25.5 40.5 33.5Q25 42.5 10 35Z' fill='%23fff3e2' stroke='%23401008' stroke-width='2.2' stroke-linejoin='round'/%3E%3Ccircle cx='25' cy='33.8' r='4.3' fill='%23401008'/%3E%3Cpath d='M21.5 39.5Q19 47.5 25.5 50.5Q31.5 52.5 31 47Q30.3 43.8 27 45.2' fill='none' stroke='%23401008' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M28.5 39l5.5 13.5' stroke='%23401008' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* The painted border: red, gold, blue and black bands. */
+  border: clamp(5px, 1.4cqmin, 9px) solid transparent;
+  border-image: repeating-linear-gradient(90deg, #b3201b 0 6px, #e9c35a 6px 8px, #1d4f9c 8px 14px, #e9c35a 14px 16px, #15100a 16px 19px, #e9c35a 19px 21px) 9;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .25 0 0 0 0 .15 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 30% 20%, rgba(255, 236, 160, 0.55), transparent 55%),
+    radial-gradient(ellipse at 70% 75%, rgba(120, 70, 10, 0.45), transparent 60%),
+    linear-gradient(160deg, #c99a35, #a8761c 45%, #c79634 70%, #8f5e12);
+  box-shadow: inset 0 0 40px rgba(60, 30, 0, 0.55);
+}
+
+.book-gamble {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  gap: clamp(0.2rem, 2cqh, 0.8rem);
+  padding: clamp(0.35rem, 3cqh, 1.2rem) clamp(0.6rem, 4cqw, 2.4rem);
+  text-transform: none;
+}
+
+.book-gamble-amounts {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.book-gamble-amounts > div {
+  display: grid;
+  justify-items: center;
+  min-width: 30%;
+}
+
+.book-gamble-amounts dt,
+.book-gamble-history > span {
+  color: #fff;
+  font-size: clamp(0.62rem, min(3.4cqw, 5.5cqh), 1.7rem);
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 0 rgba(60, 30, 0, 0.6), 0 0 6px rgba(0, 0, 0, 0.35);
+}
+
+.book-gamble-amounts dd {
+  margin: 0;
+  color: #ffd84a;
+  font-size: clamp(0.66rem, min(3.2cqw, 5.2cqh), 1.6rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 rgba(60, 30, 0, 0.7);
+}
+
+.book-gamble.is-won .book-gamble-amounts dd {
+  animation: gamble-pulse 520ms ease-out 2;
+}
+
+/* "Previous cards" and the six of them, on the right under "Gamble to win". */
+.book-gamble-history {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(0.4rem, 4cqw, 3rem);
+}
+
+.book-gamble-history ol {
+  display: flex;
+  gap: clamp(2px, 0.8cqw, 8px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.book-gamble-mini {
+  display: grid;
+  place-items: center;
+  height: clamp(1.4rem, 13cqh, 4.6rem);
+  aspect-ratio: 5 / 7;
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  font-size: clamp(0.7rem, 7cqh, 2.2rem);
+  line-height: 1;
+}
+
+.book-gamble-mini.is-back {
+  background: var(--book-eye) center / 100% 100% no-repeat;
+}
+
+.book-gamble-mini.is-face {
+  border: 2px solid #f4efe2;
+  background: #fbf8f1;
+}
+
+.book-gamble-mini.is-red {
+  color: #d1242f;
+}
+
+.book-gamble-mini.is-black {
+  color: #15191e;
+}
+
+/* The card between the two oval buttons. */
+.book-gamble-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(0.4rem, 4cqw, 3rem);
+  min-height: 0;
+}
+
+.book-gamble-table .gamble-table {
+  height: 100%;
+}
+
+.slot-gamble.is-book .gamble-card {
+  height: min(100%, 44cqh);
+  min-height: 3rem;
+  border: 0;
+  border-radius: clamp(5px, 1.2cqmin, 10px);
+}
+
+.slot-gamble.is-book .gamble-card.is-back {
+  outline: 0;
+  background: var(--book-eye) center / 100% 100% no-repeat;
+}
+
+/* Waiting for a pick, the back flashes red and black, as the original's does. */
+.slot-gamble.is-book .gamble-card.is-flashing {
+  animation: book-gamble-flash 520ms steps(1, end) infinite;
+}
+
+.slot-gamble.is-book .gamble-card.is-flashing.is-fast {
+  animation-duration: 180ms;
+}
+
+@keyframes book-gamble-flash {
+  0% {
+    filter: none;
+  }
+  50% {
+    filter: grayscale(1) brightness(0.42) contrast(1.3);
+  }
+}
+
+.slot-gamble.is-book .gamble-card.is-face {
+  border: 3px solid #f4efe2;
+}
+
+/* An oval button: a silver rim, a glossy cap above and below in its colour, its name on the band between. */
+.slot-gamble.is-book .book-gamble-pick {
+  position: relative;
+  justify-self: center;
+  align-self: center;
+  min-height: 0;
+  width: min(100%, 15rem, 62cqh);
+  aspect-ratio: 1.45;
+  padding: 0;
+  border: 0;
+  /* The Player's buttons take their rounding from this. */
+  --radius-control: 50%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 35%, #ffffff, #d6d6d6 45%, #8d8d8d 80%, #5e5e5e);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7), inset 0 -4px 10px rgba(0, 0, 0, 0.35), 0 6px 14px rgba(40, 20, 0, 0.55);
+  cursor: pointer;
+}
+
+.book-gamble-pick::before,
+.book-gamble-pick::after {
+  content: "";
+  position: absolute;
+  left: 11%;
+  right: 11%;
+  height: 27%;
+}
+
+.book-gamble-pick::before {
+  top: 11%;
+  border-radius: 50% 50% 22% 22% / 100% 100% 30% 30%;
+}
+
+.book-gamble-pick::after {
+  bottom: 11%;
+  border-radius: 22% 22% 50% 50% / 30% 30% 100% 100%;
+}
+
+.book-gamble-pick.is-red::before {
+  background: linear-gradient(180deg, #ffd1d1, #ff7272 30%, #e3262a);
+}
+
+.book-gamble-pick.is-red::after {
+  background: linear-gradient(180deg, #d71a1a, #b30d0d 60%, #7d0404);
+}
+
+.book-gamble-pick.is-black::before {
+  background: linear-gradient(180deg, #f2f2f2, #b5b5b5 35%, #7a7a7a);
+}
+
+.book-gamble-pick.is-black::after {
+  background: linear-gradient(180deg, #1b1b1b, #050505);
+}
+
+.book-gamble-pick span {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(0.75rem, min(3.6cqw, 7cqh), 2rem);
+  font-weight: 900;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.book-gamble-pick.is-red span {
+  color: #e01414;
+}
+
+.book-gamble-pick.is-black span {
+  color: #141414;
+}
+
+.book-gamble-pick:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.book-gamble-pick:active:not(:disabled) {
+  transform: translateY(2px);
+}
+
+.book-gamble-pick:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.book-gamble-message {
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  margin: 0;
+  text-align: center;
+}
+
+.book-gamble-message strong {
+  color: #fff;
+  font-size: clamp(0.66rem, min(2.4cqw, 4.4cqh), 1.25rem);
+  font-weight: 600;
+  text-shadow: 0 1px 0 #3a2000, 0 0 4px rgba(0, 0, 0, 0.6);
+}
+
+.book-gamble.is-lost .book-gamble-message strong {
+  color: #ffd2c8;
+}
+
+.book-gamble-message small {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: clamp(0.58rem, min(1.9cqw, 3.4cqh), 0.9rem);
+  font-weight: 700;
+  text-shadow: 0 1px 0 #3a2000;
+}
+
+.book-gamble-take {
+  justify-self: center;
+  min-height: clamp(30px, 9cqh, 44px);
+  padding: 0.2rem 1.4rem;
+  border: 2px solid #f6d36a;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #3b2a06, #1d1403);
+  color: #ffd84a;
+  font-size: clamp(0.68rem, min(2.2cqw, 4cqh), 1rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.book-gamble-take:disabled {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot-gamble.is-book .gamble-card.is-flashing,
+  .book-gamble.is-won .book-gamble-amounts dd {
+    animation: none;
+  }
+}
+
+/* Book of Ra's gamble in a short reel window (a phone held sideways): the label of the earlier cards and the guesses-left line go. */
+@container gamble (max-height: 300px) {
+  .book-gamble-history > span,
+  .book-gamble-message small {
+    display: none;
   }
 }

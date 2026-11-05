@@ -920,7 +920,10 @@ export function GamblePanel({
   onGuess,
   onTake,
   onContinue,
+  look = "fruit",
 }: {
+  /** "book": Book of Ra's gamble screen, gold papyrus in a painted frame, the card between oval Red and Black buttons. */
+  look?: "fruit" | "book";
   gamble: CasinoGamble | null;
   card: { suit: CardSuit; won: boolean; win: number } | null;
   /** Changes with each guess, so the card turns over again. */
@@ -962,6 +965,74 @@ export function GamblePanel({
       : t("Wrong card. This win is lost.")
     : t("Choose red or black, or take the win");
 
+  const shownCard =
+    faceUp && card ? (
+      <div key={`${cardKey ?? ""}-${card.suit}-${card.win}`} className={`gamble-card is-face is-${color(card.suit)}`} role="img" aria-label={t("The card: {suit}", { suit: SUIT_MARKS[card.suit] })}>
+        <span className="gamble-card-corner">{SUIT_MARKS[card.suit]}</span>
+        <span className="gamble-card-suit">{SUIT_MARKS[card.suit]}</span>
+        <span className="gamble-card-corner is-bottom">{SUIT_MARKS[card.suit]}</span>
+      </div>
+    ) : (
+      <div className={`gamble-card is-back${flashing ? " is-flashing" : ""}${guessing ? " is-fast" : ""}`} role="img" aria-label={t("A face-down card")} />
+    );
+
+  if (look === "book") {
+    // Book of Ra: the amounts in the top corners, six earlier cards (backs until drawn) under the one to win, and
+    // the card between two oval buttons, Red on the left and Black on the right; the message and Take win below.
+    return (
+      <div className="slot-gamble is-book">
+        <div className={`gamble-screen book-gamble${faceUp && card ? (card.won ? " is-won" : " is-lost") : ""}`} aria-live="polite">
+          <dl className="book-gamble-amounts">
+            <div>
+              <dt>{t("Gamble amount")}</dt>
+              <dd>{formatMoney(atStake)}</dd>
+            </div>
+            <div>
+              <dt>{t("Gamble to win")}</dt>
+              <dd>{gamble ? formatMoney(gamble.amount * 2) : "–"}</dd>
+            </div>
+          </dl>
+          <div className="book-gamble-history">
+            <span>{t("Previous cards")}</span>
+            <ol aria-label={t("Previous cards")}>
+              {Array.from({ length: 6 }, (_, index) => {
+                const suit = history[index];
+                return suit ? (
+                  <li key={index} className={`book-gamble-mini is-face is-${color(suit)}`}>{SUIT_MARKS[suit]}</li>
+                ) : (
+                  <li key={index} className="book-gamble-mini is-back" aria-hidden="true" />
+                );
+              })}
+            </ol>
+          </div>
+          <div className="book-gamble-table">
+            <button type="button" className="book-gamble-pick is-red" disabled={!gamble || guessing} onClick={() => onGuess("RED")}>
+              <span>{t("Red")}</span>
+            </button>
+            <div className="gamble-table">{shownCard}</div>
+            <button type="button" className="book-gamble-pick is-black" disabled={!gamble || guessing} onClick={() => onGuess("BLACK")}>
+              <span>{t("Black")}</span>
+            </button>
+          </div>
+          <p className="book-gamble-message">
+            <strong>{message}</strong>
+            {gamble && !(faceUp && card) ? <small>{tn(gamble.stepsLeft, "{count} guess left.", "{count} guesses left.")}</small> : null}
+            {!gamble && faceUp && card?.won ? <small>{t("That's the most this win can be doubled. It's in your balance.")}</small> : null}
+          </p>
+          {gamble ? (
+            <button type="button" className="book-gamble-take" disabled={guessing} onClick={onTake}>
+              {t("Take {amount}", { amount: formatMoney(gamble.amount) })}
+            </button>
+          ) : (
+            <button type="button" className="book-gamble-take" onClick={onContinue}>
+              {t("Continue")}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="slot-gamble">
       <div className={`gamble-screen${faceUp && card ? (card.won ? " is-won" : " is-lost") : ""}`} aria-live="polite">
@@ -991,17 +1062,7 @@ export function GamblePanel({
           </div>
         </div>
 
-        <div className="gamble-table">
-          {faceUp && card ? (
-            <div key={`${cardKey ?? ""}-${card.suit}-${card.win}`} className={`gamble-card is-face is-${color(card.suit)}`} role="img" aria-label={t("The card: {suit}", { suit: SUIT_MARKS[card.suit] })}>
-              <span className="gamble-card-corner">{SUIT_MARKS[card.suit]}</span>
-              <span className="gamble-card-suit">{SUIT_MARKS[card.suit]}</span>
-              <span className="gamble-card-corner is-bottom">{SUIT_MARKS[card.suit]}</span>
-            </div>
-          ) : (
-            <div className={`gamble-card is-back${flashing ? " is-flashing" : ""}${guessing ? " is-fast" : ""}`} role="img" aria-label={t("A face-down card")} />
-          )}
-        </div>
+        <div className="gamble-table">{shownCard}</div>
 
         <p className="gamble-message">
           <strong>{message}</strong>

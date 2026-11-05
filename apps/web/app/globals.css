@@ -12244,7 +12244,8 @@ button.is-blocked {
 @container (min-width: 760px) {
   .plinko-body {
     display: grid;
-    grid-template-columns: 17rem 1fr;
+    /* Wide enough for the biggest stake (2,500 ALL) inside its button. */
+    grid-template-columns: 19.5rem 1fr;
   }
 
   .plinko-controls {

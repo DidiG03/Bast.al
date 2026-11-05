@@ -1015,6 +1015,8 @@ function BetPage() {
       ) : tab === "matches" ? (
         <div className="bet-layout">
           <div className={`stack bet-matches${focused ? " is-jumping" : ""}${expanded.size > 0 ? " is-reading" : ""}`}>
+            {/* On a computer the search, league and country filters and the day chips share one line; on a phone, two. */}
+            <div className="bet-filter-bar">
             <div className="bet-filters">
               <div className="bet-filters-row">
                 <input type="search" placeholder={t("Search teams or leagues")} value={search} onChange={(e) => filter(() => setSearch(e.target.value))} aria-label={t("Search matches")} />
@@ -1095,6 +1097,7 @@ function BetPage() {
                   })}
                 </div>
             ) : null}
+            </div>
 
             {events === null ? (
               <div className="loading-state">

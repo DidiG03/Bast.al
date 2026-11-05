@@ -19668,3 +19668,50 @@ button.cab-field-box:disabled {
 .scratch-picture.is-seven {
   width: 1.7em;
 }
+
+/*
+ * The Bast page's filters: on a phone or tablet the bar is no box at all (the search row, then the day chips under
+ * it, which stick to the top as you scroll). On a computer the two share one line in one panel, and the whole
+ * line sticks instead; once a match is open it scrolls away, as the chips did.
+ */
+.bet-filter-bar {
+  display: contents;
+}
+
+@media (min-width: 1024px) {
+  .role-player .bet-page .bet-filter-bar {
+    position: sticky;
+    top: 3.35rem;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.55rem;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-panel, 14px);
+    background: var(--surface-1);
+  }
+
+  .role-player .bet-page .bet-matches.is-reading .bet-filter-bar {
+    position: static;
+  }
+
+  .role-player .bet-page .bet-filter-bar > .bet-filters {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .role-player .bet-page .bet-filter-bar > .bet-day-chips {
+    position: static;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  .role-player .bet-page .bet-filter-bar > .bet-day-chips::after {
+    background: linear-gradient(to right, transparent, var(--surface-1) 70%);
+  }
+}

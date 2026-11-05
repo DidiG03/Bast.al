@@ -28,7 +28,7 @@ export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 
 /**
  * What a round pays, in times the stake: PAYS[picks][hits]. Every row pays
- * back about 85% on average (see payoutRate), worked out exactly from the
+ * back about 85% on average, and never more (see payoutRate), worked out exactly from the
  * odds, so it doesn't matter how many numbers a Player picks.
  */
 export const PAYS: Record<number, number[]> = {
@@ -36,7 +36,7 @@ export const PAYS: Record<number, number[]> = {
   2: [0, 1, 7.8],
   3: [0, 0, 2, 41],
   4: [0, 0, 1, 6.5, 116],
-  5: [0, 0, 0, 4, 24, 350],
+  5: [0, 0, 0, 4, 23.8, 350],
   6: [0, 0, 0, 2, 8.5, 56, 1350],
   7: [0, 0, 0, 1, 5.5, 26, 155, 2000],
   8: [0, 0, 0, 1, 2.8, 12, 50, 370, 2000],

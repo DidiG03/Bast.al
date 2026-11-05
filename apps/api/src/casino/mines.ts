@@ -22,8 +22,16 @@ export const GAME_NAME = "Mines";
 
 export const COLUMNS = 5;
 export const TILES = 25;
-/** How many mines a round can hide. */
-export const MINE_COUNTS = [1, 3, 5, 10, 15, 20, 24] as const;
+/**
+ * How many mines a round can hide. Not 1 or 3: with so few, 85% of the fair
+ * price of the first tiles is under 1.01×, and holding them at 1.01× paid
+ * back more than 85% (up to 97% on one mine). From 5 mines up, every
+ * cash-out pays back 85% or less. (Rounds started with 1 or 3 mines before
+ * still settle by the rules below.)
+ */
+export const MINE_COUNTS = [5, 10, 15, 20, 24] as const;
+/** Why a mine count can't be played. */
+export const MINE_COUNT_ERROR = `Pick ${MINE_COUNTS.slice(0, -1).join(", ")} or ${MINE_COUNTS[MINE_COUNTS.length - 1]} mines.`;
 /** What a round can cost, in dollars. The same chips as the fruit slot. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 /** The house's edge: 15%, so a round pays back 85% on average, except on the early tiles that climb evenly from 1.01×. */
@@ -132,7 +140,7 @@ export function placeMines(count: number, draw: (below: number) => number): numb
 
 /** Starts a round: the bet (cents) down, the mines placed, nothing opened yet. */
 export function startRound(betCents: number, mines: number, draw: (below: number) => number): Round {
-  if (!(MINE_COUNTS as readonly number[]).includes(mines)) throw new MinesError("Pick 1, 3, 5, 10, 15, 20 or 24 mines.");
+  if (!(MINE_COUNTS as readonly number[]).includes(mines)) throw new MinesError(MINE_COUNT_ERROR);
   return { bet: betCents, mines, mineTiles: placeMines(mines, draw), revealed: [], bust: null, phase: "PLAY", payout: 0, capped: false };
 }
 

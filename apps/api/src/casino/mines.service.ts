@@ -9,7 +9,7 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { dayKey, startOfDay } from "../time";
 import { UsersService } from "../users/users.service";
 import { addToDailyLine, casinoClosedReason, maxStakeOf } from "./access";
-import { BETS, COLUMNS, GAME_NAME, MAX_WIN, MINE_COUNTS, MinesError, PAYOUT_RATE, TILES, cashOut, publicView, reveal, startRound, type Round } from "./mines";
+import { BETS, COLUMNS, GAME_NAME, MAX_WIN, MINE_COUNTS, MINE_COUNT_ERROR, MinesError, PAYOUT_RATE, TILES, cashOut, publicView, reveal, startRound, type Round } from "./mines";
 import { formatAll } from "../money";
 
 const RECENT = 10;
@@ -97,7 +97,7 @@ export class MinesService implements OnModuleInit, OnModuleDestroy {
     if (!Number.isFinite(bet) || Math.abs(cents - bet * 100) > 1e-6 || !(BETS as readonly number[]).includes(bet)) {
       throw new BadRequestException(`A round costs ${BETS.map((value) => value.toFixed(2)).join(", ")} ALL`);
     }
-    if (!(MINE_COUNTS as readonly number[]).includes(mines)) throw new BadRequestException("Pick 1, 3, 5, 10, 15, 20 or 24 mines.");
+    if (!(MINE_COUNTS as readonly number[]).includes(mines)) throw new BadRequestException(MINE_COUNT_ERROR);
     const tableMax = await this.tableMax(actor.id);
     if (bet > tableMax) throw new BadRequestException(`The most you can bet on one round is ${formatAll(tableMax)}`);
     const team = await assertOnTeam(this.prisma, actor);

@@ -10,8 +10,8 @@ import { randomInt } from "crypto";
  *
  * With `rows` rows the ball lands in bucket k (k rights) with chance
  * C(rows, k) / 2^rows. Every pay table is set so a ball pays back about 85%
- * of its stake on average (payoutRate() works it out exactly, and the tests
- * hold every table to 84.8% to 85.2%).
+ * of its stake on average, and never more (payoutRate() works it out exactly,
+ * and the tests hold every table to 84.4% to 85%).
  */
 
 export const GAME_NAME = "Plinko";
@@ -38,15 +38,15 @@ const HALF_TABLES: Record<Rows, Record<Risk, readonly number[]>> = {
   8: {
     LOW: [5.1, 1.4, 1, 0.9, 0.4],
     MEDIUM: [11.5, 2.7, 1, 0.6, 0.4],
-    HIGH: [25.5, 3.6, 1.1, 0.3, 0.2],
+    HIGH: [25.4, 3.6, 1.1, 0.3, 0.2],
   },
   12: {
-    LOW: [9, 2.2, 1.1, 1.1, 1, 0.9, 0.4],
-    MEDIUM: [30, 10, 3.6, 1.7, 0.9, 0.5, 0.3],
-    HIGH: [150, 20.8, 6.7, 1.6, 0.6, 0.2, 0.2],
+    LOW: [9, 2, 1.1, 1.1, 1, 0.9, 0.4],
+    MEDIUM: [30, 9.9, 3.6, 1.7, 0.9, 0.5, 0.3],
+    HIGH: [150, 20.7, 6.7, 1.6, 0.6, 0.2, 0.2],
   },
   16: {
-    LOW: [14, 8, 1.4, 1.2, 1.1, 1.1, 0.9, 0.9, 0.4],
+    LOW: [14, 8, 1.2, 1.2, 1.1, 1.1, 0.9, 0.9, 0.4],
     MEDIUM: [100, 40, 9, 4.3, 2.8, 1.1, 0.9, 0.4, 0.3],
     HIGH: [900, 110, 23, 8.1, 3.5, 1.6, 0.2, 0.2, 0.1],
   },

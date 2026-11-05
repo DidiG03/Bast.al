@@ -21,10 +21,10 @@ test("the board, the draw and the bets are what the rules say", () => {
   }
 });
 
-test("every number of picks pays back between 84% and 86%", () => {
+test("every number of picks pays back between 84% and 85%, never more", () => {
   for (let picks = MIN_PICKS; picks <= MAX_PICKS; picks++) {
     const rate = payoutRate(picks);
-    assert.ok(rate > 84 && rate < 86, `${picks} picks pay back ${rate.toFixed(2)}%`);
+    assert.ok(rate > 84 && rate <= 85 + 1e-9, `${picks} picks pay back ${rate.toFixed(3)}%`);
   }
   assert.equal(payoutRate(1), 85, "1 pick: a 1 in 4 chance at 3.4x");
 });

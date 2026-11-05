@@ -22,7 +22,7 @@ const ways = (tiles, opened, safe) => {
 
 test("the field, the mine counts and the bets are what the rules say", () => {
   assert.equal(TILES, 25);
-  assert.deepEqual([...MINE_COUNTS], [1, 3, 5, 10, 15, 20, 24]);
+  assert.deepEqual([...MINE_COUNTS], [5, 10, 15, 20, 24]);
   assert.deepEqual([...BETS], [50, 100, 250, 500, 1000, 2500]);
   assert.equal(MAX_WIN, 5000);
 });
@@ -69,6 +69,21 @@ test("the multiplier rises with every safe tile, and it stops at 5,000 times the
   assert.equal(payoutCents(1000, 20, 5), 1000 * MAX_WIN);
 });
 
+test("1 and 3 mines can't be played: their first tiles paid back more than 85%", () => {
+  assert.throws(() => startRound(100, 1, () => 0), /Pick 5, 10, 15, 20 or 24 mines/);
+  assert.throws(() => startRound(100, 3, () => 0), /Pick 5, 10, 15, 20 or 24 mines/);
+});
+
+test("every mine count that can be played pays back 85% or less at every cash-out, cents included", () => {
+  for (const mines of MINE_COUNTS) {
+    const safe = TILES - mines;
+    for (let opened = 1; opened <= safe; opened++) {
+      const back = ways(TILES, opened, safe) * payoutCents(5_000, mines, opened);
+      assert.ok(back <= 0.85 * 5_000 + 1e-6, `${mines} mines, ${opened} tiles pays back ${(back / 50).toFixed(3)}%`);
+    }
+  }
+});
+
 test("cashing out after any number of tiles pays back 85% before the cents are floored", () => {
   for (const mines of [1, 3, 10]) {
     const safe = TILES - mines;
@@ -91,7 +106,7 @@ test("cashing out after any number of tiles pays back 85% before the cents are f
 });
 
 test("a mine loses the stake, and the board stays secret until the round ends", () => {
-  const round = startRound(100, 3, draws(4, 4, 4));
+  const round = startRound(100, 5, draws(4, 4, 4, 4, 4));
   const hidden = publicView(round);
   assert.equal(hidden.tiles.every((tile) => tile === "hidden"), true);
   assert.equal(hidden.cashout, 0);
@@ -106,19 +121,19 @@ test("a mine loses the stake, and the board stays secret until the round ends", 
   assert.equal(lost.payout, 0);
   const shown = publicView(lost);
   assert.equal(shown.tiles[round.mineTiles[0]], "hit");
-  assert.equal(shown.tiles.filter((tile) => tile === "mine").length, 2);
+  assert.equal(shown.tiles.filter((tile) => tile === "mine").length, 4);
   assert.equal(shown.cashout, 0);
 });
 
 test("cashing out pays the open tiles, and clearing the board pays the last one", () => {
-  const round = startRound(200, 3, draws(0, 0, 0));
+  const round = startRound(200, 5, draws(0, 0, 0, 0, 0));
   assert.throws(() => cashOut(round), /Open a tile before you cash out/);
-  const open = reveal(round, 5);
+  const open = reveal(round, 7);
   assert.equal(open.phase, "PLAY");
   const won = cashOut(open);
   assert.equal(won.phase, "WON");
-  assert.equal(won.payout, payoutCents(200, 3, 1));
-  assert.equal(publicView(won).tiles.filter((tile) => tile === "mine").length, 3);
+  assert.equal(won.payout, payoutCents(200, 5, 1));
+  assert.equal(publicView(won).tiles.filter((tile) => tile === "mine").length, 5);
 
   const last = startRound(200, 24, draws(0));
   const cleared = reveal(last, 24);
@@ -127,16 +142,15 @@ test("cashing out pays the open tiles, and clearing the board pays the last one"
   assert.equal(cleared.payout, payoutCents(200, 24, 1));
   assert.equal(publicView(cleared).tiles.filter((tile) => tile === "mine").length, 24);
 
-  const few = startRound(100, 1, () => 0);
+  const few = startRound(100, 5, () => 0);
   let playing = few;
-  for (let tile = 1; tile < TILES; tile++) playing = playing.phase === "PLAY" ? reveal(playing, tile) : playing;
+  for (let tile = 5; tile < TILES; tile++) playing = playing.phase === "PLAY" ? reveal(playing, tile) : playing;
   assert.equal(playing.phase, "WON");
-  assert.equal(playing.revealed.length, TILES - 1);
-  assert.equal(playing.payout, payoutCents(100, 1, TILES - 1));
+  assert.equal(playing.payout, payoutCents(100, 5, playing.revealed.length));
 });
 
 test("a tile can't be opened twice, and a finished round stays finished", () => {
-  const round = startRound(100, 3, draws(2, 2, 2));
+  const round = startRound(100, 5, draws(2, 2, 2, 2, 2));
   const once = reveal(round, 0);
   assert.throws(() => reveal(once, 0), /already open/);
   const won = cashOut(once);

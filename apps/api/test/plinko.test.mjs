@@ -35,14 +35,16 @@ test("the buckets' chances add up to 1 and follow the binomial", () => {
   assert.deepEqual(bucketChances(8).map((chance) => chance * 256), [1, 8, 28, 56, 70, 56, 28, 8, 1]);
 });
 
-test(`every board pays back ${PAYOUT_RATE}% on average, within 0.2%`, () => {
+test(`every board pays back ${PAYOUT_RATE}% on average, within 0.6% under and never over`, () => {
   for (const rows of ROWS) {
     for (const risk of RISKS) {
-      const rate = payoutRate(rows, risk);
-      assert.ok(rate >= PAYOUT_RATE - 0.2 && rate <= PAYOUT_RATE + 0.2, `${rows} rows ${risk}: ${rate}%`);
+      // Exact, cents included: what a 50 ALL ball pays back.
+      const table = payTable(rows, risk);
+      const exact = bucketChances(rows).reduce((sum, chance, bucket) => sum + chance * (winCents(5000, table[bucket]) / 5000), 0) * 100;
+      assert.ok(exact >= PAYOUT_RATE - 0.6 && exact <= PAYOUT_RATE + 1e-9, `${rows} rows ${risk}: ${exact}%`);
     }
   }
-  assert.equal(payoutRate(16, "LOW"), 85.04);
+  assert.equal(payoutRate(16, "LOW"), 84.97);
 });
 
 test("the ball's bucket is how many times it went right", () => {

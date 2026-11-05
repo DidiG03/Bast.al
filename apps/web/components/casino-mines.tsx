@@ -63,7 +63,7 @@ export function MinesGame() {
 
   const [state, setState] = useState<MinesState | null>(null);
   const [balance, setBalance] = useState(0);
-  const [mines, setMines] = useState(3);
+  const [mines, setMines] = useState(5);
   const [bet, setBet] = useState(0);
   const [round, setRound] = useState<MinesRoundView | null>(null);
   const [recent, setRecent] = useState<MinesState["recent"]>([]);
@@ -88,7 +88,7 @@ export function MinesGame() {
     setRecent(next.recent);
     // A round still in play comes back; a finished one stays in the history, and the board starts fresh.
     setRound(next.round ?? null);
-    setMines((current) => (next.game.mineCounts.includes(current) ? current : next.game.mineCounts[1] ?? next.game.mineCounts[0]));
+    setMines((current) => (next.game.mineCounts.includes(current) ? current : next.game.mineCounts[0]));
     setBet((current) => current || Math.min(next.game.bets[0], next.tableMax));
   }, [getToken, t]);
 
@@ -350,7 +350,7 @@ export function MinesGame() {
               {t("A 5 by 5 field hides the number of mines you pick. Tap a tile: a coin raises what the round pays, a mine loses the stake. Cash out after the first coin, or keep going. The round ends on its own if you clear every coin, or if it reaches {times} times the stake.", { times: state.game.maxWin.toLocaleString() })}
             </p>
             <p>
-              {t("Each coin pays more than the last, and never 1.00× or less. With few mines the first coins climb evenly from 1.01×. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.", {
+              {t("Each coin pays more than the last, and never 1.00× or less. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.", {
                 min: formatMoney(state.game.bets[0]),
                 max: formatMoney(state.game.bets[state.game.bets.length - 1]),
               })}

@@ -378,11 +378,8 @@ function TileFace({ tile, fresh }: { tile: MinesTile; fresh: boolean }) {
 function CoinBurst({ fresh }: { fresh: boolean }) {
   return (
     <span className={`mines-coins${fresh ? " is-fresh" : ""}`} aria-hidden="true">
-      <span className="mines-coin-stack">
-        <i />
-        <i />
-        <i />
-      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element -- a small static picture, the treasure under a safe tile */}
+      <img className="mines-treasure" src="/casino/mines/treasure.webp" alt="" draggable={false} />
       {fresh
         ? COIN_BURST.map(([x, y], index) => <i key={index} className="mines-fly" style={{ "--dx": x, "--dy": y } as CSSProperties} />)
         : null}

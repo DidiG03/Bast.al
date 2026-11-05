@@ -745,7 +745,7 @@ export const casino: Record<string, string> = {
   "Bell": "Zilja",
   "Clover": "Tërfili",
   "Diamond": "Diamanti",
-  "Crown": "Kurora",
+  "Dollar": "Dollar",
   // From the server
   "The Casino is turned off for your account.": "Kazinoja është e fikur për llogarinë tënde.",
   "A roll costs {bets} ALL": "Një hedhje kushton {bets} ALL",

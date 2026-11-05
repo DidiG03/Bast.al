@@ -34,6 +34,15 @@ export const SYMBOL_ART: Record<ScratchSymbol, string> = {
   CROWN: "👑",
 };
 
+/** Symbols drawn from a picture (public/casino/scratch/) instead of their emoji. The Crown, the top prize, is a gold dollar sign. */
+export const SYMBOL_PICTURES: Partial<Record<ScratchSymbol, string>> = {
+  SEVEN: "/casino/scratch/seven.webp",
+  CHERRY: "/casino/scratch/cherry.webp",
+  CLOVER: "/casino/scratch/clover.webp",
+  DIAMOND: "/casino/scratch/diamond.webp",
+  CROWN: "/casino/scratch/dollar.webp",
+};
+
 /** Each symbol's name, to translate. */
 export const SYMBOL_NAMES: Record<ScratchSymbol, string> = {
   CHERRY: "Cherry",
@@ -43,7 +52,7 @@ export const SYMBOL_NAMES: Record<ScratchSymbol, string> = {
   WATERMELON: "Watermelon",
   DIAMOND: "Diamond",
   SEVEN: "Seven",
-  CROWN: "Crown",
+  CROWN: "Dollar",
 };
 
 /** The card these seeds and this nonce make: the i-th random number is HMAC-SHA256(serverSeed, "clientSeed:nonce:i"), first 4 bytes as a fraction. */

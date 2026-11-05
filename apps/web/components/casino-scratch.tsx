@@ -15,7 +15,7 @@ import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import { apiFetch, newIdempotencyKey, type DiceSeed, type DiceSeedChange, type ScratchBuyResult, type ScratchCard, type ScratchState, type ScratchSymbol } from "../lib/api";
 import { sha256Hex } from "../lib/dice";
 import { formatMoney, formatStake } from "../lib/format";
-import { CELLS, SYMBOL_ART, SYMBOL_NAMES, cardFromSeeds } from "../lib/scratch";
+import { CELLS, SYMBOL_ART, SYMBOL_NAMES, SYMBOL_PICTURES, cardFromSeeds } from "../lib/scratch";
 import { useCasinoSession } from "./use-casino-session";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", second: "2-digit" };
@@ -45,6 +45,9 @@ function parseMoney(text: string): number {
 }
 
 function SymbolArt({ symbol }: { symbol: ScratchSymbol }) {
+  const picture = SYMBOL_PICTURES[symbol];
+  // eslint-disable-next-line @next/next/no-img-element -- a small static picture, sized like the emoji it stands in for
+  if (picture) return <img className={`scratch-emoji scratch-picture is-${symbol.toLowerCase()}`} src={picture} alt="" draggable={false} />;
   return symbol === "SEVEN" ? <span className="scratch-seven">7</span> : <span className="scratch-emoji">{SYMBOL_ART[symbol]}</span>;
 }
 

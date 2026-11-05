@@ -10229,18 +10229,31 @@ button.is-blocked {
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5));
 }
 
-/* A cover picture fills the whole tile, framed on the explorer: his hat and face. */
+/* The cover picture is square and the tile wide: all of it shows in the middle, over a blurred copy of it filling the sides. */
 .casino-tile.is-book .casino-tile-art:has(.is-photo) {
+  position: relative;
+  isolation: isolate;
   padding: 0;
+}
+
+.casino-tile.is-book .casino-tile-art:has(.is-photo)::before {
+  content: "";
+  position: absolute;
+  inset: -24px;
+  z-index: -1;
+  background: url("/casino/book-of-ra/cover.webp") center / cover no-repeat;
+  filter: blur(18px) brightness(0.75) saturate(1.2);
 }
 
 .casino-tile-cover.is-book.is-photo {
   width: 100%;
   max-width: none;
-  object-fit: cover;
-  object-position: 50% 33%;
+  object-fit: contain;
+  object-position: 50% 50%;
   border-radius: 0;
-  filter: none;
+  background: none;
+  animation: none;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
 }
 
 /* Book of Ra, made to look like the original cabinet: a sunset marquee, a stone wall with hieroglyphs, banded reels, numbered line boxes and a dark control bar. */

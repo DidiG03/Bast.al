@@ -14,7 +14,7 @@ import type { BookSymbol } from "../lib/api";
 
 const ART_FOLDER = "/casino/book-of-ra";
 /** The lobby tile's picture. */
-export const BOOK_COVER = `${ART_FOLDER}/cover.webp`;
+export const BOOK_COVER = `${ART_FOLDER}/cover-wide.webp`;
 
 /** Draws a picture in a 100 × 100 box. */
 type Icon = (ctx: CanvasRenderingContext2D) => void;

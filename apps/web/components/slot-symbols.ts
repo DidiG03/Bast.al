@@ -619,6 +619,7 @@ const PICTURES: Partial<Record<SlotSymbol, string>> = {
   SEVEN: "/casino/sizzling-hot/seven.webp",
   CHERRY: "/casino/sizzling-hot/cherry.webp",
   MELON: "/casino/sizzling-hot/melon.webp",
+  STAR: "/casino/sizzling-hot/star.webp",
 };
 const pictures = new Map<SlotSymbol, HTMLImageElement>();
 let loadingPictures: Promise<void> | null = null;
@@ -730,7 +731,7 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
   const look: Look | undefined = LOOKS[symbol];
   const art = artOf(symbol, size);
   if (look && art) {
-    if (look.plate) plate(ctx, size);
+    if (look.plate && !pictures.has(symbol)) plate(ctx, size);
     if (look.glow) {
       const glow = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * 0.5);
       glow.addColorStop(0, `rgba(${look.glow},0.6)`);
@@ -939,7 +940,7 @@ export function drawBurning(symbol: SlotSymbol, size: number, frame: number, lit
   }
   const art = artOf(symbol, size);
   if (art) {
-    if (LOOKS[symbol]?.plate) plate(ctx, size);
+    if (LOOKS[symbol]?.plate && !pictures.has(symbol)) plate(ctx, size);
     const fire = fireOf(symbol, art, frame);
     // The heat round it: an orange glow, the flames behind, then a white-hot edge.
     ctx.save();

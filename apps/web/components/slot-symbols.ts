@@ -611,6 +611,44 @@ function border(ctx: CanvasRenderingContext2D, shape: HTMLCanvasElement, radius:
   }
 }
 
+/**
+ * Symbols drawn from a picture (public/casino/sizzling-hot/) instead of in code. Each picture is the symbol alone on
+ * a transparent background; until it has loaded (or if it can't), the symbol is drawn in code as before.
+ */
+const PICTURES: Partial<Record<SlotSymbol, string>> = {
+  SEVEN: "/casino/sizzling-hot/seven.webp",
+  CHERRY: "/casino/sizzling-hot/cherry.webp",
+  MELON: "/casino/sizzling-hot/melon.webp",
+};
+const pictures = new Map<SlotSymbol, HTMLImageElement>();
+let loadingPictures: Promise<void> | null = null;
+
+/** Loads the symbols' pictures. Call before drawing the reels; a picture that fails leaves its symbol drawn in code. */
+export function loadSlotArt(): Promise<void> {
+  loadingPictures ??= Promise.all(
+    (Object.entries(PICTURES) as Array<[SlotSymbol, string]>).map(
+      ([symbol, src]) =>
+        new Promise<void>((resolve) => {
+          const image = new Image();
+          image.onload = () => {
+            pictures.set(symbol, image);
+            resolve();
+          };
+          image.onerror = () => resolve();
+          image.src = src;
+        }),
+    ),
+  ).then(() => {
+    // Anything drawn before the pictures came is drawn again with them.
+    arts.clear();
+    drawn.clear();
+    burning.clear();
+    fires.clear();
+    addresses.clear();
+  });
+  return loadingPictures;
+}
+
 /** The symbol's picture alone, `size` pixels square on a transparent background, or null for a symbol this game doesn't have. */
 const arts = new Map<string, HTMLCanvasElement | null>();
 const BOX = 0.9;
@@ -619,16 +657,26 @@ function artOf(symbol: SlotSymbol, size: number): HTMLCanvasElement | null {
   const key = `${symbol}:${size}`;
   if (arts.has(key)) return arts.get(key)!;
   const look: Look | undefined = LOOKS[symbol];
+  const picture = pictures.get(symbol);
   let art: HTMLCanvasElement | null = null;
-  if (look) {
+  if (look || picture) {
     art = document.createElement("canvas");
     art.width = size;
     art.height = size;
     const ctx = art.getContext("2d", { willReadFrequently: true })!;
     const box = size * BOX;
-    ctx.translate((size - box) / 2, (size - box) / 2);
-    ctx.scale(box / 100, box / 100);
-    look.icon(ctx);
+    if (picture) {
+      // Fitted to the box, keeping its shape.
+      const scale = Math.min(box / picture.width, box / picture.height);
+      const w = picture.width * scale;
+      const h = picture.height * scale;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(picture, (size - w) / 2, (size - h) / 2, w, h);
+    } else if (look) {
+      ctx.translate((size - box) / 2, (size - box) / 2);
+      ctx.scale(box / 100, box / 100);
+      look.icon(ctx);
+    }
   }
   arts.set(key, art);
   return art;
@@ -708,7 +756,8 @@ export function drawSymbol(symbol: SlotSymbol, size: number): HTMLCanvasElement 
     ctx.save();
     ctx.translate((size - box) / 2, (size - box) / 2);
     ctx.scale(box / 100, box / 100);
-    for (const [x, y, r] of look.glints) sparkle(ctx, x, y, r);
+    // A picture has its own highlights.
+    if (!pictures.has(symbol)) for (const [x, y, r] of look.glints) sparkle(ctx, x, y, r);
     ctx.restore();
   }
   drawn.set(key, canvas);

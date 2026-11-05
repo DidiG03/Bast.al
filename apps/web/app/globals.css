@@ -7209,71 +7209,71 @@ button.is-blocked {
 }
 
 @container gamble (max-height: 300px) {
-  .slot-gamble:not(.is-book) .gamble-screen {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-screen {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 0.3rem 0.8rem;
     padding: 0.45rem 0.7rem;
   }
 
-  .slot-gamble:not(.is-book) .gamble-top {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-top {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .slot-gamble:not(.is-book) .gamble-table {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-table {
     grid-column: 1;
     grid-row: 1 / -1;
   }
 
-  .slot-gamble:not(.is-book) .gamble-card {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-card {
     height: min(100%, 7.5rem);
     min-height: 0;
   }
 
-  .slot-gamble:not(.is-book) .gamble-message {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-message {
     grid-column: 2;
     grid-row: 2;
     align-self: center;
   }
 
-  .slot-gamble:not(.is-book) .gamble-buttons {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-buttons {
     grid-column: 2;
     grid-row: 3;
     gap: 0.35rem;
   }
 
   /* Room for what matters: the earlier cards go, and the two amounts sit side by side on one line each. */
-  .slot-gamble:not(.is-book) .gamble-history {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-history {
     display: none;
   }
 
-  .slot-gamble:not(.is-book) .gamble-top,
-  .slot-gamble:not(.is-book) .gamble-amounts {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-top,
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-amounts {
     width: 100%;
   }
 
-  .slot-gamble:not(.is-book) .gamble-amounts {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-amounts {
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
   }
 
-  .slot-gamble:not(.is-book) .gamble-amounts dt {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-amounts dt {
     font-size: 0.56rem;
     white-space: nowrap;
   }
 
-  .slot-gamble:not(.is-book) .gamble-amounts dd {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-amounts dd {
     font-size: 0.85rem;
     white-space: nowrap;
   }
 
-  .slot-gamble:not(.is-book) .gamble-message strong {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-message strong {
     font-size: 0.72rem;
   }
 
-  .slot-gamble:not(.is-book) .gamble-pick,
-  .slot-gamble:not(.is-book) .gamble-take {
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-pick,
+  .slot-gamble:not(.is-book):not(.is-sizzling) .gamble-take {
     min-height: 36px;
     padding: 0.25rem 0.4rem;
     font-size: 0.7rem;
@@ -19380,7 +19380,7 @@ button.cab-field-box:disabled {
   height: 100%;
 }
 
-.slot-gamble.is-book .gamble-card {
+.slot-gamble:is(.is-book, .is-sizzling) .gamble-card {
   height: min(100%, 44cqh);
   min-height: 3rem;
   border: 0;
@@ -19393,11 +19393,11 @@ button.cab-field-box:disabled {
 }
 
 /* Waiting for a pick, the back flashes red and black, as the original's does. */
-.slot-gamble.is-book .gamble-card.is-flashing {
+.slot-gamble:is(.is-book, .is-sizzling) .gamble-card.is-flashing {
   animation: book-gamble-flash 520ms steps(1, end) infinite;
 }
 
-.slot-gamble.is-book .gamble-card.is-flashing.is-fast {
+.slot-gamble:is(.is-book, .is-sizzling) .gamble-card.is-flashing.is-fast {
   animation-duration: 180ms;
 }
 
@@ -19410,12 +19410,12 @@ button.cab-field-box:disabled {
   }
 }
 
-.slot-gamble.is-book .gamble-card.is-face {
+.slot-gamble:is(.is-book, .is-sizzling) .gamble-card.is-face {
   border: 3px solid #f4efe2;
 }
 
 /* An oval button: a silver rim, a glossy cap above and below in its colour, its name on the band between. */
-.slot-gamble.is-book .book-gamble-pick {
+.slot-gamble:is(.is-book, .is-sizzling) .book-gamble-pick {
   position: relative;
   justify-self: center;
   align-self: center;
@@ -19542,7 +19542,7 @@ button.cab-field-box:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .slot-gamble.is-book .gamble-card.is-flashing,
+  .slot-gamble:is(.is-book, .is-sizzling) .gamble-card.is-flashing,
   .book-gamble.is-won .book-gamble-amounts dd {
     animation: none;
   }
@@ -19554,4 +19554,64 @@ button.cab-field-box:disabled {
   .book-gamble-message small {
     display: none;
   }
+}
+
+/* Sizzling Hot's double or nothing, after the original: the same layout on deep purple in a red frame, serif
+   headings, plain playing-card backs (pink for the earlier cards, blue lattice on white for the one in play). */
+.slot-gamble.is-sizzling {
+  border: clamp(4px, 1.1cqmin, 7px) solid #c4161c;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(170, 40, 140, 0.35), transparent 65%),
+    linear-gradient(180deg, #6e1563, #4a0d45 55%, #2c0629);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 0 50px rgba(0, 0, 0, 0.45);
+}
+
+.slot-gamble.is-sizzling .book-gamble-amounts dt,
+.slot-gamble.is-sizzling .book-gamble-history > span {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.5);
+}
+
+.slot-gamble.is-sizzling .book-gamble-amounts dd {
+  color: #ffd21f;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.5);
+}
+
+.slot-gamble.is-sizzling .book-gamble-mini.is-back {
+  border: clamp(2px, 0.6cqmin, 4px) solid #f6f2f4;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 3px, rgba(255, 255, 255, 0.14) 3px 4px),
+    repeating-linear-gradient(-45deg, transparent 0 3px, rgba(255, 255, 255, 0.14) 3px 4px),
+    #e25a73;
+  box-shadow: inset 0 0 0 1px rgba(160, 20, 50, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.slot-gamble.is-sizzling .gamble-card.is-back {
+  outline: 0;
+  border: clamp(5px, 2.6cqmin, 16px) solid #f4f4f6;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(60deg, transparent 0 4px, rgba(255, 255, 255, 0.28) 4px 5px),
+    repeating-linear-gradient(-60deg, transparent 0 4px, rgba(255, 255, 255, 0.28) 4px 5px),
+    repeating-linear-gradient(0deg, transparent 0 6px, rgba(20, 30, 120, 0.25) 6px 7px),
+    #4f5fd6;
+  box-shadow: inset 0 0 0 2px #2b39a8, 0 10px 26px rgba(0, 0, 0, 0.55);
+}
+
+.slot-gamble.is-sizzling .book-gamble-message strong {
+  font-weight: 800;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.5);
+}
+
+.slot-gamble.is-sizzling .book-gamble-message small {
+  text-shadow: none;
+}
+
+.slot-gamble.is-sizzling .book-gamble-take {
+  border-color: #ff5a4a;
+  background: linear-gradient(180deg, #d3201b, #8e0b08);
+  color: #fff;
 }

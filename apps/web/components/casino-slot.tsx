@@ -11,7 +11,7 @@ import { useDismiss } from "./use-dismiss";
 import { useRealtime } from "./realtime-provider";
 import { SlotReels, type ReelWin, type SlotReelsHandle } from "./slot-reels";
 import { slotSound } from "./slot-sounds";
-import { BURN_FRAMES, drawBurning, symbolImage, warmBurning } from "./slot-symbols";
+import { BURN_FRAMES, drawBurning, loadSlotArt, symbolImage, warmBurning } from "./slot-symbols";
 import { useToast } from "./toaster";
 import { FullScreenIcon, RotatePhoneIcon, useFullScreen, usePrefersReducedMotion } from "./use-full-screen";
 import { useGameKeys } from "./use-game-keys";
@@ -235,6 +235,11 @@ export function SlotGame() {
     slotSound.setVoice("classic");
     return () => slotSound.setVoice("standard");
   }, []);
+  // The symbols' pictures, before the reels are drawn.
+  const [artReady, setArtReady] = useState(false);
+  useEffect(() => {
+    void loadSlotArt().finally(() => setArtReady(true));
+  }, []);
 
   /** Full screen: the browser's own, or the cabinet expanded over the page on an iPhone. */
   const { ref: cabinet, mode: fullScreen, toggle: toggleFullScreen } = useFullScreen<HTMLElement>();
@@ -425,7 +430,7 @@ export function SlotGame() {
 
   useGameKeys(rulesOpen);
 
-  if (!state || !grid) return <PageLoading label="Loading the Casino" />;
+  if (!state || !grid || !artReady) return <PageLoading label="Loading the Casino" />;
   const playingFree = freeSpins !== null && freeSpins.remaining > 0;
   const tooBig = (value: number) => (state.maxStake !== null && value > state.maxStake) || value > balance;
   const winCells = new Set(combos.flatMap((combo, index) => (showing === null || showing === index ? combo.reel.cells.map((cell) => cell.join(":")) : [])));
@@ -570,7 +575,7 @@ export function SlotGame() {
                 {!reelsReady && !plainGrid ? <LoadingSpinner label="Setting up the reels" /> : null}
 
                 {(gamble && !auto) || card ? (
-                  <GamblePanel gamble={gamble} card={card} cardKey={recent[0]?.id} history={gambleHistory} guessing={guessing} onGuess={guess} onTake={takeWin} onContinue={() => setCard(null)} />
+                  <GamblePanel look="sizzling" gamble={gamble} card={card} cardKey={recent[0]?.id} history={gambleHistory} guessing={guessing} onGuess={guess} onTake={takeWin} onContinue={() => setCard(null)} />
                 ) : null}
               </div>
               <LineMarkers side="right" shapes={shapesOf(state.game, lines)} lit={litLines} />
@@ -922,8 +927,11 @@ export function GamblePanel({
   onContinue,
   look = "fruit",
 }: {
-  /** "book": Book of Ra's gamble screen, gold papyrus in a painted frame, the card between oval Red and Black buttons. */
-  look?: "fruit" | "book";
+  /**
+   * The classic Novomatic-style gamble screen, the card between oval Red and Black buttons: "sizzling" (Sizzling
+   * Hot: purple in a red frame, five earlier cards) or "book" (Book of Ra: gold papyrus in a painted frame, six).
+   */
+  look?: "fruit" | "sizzling" | "book";
   gamble: CasinoGamble | null;
   card: { suit: CardSuit; won: boolean; win: number } | null;
   /** Changes with each guess, so the card turns over again. */
@@ -976,11 +984,11 @@ export function GamblePanel({
       <div className={`gamble-card is-back${flashing ? " is-flashing" : ""}${guessing ? " is-fast" : ""}`} role="img" aria-label={t("A face-down card")} />
     );
 
-  if (look === "book") {
-    // Book of Ra: the amounts in the top corners, six earlier cards (backs until drawn) under the one to win, and
-    // the card between two oval buttons, Red on the left and Black on the right; the message and Take win below.
+  if (look === "book" || look === "sizzling") {
+    // The amounts in the top corners, the earlier cards (backs until drawn) under the one to win, and the card
+    // between two oval buttons, Red on the left and Black on the right; the message and Take win below.
     return (
-      <div className="slot-gamble is-book">
+      <div className={`slot-gamble is-${look}`}>
         <div className={`gamble-screen book-gamble${faceUp && card ? (card.won ? " is-won" : " is-lost") : ""}`} aria-live="polite">
           <dl className="book-gamble-amounts">
             <div>
@@ -995,7 +1003,7 @@ export function GamblePanel({
           <div className="book-gamble-history">
             <span>{t("Previous cards")}</span>
             <ol aria-label={t("Previous cards")}>
-              {Array.from({ length: 6 }, (_, index) => {
+              {Array.from({ length: look === "book" ? 6 : 5 }, (_, index) => {
                 const suit = history[index];
                 return suit ? (
                   <li key={index} className={`book-gamble-mini is-face is-${color(suit)}`}>{SUIT_MARKS[suit]}</li>

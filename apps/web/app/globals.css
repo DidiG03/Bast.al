@@ -8234,17 +8234,17 @@ button.is-blocked {
 }
 
 /* Filling a screen (full screen, or a phone held sideways): wheel and table side by side, as big as the height allows. */
-.roulette-cabinet.is-full .roulette-stage {
+.roulette-cabinet .roulette-stage {
   flex: 1;
   min-height: 0;
   container-type: size;
 }
 
-.roulette-cabinet.is-full .roulette-wheel {
+.roulette-cabinet .roulette-wheel {
   width: min(100%, calc(100cqh * 500 / 330));
 }
 
-.roulette-cabinet.is-full .roulette-table {
+.roulette-cabinet .roulette-table {
   width: min(100%, calc((100cqh - 2.5rem) * 842 / 280));
   margin: 0 auto;
 }
@@ -8487,8 +8487,9 @@ button.is-blocked {
   box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 0 0 4px rgba(233, 196, 106, 0.35), inset 0 18px 40px rgba(0, 0, 0, 0.45), inset 0 -10px 50px rgba(0, 0, 0, 0.35);
 }
 
-.blackjack-cabinet.is-full .blackjack-felt {
-  min-height: 0;
+/* The felt holds the chips and the buttons, and clips: never shorter than they need (a game too tall is shrunk whole). */
+.blackjack-cabinet .blackjack-felt {
+  min-height: min-content;
 }
 
 /* The dealer's chip tray, along the straight edge. */
@@ -10664,7 +10665,7 @@ button.is-blocked {
   padding: 1rem 1rem 0.4rem;
 }
 
-.mines-cabinet.is-full .mines-stage {
+.mines-cabinet .mines-stage {
   flex: 1;
   justify-content: center;
 }
@@ -10717,6 +10718,17 @@ button.is-blocked {
   display: grid;
   gap: 0.45rem;
   width: min(100%, 28rem);
+}
+
+/* In the cabinet the board takes the height the readout and the controls leave, and stays square. */
+.mines-cabinet .mines-stage > .mines-grid {
+  flex: 1 1 0;
+  width: auto;
+  max-width: 100%;
+  min-height: 11rem;
+  max-height: 28rem;
+  aspect-ratio: 1;
+  align-content: start;
 }
 
 .mines-cell {
@@ -11134,7 +11146,7 @@ button.is-blocked {
   box-sizing: border-box;
 }
 
-.penalty-cabinet.is-full .penalty-stage,
+.penalty-cabinet .penalty-stage,
 .penalty-cabinet:fullscreen .penalty-stage {
   flex: 1;
   justify-content: flex-start;
@@ -11155,11 +11167,12 @@ button.is-blocked {
   box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.06);
 }
 
-.penalty-cabinet.is-full .penalty-scene,
+.penalty-cabinet .penalty-scene,
 .penalty-cabinet:fullscreen .penalty-scene {
   flex: 1 1 0;
   height: auto;
-  min-height: 0;
+  /* Room for the goal and the kicker; a game too tall for that is shrunk whole. */
+  min-height: 17rem;
 }
 
 .pk-world {
@@ -12031,11 +12044,11 @@ button.is-blocked {
   flex-direction: column;
 }
 
-.plinko-cabinet.is-full .plinko-body {
+.plinko-cabinet .plinko-body {
   flex: 1;
 }
 
-.plinko-cabinet.is-full .plinko-stage {
+.plinko-cabinet .plinko-stage {
   flex: 1;
   justify-content: center;
 }
@@ -12094,12 +12107,10 @@ button.is-blocked {
 }
 
 .plinko-board {
+  /* The board (with its row of pays) is about 1.08 times as tall as it's wide: no wider than the height left after the rest (--plinko-rest) allows. */
+  --plinko-rest: 33rem;
   container-type: inline-size;
-  width: min(100%, 34rem);
-}
-
-.plinko-cabinet.is-full .plinko-board {
-  width: min(100%, calc((100dvh - 24rem) / 0.86));
+  width: min(100%, 34rem, max(12rem, (var(--game-h, 100dvh) - var(--plinko-rest)) / 1.08));
 }
 
 .plinko-canvas {
@@ -12324,9 +12335,8 @@ button.is-blocked {
     padding: 1rem 1.5rem 1.2rem;
   }
 
-  .plinko-board,
-  .plinko-cabinet.is-full .plinko-board {
-    width: min(100%, calc((100dvh - 15rem) / 0.86));
+  .plinko-board {
+    --plinko-rest: 13.5rem;
   }
 
   .plinko-history {
@@ -12424,7 +12434,7 @@ button.is-blocked {
   flex-direction: column;
 }
 
-.dice-cabinet.is-full .dice-body {
+.dice-cabinet .dice-body {
   flex: 1;
 }
 
@@ -12435,7 +12445,7 @@ button.is-blocked {
   padding: 1rem 1rem 1.2rem;
 }
 
-.dice-cabinet.is-full .dice-stage {
+.dice-cabinet .dice-stage {
   justify-content: center;
 }
 
@@ -13068,7 +13078,8 @@ button.is-blocked {
  * hopping twice as it lands, its shadow tightening under it.
  */
 .dice-tray {
-  --die: clamp(2.3rem, 10cqw, 5rem);
+  /* As wide as the cabinet allows, and no taller than its height has room for. */
+  --die: clamp(2.3rem, min(10cqw, var(--game-h, 100vh) * 0.085), 5rem);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -13297,6 +13308,8 @@ button.is-blocked {
 .dice-tray.is-3d {
   display: block;
   position: relative;
+  /* Its shape kept, and no wider than the game's height leaves room for: on a short screen a narrower tray, centred. */
+  width: min(100%, var(--game-h, 100vh) * 0.95);
   padding: 0;
   aspect-ratio: 3 / 1;
   overflow: hidden;
@@ -13387,9 +13400,10 @@ button.is-blocked {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 0.3rem;
-  /* 10 by 8, so a board as wide as this is as tall as the screen less the title bar, the readout and the result: all 80 numbers fit without scrolling. */
+  /* 10 by 8, so a board this wide is as tall as the game less the rest of it (--keno-rest): all 80 numbers in view. */
+  --keno-rest: 14rem;
   width: 100%;
-  max-width: max(18rem, calc((100dvh - 15rem) * 1.25));
+  max-width: max(14rem, calc((var(--game-h, 100dvh) - var(--keno-rest)) * 1.25));
   margin-inline: auto;
 }
 
@@ -14032,7 +14046,9 @@ button.is-blocked {
 
 /* The ticket. */
 .scratch-ticket {
-  width: min(100%, 24rem);
+  /* About 1.25 times as tall as it's wide: no wider than the game's height less the rest of it (--scratch-rest) allows. */
+  --scratch-rest: 14.5rem;
+  width: min(100%, 24rem, max(15rem, (var(--game-h, 100dvh) - var(--scratch-rest)) / 1.25));
   padding: 0 0.75rem 0.75rem;
   overflow: hidden;
   border: 3px solid #c8961c;
@@ -16433,49 +16449,18 @@ html[data-theme="light"] .role-player {
   box-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset;
 }
 
-/* A slot fills the sheet and stops there. The page itself does not scroll. Other games keep their own height, so the board is never squeezed away. */
-.role-player.dashboard-shell:has(.slot-cabinet) {
-  height: 100vh;
-  overflow: hidden;
-}
+/* A game is as tall as the screen below the title (set by useFullScreen); the page scrolls on to the last rounds. */
 
-.role-player .dashboard-content:has(.slot-cabinet),
-.role-player .dashboard-sidebar.is-collapsed ~ .dashboard-content:has(.slot-cabinet) {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 0.9rem);
-  max-height: calc(100vh - 0.9rem);
-  min-height: 0;
-  overflow: hidden;
-  padding-bottom: 0.85rem;
-}
-
-.role-player .dashboard-content:has(.slot-cabinet) .dashboard-topbar {
-  flex: none;
-}
-
-.role-player .dashboard-content:has(.slot-cabinet) .casino-page {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.role-player .casino-page > .page-title-row,
-.role-player .casino-page > .card:last-child {
-  flex: none;
-}
-
-.role-player .casino-page > .card:last-child {
-  margin-top: auto;
-}
-
-.role-player .casino-page .casino-spins-panel {
-  max-height: min(14rem, 24vh);
-  overflow: auto;
+/* On a phone the game gets the room: the title stays (its ? opens the rules), the line under it goes. */
+@media (max-width: 760px) {
+  .role-player .casino-page > .page-title-row .report-subtitle,
+  .role-player .casino-page > .page-title-row .game-keys-hint {
+    display: none;
+  }
 }
 
 .role-player .casino-page .slot-cabinet {
-  flex: 1 1 auto;
+  flex: none;
   min-height: 0;
 }
 
@@ -19108,3 +19093,167 @@ button.cab-field-box:disabled {
 .crash-screen.is-won .crash-multiplier strong { color: var(--dice-win); }
 .crash-cashout { min-height: 64px; font-size: 1.2rem; }
 
+
+/*
+ * Every game is as tall as the screen below its title (useFullScreen sets the
+ * height). In Dice's cabinet and the games built on it, the stage takes what
+ * the controls leave, and each game's picture takes what's left of the stage.
+ */
+/* Grown into the room, never squeezed below what's in them: a game that still doesn't fit is shrunk whole (useFullScreen). */
+.dice-cabinet .dice-body {
+  flex: 1 0 auto;
+}
+
+.dice-cabinet .dice-stage {
+  flex: 1 0 auto;
+}
+
+@container (min-width: 760px) {
+  .dice-cabinet .dice-body {
+    grid-template-rows: 1fr;
+  }
+}
+
+/* The new games: the picture under the readout grows into the room. */
+.house-stage > :last-child {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.wheel-stage,
+.tower-stage {
+  display: flex;
+  flex-direction: column;
+}
+
+.wheel-stage {
+  align-items: center;
+}
+
+.wheel-scene {
+  flex: 1 1 0;
+  width: auto;
+  max-width: min(100%, 30rem);
+  min-height: 7rem;
+}
+
+.tower-grid {
+  flex: 1 1 0;
+  grid-auto-rows: minmax(0, 1fr);
+  /* Eight floors never thinner than a door can be pressed. */
+  min-height: calc(8 * 1.55rem + 7 * 0.35rem);
+}
+
+.tower-floor {
+  min-height: 0;
+  height: 100%;
+}
+
+.tower-door {
+  height: 100%;
+  max-height: 3.2rem;
+  min-height: 1.3rem;
+}
+
+.baccarat-table {
+  flex: 1 1 0;
+  grid-auto-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.baccarat-hand {
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.baccarat-cards {
+  min-height: 3.8rem;
+  container-type: size;
+}
+
+.baccarat-cards .house-card {
+  width: auto;
+  height: min(100cqh, 8.4rem);
+  aspect-ratio: 4.2 / 5.9;
+}
+
+.hilo-stage {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  flex: 1 1 0;
+}
+
+.hilo-current {
+  display: grid;
+  place-items: center;
+  min-height: 7rem;
+  height: 100%;
+  container-type: size;
+}
+
+.hilo-current .house-card {
+  width: auto;
+  height: min(100cqh, 12rem);
+  aspect-ratio: 6.2 / 8.6;
+}
+
+.crash-stage {
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1 1 0;
+}
+
+.crash-screen {
+  height: auto;
+  min-height: 7rem;
+}
+
+/* A narrow cabinet (a phone): a slimmer readout, so the game itself has the room. */
+@container (max-width: 559.98px) {
+  .dice-cabinet .dice-readout {
+    gap: 0.35rem;
+  }
+
+  .dice-cabinet .dice-readout span {
+    padding: 0.3rem 0.4rem;
+  }
+
+  .dice-cabinet .dice-readout small {
+    font-size: 0.62rem;
+  }
+
+  .dice-cabinet .dice-readout strong {
+    font-size: 0.82rem;
+    line-height: 1.2;
+  }
+
+  .dice-cabinet .dice-stage {
+    gap: 0.55rem;
+    padding: 0.6rem 0.75rem 0.7rem;
+  }
+
+  .dice-cabinet .dice-controls {
+    gap: 0.5rem;
+    padding: 0.7rem 0.75rem;
+  }
+}
+
+/* A wide cabinet on a short screen: less room between the parts. */
+@container (min-width: 760px) {
+  .dice-cabinet .dice-stage {
+    gap: clamp(0.5rem, var(--game-h, 100vh) * 0.016, 1.2rem);
+    padding-block: clamp(0.7rem, var(--game-h, 100vh) * 0.02, 1.6rem);
+  }
+}
+
+/* A narrow Keno cabinet (a phone): the controls sit under the board, so they're part of the rest too. */
+@container (max-width: 759.98px) {
+  .keno-board {
+    --keno-rest: 36rem;
+  }
+}
+
+/* A narrow Scratch cabinet (a phone): the controls under the ticket are part of the rest. */
+@container (max-width: 759.98px) {
+  .scratch-ticket {
+    --scratch-rest: 32rem;
+  }
+}

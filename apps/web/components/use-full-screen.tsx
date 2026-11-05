@@ -4,6 +4,15 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 
 export type FullScreenMode = "off" | "browser" | "page";
 
+/** The room left under a game, px: the page's bottom edge. */
+const GAME_GAP = 14;
+/** Less room than this under the title, px, and the game is as tall as the whole screen instead. */
+const MIN_GAME_HEIGHT = 340;
+/** However short the screen, a game is never squeezed below this, px. */
+const MIN_SCREEN_GAME_HEIGHT = 260;
+/** A game too tall for its height is shrunk to fit, but never below this share of its size. */
+const MIN_GAME_SCALE = 0.72;
+
 /**
  * Full screen for a casino game: the browser's own where it allows a page
  * to (computers, Android); on an iPhone, where Safari doesn't, the game
@@ -23,6 +32,91 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
       document.removeEventListener("keydown", onKey);
     };
   }, []);
+
+  // Out of full screen, the game is exactly as tall as the screen below the page's title (and above a phone's
+  // tab bar): all of it in view, the page scrolling on to the last rounds. A game the page fixes over the whole
+  // screen (a phone held sideways) is left to its CSS, as is full screen.
+  useEffect(() => {
+    let frame = 0;
+    let watch: ResizeObserver | null = null;
+    let inside: ResizeObserver | null = null;
+    /** The height the game is given, px, and how far it's shrunk to fit it (1: not at all). */
+    let given = 0;
+    let scale = 1;
+    const apply = (element: T) => {
+      element.style.height = `${given / scale}px`;
+      // For a game's CSS: its height in its own pixels, to size a picture that would otherwise grow with the width.
+      element.style.setProperty("--game-h", `${given / scale}px`);
+      if (scale === 1) element.style.removeProperty("zoom");
+      else element.style.setProperty("zoom", `${scale}`);
+    };
+    /**
+     * Shrinks the game, all of it alike, as far as what's in it needs to fit its height (not at all if it fits).
+     * Worked out afresh each time, from full size: a few passes, since a game's pictures can size themselves
+     * by its height.
+     */
+    const shrink = () => {
+      const element = ref.current;
+      if (!element || !given) return;
+      const before = scale;
+      scale = 1;
+      apply(element);
+      for (let pass = 0; pass < 4; pass += 1) {
+        const needs = element.scrollHeight;
+        const has = element.clientHeight;
+        if (needs <= has + 1 || scale <= MIN_GAME_SCALE) break;
+        scale = Math.max(MIN_GAME_SCALE, Math.floor(scale * (has / needs) * 0.995 * 1000) / 1000);
+        apply(element);
+      }
+      if (scale !== before) apply(element);
+    };
+    const fit = () => {
+      const element = ref.current;
+      if (!element) return;
+      if (mode !== "off" || getComputedStyle(element).position === "fixed") {
+        given = 0;
+        scale = 1;
+        element.style.removeProperty("height");
+        element.style.removeProperty("zoom");
+        element.style.removeProperty("--game-h");
+        return;
+      }
+      const top = element.getBoundingClientRect().top + window.scrollY;
+      const tabs = document.querySelector<HTMLElement>(".mobile-bottom-nav");
+      const below = tabs && getComputedStyle(tabs).display !== "none" ? tabs.getBoundingClientRect().height : 0;
+      const screen = window.innerHeight - below - GAME_GAP;
+      // Too little room under the title (a phone held sideways): the game is the screen's height, less a bar that
+      // stays pinned over the page's top, a short scroll down.
+      const bar = document.querySelector<HTMLElement>(".dashboard-topbar");
+      const pinned = bar && ["sticky", "fixed"].includes(getComputedStyle(bar).position) ? bar.getBoundingClientRect().height : 0;
+      const height = Math.floor(screen - top >= MIN_GAME_HEIGHT ? screen - top : Math.max(MIN_SCREEN_GAME_HEIGHT, screen - pinned - GAME_GAP));
+      if (height === given) return;
+      given = height;
+      shrink();
+    };
+    const attach = () => {
+      const element = ref.current;
+      if (!element) {
+        frame = window.requestAnimationFrame(attach);
+        return;
+      }
+      fit();
+      // The title above can change height (a note appears, a line wraps), and the screen can turn or resize.
+      watch = new ResizeObserver(fit);
+      watch.observe(document.body);
+      window.addEventListener("resize", fit);
+      // What's in the game changes as it's loaded and played (other buttons in play, a result line): fitted again.
+      inside = new ResizeObserver(shrink);
+      for (const child of Array.from(element.children)) inside.observe(child);
+    };
+    attach();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      watch?.disconnect();
+      inside?.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, [mode]);
 
   async function toggle() {
     if (mode === "browser") {

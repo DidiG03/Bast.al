@@ -19478,10 +19478,15 @@ button.cab-field-box:disabled {
   }
 }
 
-/* A narrow Scratch cabinet (a phone): the ticket as wide as it can be, so its prizes fit; the page scrolls to the controls under it. */
+/* A narrow Scratch cabinet (a phone): the ticket as wide as it can be, so each prize fits on one line. */
 @container (max-width: 759.98px) {
   .scratch-ticket {
-    width: min(100%, 17.25rem);
+    width: min(100%, 24rem);
+  }
+
+  /* Boxes a little wider than tall, so the whole ticket and the Buy button under it fit a phone's screen. */
+  .scratch-cell {
+    aspect-ratio: 1.55;
   }
 }
 

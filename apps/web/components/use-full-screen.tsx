@@ -50,12 +50,23 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
     let scale = 1;
     /** The height a game's pictures size themselves by, px: the room it's given, even when it has to grow past that. */
     let sizing = 0;
+    // Safari (every browser on an iPhone) sizes container units (cqw, cqh) wrong inside a zoomed element, so the
+    // pictures that use them come out too small: there the game is scaled instead, its margins giving back the
+    // room the scale doesn't, so it takes exactly the same place on the page.
+    const scaleInstead = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Android/.test(navigator.userAgent);
     const apply = (element: T) => {
       element.style.height = `${given / scale}px`;
       // For a game's CSS: its height in its own pixels, to size a picture that would otherwise grow with the width.
       element.style.setProperty("--game-h", `${(sizing || given) / scale}px`);
-      if (scale === 1) element.style.removeProperty("zoom");
-      else element.style.setProperty("zoom", `${scale}`);
+      if (scale === 1) {
+        for (const property of ["zoom", "transform", "transform-origin", "width", "margin-right", "margin-bottom"]) element.style.removeProperty(property);
+      } else if (scaleInstead) {
+        element.style.transformOrigin = "0 0";
+        element.style.transform = `scale(${scale})`;
+        element.style.width = `${100 / scale}%`;
+        element.style.marginRight = `${100 - 100 / scale}%`;
+        element.style.marginBottom = `${given - given / scale}px`;
+      } else element.style.setProperty("zoom", `${scale}`);
     };
     /**
      * How tall the game's contents are, px: its own overflow, or a part of it (the stage, say) that its contents
@@ -117,9 +128,7 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
         scale = 1;
         sizing = 0;
         room = { under: 0, whole: 0 };
-        element.style.removeProperty("height");
-        element.style.removeProperty("zoom");
-        element.style.removeProperty("--game-h");
+        for (const property of ["height", "zoom", "transform", "transform-origin", "width", "margin-right", "margin-bottom", "--game-h"]) element.style.removeProperty(property);
         return;
       }
       const top = element.getBoundingClientRect().top + window.scrollY;

@@ -12,6 +12,10 @@ const MIN_GAME_HEIGHT = 340;
 const MIN_SCREEN_GAME_HEIGHT = 260;
 /** A game too tall for its height is shrunk to fit, but never below this share of its size. */
 const MIN_GAME_SCALE = 0.72;
+/** Overflow this small, px, is rounding (a shadow, a border, a zoomed half pixel), not something out of reach. */
+const FIT_SLACK = 6;
+/** A part of a game sticking out of its place by this much or less, px, is the design (a marquee's buttons). */
+const MIN_SPILL = 16;
 
 /**
  * Full screen for a casino game: the browser's own where it allows a page
@@ -34,7 +38,8 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
   }, []);
 
   // Out of full screen, the game is exactly as tall as the screen below the page's title (and above a phone's
-  // tab bar): all of it in view, the page scrolling on to the last rounds. A game the page fixes over the whole
+  // tab bar): all of it in view, the page scrolling on to the last rounds. On a short screen it can take the whole
+  // screen below the top bar, or grow past it, rather than leave anything out of reach. A game the page fixes over the whole
   // screen (a phone held sideways) is left to its CSS, as is full screen.
   useEffect(() => {
     let frame = 0;
@@ -43,32 +48,66 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
     /** The height the game is given, px, and how far it's shrunk to fit it (1: not at all). */
     let given = 0;
     let scale = 1;
+    /** The height a game's pictures size themselves by, px: the room it's given, even when it has to grow past that. */
+    let sizing = 0;
     const apply = (element: T) => {
       element.style.height = `${given / scale}px`;
       // For a game's CSS: its height in its own pixels, to size a picture that would otherwise grow with the width.
-      element.style.setProperty("--game-h", `${given / scale}px`);
+      element.style.setProperty("--game-h", `${(sizing || given) / scale}px`);
       if (scale === 1) element.style.removeProperty("zoom");
       else element.style.setProperty("zoom", `${scale}`);
     };
+    /**
+     * How tall the game's contents are, px: its own overflow, or a part of it (the stage, say) that its contents
+     * spill out of. Only a part that shows what spills: one that hides or scrolls it (the reels' strip) is as tall
+     * as it looks. And a few px sticking out (a marquee's buttons, the reels' markers) is the design.
+     */
+    const needs = (element: T) => {
+      let spill = 0;
+      for (const child of Array.from(element.children)) {
+        if (getComputedStyle(child).overflowY === "visible") spill = Math.max(spill, child.scrollHeight - child.clientHeight);
+      }
+      return Math.max(element.scrollHeight, element.clientHeight + (spill > MIN_SPILL ? spill : 0));
+    };
+    const fits = (element: T) => needs(element) <= element.clientHeight + FIT_SLACK;
     /**
      * Shrinks the game, all of it alike, as far as what's in it needs to fit its height (not at all if it fits).
      * Worked out afresh each time, from full size: a few passes, since a game's pictures can size themselves
      * by its height.
      */
-    const shrink = () => {
-      const element = ref.current;
-      if (!element || !given) return;
-      const before = scale;
+    const shrink = (element: T) => {
       scale = 1;
+      sizing = 0;
       apply(element);
       for (let pass = 0; pass < 4; pass += 1) {
-        const needs = element.scrollHeight;
         const has = element.clientHeight;
-        if (needs <= has + 1 || scale <= MIN_GAME_SCALE) break;
-        scale = Math.max(MIN_GAME_SCALE, Math.floor(scale * (has / needs) * 0.995 * 1000) / 1000);
+        const want = needs(element);
+        if (want <= has + FIT_SLACK || scale <= MIN_GAME_SCALE) break;
+        scale = Math.max(MIN_GAME_SCALE, Math.floor(scale * (has / want) * 0.995 * 1000) / 1000);
         apply(element);
       }
-      if (scale !== before) apply(element);
+    };
+    /** The room the game can have, px: below the title, and the whole screen below the pinned top bar. */
+    let room = { under: 0, whole: 0 };
+    /**
+     * Picks the game's height: the room below the title; if the game doesn't fit that even shrunk as far as it
+     * goes, the whole screen below the top bar (the page scrolls the title away); and if not even that, as tall as
+     * it needs, so nothing in it is ever out of reach (its pictures keep the size the screen gave them).
+     */
+    const settle = () => {
+      const element = ref.current;
+      if (!element || !room.whole) return;
+      given = room.under >= MIN_GAME_HEIGHT ? room.under : room.whole;
+      shrink(element);
+      if (!fits(element) && room.whole > given) {
+        given = room.whole;
+        shrink(element);
+      }
+      if (!fits(element)) {
+        sizing = given;
+        given = Math.ceil(needs(element) * scale);
+        apply(element);
+      }
     };
     const fit = () => {
       const element = ref.current;
@@ -76,6 +115,8 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
       if (mode !== "off" || getComputedStyle(element).position === "fixed") {
         given = 0;
         scale = 1;
+        sizing = 0;
+        room = { under: 0, whole: 0 };
         element.style.removeProperty("height");
         element.style.removeProperty("zoom");
         element.style.removeProperty("--game-h");
@@ -85,14 +126,14 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
       const tabs = document.querySelector<HTMLElement>(".mobile-bottom-nav");
       const below = tabs && getComputedStyle(tabs).display !== "none" ? tabs.getBoundingClientRect().height : 0;
       const screen = window.innerHeight - below - GAME_GAP;
-      // Too little room under the title (a phone held sideways): the game is the screen's height, less a bar that
-      // stays pinned over the page's top, a short scroll down.
+      // The bar that stays pinned over the page's top, a short scroll down.
       const bar = document.querySelector<HTMLElement>(".dashboard-topbar");
       const pinned = bar && ["sticky", "fixed"].includes(getComputedStyle(bar).position) ? bar.getBoundingClientRect().height : 0;
-      const height = Math.floor(screen - top >= MIN_GAME_HEIGHT ? screen - top : Math.max(MIN_SCREEN_GAME_HEIGHT, screen - pinned - GAME_GAP));
-      if (height === given) return;
-      given = height;
-      shrink();
+      const under = Math.floor(screen - top);
+      const whole = Math.floor(Math.max(MIN_SCREEN_GAME_HEIGHT, screen - pinned - GAME_GAP));
+      if (under === room.under && whole === room.whole) return;
+      room = { under, whole };
+      settle();
     };
     const attach = () => {
       const element = ref.current;
@@ -106,7 +147,7 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
       watch.observe(document.body);
       window.addEventListener("resize", fit);
       // What's in the game changes as it's loaded and played (other buttons in play, a result line): fitted again.
-      inside = new ResizeObserver(shrink);
+      inside = new ResizeObserver(settle);
       for (const child of Array.from(element.children)) inside.observe(child);
     };
     attach();

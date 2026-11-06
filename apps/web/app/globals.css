@@ -12335,6 +12335,13 @@ button.is-blocked {
   animation-direction: reverse;
 }
 
+/* A short phone held sideways (an iPhone with Safari's bars, ~340px): the controls a little smaller, so all of them fit. */
+@media (orientation: landscape) and (max-height: 380px) {
+  .plinko-controls {
+    zoom: 0.84;
+  }
+}
+
 /* A phone held upright: Plinko waits to be turned sideways (after its own display rule, so this one wins). */
 @media (orientation: portrait) and (max-width: 600px) {
   .plinko-cabinet {
@@ -12373,7 +12380,8 @@ button.is-blocked {
 
   .plinko-controls {
     order: -1;
-    align-content: center;
+    /* Centred, but a column taller than the screen starts at its top rather than losing it. */
+    align-content: safe center;
     gap: 0.4rem;
     min-height: 0;
     overflow-y: auto;

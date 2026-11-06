@@ -12,97 +12,81 @@ export const casino: Record<string, string> = {
   "Sound off. Tap to turn it on.": "Zëri është fikur. Prek për ta ndezur.",
   "Balance too low for this bet": "Balanca s'mjafton për këtë bast",
   "Better luck next time": "Më shumë fat herën tjetër",
-  Continue: "Vazhdo",
-  Credits: "Kredit",
+  "Continue": "Vazhdo",
+  "Credits": "Kredit",
   "Good luck!": "Paç fat!",
   "Leave the game": "Dil nga loja",
-  Lines: "Linja",
+  "Lines": "Linja",
   "Lower the bet": "Ul bastin",
   "Raise the bet": "Rrit bastin",
   "Max bet": "Bast maks.",
-  Menu: "Menuja",
+  "Menu": "Menuja",
   "Over your limit for one bet": "Mbi kufirin tënd për një bast",
   "Please place your bet": "Vendos bastin",
-  Start: "Nis",
-  Stop: "Ndalo",
+  "Start": "Nis",
+  "Stop": "Ndalo",
   "Total bet": "Basti",
   "Change the bet": "Ndrysho bastin",
   "Turn your phone sideways to play": "Ktheje telefonin anash për të luajtur",
   "Turn your phone upright to play": "Ktheje telefonin drejt për të luajtur",
-  "{name} plays with the phone held upright. Turn it and the game opens.":
-    "{name} luhet me telefonin drejt. Ktheje dhe loja hapet.",
+  "{name} plays with the phone held upright. Turn it and the game opens.": "{name} luhet me telefonin drejt. Ktheje dhe loja hapet.",
   "Win {amount}": "Fitim {amount}",
   "{count} free spin left": "Të ka mbetur {count} rrotullim falas",
   "{count} free spins left": "Të kanë mbetur {count} rrotullime falas",
-  "{name} plays with the phone held sideways. Turn it and the game opens.":
-    "{name} luhet me telefonin anash. Ktheje dhe loja hapet.",
-  "5 reels, 5 or 10 lines, played with your balance.":
-    "5 rrotulla, 5 ose 10 linja, luhet me balancën tënde.",
-  "Lines: {count}. Tap to play {other}.":
-    "Linja: {count}. Shtyp për të luajtur {other}.",
-  "The bet is split between the lines: 10 lines win smaller amounts more often, and pay back the same on average.":
-    "Basti ndahet mes linjave: me 10 linja fiton shuma më të vogla më shpesh, dhe mesatarisht kthen njësoj.",
-  Seven: "Shtata",
-  Watermelon: "Shalqiri",
-  Grapes: "Rrushi",
-  Plum: "Kumbulla",
-  Orange: "Portokalli",
-  Lemon: "Limoni",
-  Cherry: "Qershia",
-  Star: "Ylli",
+  "{name} plays with the phone held sideways. Turn it and the game opens.": "{name} luhet me telefonin anash. Ktheje dhe loja hapet.",
+  "5 reels, 5 or 10 lines, played with your balance.": "5 rrotulla, 5 ose 10 linja, luhet me balancën tënde.",
+  "Lines: {count}. Tap to play {other}.": "Linja: {count}. Shtyp për të luajtur {other}.",
+  "The bet is split between the lines: 10 lines win smaller amounts more often, and pay back the same on average.": "Basti ndahet mes linjave: me 10 linja fiton shuma më të vogla më shpesh, dhe mesatarisht kthen njësoj.",
+  "Seven": "Shtata",
+  "Watermelon": "Shalqiri",
+  "Grapes": "Rrushi",
+  "Plum": "Kumbulla",
+  "Orange": "Portokalli",
+  "Lemon": "Limoni",
+  "Cherry": "Qershia",
+  "Star": "Ylli",
   "Stars! You won {amount}.": "Yje! Fitove {amount}.",
-  "Stars pay anywhere on the reels, not just on a line, and the same with 5 lines or 10.":
-    "Yjet paguajnë kudo në rrotulla, jo vetëm në një linjë, dhe njësoj me 5 ose 10 linja.",
+  "Stars pay anywhere on the reels, not just on a line, and the same with 5 lines or 10.": "Yjet paguajnë kudo në rrotulla, jo vetëm në një linjë, dhe njësoj me 5 ose 10 linja.",
   "Pays shown for a {amount} spin on {lines} lines. A line pays when the same symbol lands on it 3, 4 or 5 times in a row from the left reel; cherries pay from 2.":
     "Pagesat për një rrotullim {amount} me {lines} linja. Një linjë paguan kur i njëjti simbol bie 3, 4 ose 5 herë radhazi nga rrotulla e majtë; qershitë paguajnë që nga 2.",
   "The {count} lines": "{count} linjat",
   "Double or nothing": "Dyfisho ose humb",
   "Double or nothing?": "Dyfisho ose humb?",
-  "Guess the card's colour: {amount} becomes {double}, or nothing.":
-    "Gjej ngjyrën e letrës: {amount} bëhet {double}, ose asgjë.",
+  "Guess the card's colour: {amount} becomes {double}, or nothing.": "Gjej ngjyrën e letrës: {amount} bëhet {double}, ose asgjë.",
   "{count} guess left.": "Të ka mbetur {count} provë.",
   "{count} guesses left.": "Të kanë mbetur {count} prova.",
-  Red: "E kuqe",
-  Black: "E zezë",
+  "Red": "E kuqe",
+  "Black": "E zezë",
   "Take {amount}": "Merr {amount}",
   "Right! You now have {amount}.": "Saktë! Tani ke {amount}.",
   "Wrong card. This win is lost.": "Letër e gabuar. Ky fitim humbi.",
-  "That's the most this win can be doubled. It's in your balance.":
-    "Ky fitim nuk mund të dyfishohet më. Është në balancën tënde.",
+  "That's the most this win can be doubled. It's in your balance.": "Ky fitim nuk mund të dyfishohet më. Është në balancën tënde.",
   "That didn't go through. Try again.": "Nuk u krye. Provo sërish.",
-  "Double or nothing on {amount}: picked {pick}, card {card}":
-    "Dyfisho ose humb me {amount}: zgjodhe {pick}, letra {card}",
+  "Double or nothing on {amount}: picked {pick}, card {card}": "Dyfisho ose humb me {amount}: zgjodhe {pick}, letra {card}",
   "Your newest spins and double-or-nothing guesses. They're also in My money, as one Casino line for each day.":
     "Rrotullimet dhe provat e fundit për dyfishim. Janë edhe te Paratë e mia, si një rresht Kazinoje për çdo ditë.",
   "After a win you can guess whether a card is red or black. Right, and the win doubles; wrong, and it's lost. Up to {steps} guesses in a row, and up to {limit}. Take the win any time; your next spin takes it too.":
     "Pas një fitimi mund të gjesh nëse letra është e kuqe apo e zezë. Saktë, dhe fitimi dyfishohet; gabim, dhe humbet. Deri në {steps} prova radhazi, dhe deri në {limit}. Merre fitimin kur të duash; edhe rrotullimi tjetër e merr.",
-  Casino: "Kazino",
+  "Casino": "Kazino",
   "Live betting": "Baste live",
-  "Play for fun. Your max stake and daily loss limit apply here too. Take a break if a session runs long.":
-    "Luaj për qejf. Limiti i bastit dhe limiti ditor i humbjes vlejnë edhe këtu. Bëj një pushim nëse sesioni zgjatet.",
+  "Play for fun. Your max stake and daily loss limit apply here too. Take a break if a session runs long.": "Luaj për qejf. Limiti i bastit dhe limiti ditor i humbjes vlejnë edhe këtu. Bëj një pushim nëse sesioni zgjatet.",
   "My account": "Llogaria ime",
   "Loading the Casino": "Duke ngarkuar Kazinonë",
-  "Golazo: 5 reels, 10 lines, played with your balance.":
-    "Golazo: 5 rrotulla, 10 linja, luhet me balancën tënde.",
+  "Golazo: 5 reels, 10 lines, played with your balance.": "Golazo: 5 rrotulla, 10 linja, luhet me balancën tënde.",
   "Pays and rules": "Pagesat dhe rregullat",
-  Win: "Fitimi",
+  "Win": "Fitimi",
   "Free spins": "Rrotullime falas",
   "Bet per spin": "Basti për rrotullim",
   "Free spin at {amount}": "Rrotullim falas me {amount}",
   "Spin {amount}": "Rrotullo {amount}",
   "Spin at {amount}": "Rrotullim me {amount}",
-  Spinning: "Duke rrotulluar",
+  "Spinning": "Duke rrotulluar",
   "Setting up the reels": "Duke përgatitur rrotullat",
-  "Your balance is too low for this bet. Pick a smaller one, or ask your Manager for a top-up.":
-    "Balanca jote është shumë e ulët për këtë bast. Zgjidh një më të vogël, ose kërkoji Menaxherit një rimbushje.",
-  "That's more than your limit for one bet.":
-    "Kjo është më shumë se limiti yt për një bast.",
-  "The spin didn't go through. Try again.":
-    "Rrotullimi nuk u krye. Provo sërish.",
-  "Goal! {count} free spin, and {amount} won.":
-    "Gol! {count} rrotullim falas, dhe {amount} fitim.",
-  "Goal! {count} free spins, and {amount} won.":
-    "Gol! {count} rrotullime falas, dhe {amount} fitim.",
+  "Your balance is too low for this bet. Pick a smaller one, or ask your Manager for a top-up.": "Balanca jote është shumë e ulët për këtë bast. Zgjidh një më të vogël, ose kërkoji Menaxherit një rimbushje.",
+  "That's more than your limit for one bet.": "Kjo është më shumë se limiti yt për një bast.",
+  "The spin didn't go through. Try again.": "Rrotullimi nuk u krye. Provo sërish.",
+  "Goal! {count} free spin, and {amount} won.": "Gol! {count} rrotullim falas, dhe {amount} fitim.",
+  "Goal! {count} free spins, and {amount} won.": "Gol! {count} rrotullime falas, dhe {amount} fitim.",
   "You won {amount} on {count} line.": "Fitove {amount} në {count} linjë.",
   "You won {amount} on {count} lines.": "Fitove {amount} në {count} linja.",
   "Your last spins": "Rrotullimet e tua të fundit",
@@ -120,56 +104,48 @@ export const casino: Record<string, string> = {
 
   // The symbols
   "Golden 7": "7-shi i artë",
-  Trophy: "Trofeu",
-  Ball: "Topi",
-  Boot: "Këpuca",
-  Gloves: "Dorezat",
+  "Trophy": "Trofeu",
+  "Ball": "Topi",
+  "Boot": "Këpuca",
+  "Gloves": "Dorezat",
   "Corner flag": "Flamuri i këndit",
   "Yellow card": "Karton i verdhë",
   "Red card": "Karton i kuq",
-  Wild: "Xhoker",
-  Goal: "Porta",
+  "Wild": "Xhoker",
+  "Goal": "Porta",
 
   // Pays and rules
   "Pays shown for a {amount} spin. A line pays when the same symbol lands on it 3, 4 or 5 times in a row from the left reel.":
     "Pagesat për një rrotullim me {amount}. Një linjë paguan kur i njëjti simbol bie në të 3, 4 ose 5 herë radhazi, duke nisur nga rrotulla e majtë.",
-  "Stands in for any symbol except the goal. Only on reels 2, 3 and 4.":
-    "Zëvendëson çdo simbol përveç portës. Vetëm në rrotullat 2, 3 dhe 4.",
+  "Stands in for any symbol except the goal. Only on reels 2, 3 and 4.": "Zëvendëson çdo simbol përveç portës. Vetëm në rrotullat 2, 3 dhe 4.",
   "Goals pay anywhere on the reels, not just on a line. Free spins play at the bet that won them and cost nothing; more goals during them add more.":
     "Portat paguajnë kudo në rrotulla, jo vetëm në një linjë. Rrotullimet falas luhen me bastin që i fitoi dhe nuk kushtojnë asgjë; porta të tjera gjatë tyre shtojnë edhe më shumë.",
   "The 10 lines": "10 linjat",
   "Line {number}": "Linja {number}",
   "Big win!": "Fitim i madh!",
   "Your wins on this spin": "Fitimet e tua në këtë rrotullim",
-  "Tap a win to see it on the reels.":
-    "Prek një fitim për ta parë në rrotulla.",
+  "Tap a win to see it on the reels.": "Prek një fitim për ta parë në rrotulla.",
 
   // Staff: switches and figures
-  "Open the Casino for the site and for each Owner's team, and see how it's doing.":
-    "Hape Kazinonë për faqen dhe për skuadrën e çdo Pronari, dhe shiko si po ecën.",
-  "Open the Casino for your team, and see how your Players are doing on it.":
-    "Hape Kazinonë për skuadrën tënde dhe shiko si po ecin Lojtarët e tu në të.",
-  "How your Players are doing in the Casino.":
-    "Si po ecin Lojtarët e tu në Kazino.",
+  "Open the Casino for the site and for each Owner's team, and see how it's doing.": "Hape Kazinonë për faqen dhe për skuadrën e çdo Pronari, dhe shiko si po ecën.",
+  "Open the Casino for your team, and see how your Players are doing on it.": "Hape Kazinonë për skuadrën tënde dhe shiko si po ecin Lojtarët e tu në të.",
+  "How your Players are doing in the Casino.": "Si po ecin Lojtarët e tu në Kazino.",
   "Open or closed": "E hapur apo e mbyllur",
   "Players see the Casino only when it's open for the whole site and for their team. Spins use the Player's balance, and their profit counts in Commissions like bets do.":
     "Lojtarët e shohin Kazinonë vetëm kur është e hapur për gjithë faqen dhe për skuadrën e tyre. Rrotullimet përdorin balancën e Lojtarit, dhe fitimi prej tyre llogaritet te Komisionet si bastet.",
   "The whole site": "E gjithë faqja",
-  "Super Admin's switch. Off closes it for every team.":
-    "Çelësi i Super Adminit. Kur fiket, mbyllet për çdo skuadër.",
+  "Super Admin's switch. Off closes it for every team.": "Çelësi i Super Adminit. Kur fiket, mbyllet për çdo skuadër.",
   "Super Admin has it open.": "Super Admini e ka të hapur.",
-  "Super Admin has it closed for now, so your Players don't see it yet.":
-    "Super Admini e ka të mbyllur tani për tani, prandaj Lojtarët e tu ende nuk e shohin.",
+  "Super Admin has it closed for now, so your Players don't see it yet.": "Super Admini e ka të mbyllur tani për tani, prandaj Lojtarët e tu ende nuk e shohin.",
   "Open: Players can play.": "E hapur: Lojtarët mund të luajnë.",
   "Open, but the site is closed.": "E hapur, por faqja është e mbyllur.",
   "Closed.": "E mbyllur.",
   "Open: your Players can play.": "E hapur: Lojtarët e tu mund të luajnë.",
-  "Closed. Your Owner decides whether it's open for your team.":
-    "E mbyllur. Pronari yt vendos nëse është e hapur për skuadrën tënde.",
+  "Closed. Your Owner decides whether it's open for your team.": "E mbyllur. Pronari yt vendos nëse është e hapur për skuadrën tënde.",
   "The Casino is open.": "Kazinoja është e hapur.",
   "The Casino is closed.": "Kazinoja është e mbyllur.",
   "Couldn't change it": "Nuk u ndryshua",
-  Spins: "Rrotullime",
+  "Spins": "Rrotullime",
   "What spins cost": "Sa kushtuan rrotullimet",
   "{rate}% of what was staked": "{rate}% e shumës së vënë",
   "Casino profit": "Fitimi nga Kazinoja",
@@ -181,26 +157,19 @@ export const casino: Record<string, string> = {
   // From the API
   "Your account can't play right now": "Llogaria jote nuk mund të luajë tani",
   "The Casino is closed right now.": "Kazinoja është e mbyllur tani.",
-  "The Casino isn't open for your team.":
-    "Kazinoja nuk është e hapur për skuadrën tënde.",
+  "The Casino isn't open for your team.": "Kazinoja nuk është e hapur për skuadrën tënde.",
   "Only Players play in the Casino": "Vetëm Lojtarët luajnë në Kazino",
   "Casino: 1 spin": "Kazino: 1 rrotullim",
   "Sizzling Hot: 1 spin": "Sizzling Hot: 1 rrotullim",
-  "Couldn't record this card's prize yet. It's paid when you buy your next card or reload the page.":
-    "Fitimi i kësaj karte nuk u regjistrua ende. Paguhet kur blen kartën tjetër ose rifreskon faqen.",
+  "Couldn't record this card's prize yet. It's paid when you buy your next card or reload the page.": "Fitimi i kësaj karte nuk u regjistrua ende. Paguhet kur blen kartën tjetër ose rifreskon faqen.",
   "No card yet": "Ende pa kartë",
-  "Buy a card for {amount}, then scratch it.":
-    "Bli një kartë për {amount}, pastaj gërvishte.",
-  "You bought this card at {time} for {amount}; its price has already left your balance. Scratch it to see what it pays.":
-    "E bleve këtë kartë në {time} për {amount}; çmimi i saj është marrë tashmë nga balanca. Gërvishte për të parë sa paguan.",
-  "Card bought for {amount}. Scratch the boxes, or reveal them all.":
-    "Karta u ble për {amount}. Gërvisht kutitë, ose zbuloji të gjitha.",
-  "The connection dropped. This is where your round stands now.":
-    "Lidhja ra. Ja ku ndodhet raundi yt tani.",
+  "Buy a card for {amount}, then scratch it.": "Bli një kartë për {amount}, pastaj gërvishte.",
+  "You bought this card at {time} for {amount}; its price has already left your balance. Scratch it to see what it pays.": "E bleve këtë kartë në {time} për {amount}; çmimi i saj është marrë tashmë nga balanca. Gërvishte për të parë sa paguan.",
+  "Card bought for {amount}. Scratch the boxes, or reveal them all.": "Karta u ble për {amount}. Gërvisht kutitë, ose zbuloji të gjitha.",
+  "The connection dropped. This is where your round stands now.": "Lidhja ra. Ja ku ndodhet raundi yt tani.",
   "No win this spin": "Pa fitim këtë herë",
   "Start autoplay?": "Të nisë loja automatike?",
-  "{balls} × {stake} = {total}. Autoplay stops sooner if you press Stop or lose {times}× the stake.":
-    "{balls} × {stake} = {total}. Loja automatike ndalon më herët nëse shtyp Ndalo ose humb {times}× shumën e vënë.",
+  "{balls} × {stake} = {total}. Autoplay stops sooner if you press Stop or lose {times}× the stake.": "{balls} × {stake} = {total}. Loja automatike ndalon më herët nëse shtyp Ndalo ose humb {times}× shumën e vënë.",
   "Drop {count} ball": "Hidh {count} top",
   "Drop {count} balls": "Hidh {count} topa",
   "Show more ({count} more)": "Shfaq më shumë (edhe {count})",
@@ -211,17 +180,13 @@ export const casino: Record<string, string> = {
   "Casino: {count} spins": "Kazino: {count} rrotullime",
   "Choose a bet of {bets}": "Zgjidh një bast prej {bets}",
   "Players can't see this": "Lojtarët nuk mund ta shohin këtë",
-  "Owners can only open or close the Casino for their own team":
-    "Pronarët mund ta hapin ose mbyllin Kazinonë vetëm për skuadrën e tyre",
-  "Only Super Admin and Owners can open or close the Casino":
-    "Vetëm Super Admini dhe Pronarët mund ta hapin ose mbyllin Kazinonë",
+  "Owners can only open or close the Casino for their own team": "Pronarët mund ta hapin ose mbyllin Kazinonë vetëm për skuadrën e tyre",
+  "Only Super Admin and Owners can open or close the Casino": "Vetëm Super Admini dhe Pronarët mund ta hapin ose mbyllin Kazinonë",
 
   // The lobby and roulette
-  "Hot fruits and blazing sevens! The classic fruit slot with 5 reels and 5 lines, where the star pays anywhere on the screen.":
-    "Fruta të nxehta dhe shtatëshe të zjarrta! Sloti klasik me fruta, me 5 rrotulla dhe 5 linja, ku ylli paguan kudo që të dalë në ekran.",
-  Roulette: "Ruletë",
-  "The classic European roulette with a single zero. Place your chips, spin the wheel and watch where the ball lands.":
-    "Ruleta klasike evropiane me një zero të vetme. Vendos fishat, rrotullo rrotën dhe shiko ku ndalon topi.",
+  "Hot fruits and blazing sevens! The classic fruit slot with 5 reels and 5 lines, where the star pays anywhere on the screen.": "Fruta të nxehta dhe shtatëshe të zjarrta! Sloti klasik me fruta, me 5 rrotulla dhe 5 linja, ku ylli paguan kudo që të dalë në ekran.",
+  "Roulette": "Ruletë",
+  "The classic European roulette with a single zero. Place your chips, spin the wheel and watch where the ball lands.": "Ruleta klasike evropiane me një zero të vetme. Vendos fishat, rrotullo rrotën dhe shiko ku ndalon topi.",
   "Spins and rounds": "Rrotullime dhe raunde",
   "What spins and rounds cost": "Sa kushtuan rrotullimet dhe raundet",
   "Each game": "Çdo lojë",
@@ -232,9 +197,9 @@ export const casino: Record<string, string> = {
   "{count} roulette round": "{count} raund rulete",
   "{count} roulette rounds": "{count} raunde rulete",
   "Column {number}": "Kolona {number}",
-  Split: "Dyshe",
-  Street: "Rresht",
-  Corner: "Kënd",
+  "Split": "Dyshe",
+  "Street": "Rresht",
+  "Corner": "Kënd",
   "Six line": "Gjashtëshe",
   "Table limit {amount}": "Kufiri i tavolinës {amount}",
   "Balance too low": "Balanca nuk mjafton",
@@ -243,36 +208,29 @@ export const casino: Record<string, string> = {
   "No more bets": "Nuk pranohen më baste",
   "{number} {color}: you win {amount}": "{number} {color}: fiton {amount}",
   "Bet {amount}": "Basti {amount}",
-  "European roulette with a single 0, played with your balance.":
-    "Ruletë evropiane me një 0, luhet me balancën tënde.",
+  "European roulette with a single 0, played with your balance.": "Ruletë evropiane me një 0, luhet me balancën tënde.",
   "Last numbers": "Numrat e fundit",
   "Last numbers show here": "Numrat e fundit shfaqen këtu",
-  Chip: "Fisha",
-  Undo: "Zhbëj",
-  Double: "Dyfisho",
-  Repeat: "Përsërit",
+  "Chip": "Fisha",
+  "Undo": "Zhbëj",
+  "Double": "Dyfisho",
+  "Repeat": "Përsërit",
   "Credits {amount}": "Kredite {amount}",
   "Max {amount}": "Maks. {amount}",
-  Spin: "Rrotullo",
+  "Spin": "Rrotullo",
   "Your last rounds": "Raundet e tua të fundit",
   "No rounds yet.": "Ende asnjë raund.",
   "Betting table": "Tavolina e basteve",
   "pays {payout} to 1": "paguan {payout} me 1",
   "Straight up": "Numër i vetëm",
   "One number, 0 included": "Një numër, edhe 0",
-  "Two numbers side by side: chip on the line between them":
-    "Dy numra ngjitur: fisha mbi vijën mes tyre",
-  "A row of three: chip on the bottom edge of the row":
-    "Një rresht me tre: fisha në buzën e poshtme të rreshtit",
-  "Four numbers: chip where they meet. 0, 1, 2 and 3 together too: chip at the bottom corner of 0":
-    "Katër numra: fisha aty ku takohen. Edhe 0, 1, 2 dhe 3 bashkë: fisha në këndin e poshtëm të 0",
-  "Two rows: chip on the bottom edge between them":
-    "Dy rreshta: fisha në buzën e poshtme mes tyre",
+  "Two numbers side by side: chip on the line between them": "Dy numra ngjitur: fisha mbi vijën mes tyre",
+  "A row of three: chip on the bottom edge of the row": "Një rresht me tre: fisha në buzën e poshtme të rreshtit",
+  "Four numbers: chip where they meet. 0, 1, 2 and 3 together too: chip at the bottom corner of 0": "Katër numra: fisha aty ku takohen. Edhe 0, 1, 2 dhe 3 bashkë: fisha në këndin e poshtëm të 0",
+  "Two rows: chip on the bottom edge between them": "Dy rreshta: fisha në buzën e poshtme mes tyre",
   "Dozen or column": "Duzinë ose kolonë",
-  '12 numbers: 1st, 2nd or 3rd 12, or a "2 to 1" row':
-    '12 numra: 12-shja e 1-rë, e 2-të ose e 3-të, ose një rresht "2 me 1"',
-  "Red, black, even, odd, 1–18, 19–36":
-    "E kuqe, e zezë, çift, tek, 1–18, 19–36",
+  "12 numbers: 1st, 2nd or 3rd 12, or a \"2 to 1\" row": "12 numra: 12-shja e 1-rë, e 2-të ose e 3-të, ose një rresht \"2 me 1\"",
+  "Red, black, even, odd, 1–18, 19–36": "E kuqe, e zezë, çift, tek, 1–18, 19–36",
   "18 numbers. They lose on 0.": "18 numra. Humbin kur del 0.",
   "European roulette: 37 pockets, 0 to 36. Pick a chip, tap the table to place it, then spin. A winning chip comes back with its pay.":
     "Ruletë evropiane: 37 xhepa, 0 deri 36. Zgjidh një fishë, prek tavolinën për ta vendosur, pastaj rrotullo. Fisha fituese kthehet bashkë me pagesën.",
@@ -283,7 +241,7 @@ export const casino: Record<string, string> = {
   "2nd 12": "12 e 2-të",
   "3rd 12": "12 e 3-të",
   "2 to 1": "2 me 1",
-  Green: "E gjelbër",
+  "Green": "E gjelbër",
   "Your newest roulette rounds. They're also in My money, as one Roulette line for each day.":
     "Raundet e tua më të reja në ruletë. Janë edhe te Paratë e mia, si një rresht Ruletë për çdo ditë.",
   "{count} spot, {amount}": "{count} vend, {amount}",
@@ -292,22 +250,17 @@ export const casino: Record<string, string> = {
   // From the API: roulette
   "Roulette: 1 spin": "Ruletë: 1 rrotullim",
   "Roulette: {count} spins": "Ruletë: {count} rrotullime",
-  "The most you can have on the table in one spin is {amount} ALL":
-    "Më së shumti mund të kesh në tavolinë për një rrotullim {amount} ALL",
-  "Your balance is too low for these chips. Take some off, or ask your Manager for a top-up.":
-    "Balanca nuk mjafton për këto fisha. Hiq disa, ose kërkoji Menaxherit një rimbushje.",
+  "The most you can have on the table in one spin is {amount} ALL": "Më së shumti mund të kesh në tavolinë për një rrotullim {amount} ALL",
+  "Your balance is too low for these chips. Take some off, or ask your Manager for a top-up.": "Balanca nuk mjafton për këto fisha. Hiq disa, ose kërkoji Menaxherit një rimbushje.",
   "Place at least one chip.": "Vendos të paktën një fishë.",
-  "Bets can cover at most {count} spots in one spin.":
-    "Bastet mund të mbulojnë më së shumti {count} vende për një rrotullim.",
-  'There\'s no "{spot}" on the table.': 'Nuk ka "{spot}" në tavolinë.',
-  "Bets are made in chips of {amount} ALL and up.":
-    "Bastet bëhen me fisha prej {amount} ALL e lart.",
+  "Bets can cover at most {count} spots in one spin.": "Bastet mund të mbulojnë më së shumti {count} vende për një rrotullim.",
+  "There's no \"{spot}\" on the table.": "Nuk ka \"{spot}\" në tavolinë.",
+  "Bets are made in chips of {amount} ALL and up.": "Bastet bëhen me fisha prej {amount} ALL e lart.",
   "The wheel stopped off the wheel": "Rrota ndaloi jashtë rrotës",
 
   // Blackjack
-  Blackjack: "Blackjack",
-  "Get as close to 21 as you can without going over, and beat the dealer's hand. Blackjack pays 3 to 2.":
-    "Afrohu sa më shumë te 21 pa e kaluar dhe mund dorën e dilerit. Blackjack paguan 3 me 2.",
+  "Blackjack": "Blackjack",
+  "Get as close to 21 as you can without going over, and beat the dealer's hand. Blackjack pays 3 to 2.": "Afrohu sa më shumë te 21 pa e kaluar dhe mund dorën e dilerit. Blackjack paguan 3 me 2.",
   "{count} hand": "{count} dorë",
   "{count} hands": "{count} duar",
   "{count} blackjack hand": "{count} dorë blackjack",
@@ -315,52 +268,44 @@ export const casino: Record<string, string> = {
   "Place your bet": "Vendos bastin",
   "Dealing…": "Po shpërndahen letrat…",
   "Insurance? It costs {amount}": "Sigurim? Kushton {amount}",
-  Soft: "Butë",
+  "Soft": "Butë",
   "Hand {number}: {total}": "Dora {number}: {total}",
   "Your hand: {total}": "Dora jote: {total}",
   "Dealer's turn": "Radha e dilerit",
-  "Beat the dealer to 21, played with your balance.":
-    "Mund dilerin deri në 21, luhet me balancën tënde.",
-  Dealer: "Dileri",
+  "Beat the dealer to 21, played with your balance.": "Mund dilerin deri në 21, luhet me balancën tënde.",
+  "Dealer": "Dileri",
   "Blackjack pays 3 to 2": "Blackjack paguan 3 me 2",
-  "Dealer stands on soft 17 · Insurance pays 2 to 1":
-    "Dileri ndalon në 17 të butë · Sigurimi paguan 2 me 1",
-  BJ: "BJ",
+  "Dealer stands on soft 17 · Insurance pays 2 to 1": "Dileri ndalon në 17 të butë · Sigurimi paguan 2 me 1",
+  "BJ": "BJ",
   "Add {amount}": "Shto {amount}",
   "Double the bet": "Dyfisho bastin",
   "Tap Deal to play": "Prek Shpërndaj për të luajtur",
-  Deal: "Shpërndaj",
-  Insurance: "Sigurim",
+  "Deal": "Shpërndaj",
+  "Insurance": "Sigurim",
   "No insurance": "Pa sigurim",
-  Stand: "Ndal",
-  Hit: "Merr letër",
+  "Stand": "Ndal",
+  "Hit": "Merr letër",
   "Your last hands": "Duart e tua të fundit",
   "No hands yet.": "Ende asnjë dorë.",
   "against {total}": "kundër {total}",
-  Push: "Barazim",
+  "Push": "Barazim",
   "Blackjack!": "Blackjack!",
-  Lose: "Humb",
-  Bust: "Mbi 21",
+  "Lose": "Humb",
+  "Bust": "Mbi 21",
   "Blackjack! You win {amount}": "Blackjack! Fiton {amount}",
   "You win {amount}": "Fiton {amount}",
   "Push: your bet is back": "Barazim: basti të kthehet",
   "Insurance pays {amount}": "Sigurimi paguan {amount}",
   "Dealer wins": "Fiton dileri",
-  "An ace and a ten or face card as your first two cards. Pays 3 to 2.":
-    "Një as dhe një 10 ose figurë si dy letrat e para. Paguan 3 me 2.",
-  "Closer to 21 than the dealer without going over, or the dealer goes over. Pays 1 to 1.":
-    "Më afër 21 se dileri pa e kaluar, ose dileri e kalon. Paguan 1 me 1.",
-  "The same total as the dealer. Your bet comes back.":
-    "I njëjti total si dileri. Basti të kthehet.",
+  "An ace and a ten or face card as your first two cards. Pays 3 to 2.": "Një as dhe një 10 ose figurë si dy letrat e para. Paguan 3 me 2.",
+  "Closer to 21 than the dealer without going over, or the dealer goes over. Pays 1 to 1.": "Më afër 21 se dileri pa e kaluar, ose dileri e kalon. Paguan 1 me 1.",
+  "The same total as the dealer. Your bet comes back.": "I njëjti total si dileri. Basti të kthehet.",
   "Hit or stand": "Merr letër ose ndal",
-  "Hit takes another card; stand keeps what you have. Over 21 is bust and loses.":
-    "Merr letër të jep një letër tjetër; ndal mban atë që ke. Mbi 21 humbet.",
-  "Double your bet on your first two cards and take exactly one more card. Once a round.":
-    "Dyfisho bastin te dy letrat e para dhe merr vetëm edhe një letër. Një herë për raund.",
+  "Hit takes another card; stand keeps what you have. Over 21 is bust and loses.": "Merr letër të jep një letër tjetër; ndal mban atë që ke. Mbi 21 humbet.",
+  "Double your bet on your first two cards and take exactly one more card. Once a round.": "Dyfisho bastin te dy letrat e para dhe merr vetëm edhe një letër. Një herë për raund.",
   "Two cards of the same rank, like two kings (not a king and a queen), become two hands, each with its own bet. Once a round.":
     "Dy letra të njëjta, si dy mbretër (jo një mbret dhe një mbretëreshë), bëhen dy duar, secila me bastin e vet. Një herë për raund.",
-  "When the dealer shows an ace: half your bet that the dealer has blackjack. Pays 2 to 1, settled when the dealer's card is turned over.":
-    "Kur dileri tregon një as: gjysma e bastit që dileri ka blackjack. Paguan 2 me 1, dhe mbyllet kur kthehet letra e dilerit.",
+  "When the dealer shows an ace: half your bet that the dealer has blackjack. Pays 2 to 1, settled when the dealer's card is turned over.": "Kur dileri tregon një as: gjysma e bastit që dileri ka blackjack. Paguan 2 me 1, dhe mbyllet kur kthehet letra e dilerit.",
   "Get closer to 21 than the dealer. Cards 2 to 10 count their number, faces 10, an ace 1 or 11. The dealer draws to 17 and stands on every 17, soft 17 included. With an ace showing, the dealer offers insurance, then looks at the face-down card: a blackjack is turned over at once and ends the round. Under any other card, the dealer's second card stays face down until you've played: a dealer's blackjack beats every hand but a blackjack, doubles and splits included. Six decks, shuffled for every round.":
     "Arri më afër 21 se dileri. Letrat 2 deri 10 vlejnë numrin e tyre, figurat 10, asi 1 ose 11. Dileri merr letra deri në 17 dhe ndalon në çdo 17, edhe në 17 të butë. Kur dileri ka një as të hapur, ofron sigurimin dhe pastaj shikon letrën e kthyer: një blackjack hapet menjëherë dhe raundi mbaron. Nën çdo letër tjetër, letra e dytë e dilerit mbetet e kthyer derisa të luash ti: një blackjack i dilerit mund çdo dorë përveç një blackjack-u, edhe duart e dyfishuara dhe të ndara. Gjashtë pako, të përziera për çdo raund.",
   "Bets from {min} up to {limit} a hand: your max stake, if you have one. Doubling and splitting add to it. A hand left for an hour is stood for you.":
@@ -369,38 +314,30 @@ export const casino: Record<string, string> = {
     "Raundet e tua më të reja në blackjack. Janë edhe te Paratë e mia, si një rresht Blackjack për çdo ditë.",
 
   // From the API: blackjack
-  "The most you can bet on one hand is {amount} ALL":
-    "Më së shumti mund të vësh në një dorë {amount} ALL",
+  "The most you can bet on one hand is {amount} ALL": "Më së shumti mund të vësh në një dorë {amount} ALL",
   "Finish the hand you're playing first.": "Mbaro më parë dorën që po luan.",
-  "There's no hand in play. Deal first.":
-    "Nuk ka dorë në lojë. Shpërndaj më parë.",
-  "Your balance is too low for that. You can still hit or stand.":
-    "Balanca nuk mjafton për këtë. Mund të marrësh letër ose të ndalosh.",
+  "There's no hand in play. Deal first.": "Nuk ka dorë në lojë. Shpërndaj më parë.",
+  "Your balance is too low for that. You can still hit or stand.": "Balanca nuk mjafton për këtë. Mund të marrësh letër ose të ndalosh.",
   "Blackjack: 1 hand": "Blackjack: 1 dorë",
   "Blackjack: {count} hands": "Blackjack: {count} duar",
   "The shoe ran out": "Letrat në kuti mbaruan",
-  "A bet is a whole number of cents":
-    "Basti duhet të jetë numër i plotë centësh",
+  "A bet is a whole number of cents": "Basti duhet të jetë numër i plotë centësh",
   "This round is over. Deal again.": "Ky raund mbaroi. Shpërndaj sërish.",
   "That move isn't open right now.": "Ky veprim nuk lejohet tani.",
 
   // Book of Ra
-  "Explore the pyramids for the book. 3 books open 10 free spins, where one special symbol fills whole reels and pays on all 10 lines.":
-    "Eksploro piramidat për librin. 3 libra hapin 10 rrotullime falas, ku një simbol i veçantë mbush rrotulla të tëra dhe paguan në të 10 linjat.",
+  "Explore the pyramids for the book. 3 books open 10 free spins, where one special symbol fills whole reels and pays on all 10 lines.": "Eksploro piramidat për librin. 3 libra hapin 10 rrotullime falas, ku një simbol i veçantë mbush rrotulla të tëra dhe paguan në të 10 linjat.",
   "{count} Book of Ra spin": "{count} rrotullim Book of Ra",
   "{count} Book of Ra spins": "{count} rrotullime Book of Ra",
   "Free spin {number} of {total}": "Rrotullimi falas {number} nga {total}",
-  "5 reels, 10 lines, and the book that opens free spins. Played with your balance.":
-    "5 rrotulla, 10 linja dhe libri që hap rrotullime falas. Luhet me balancën tënde.",
+  "5 reels, 10 lines, and the book that opens free spins. Played with your balance.": "5 rrotulla, 10 linja dhe libri që hap rrotullime falas. Luhet me balancën tënde.",
   "Special symbol": "Simboli i veçantë",
   "Won so far: {amount}": "Fituar deri tani: {amount}",
   "Free spins over": "Rrotullimet falas mbaruan",
-  "That's the most a round can pay: {times} times the bet.":
-    "Kjo është sa më shumë që mund të paguajë një raund: {times} herë basti.",
+  "That's the most a round can pay: {times} times the bet.": "Kjo është sa më shumë që mund të paguajë një raund: {times} herë basti.",
   "{count} left": "{count} të mbetura",
-  Autoplay: "Luaj automatikisht",
-  "Spins in a row at {amount}. It stops for free spins, when your balance or a limit runs out, or when you leave the page.":
-    "Rrotullime njëri pas tjetrit me {amount}. Ndalon për rrotullimet falas, kur mbaron balanca ose një limit, ose kur largohesh nga faqja.",
+  "Autoplay": "Luaj automatikisht",
+  "Spins in a row at {amount}. It stops for free spins, when your balance or a limit runs out, or when you leave the page.": "Rrotullime njëri pas tjetrit me {amount}. Ndalon për rrotullimet falas, kur mbaron balanca ose një limit, ose kur largohesh nga faqja.",
   "Stop on a win of": "Ndalo me një fitim prej",
   "Don't stop on a win": "Mos ndalo për fitime",
   "{times}× the bet or more": "{times}× basti ose më shumë",
@@ -408,219 +345,160 @@ export const casino: Record<string, string> = {
   "Special symbol, every line": "Simboli i veçantë, çdo linjë",
   "{count} more free spins!": "{count} rrotullime falas të tjera!",
   "{count} free spins!": "{count} rrotullime falas!",
-  "Special symbol: {name}. In each free spin it fills its reels and pays on all 10 lines.":
-    "Simboli i veçantë: {name}. Në çdo rrotullim falas mbush rrotullat e veta dhe paguan në të 10 linjat.",
-  "The book is choosing your special symbol…":
-    "Libri po zgjedh simbolin tënd të veçantë…",
+  "Special symbol: {name}. In each free spin it fills its reels and pays on all 10 lines.": "Simboli i veçantë: {name}. Në çdo rrotullim falas mbush rrotullat e veta dhe paguan në të 10 linjat.",
+  "The book is choosing your special symbol…": "Libri po zgjedh simbolin tënd të veçantë…",
   "Start free spins": "Nis rrotullimet falas",
-  "Pays shown for a {amount} spin. A line pays when the same symbol lands on it from the left reel: the explorer, pharaoh, statue and scarab from 2 in a row, the cards from 3.":
-    "Pagesat për një rrotullim prej {amount}. Një linjë paguan kur i njëjti simbol bie mbi të që nga rrotulla e majtë: eksploruesi, faraoni, statuja dhe skarabeu nga 2 radhazi, letrat nga 3.",
+  "Pays shown for a {amount} spin. A line pays when the same symbol lands on it from the left reel: the explorer, pharaoh, statue and scarab from 2 in a row, the cards from 3.": "Pagesat për një rrotullim prej {amount}. Një linjë paguan kur i njëjti simbol bie mbi të që nga rrotulla e majtë: eksploruesi, faraoni, statuja dhe skarabeu nga 2 radhazi, letrat nga 3.",
   "The book": "Libri",
-  "The book stands in for any symbol on a line, and pays anywhere on the reels: 3, 4 or 5 books pay 2, 20 or 200 times the bet, and 3 or more give {count} free spins.":
-    "Libri zëvendëson çdo simbol në një linjë dhe paguan kudo në rrotulla: 3, 4 ose 5 libra paguajnë 2, 20 ose 200 herë bastin, dhe 3 ose më shumë japin {count} rrotullime falas.",
-  "Free spins and the special symbol":
-    "Rrotullimet falas dhe simboli i veçantë",
-  "Before the free spins the book chooses a special symbol. In each free spin, after the line wins are paid, the special symbol on enough reels fills them and pays again on all 10 lines. The reels don't need to be next to each other. 3 books in a free spin give {count} more.":
-    "Para rrotullimeve falas libri zgjedh një simbol të veçantë. Në çdo rrotullim falas, pasi paguhen fitimet e linjave, simboli i veçantë në mjaft rrotulla i mbush ato dhe paguan sërish në të 10 linjat. Rrotullat nuk duhet të jenë njëra pranë tjetrës. 3 libra në një rrotullim falas japin edhe {count}.",
-  "After a win, or at the end of the free spins, you can guess whether a card is red or black. Right, and the win doubles; wrong, and it's lost. Up to {steps} guesses in a row, and up to {limit}.":
-    "Pas një fitimi, ose në fund të rrotullimeve falas, mund të gjesh nëse një letër është e kuqe apo e zezë. E saktë, dhe fitimi dyfishohet; e gabuar, dhe humbet. Deri në {steps} hamendje radhazi, dhe deri në {limit}.",
-  "A spin, or a round of free spins with the spin that started it, pays at most {times} times the bet.":
-    "Një rrotullim, ose një raund rrotullimesh falas bashkë me rrotullimin që e nisi, paguan të shumtën {times} herë bastin.",
-  Explorer: "Eksploruesi",
-  Pharaoh: "Faraoni",
-  Statue: "Statuja",
-  Scarab: "Skarabeu",
-  Ace: "Asi",
-  King: "Mbreti",
-  Queen: "Mbretëresha",
-  Jack: "Fanti",
-  Ten: "Dhjeta",
-  Book: "Libri",
-  "Your newest Book of Ra spins, free ones included. They're also in My money, as one Book of Ra line for each day.":
-    "Rrotullimet e tua më të fundit në Book of Ra, përfshirë ato falas. Janë edhe te Paratë e mia, si një rresht Book of Ra për çdo ditë.",
-  Mines: "Minat",
-  "A field of 25 tiles hides the mines you choose. Every gem raises the payout. Cash out before one blows.":
-    "Një fushë me 25 katrorë fsheh minat që zgjedh ti. Çdo gur e ngre pagesën. Tërhiqe para se një minë të shpërthejë.",
-  "A field of 25 tiles hides the mines you choose. Every coin raises the payout. Cash out before one blows.":
-    "Një fushë me 25 katrorë fsheh minat që zgjedh ti. Çdo monedhë e ngre pagesën. Tërhiqe para se një minë të shpërthejë.",
-  "Open the gems, cash out before a mine. Played with your balance.":
-    "Hap gurët, tërhiqe para një mine. Luhet me balancën tënde.",
-  "Open the coins, cash out before a mine. Played with your balance.":
-    "Hap monedhat, tërhiqe para një mine. Luhet me balancën tënde.",
+  "The book stands in for any symbol on a line, and pays anywhere on the reels: 3, 4 or 5 books pay 2, 20 or 200 times the bet, and 3 or more give {count} free spins.": "Libri zëvendëson çdo simbol në një linjë dhe paguan kudo në rrotulla: 3, 4 ose 5 libra paguajnë 2, 20 ose 200 herë bastin, dhe 3 ose më shumë japin {count} rrotullime falas.",
+  "Free spins and the special symbol": "Rrotullimet falas dhe simboli i veçantë",
+  "Before the free spins the book chooses a special symbol. In each free spin, after the line wins are paid, the special symbol on enough reels fills them and pays again on all 10 lines. The reels don't need to be next to each other. 3 books in a free spin give {count} more.": "Para rrotullimeve falas libri zgjedh një simbol të veçantë. Në çdo rrotullim falas, pasi paguhen fitimet e linjave, simboli i veçantë në mjaft rrotulla i mbush ato dhe paguan sërish në të 10 linjat. Rrotullat nuk duhet të jenë njëra pranë tjetrës. 3 libra në një rrotullim falas japin edhe {count}.",
+  "After a win, or at the end of the free spins, you can guess whether a card is red or black. Right, and the win doubles; wrong, and it's lost. Up to {steps} guesses in a row, and up to {limit}.": "Pas një fitimi, ose në fund të rrotullimeve falas, mund të gjesh nëse një letër është e kuqe apo e zezë. E saktë, dhe fitimi dyfishohet; e gabuar, dhe humbet. Deri në {steps} hamendje radhazi, dhe deri në {limit}.",
+  "A spin, or a round of free spins with the spin that started it, pays at most {times} times the bet.": "Një rrotullim, ose një raund rrotullimesh falas bashkë me rrotullimin që e nisi, paguan të shumtën {times} herë bastin.",
+  "Explorer": "Eksploruesi",
+  "Pharaoh": "Faraoni",
+  "Statue": "Statuja",
+  "Scarab": "Skarabeu",
+  "Ace": "Asi",
+  "King": "Mbreti",
+  "Queen": "Mbretëresha",
+  "Jack": "Fanti",
+  "Ten": "Dhjeta",
+  "Book": "Libri",
+  "Your newest Book of Ra spins, free ones included. They're also in My money, as one Book of Ra line for each day.": "Rrotullimet e tua më të fundit në Book of Ra, përfshirë ato falas. Janë edhe te Paratë e mia, si një rresht Book of Ra për çdo ditë.",
+  "Mines": "Minat",
+  "A field of 25 tiles hides the mines you choose. Every gem raises the payout. Cash out before one blows.": "Një fushë me 25 katrorë fsheh minat që zgjedh ti. Çdo gur e ngre pagesën. Tërhiqe para se një minë të shpërthejë.",
+  "A field of 25 tiles hides the mines you choose. Every coin raises the payout. Cash out before one blows.": "Një fushë me 25 katrorë fsheh minat që zgjedh ti. Çdo monedhë e ngre pagesën. Tërhiqe para se një minë të shpërthejë.",
+  "Open the gems, cash out before a mine. Played with your balance.": "Hap gurët, tërhiqe para një mine. Luhet me balancën tënde.",
+  "Open the coins, cash out before a mine. Played with your balance.": "Hap monedhat, tërhiqe para një mine. Luhet me balancën tënde.",
   "Pick the mines, then start.": "Zgjidh minat, pastaj nise.",
-  "Tap a tile. A gem raises the multiplier.":
-    "Prek një katror. Një gur e ngre shumëzuesin.",
-  "Tap a tile. A coin raises the multiplier.":
-    "Prek një katror. Një monedhë e ngre shumëzuesin.",
-  Coin: "Monedhë",
+  "Tap a tile. A gem raises the multiplier.": "Prek një katror. Një gur e ngre shumëzuesin.",
+  "Tap a tile. A coin raises the multiplier.": "Prek një katror. Një monedhë e ngre shumëzuesin.",
+  "Coin": "Monedhë",
   "{count} coin": "{count} monedhë",
   "{count} coins": "{count} monedha",
-  "Next tile {multiplier}×. Cash out {amount}.":
-    "Katrori tjetër {multiplier}×. Tërhiq {amount}.",
+  "Next tile {multiplier}×. Cash out {amount}.": "Katrori tjetër {multiplier}×. Tërhiq {amount}.",
   "Mine! The stake is lost.": "Minë! Shuma humbi.",
-  "That's the most a round pays: {amount}.":
-    "Kjo është pagesa më e madhe e një raundi: {amount}.",
+  "That's the most a round pays: {amount}.": "Kjo është pagesa më e madhe e një raundi: {amount}.",
   "You cleared the board: {amount}.": "E pastrove fushën: {amount}.",
   "Cashed out {amount} at {multiplier}×.": "Tërhiqe {amount} me {multiplier}×.",
-  Multiplier: "Shumëzuesi",
+  "Multiplier": "Shumëzuesi",
   "Cash out": "Tërhiq",
   "The field": "Fusha",
   "Tile {number}, {state}": "Katrori {number}, {state}",
-  Gem: "Gur",
-  Mine: "Minë",
+  "Gem": "Gur",
+  "Mine": "Minë",
   "The mine you hit": "Mina që preke",
   "Open a tile": "Hap një katror",
   "Cash out {amount}": "Tërhiq {amount}",
   "Start {amount}": "Nis {amount}",
-  "Your newest Mines rounds. They're also in My money, as one Mines line for each day.":
-    "Raundet e tua më të fundit te Minat. Janë edhe te Paratë e mia, si një rresht Minat për çdo ditë.",
+  "Your newest Mines rounds. They're also in My money, as one Mines line for each day.": "Raundet e tua më të fundit te Minat. Janë edhe te Paratë e mia, si një rresht Minat për çdo ditë.",
   "{count} mine": "{count} minë",
   "{count} mines": "{count} mina",
   "{count} gem": "{count} gur",
   "{count} gems": "{count} gurë",
   "{count} Mines round": "{count} raund te Minat",
   "{count} Mines rounds": "{count} raunde te Minat",
-  "A 5 by 5 field hides the number of mines you pick. Tap a tile: a gem raises what the round pays, a mine loses the stake. Cash out after the first gem, or keep going. The round ends on its own if you clear every gem, or if it reaches {times} times the stake.":
-    "Një fushë 5 me 5 fsheh numrin e minave që zgjedh ti. Prek një katror: një gur e ngre pagesën e raundit, një minë e humb shumën. Tërhiqe pas gurit të parë, ose vazhdo. Raundi mbaron vetë nëse i hap të gjithë gurët, ose nëse arrin {times} herë shumën.",
-  "A 5 by 5 field hides the number of mines you pick. Tap a tile: a coin raises what the round pays, a mine loses the stake. Cash out after the first coin, or keep going. The round ends on its own if you clear every coin, or if it reaches {times} times the stake.":
-    "Një fushë 5 me 5 fsheh numrin e minave që zgjedh ti. Prek një katror: një monedhë e ngre pagesën e raundit, një minë e humb shumën. Tërhiqe pas monedhës së parë, ose vazhdo. Raundi mbaron vetë nëse i hap të gjitha monedhat, ose nëse arrin {times} herë shumën.",
-  "Each gem pays a little less than the fair chance of having reached it. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.":
-    "Çdo gur paguan pak më pak se shansi i drejtë për të arritur deri aty. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
-  "The house keeps 15%. The first coin always pays at least 1.01× the stake; later coins pay 85% of the fair chance of having reached them. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.":
-    "Shtëpia mban 15%. Monedha e parë paguan të paktën 1.01× shumën; monedhat e mëpasshme paguajnë 85% të shansit të drejtë për të arritur deri aty. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
-  "The house keeps 15%. Cashing out after any coin pays at least 1.01× the stake; once the fair price is higher, it pays 85% of the chance of having reached it. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.":
-    "Shtëpia mban 15%. Tërheqja pas çdo monedhe paguan të paktën 1.01× shumën; kur çmimi i drejtë është më i lartë, paguan 85% të shansit për të arritur deri aty. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
-  "The house keeps 15%. Each coin pays more than the last, and never 1.00× or less: 85% of the fair chance of reaching it. With few mines the first coins climb evenly from 1.01× until that price is higher. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.":
-    "Shtëpia mban 15%. Çdo monedhë paguan më shumë se e mëparshmja, dhe kurrë 1.00× ose më pak: 85% të shansit të drejtë për të arritur deri aty. Me pak mina, monedhat e para rriten njëtrajtësisht nga 1.01× derisa ai çmim të jetë më i lartë. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
+  "A 5 by 5 field hides the number of mines you pick. Tap a tile: a gem raises what the round pays, a mine loses the stake. Cash out after the first gem, or keep going. The round ends on its own if you clear every gem, or if it reaches {times} times the stake.": "Një fushë 5 me 5 fsheh numrin e minave që zgjedh ti. Prek një katror: një gur e ngre pagesën e raundit, një minë e humb shumën. Tërhiqe pas gurit të parë, ose vazhdo. Raundi mbaron vetë nëse i hap të gjithë gurët, ose nëse arrin {times} herë shumën.",
+  "A 5 by 5 field hides the number of mines you pick. Tap a tile: a coin raises what the round pays, a mine loses the stake. Cash out after the first coin, or keep going. The round ends on its own if you clear every coin, or if it reaches {times} times the stake.": "Një fushë 5 me 5 fsheh numrin e minave që zgjedh ti. Prek një katror: një monedhë e ngre pagesën e raundit, një minë e humb shumën. Tërhiqe pas monedhës së parë, ose vazhdo. Raundi mbaron vetë nëse i hap të gjitha monedhat, ose nëse arrin {times} herë shumën.",
+  "Each gem pays a little less than the fair chance of having reached it. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.": "Çdo gur paguan pak më pak se shansi i drejtë për të arritur deri aty. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
+  "The house keeps 15%. The first coin always pays at least 1.01× the stake; later coins pay 85% of the fair chance of having reached them. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.": "Shtëpia mban 15%. Monedha e parë paguan të paktën 1.01× shumën; monedhat e mëpasshme paguajnë 85% të shansit të drejtë për të arritur deri aty. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
+  "The house keeps 15%. Cashing out after any coin pays at least 1.01× the stake; once the fair price is higher, it pays 85% of the chance of having reached it. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.": "Shtëpia mban 15%. Tërheqja pas çdo monedhe paguan të paktën 1.01× shumën; kur çmimi i drejtë është më i lartë, paguan 85% të shansit për të arritur deri aty. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
+  "The house keeps 15%. Each coin pays more than the last, and never 1.00× or less: 85% of the fair chance of reaching it. With few mines the first coins climb evenly from 1.01× until that price is higher. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.": "Shtëpia mban 15%. Çdo monedhë paguan më shumë se e mëparshmja, dhe kurrë 1.00× ose më pak: 85% të shansit të drejtë për të arritur deri aty. Me pak mina, monedhat e para rriten njëtrajtësisht nga 1.01× derisa ai çmim të jetë më i lartë. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke hapur asnjë katror.",
   "Auto balls": "Topa automatikë",
   "Stop after losing": "Ndalo pas humbjes",
   "{times}× the stake": "{times}× shuma",
-  "Finish the Mines round you're playing first.":
-    "Mbaro më parë raundin që po luan te Minat.",
-  "Finish your Book of Ra free spins first.":
-    "Mbaro më parë rrotullimet falas të Book of Ra.",
-  "There's no Mines round in play. Start one first.":
-    "Nuk ke raund në lojë te Minat. Nise një më parë.",
-  "Pick 1, 3, 5, 10, 15, 20 or 24 mines.":
-    "Zgjidh 1, 3, 5, 10, 15, 20 ose 24 mina.",
+  "Finish the Mines round you're playing first.": "Mbaro më parë raundin që po luan te Minat.",
+  "Finish your Book of Ra free spins first.": "Mbaro më parë rrotullimet falas të Book of Ra.",
+  "There's no Mines round in play. Start one first.": "Nuk ke raund në lojë te Minat. Nise një më parë.",
+  "Pick 1, 3, 5, 10, 15, 20 or 24 mines.": "Zgjidh 1, 3, 5, 10, 15, 20 ose 24 mina.",
   "This round is already over.": "Ky raund ka mbaruar.",
   "That isn't a tile on the board.": "Ky nuk është katror i fushës.",
   "That tile is already open.": "Ky katror është hapur.",
   "Open a tile before you cash out.": "Hap një katror para se të tërheqësh.",
-  "The most you can bet on one round is {amount} ALL":
-    "Më së shumti mund të vësh në një raund {amount} ALL",
+  "The most you can bet on one round is {amount} ALL": "Më së shumti mund të vësh në një raund {amount} ALL",
   "Mines: 1 round": "Minat: 1 raund",
   "Mines: {count} rounds": "Minat: {count} raunde",
-  "{name} is in the middle of a Mines round. Move them once it's over.":
-    "{name} është në mes të një raundi te Minat. Zhvendose pasi të mbarojë.",
-  Penalty: "Penallti",
-  "Aim left, center or right. The keeper dives. Every goal raises the payout. Cash out before a save.":
-    "Syno majtas, në qendër ose djathtas. Portieri hidhet. Çdo gol e ngre pagesën. Tërhiqe para një pritjeje.",
-  "Take the penalties, cash out before the keeper saves one. Played with your balance.":
-    "Gjuaj penalltitë, tërhiqe para se portieri të pritë një. Luhet me balancën tënde.",
+  "{name} is in the middle of a Mines round. Move them once it's over.": "{name} është në mes të një raundi te Minat. Zhvendose pasi të mbarojë.",
+  "Penalty": "Penallti",
+  "Aim left, center or right. The keeper dives. Every goal raises the payout. Cash out before a save.": "Syno majtas, në qendër ose djathtas. Portieri hidhet. Çdo gol e ngre pagesën. Tërhiqe para një pritjeje.",
+  "Take the penalties, cash out before the keeper saves one. Played with your balance.": "Gjuaj penalltitë, tërhiqe para se portieri të pritë një. Luhet me balancën tënde.",
   "Pick your stake, then start.": "Zgjidh shumën, pastaj nise.",
   "Aim left, center or right.": "Syno majtas, në qendër ose djathtas.",
-  "Next goal {multiplier}×. Cash out {amount}.":
-    "Goli tjetër {multiplier}×. Tërhiq {amount}.",
+  "Next goal {multiplier}×. Cash out {amount}.": "Goli tjetër {multiplier}×. Tërhiq {amount}.",
   "Saved! The stake is lost.": "E priti! Shuma humbi.",
   "The goal": "Porta",
   "Shoot {side}": "Gjuaj {side}",
-  Left: "Majtas",
-  Center: "Qendër",
-  Right: "Djathtas",
+  "Left": "Majtas",
+  "Center": "Qendër",
+  "Right": "Djathtas",
   "Goal!": "Gol!",
   "Saved!": "E priti!",
   "Score a goal": "Shëno një gol",
-  Saved: "E pritur",
+  "Saved": "E pritur",
   "{count} goal": "{count} gol",
   "{count} goals": "{count} gola",
   "{count} Penalty round": "{count} raund te Penalltitë",
   "{count} Penalty rounds": "{count} raunde te Penalltitë",
-  "Your newest Penalty rounds. They're also in My money, as one Penalty line for each day.":
-    "Raundet e tua më të fundit te Penalltitë. Janë edhe te Paratë e mia, si një rresht Penallti për çdo ditë.",
-  "You aim left, center or right, and the keeper dives one of those ways. A different way is a goal and raises what the round pays. The same way is a save and loses the stake. Cash out after the first goal, or keep taking them. The round ends on its own if it reaches {times} times the stake.":
-    "Synon majtas, në qendër ose djathtas, dhe portieri hidhet nga njëra anë. Anë tjetër, dhe është gol që e ngre pagesën e raundit. E njëjta anë, dhe është pritje që e humb shumën. Tërhiqe pas golit të parë, ose vazhdo. Raundi mbaron vetë nëse arrin {times} herë shumën.",
-  "The first {full} goals pay a little less than the fair chance of having scored that many. Every goal after that multiplies what the round pays by {step} instead of the fair 1.5. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't scored.":
-    "{full} golat e parë paguajnë pak më pak se shansi i drejtë për të shënuar aq. Çdo gol pas tyre e shumëzon fitimin me {step} në vend të 1.5 së drejtë. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke shënuar.",
-  "Finish the Penalty round you're playing first.":
-    "Mbaro më parë raundin që po luan te Penalltitë.",
-  "There's no Penalty round in play. Start one first.":
-    "Nuk ke raund në lojë te Penalltitë. Nise një më parë.",
+  "Your newest Penalty rounds. They're also in My money, as one Penalty line for each day.": "Raundet e tua më të fundit te Penalltitë. Janë edhe te Paratë e mia, si një rresht Penallti për çdo ditë.",
+  "You aim left, center or right, and the keeper dives one of those ways. A different way is a goal and raises what the round pays. The same way is a save and loses the stake. Cash out after the first goal, or keep taking them. The round ends on its own if it reaches {times} times the stake.": "Synon majtas, në qendër ose djathtas, dhe portieri hidhet nga njëra anë. Anë tjetër, dhe është gol që e ngre pagesën e raundit. E njëjta anë, dhe është pritje që e humb shumën. Tërhiqe pas golit të parë, ose vazhdo. Raundi mbaron vetë nëse arrin {times} herë shumën.",
+  "The first {full} goals pay a little less than the fair chance of having scored that many. Every goal after that multiplies what the round pays by {step} instead of the fair 1.5. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't scored.": "{full} golat e parë paguajnë pak më pak se shansi i drejtë për të shënuar aq. Çdo gol pas tyre e shumëzon fitimin me {step} në vend të 1.5 së drejtë. Centët rrumbullakosen poshtë. Shuma është nga {min} deri në {max}, dhe kurrë më shumë se limiti yt. Një raund i lënë për një orë tërhiqet, ose shuma kthehet nëse s'ke shënuar.",
+  "Finish the Penalty round you're playing first.": "Mbaro më parë raundin që po luan te Penalltitë.",
+  "There's no Penalty round in play. Start one first.": "Nuk ke raund në lojë te Penalltitë. Nise një më parë.",
   "Score a goal before you cash out.": "Shëno një gol para se të tërheqësh.",
   "Penalty: 1 round": "Penallti: 1 raund",
   "Penalty: {count} rounds": "Penallti: {count} raunde",
-  "{name} is in the middle of a Penalty round. Move them once it's over.":
-    "{name} është në mes të një raundi te Penalltitë. Zhvendose pasi të mbarojë.",
-  "Drop the ball through the pegs. The middle pays a little, the edges pay up to 900 times the stake.":
-    "Lësho topin nëpër kunjat. Mesi paguan pak, skajet paguajnë deri në 900 herë shumën.",
-  "Drop a ball through the pegs and see where it lands. Played with your balance.":
-    "Lësho një top nëpër kunjat dhe shiko ku bie. Luhet me balancën tënde.",
+  "{name} is in the middle of a Penalty round. Move them once it's over.": "{name} është në mes të një raundi te Penalltitë. Zhvendose pasi të mbarojë.",
+  "Drop the ball through the pegs. The middle pays a little, the edges pay up to 900 times the stake.": "Lësho topin nëpër kunjat. Mesi paguan pak, skajet paguajnë deri në 900 herë shumën.",
+  "Drop a ball through the pegs and see where it lands. Played with your balance.": "Lësho një top nëpër kunjat dhe shiko ku bie. Luhet me balancën tënde.",
   "{count} ball": "{count} top",
   "{count} balls": "{count} topa",
   "{count} Plinko ball": "{count} top Plinko",
   "{count} Plinko balls": "{count} topa Plinko",
   "Last win": "Fitimi i fundit",
   "Your last balls": "Topat e tu të fundit",
-  Rows: "Rreshtat",
+  "Rows": "Rreshtat",
   "{count} rows": "{count} rreshta",
   "Drop a ball {amount}": "Lësho një top {amount}",
   "No balls yet.": "Ende asnjë top.",
   "{amount} stake": "shuma {amount}",
-  Low: "I ulët",
-  Medium: "Mesatar",
-  High: "I lartë",
-  "Your newest Plinko balls. They're also in My money, as one Plinko line for each day.":
-    "Topat e tu më të fundit në Plinko. Janë edhe te Paratë e mia, si një rresht Plinko për çdo ditë.",
-  "The ball falls through the rows of pegs. At every peg it goes left or right, each just as likely, and lands in a bucket at the bottom. Each bucket pays the stake times its number: the middle ones are hit most and pay least, the edges are rare and pay most.":
-    "Topi bie nëpër rreshtat e kunjave. Te çdo kunj shkon majtas ose djathtas, me të njëjtin shans, dhe bie në një kuti poshtë. Çdo kuti paguan shumën herë numrin e saj: ato në mes bien më shpesh dhe paguajnë më pak, skajet janë të rralla dhe paguajnë më shumë.",
-  "More rows and more risk make the edges pay more and the middle less. A ball costs {min} to {max}, and never more than your max stake.":
-    "Më shumë rreshta dhe më shumë rrezik i bëjnë skajet të paguajnë më shumë dhe mesin më pak. Një top kushton nga {min} deri në {max}, dhe kurrë më shumë se limiti yt.",
+  "Low": "I ulët",
+  "Medium": "Mesatar",
+  "High": "I lartë",
+  "Your newest Plinko balls. They're also in My money, as one Plinko line for each day.": "Topat e tu më të fundit në Plinko. Janë edhe te Paratë e mia, si një rresht Plinko për çdo ditë.",
+  "The ball falls through the rows of pegs. At every peg it goes left or right, each just as likely, and lands in a bucket at the bottom. Each bucket pays the stake times its number: the middle ones are hit most and pay least, the edges are rare and pay most.": "Topi bie nëpër rreshtat e kunjave. Te çdo kunj shkon majtas ose djathtas, me të njëjtin shans, dhe bie në një kuti poshtë. Çdo kuti paguan shumën herë numrin e saj: ato në mes bien më shpesh dhe paguajnë më pak, skajet janë të rralla dhe paguajnë më shumë.",
+  "More rows and more risk make the edges pay more and the middle less. A ball costs {min} to {max}, and never more than your max stake.": "Më shumë rreshta dhe më shumë rrezik i bëjnë skajet të paguajnë më shumë dhe mesin më pak. Një top kushton nga {min} deri në {max}, dhe kurrë më shumë se limiti yt.",
   "{count} rows, {risk} risk": "{count} rreshta, rrezik {risk}",
-  "From the edge to the middle; the other side is the same. Under each, how often a ball lands in that bucket or its twin.":
-    "Nga skaji te mesi; ana tjetër është njësoj. Poshtë secilës, sa shpesh bie një top në atë kuti ose në binjaken e saj.",
-  "Pick one of the stakes shown for a ball.":
-    "Zgjidh një nga shumat e treguara për një top.",
+  "From the edge to the middle; the other side is the same. Under each, how often a ball lands in that bucket or its twin.": "Nga skaji te mesi; ana tjetër është njësoj. Poshtë secilës, sa shpesh bie një top në atë kuti ose në binjaken e saj.",
+  "Pick one of the stakes shown for a ball.": "Zgjidh një nga shumat e treguara për një top.",
   "A board has 8, 12 or 16 rows.": "Një tabelë ka 8, 12 ose 16 rreshta.",
-  "Pick a risk: low, medium or high.":
-    "Zgjidh rrezikun: i ulët, mesatar ose i lartë.",
-  "The most a ball can cost you is {amount} ALL":
-    "Më së shumti një top mund të të kushtojë {amount} ALL",
-  "Your balance is too low for this ball. Pick a smaller stake, or ask your Manager for a top-up.":
-    "Balanca jote është shumë e ulët për këtë top. Zgjidh një shumë më të vogël, ose kërkoji Menaxherit një rimbushje.",
+  "Pick a risk: low, medium or high.": "Zgjidh rrezikun: i ulët, mesatar ose i lartë.",
+  "The most a ball can cost you is {amount} ALL": "Më së shumti një top mund të të kushtojë {amount} ALL",
+  "Your balance is too low for this ball. Pick a smaller stake, or ask your Manager for a top-up.": "Balanca jote është shumë e ulët për këtë top. Zgjidh një shumë më të vogël, ose kërkoji Menaxherit një rimbushje.",
   "Plinko: 1 ball": "Plinko: 1 top",
   "Plinko: {count} balls": "Plinko: {count} topa",
   "The ball bounced off the board": "Topi doli jashtë tabelës",
   "Press Space to drop a ball.": "Shtyp Space për të lëshuar një top.",
-  Dice: "Zare",
-  "Set your own odds: roll over or under a target, for up to 85 times the stake. Every roll can be checked.":
-    "Vendos vetë shanset: hidh mbi ose nën një objektiv, deri në 85 herë shumën. Çdo hedhje mund të verifikohet.",
+  "Dice": "Zare",
+  "Set your own odds: roll over or under a target, for up to 85 times the stake. Every roll can be checked.": "Vendos vetë shanset: hidh mbi ose nën një objektiv, deri në 85 herë shumën. Çdo hedhje mund të verifikohet.",
   "{count} roll": "{count} hedhje",
   "{count} rolls": "{count} hedhje",
   "{count} dice roll": "{count} hedhje zaresh",
   "{count} dice rolls": "{count} hedhje zaresh",
   "Type a stake in dollars and cents.": "Shkruaj shumën në dollarë dhe centë.",
   "The smallest roll is {amount}.": "Hedhja më e vogël është {amount}.",
-  "The most a roll can cost you is {amount}.":
-    "Më së shumti një hedhje mund të të kushtojë {amount}.",
-  "Your balance is too low for this stake.":
-    "Balanca jote është shumë e ulët për këtë shumë.",
-  "Set from 1 to 1,000 rolls, or 0 to keep going until you stop.":
-    "Vendos nga 1 deri në 1,000 hedhje, ose 0 për të vazhduar derisa ta ndalosh.",
-  "Stop on profit and stop on loss are amounts above 0 ALL, or empty.":
-    "Ndalo në fitim dhe Ndalo në humbje janë shuma mbi 0 ALL, ose bosh.",
-  "Autoplay stopped: profit reached {amount}.":
-    "Loja automatike u ndal: fitimi arriti {amount}.",
-  "Autoplay stopped: loss reached {amount}.":
-    "Loja automatike u ndal: humbja arriti {amount}.",
-  "A client seed is 1 to 32 letters, digits, dashes or underscores.":
-    "Seed-i i klientit ka 1 deri në 32 shkronja, shifra, viza ose nënvizime.",
-  "New seeds set. The old server seed is shown below.":
-    "U vendosën seed-e të reja. Seed-i i vjetër i serverit shfaqet më poshtë.",
+  "The most a roll can cost you is {amount}.": "Më së shumti një hedhje mund të të kushtojë {amount}.",
+  "Your balance is too low for this stake.": "Balanca jote është shumë e ulët për këtë shumë.",
+  "Set from 1 to 1,000 rolls, or 0 to keep going until you stop.": "Vendos nga 1 deri në 1,000 hedhje, ose 0 për të vazhduar derisa ta ndalosh.",
+  "Stop on profit and stop on loss are amounts above 0 ALL, or empty.": "Ndalo në fitim dhe Ndalo në humbje janë shuma mbi 0 ALL, ose bosh.",
+  "Autoplay stopped: profit reached {amount}.": "Loja automatike u ndal: fitimi arriti {amount}.",
+  "Autoplay stopped: loss reached {amount}.": "Loja automatike u ndal: humbja arriti {amount}.",
+  "A client seed is 1 to 32 letters, digits, dashes or underscores.": "Seed-i i klientit ka 1 deri në 32 shkronja, shifra, viza ose nënvizime.",
+  "New seeds set. The old server seed is shown below.": "U vendosën seed-e të reja. Seed-i i vjetër i serverit shfaqet më poshtë.",
   "Copied.": "U kopjua.",
   "Roll under": "Hidh nën",
   "Roll over": "Hidh mbi",
-  "Pick a target, roll over or under it. Every roll can be checked. Played with your balance.":
-    "Zgjidh një objektiv dhe hidh mbi ose nën të. Çdo hedhje mund të verifikohet. Luhet me balancën tënde.",
+  "Pick a target, roll over or under it. Every roll can be checked. Played with your balance.": "Zgjidh një objektiv dhe hidh mbi ose nën të. Çdo hedhje mund të verifikohet. Luhet me balancën tënde.",
   "Provably fair": "Ndershmëri e verifikueshme",
   "This visit": "Këtë vizitë",
   "Rolls won": "Hedhje të fituara",
@@ -633,9 +511,9 @@ export const casino: Record<string, string> = {
   "Switch to roll over": "Kalo te hidh mbi",
   "Switch to roll under": "Kalo te hidh nën",
   "Win chance": "Shansi i fitores",
-  Manual: "Me dorë",
-  Auto: "Auto",
-  Max: "Maks",
+  "Manual": "Me dorë",
+  "Auto": "Auto",
+  "Max": "Maks",
   "Profit on win": "Fitimi nëse fiton",
   "Number of rolls": "Numri i hedhjeve",
   "Stop on profit": "Ndalo në fitim",
@@ -643,7 +521,7 @@ export const casino: Record<string, string> = {
   "Roll {done}": "Hedhja {done}",
   "Roll {done} of {total}": "Hedhja {done} nga {total}",
   "Rolling…": "Duke hedhur…",
-  Roll: "Hidh",
+  "Roll": "Hidh",
   "Stop autoplay": "Ndalo lojën automatike",
   "Start autoplay": "Nis lojën automatike",
   "Press Space to roll.": "Shtyp Space për të hedhur.",
@@ -651,16 +529,11 @@ export const casino: Record<string, string> = {
   "No rolls yet.": "Ende asnjë hedhje.",
   "under {target}": "nën {target}",
   "over {target}": "mbi {target}",
-  "A roll is a number from 0.00 to 99.99, each as likely as any other. Pick a target and a side: under wins when the roll is below the target, over when it's above it. Drag the slider, or type the target, the multiplier or the win chance; the other two follow.":
-    "Një hedhje është një numër nga 0.00 deri në 99.99, secili me të njëjtin shans. Zgjidh një objektiv dhe një anë: nën fiton kur hedhja është poshtë objektivit, mbi kur është sipër tij. Tërhiq rrëshqitësin, ose shkruaj objektivin, shumëzuesin ose shansin e fitores; dy të tjerat ndjekin.",
-  "The win chance can be {min}% to {max}%. A win pays the stake times the multiplier, rounded down to 4 decimals: 50% pays {half}×, 1% pays {top}×. Cents are rounded down.":
-    "Shansi i fitores mund të jetë nga {min}% deri në {max}%. Një fitore paguan shumën herë shumëzuesin, rrumbullakosur poshtë në 4 shifra dhjetore: 50% paguan {half}×, 1% paguan {top}×. Centët rrumbullakosen poshtë.",
-  "A roll costs {min} to {max}, never more than your max stake. Autoplay rolls for you and stops after the number of rolls you set, when it reaches your stop on profit or stop on loss, or when you stop it.":
-    "Një hedhje kushton nga {min} deri në {max}, kurrë më shumë se limiti yt. Loja automatike hedh për ty dhe ndalon pas numrit të hedhjeve që vendos, kur arrin Ndalo në fitim ose Ndalo në humbje, ose kur e ndalon ti.",
-  "Every roll is made on our server from seeds you can check: see Provably fair.":
-    "Çdo hedhje bëhet në serverin tonë nga seed-e që mund t'i verifikosh: shiko Ndershmëri e verifikueshme.",
-  "Each roll comes from three things: our server seed, your client seed, and a nonce that counts your rolls. Before you roll, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing, and you can't work out the rolls. When you change seeds, the old server seed is shown, and you can check every roll it made, here or with any HMAC-SHA256 tool.":
-    "Çdo hedhje del nga tri gjëra: seed-i ynë i serverit, seed-i yt i klientit dhe një nonce që numëron hedhjet e tua. Para se të hedhësh, sheh vetëm gjurmën (hash SHA-256) të seed-it të serverit, kështu që ne s'mund ta ndryshojmë pa e vënë re ti, dhe ti s'mund t'i parashikosh hedhjet. Kur ndryshon seed-et, seed-i i vjetër i serverit shfaqet dhe mund të verifikosh çdo hedhje që ka bërë, këtu ose me çdo mjet HMAC-SHA256.",
+  "A roll is a number from 0.00 to 99.99, each as likely as any other. Pick a target and a side: under wins when the roll is below the target, over when it's above it. Drag the slider, or type the target, the multiplier or the win chance; the other two follow.": "Një hedhje është një numër nga 0.00 deri në 99.99, secili me të njëjtin shans. Zgjidh një objektiv dhe një anë: nën fiton kur hedhja është poshtë objektivit, mbi kur është sipër tij. Tërhiq rrëshqitësin, ose shkruaj objektivin, shumëzuesin ose shansin e fitores; dy të tjerat ndjekin.",
+  "The win chance can be {min}% to {max}%. A win pays the stake times the multiplier, rounded down to 4 decimals: 50% pays {half}×, 1% pays {top}×. Cents are rounded down.": "Shansi i fitores mund të jetë nga {min}% deri në {max}%. Një fitore paguan shumën herë shumëzuesin, rrumbullakosur poshtë në 4 shifra dhjetore: 50% paguan {half}×, 1% paguan {top}×. Centët rrumbullakosen poshtë.",
+  "A roll costs {min} to {max}, never more than your max stake. Autoplay rolls for you and stops after the number of rolls you set, when it reaches your stop on profit or stop on loss, or when you stop it.": "Një hedhje kushton nga {min} deri në {max}, kurrë më shumë se limiti yt. Loja automatike hedh për ty dhe ndalon pas numrit të hedhjeve që vendos, kur arrin Ndalo në fitim ose Ndalo në humbje, ose kur e ndalon ti.",
+  "Every roll is made on our server from seeds you can check: see Provably fair.": "Çdo hedhje bëhet në serverin tonë nga seed-e që mund t'i verifikosh: shiko Ndershmëri e verifikueshme.",
+  "Each roll comes from three things: our server seed, your client seed, and a nonce that counts your rolls. Before you roll, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing, and you can't work out the rolls. When you change seeds, the old server seed is shown, and you can check every roll it made, here or with any HMAC-SHA256 tool.": "Çdo hedhje del nga tri gjëra: seed-i ynë i serverit, seed-i yt i klientit dhe një nonce që numëron hedhjet e tua. Para se të hedhësh, sheh vetëm gjurmën (hash SHA-256) të seed-it të serverit, kështu që ne s'mund ta ndryshojmë pa e vënë re ti, dhe ti s'mund t'i parashikosh hedhjet. Kur ndryshon seed-et, seed-i i vjetër i serverit shfaqet dhe mund të verifikosh çdo hedhje që ka bërë, këtu ose me çdo mjet HMAC-SHA256.",
   "Your seeds now": "Seed-et e tua tani",
   "Server seed (hashed)": "Seed-i i serverit (hash)",
   "Client seed": "Seed-i i klientit",
@@ -671,32 +544,25 @@ export const casino: Record<string, string> = {
   "Your last seeds, now shown": "Seed-et e tua të fundit, tani të shfaqura",
   "Server seed": "Seed-i i serverit",
   "Check a roll": "Verifiko një hedhje",
-  Nonce: "Nonce",
+  "Nonce": "Nonce",
   "Its hash": "Hash-i i tij",
-  "Paste a server seed that has been shown, its client seed and a nonce.":
-    "Ngjit një seed serveri që është shfaqur, seed-in e tij të klientit dhe një nonce.",
-  Target: "Objektivi",
-  Paid: "Paguar",
-  Time: "Ora",
+  "Paste a server seed that has been shown, its client seed and a nonce.": "Ngjit një seed serveri që është shfaqur, seed-in e tij të klientit dhe një nonce.",
+  "Target": "Objektivi",
+  "Paid": "Paguar",
+  "Time": "Ora",
   "Check this roll": "Verifiko këtë hedhje",
-  "The server seed is shown once you change seeds. Then you can check this roll.":
-    "Seed-i i serverit shfaqet sapo të ndryshosh seed-et. Atëherë mund ta verifikosh këtë hedhje.",
-  Copy: "Kopjo",
-  "Your newest dice rolls. Tap one to see its seeds and check it. They're also in My money, as one Dice line for each day.":
-    "Hedhjet e tua më të fundit me zare. Prek njërën për të parë seed-et dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Zare për çdo ditë.",
+  "The server seed is shown once you change seeds. Then you can check this roll.": "Seed-i i serverit shfaqet sapo të ndryshosh seed-et. Atëherë mund ta verifikosh këtë hedhje.",
+  "Copy": "Kopjo",
+  "Your newest dice rolls. Tap one to see its seeds and check it. They're also in My money, as one Dice line for each day.": "Hedhjet e tua më të fundit me zare. Prek njërën për të parë seed-et dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Zare për çdo ditë.",
   "The stake is in whole cents.": "Shuma është në centë të plotë.",
   "The smallest roll is {amount} ALL": "Hedhja më e vogël është {amount} ALL",
   "Roll over or under the target.": "Hidh mbi ose nën objektivin.",
-  "The target is a number from 0.00 to 99.99.":
-    "Objektivi është një numër nga 0.00 deri në 99.99.",
-  "The most a roll can cost you is {amount} ALL":
-    "Më së shumti një hedhje mund të të kushtojë {amount} ALL",
-  "Your balance is too low for this roll. Lower the stake, or ask your Manager for a top-up.":
-    "Balanca jote është shumë e ulët për këtë hedhje. Ule shumën, ose kërkoji Menaxherit një rimbushje.",
+  "The target is a number from 0.00 to 99.99.": "Objektivi është një numër nga 0.00 deri në 99.99.",
+  "The most a roll can cost you is {amount} ALL": "Më së shumti një hedhje mund të të kushtojë {amount} ALL",
+  "Your balance is too low for this roll. Lower the stake, or ask your Manager for a top-up.": "Balanca jote është shumë e ulët për këtë hedhje. Ule shumën, ose kërkoji Menaxherit një rimbushje.",
   "Dice: 1 roll": "Zare: 1 hedhje",
   "Dice: {count} rolls": "Zare: {count} hedhje",
-  "Set a target that wins 1% to 84% of the time.":
-    "Vendos një objektiv që fiton nga 1% deri në 84% të herëve.",
+  "Set a target that wins 1% to 84% of the time.": "Vendos një objektiv që fiton nga 1% deri në 84% të herëve.",
   "No games are open right now.": "Asnjë lojë nuk është e hapur tani.",
   "{game} is on.": "{game} u aktivizua.",
   "{game} is off.": "{game} u çaktivizua.",
@@ -705,55 +571,39 @@ export const casino: Record<string, string> = {
   "Hidden from your Players.": "E fshehur për lojtarët e tu.",
   "Your Players see it.": "Lojtarët e tu e shohin.",
   "Open for your team: {games}.": "Të hapura për skuadrën tënde: {games}.",
-  "Your Owner hasn't opened any games for your team.":
-    "Pronari yt nuk ka hapur asnjë lojë për skuadrën tënde.",
-  "Turn single games on or off for the whole site. A game you turn off is hidden from every team: Owners don't see it and can't turn it back on.":
-    "Aktivizo ose çaktivizo lojëra të veçanta për gjithë faqen. Një lojë që e çaktivizon fshihet për çdo skuadër: Pronarët nuk e shohin dhe nuk mund ta aktivizojnë sërish.",
-  "Choose which games your Players see. Rounds already started can still be finished.":
-    "Zgjidh cilat lojëra shohin lojtarët e tu. Raundet e nisura mund të përfundohen gjithsesi.",
-  Result: "Rezultati",
+  "Your Owner hasn't opened any games for your team.": "Pronari yt nuk ka hapur asnjë lojë për skuadrën tënde.",
+  "Turn single games on or off for the whole site. A game you turn off is hidden from every team: Owners don't see it and can't turn it back on.": "Aktivizo ose çaktivizo lojëra të veçanta për gjithë faqen. Një lojë që e çaktivizon fshihet për çdo skuadër: Pronarët nuk e shohin dhe nuk mund ta aktivizojnë sërish.",
+  "Choose which games your Players see. Rounds already started can still be finished.": "Zgjidh cilat lojëra shohin lojtarët e tu. Raundet e nisura mund të përfundohen gjithsesi.",
+  "Result": "Rezultati",
   "The dice are rolling": "Zaret po rrokullisen",
   "The dice show {roll}": "Zaret tregojnë {roll}",
   "Press Space to spin.": "Shtyp Space për të rrotulluar.",
-  "Press Space to spin, and again to stop the reels.":
-    "Shtyp Space për të rrotulluar, dhe sërish për të ndalur rrotullat.",
-  "Keys: Space deals, H hits, S stands, D doubles, P splits, Y and N answer insurance.":
-    "Tastet: Space shpërndan, H merr letër, S ndalet, D dyfishon, P ndan, Y dhe N i përgjigjen sigurimit.",
-  "Press Space to start a round or cash out.":
-    "Shtyp Space për të nisur një raund ose për të tërhequr fitimin.",
-  "Keys: Space starts a round or cashes out, and ← ↑ → shoot left, centre and right.":
-    "Tastet: Space nis një raund ose tërheq fitimin, dhe ← ↑ → gjuajnë majtas, në qendër dhe djathtas.",
+  "Press Space to spin, and again to stop the reels.": "Shtyp Space për të rrotulluar, dhe sërish për të ndalur rrotullat.",
+  "Keys: Space deals, H hits, S stands, D doubles, P splits, Y and N answer insurance.": "Tastet: Space shpërndan, H merr letër, S ndalet, D dyfishon, P ndan, Y dhe N i përgjigjen sigurimit.",
+  "Press Space to start a round or cash out.": "Shtyp Space për të nisur një raund ose për të tërhequr fitimin.",
+  "Keys: Space starts a round or cashes out, and ← ↑ → shoot left, centre and right.": "Tastet: Space nis një raund ose tërheq fitimin, dhe ← ↑ → gjuajnë majtas, në qendër dhe djathtas.",
   "The dealer checks for blackjack…": "Dileri kontrollon për blackjack…",
   "No blackjack. Play on.": "S'ka blackjack. Vazhdo lojën.",
 
   // Keno
-  Keno: "Keno",
-  "Pick up to 10 numbers, 20 of 80 are drawn. Catch them all for up to 2,000 times the stake. Every draw can be checked.":
-    "Zgjidh deri në 10 numra, hidhen 20 nga 80. Kap të gjithë dhe fito deri në 2,000 herë bastin. Çdo hedhje mund të verifikohet.",
+  "Keno": "Keno",
+  "Pick up to 10 numbers, 20 of 80 are drawn. Catch them all for up to 2,000 times the stake. Every draw can be checked.": "Zgjidh deri në 10 numra, hidhen 20 nga 80. Kap të gjithë dhe fito deri në 2,000 herë bastin. Çdo hedhje mund të verifikohet.",
   "{count} Keno round": "{count} raund Keno",
   "{count} Keno rounds": "{count} raunde Keno",
   "Pick 1 to 10 numbers on the board.": "Zgjidh 1 deri në 10 numra në tabelë.",
-  "The most a round can cost you is {amount}.":
-    "Më së shumti një raund mund të të kushtojë {amount}.",
-  "Set from 1 to 1,000 rounds, or 0 to keep going until you stop.":
-    "Vendos nga 1 deri në 1,000 raunde, ose 0 për të vazhduar derisa ta ndalosh.",
-  "You can pick up to {count} numbers.":
-    "Mund të zgjedhësh deri në {count} numra.",
-  "Pick up to 10 numbers. 20 of the 80 are drawn, and the more of yours come out, the more you win. Played with your balance.":
-    "Zgjidh deri në 10 numra. Hidhen 20 nga 80, dhe sa më shumë nga të tutë dalin, aq më shumë fiton. Luhet me balancën tënde.",
+  "The most a round can cost you is {amount}.": "Më së shumti një raund mund të të kushtojë {amount}.",
+  "Set from 1 to 1,000 rounds, or 0 to keep going until you stop.": "Vendos nga 1 deri në 1,000 raunde, ose 0 për të vazhduar derisa ta ndalosh.",
+  "You can pick up to {count} numbers.": "Mund të zgjedhësh deri në {count} numra.",
+  "Pick up to 10 numbers. 20 of the 80 are drawn, and the more of yours come out, the more you win. Played with your balance.": "Zgjidh deri në 10 numra. Hidhen 20 nga 80, dhe sa më shumë nga të tutë dalin, aq më shumë fiton. Luhet me balancën tënde.",
   "Rounds won": "Raunde të fituara",
-  "The board: pick up to {count} numbers":
-    "Tabela: zgjidh deri në {count} numra",
+  "The board: pick up to {count} numbers": "Tabela: zgjidh deri në {count} numra",
   "{number}: yours, drawn": "{number}: i yti, doli",
   "{number}: yours": "{number}: i yti",
   "{number}: drawn": "{number}: doli",
   "Ball {count} of {total}": "Topi {count} nga {total}",
-  "{hits} of {picks} hit: won {amount}":
-    "{hits} nga {picks} qëlluan: fitove {amount}",
-  "{hits} of {picks} hit: no win this time":
-    "{hits} nga {picks} qëlluan: kësaj radhe pa fitim",
-  "Tap numbers on the board, or use Quick pick.":
-    "Prek numrat në tabelë, ose përdor Zgjedhjen e shpejtë.",
+  "{hits} of {picks} hit: won {amount}": "{hits} nga {picks} qëlluan: fitove {amount}",
+  "{hits} of {picks} hit: no win this time": "{hits} nga {picks} qëlluan: kësaj radhe pa fitim",
+  "Tap numbers on the board, or use Quick pick.": "Prek numrat në tabelë, ose përdor Zgjedhjen e shpejtë.",
   "Your numbers": "Numrat e tu",
   "Quick pick": "Zgjedhje e shpejtë",
   "What {count} numbers pay": "Sa paguajnë {count} numra",
@@ -764,87 +614,66 @@ export const casino: Record<string, string> = {
   "Drawing…": "Po hidhen…",
   "Press Space to play.": "Shtyp Space për të luajtur.",
   "{hits} of {picks}": "{hits} nga {picks}",
-  "Pick 1 to 10 numbers from 1 to 80, tap them on the board or use Quick pick. Each round draws 20 of the 80 numbers, each as likely as any other. What you win depends on how many numbers you picked and how many of them were drawn: the stake times the pay below, with cents rounded down.":
-    "Zgjidh 1 deri në 10 numra nga 1 deri në 80, duke i prekur në tabelë ose me Zgjedhjen e shpejtë. Çdo raund hedh 20 nga 80 numrat, secili me të njëjtën mundësi. Sa fiton varet nga sa numra zgjodhe dhe sa prej tyre dolën: basti herë pagesën më poshtë, me qindarkat të rrumbullakosura poshtë.",
-  "A round costs {min} to {max}, never more than your max stake. Autoplay plays your numbers again and again, and stops after the number of rounds you set, when it reaches your stop on profit or stop on loss, or when you stop it.":
-    "Një raund kushton nga {min} deri në {max}, kurrë më shumë se basti yt maksimal. Loja automatike luan numrat e tu herë pas here, dhe ndalon pas numrit të raundeve që vendos, kur arrin ndalimin në fitim ose në humbje, ose kur e ndalon ti.",
-  "Every draw is made on our server from seeds you can check: see Provably fair.":
-    "Çdo hedhje bëhet në serverin tonë nga seed-e që mund t'i verifikosh: shih Provably fair.",
-  "Each draw comes from three things: our server seed, your client seed, and a nonce that counts your rounds. Before you play, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing, and you can't work out the draws. When you change seeds, the old server seed is shown, and you can check every draw it made. Keno and Dice use the same seeds.":
-    "Çdo hedhje vjen nga tre gjëra: seed-i ynë i serverit, seed-i yt i klientit dhe një nonce që numëron raundet e tua. Para se të luash, sheh vetëm një gjurmë (hash SHA-256) të seed-it të serverit, kështu që nuk mund ta ndryshojmë pa e vënë re ti, dhe ti nuk mund t'i parashikosh hedhjet. Kur ndryshon seed-et, shfaqet seed-i i vjetër i serverit dhe mund të verifikosh çdo hedhje që ai bëri. Keno dhe Zaret përdorin të njëjtat seed-e.",
+  "Pick 1 to 10 numbers from 1 to 80, tap them on the board or use Quick pick. Each round draws 20 of the 80 numbers, each as likely as any other. What you win depends on how many numbers you picked and how many of them were drawn: the stake times the pay below, with cents rounded down.": "Zgjidh 1 deri në 10 numra nga 1 deri në 80, duke i prekur në tabelë ose me Zgjedhjen e shpejtë. Çdo raund hedh 20 nga 80 numrat, secili me të njëjtën mundësi. Sa fiton varet nga sa numra zgjodhe dhe sa prej tyre dolën: basti herë pagesën më poshtë, me qindarkat të rrumbullakosura poshtë.",
+  "A round costs {min} to {max}, never more than your max stake. Autoplay plays your numbers again and again, and stops after the number of rounds you set, when it reaches your stop on profit or stop on loss, or when you stop it.": "Një raund kushton nga {min} deri në {max}, kurrë më shumë se basti yt maksimal. Loja automatike luan numrat e tu herë pas here, dhe ndalon pas numrit të raundeve që vendos, kur arrin ndalimin në fitim ose në humbje, ose kur e ndalon ti.",
+  "Every draw is made on our server from seeds you can check: see Provably fair.": "Çdo hedhje bëhet në serverin tonë nga seed-e që mund t'i verifikosh: shih Provably fair.",
+  "Each draw comes from three things: our server seed, your client seed, and a nonce that counts your rounds. Before you play, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing, and you can't work out the draws. When you change seeds, the old server seed is shown, and you can check every draw it made. Keno and Dice use the same seeds.": "Çdo hedhje vjen nga tre gjëra: seed-i ynë i serverit, seed-i yt i klientit dhe një nonce që numëron raundet e tua. Para se të luash, sheh vetëm një gjurmë (hash SHA-256) të seed-it të serverit, kështu që nuk mund ta ndryshojmë pa e vënë re ti, dhe ti nuk mund t'i parashikosh hedhjet. Kur ndryshon seed-et, shfaqet seed-i i vjetër i serverit dhe mund të verifikosh çdo hedhje që ai bëri. Keno dhe Zaret përdorin të njëjtat seed-e.",
   "Rounds made with these seeds": "Raunde të bëra me këto seed-e",
   "Check a draw": "Verifiko një hedhje",
   "Numbers drawn, in order": "Numrat që dolën, me radhë",
   "Round details": "Detajet e raundit",
   "Won {amount} at {multiplier}": "Fitove {amount} me {multiplier}",
   "Check this draw": "Verifiko këtë hedhje",
-  "The server seed is shown once you change seeds. Then you can check this draw.":
-    "Seed-i i serverit shfaqet sapo të ndryshosh seed-et. Atëherë mund ta verifikosh këtë hedhje.",
-  "Your newest Keno rounds. Tap one to see its draw and its seeds, and check it. They're also in My money, as one Keno line for each day.":
-    "Raundet e tua më të fundit në Keno. Prek njërin për të parë hedhjen dhe seed-et, dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Keno për çdo ditë.",
+  "The server seed is shown once you change seeds. Then you can check this draw.": "Seed-i i serverit shfaqet sapo të ndryshosh seed-et. Atëherë mund ta verifikosh këtë hedhje.",
+  "Your newest Keno rounds. Tap one to see its draw and its seeds, and check it. They're also in My money, as one Keno line for each day.": "Raundet e tua më të fundit në Keno. Prek njërin për të parë hedhjen dhe seed-et, dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Keno për çdo ditë.",
   "{count} hit": "{count} qëllim",
   "{count} hits": "{count} goditje",
   "{count} number picked. Press Play.": "{count} numër i zgjedhur. Shtyp Luaj.",
-  "{count} numbers picked. Press Play.":
-    "{count} numra të zgjedhur. Shtyp Luaj.",
+  "{count} numbers picked. Press Play.": "{count} numra të zgjedhur. Shtyp Luaj.",
   "{count} number": "{count} numër",
   "{count} numbers": "{count} numra",
   // Keno, from the server
   "Keno: 1 round": "Keno: 1 raund",
   "Keno: {count} rounds": "Keno: {count} raunde",
   "A round costs {bets} ALL": "Një raund kushton {bets} ALL",
-  "The most a round can cost you is {amount} ALL":
-    "Më së shumti një raund mund të të kushtojë {amount} ALL",
-  "Your balance is too low for this round. Lower the stake, or ask your Manager for a top-up.":
-    "Balanca jote është shumë e ulët për këtë raund. Ule bastin, ose kërkoji Menaxherit një rimbushje.",
+  "The most a round can cost you is {amount} ALL": "Më së shumti një raund mund të të kushtojë {amount} ALL",
+  "Your balance is too low for this round. Lower the stake, or ask your Manager for a top-up.": "Balanca jote është shumë e ulët për këtë raund. Ule bastin, ose kërkoji Menaxherit një rimbushje.",
   "Pick {min} to {max} numbers.": "Zgjidh {min} deri në {max} numra.",
   "Pick numbers from 1 to {max}.": "Zgjidh numra nga 1 deri në {max}.",
   "Pick each number once.": "Zgjidh çdo numër vetëm një herë.",
   // A Player's Casino play, as staff see it
   "Round in play, started {when}": "Raund në lojë, nisur më {when}",
-  Free: "Falas",
+  "Free": "Falas",
   "No Casino play this month.": "Asnjë lojë në Kazino këtë muaj.",
   "Last played {when}": "Luajtur për herë të fundit më {when}",
-  "This Player's Casino games this month: how many rounds they played, what they staked and what was paid back. Each game keeps one line a day in their money history.":
-    "Lojërat e këtij Lojtari në Kazino këtë muaj: sa raunde luajti, sa vuri bast dhe sa iu kthye. Çdo lojë mban një rresht në ditë në historikun e parave.",
+  "This Player's Casino games this month: how many rounds they played, what they staked and what was paid back. Each game keeps one line a day in their money history.": "Lojërat e këtij Lojtari në Kazino këtë muaj: sa raunde luajti, sa vuri bast dhe sa iu kthye. Çdo lojë mban një rresht në ditë në historikun e parave.",
   "{count} casino round": "{count} raund kazinoje",
   "{count} casino rounds": "{count} raunde kazinoje",
   "{count} free spin still to play": "{count} rrotullim falas për t'u luajtur",
-  "{count} free spins still to play":
-    "{count} rrotullime falas për t'u luajtur",
+  "{count} free spins still to play": "{count} rrotullime falas për t'u luajtur",
   // The Casino switch for one Player
-  "The Casino is off for this Player.":
-    "Kazinoja është e fikur për këtë Lojtar.",
-  "The Casino is back on for this Player.":
-    "Kazinoja është sërish e ndezur për këtë Lojtar.",
-  On: "Aktiv",
+  "The Casino is off for this Player.": "Kazinoja është e fikur për këtë Lojtar.",
+  "The Casino is back on for this Player.": "Kazinoja është sërish e ndezur për këtë Lojtar.",
+  "On": "Aktiv",
   "Turned off by their Owner": "E fikur nga Pronari i tij",
   "Turned off by their Manager": "E fikur nga Menaxheri i tij",
   "Casino for this Player": "Kazinoja për këtë Lojtar",
-  "Your Owner turned the Casino off for this Player. Only they can turn it back on.":
-    "Pronari yt e fiku Kazinonë për këtë Lojtar. Vetëm ai mund ta ndezë sërish.",
-  "Their Manager turned the Casino off for this Player, so it stays off until they turn it back on.":
-    "Menaxheri i tij e fiku Kazinonë për këtë Lojtar, ndaj mbetet e fikur derisa ta ndezë sërish.",
-  "Off: this Player can't play in the Casino. Their sports betting isn't affected.":
-    "E fikur: ky Lojtar nuk mund të luajë në Kazino. Bastet sportive nuk preken.",
-  "On: this Player can play in the Casino, when it's open for the team. Untick to turn it off for them only.":
-    "E ndezur: ky Lojtar mund të luajë në Kazino, kur ajo është e hapur për ekipin. Hiqe shenjën për ta fikur vetëm për të.",
+  "Your Owner turned the Casino off for this Player. Only they can turn it back on.": "Pronari yt e fiku Kazinonë për këtë Lojtar. Vetëm ai mund ta ndezë sërish.",
+  "Their Manager turned the Casino off for this Player, so it stays off until they turn it back on.": "Menaxheri i tij e fiku Kazinonë për këtë Lojtar, ndaj mbetet e fikur derisa ta ndezë sërish.",
+  "Off: this Player can't play in the Casino. Their sports betting isn't affected.": "E fikur: ky Lojtar nuk mund të luajë në Kazino. Bastet sportive nuk preken.",
+  "On: this Player can play in the Casino, when it's open for the team. Untick to turn it off for them only.": "E ndezur: ky Lojtar mund të luajë në Kazino, kur ajo është e hapur për ekipin. Hiqe shenjën për ta fikur vetëm për të.",
   // Coin Flip
   "Coin Flip": "Kokë a Pil",
-  "Call heads or tails. A right call pays 1.7 times the stake. Every flip can be checked.":
-    "Zgjidh kokë ose pil. Zgjedhja e saktë paguan 1.7 herë shumën. Çdo hedhje mund të verifikohet.",
+  "Call heads or tails. A right call pays 1.7 times the stake. Every flip can be checked.": "Zgjidh kokë ose pil. Zgjedhja e saktë paguan 1.7 herë shumën. Çdo hedhje mund të verifikohet.",
   "{count} flip": "{count} hedhje",
   "{count} flips": "{count} hedhje",
   "{count} coin flip": "{count} hedhje monedhe",
   "{count} coin flips": "{count} hedhje monedhe",
-  "The most a flip can cost you is {amount}.":
-    "Më së shumti një hedhje monedhe mund të të kushtojë {amount}.",
-  "Set from 1 to 1,000 flips, or 0 to keep going until you stop.":
-    "Vendos nga 1 deri në 1,000 hedhje, ose 0 për të vazhduar derisa ta ndalosh.",
-  Heads: "Kokë",
-  Tails: "Pil",
-  "Call heads or tails and flip. Every flip can be checked. Played with your balance.":
-    "Zgjidh kokë ose pil dhe hidhe monedhën. Çdo hedhje mund të verifikohet. Luhet me balancën tënde.",
+  "The most a flip can cost you is {amount}.": "Më së shumti një hedhje monedhe mund të të kushtojë {amount}.",
+  "Set from 1 to 1,000 flips, or 0 to keep going until you stop.": "Vendos nga 1 deri në 1,000 hedhje, ose 0 për të vazhduar derisa ta ndalosh.",
+  "Heads": "Kokë",
+  "Tails": "Pil",
+  "Call heads or tails and flip. Every flip can be checked. Played with your balance.": "Zgjidh kokë ose pil dhe hidhe monedhën. Çdo hedhje mund të verifikohet. Luhet me balancën tënde.",
   "Flips won": "Hedhje të fituara",
   "Your last flips": "Hedhjet e tua të fundit",
   "Flip details": "Detajet e hedhjes",
@@ -861,47 +690,34 @@ export const casino: Record<string, string> = {
   "Press Space to flip.": "Shtyp Space për ta hedhur.",
   "No flips yet.": "Ende asnjë hedhje.",
   "called {side}": "zgjodhe {side}",
-  "Call heads or tails, then flip the coin. Each side comes up half the time.":
-    "Zgjidh kokë ose pil, pastaj hidhe monedhën. Secila anë del gjysmën e herëve.",
-  "A right call pays {multiplier}× the stake: 100 ALL pays {example} ALL.":
-    "Zgjedhja e saktë paguan {multiplier}× shumën: 100 ALL paguan {example} ALL.",
-  "A flip costs {min} to {max}, never more than your max stake. Autoplay flips for you with the same call and stops after the number of flips you set, when it reaches your stop on profit or stop on loss, or when you stop it.":
-    "Një hedhje kushton nga {min} deri në {max}, kurrë më shumë se limiti yt. Loja automatike hedh për ty me të njëjtën zgjedhje dhe ndalon pas numrit të hedhjeve që vendos, kur arrin Ndalo në fitim ose Ndalo në humbje, ose kur e ndalon ti.",
-  "Every flip is made on our server from seeds you can check: see Provably fair.":
-    "Çdo hedhje bëhet në serverin tonë nga seed-e që mund t'i verifikosh: shiko Ndershmëri e verifikueshme.",
-  "Each flip comes from three things: our server seed, your client seed, and a nonce that counts your rounds. Before you flip, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing. When you change seeds, the old server seed is shown, and you can check every flip it made. Dice, Keno and Coin Flip share the same seeds.":
-    "Çdo hedhje del nga tri gjëra: seed-i ynë i serverit, seed-i yt i klientit dhe një nonce që numëron raundet e tua. Para se ta hedhësh, sheh vetëm gjurmën (hash SHA-256) të seed-it të serverit, kështu që ne s'mund ta ndryshojmë pa e vënë re ti. Kur ndryshon seed-et, seed-i i vjetër i serverit shfaqet dhe mund të verifikosh çdo hedhje që ka bërë. Zare, Keno dhe Kokë a Pil përdorin të njëjtat seed-e.",
+  "Call heads or tails, then flip the coin. Each side comes up half the time.": "Zgjidh kokë ose pil, pastaj hidhe monedhën. Secila anë del gjysmën e herëve.",
+  "A right call pays {multiplier}× the stake: 100 ALL pays {example} ALL.": "Zgjedhja e saktë paguan {multiplier}× shumën: 100 ALL paguan {example} ALL.",
+  "A flip costs {min} to {max}, never more than your max stake. Autoplay flips for you with the same call and stops after the number of flips you set, when it reaches your stop on profit or stop on loss, or when you stop it.": "Një hedhje kushton nga {min} deri në {max}, kurrë më shumë se limiti yt. Loja automatike hedh për ty me të njëjtën zgjedhje dhe ndalon pas numrit të hedhjeve që vendos, kur arrin Ndalo në fitim ose Ndalo në humbje, ose kur e ndalon ti.",
+  "Every flip is made on our server from seeds you can check: see Provably fair.": "Çdo hedhje bëhet në serverin tonë nga seed-e që mund t'i verifikosh: shiko Ndershmëri e verifikueshme.",
+  "Each flip comes from three things: our server seed, your client seed, and a nonce that counts your rounds. Before you flip, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing. When you change seeds, the old server seed is shown, and you can check every flip it made. Dice, Keno and Coin Flip share the same seeds.": "Çdo hedhje del nga tri gjëra: seed-i ynë i serverit, seed-i yt i klientit dhe një nonce që numëron raundet e tua. Para se ta hedhësh, sheh vetëm gjurmën (hash SHA-256) të seed-it të serverit, kështu që ne s'mund ta ndryshojmë pa e vënë re ti. Kur ndryshon seed-et, seed-i i vjetër i serverit shfaqet dhe mund të verifikosh çdo hedhje që ka bërë. Zare, Keno dhe Kokë a Pil përdorin të njëjtat seed-e.",
   "Check a flip": "Verifiko një hedhje",
   "below 0.5 is heads, otherwise tails": "nën 0.5 është kokë, përndryshe pil",
   "Check this flip": "Verifiko këtë hedhje",
-  "The server seed is shown once you change seeds. Then you can check this flip.":
-    "Seed-i i serverit shfaqet sapo të ndryshosh seed-et. Atëherë mund ta verifikosh këtë hedhje.",
-  "Your newest coin flips. Tap one to see its seeds and check it. They're also in My money, as one Coin Flip line for each day.":
-    "Hedhjet e tua më të fundit të monedhës. Prek njërën për të parë seed-et dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Kokë a Pil për çdo ditë.",
+  "The server seed is shown once you change seeds. Then you can check this flip.": "Seed-i i serverit shfaqet sapo të ndryshosh seed-et. Atëherë mund ta verifikosh këtë hedhje.",
+  "Your newest coin flips. Tap one to see its seeds and check it. They're also in My money, as one Coin Flip line for each day.": "Hedhjet e tua më të fundit të monedhës. Prek njërën për të parë seed-et dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Kokë a Pil për çdo ditë.",
   // Scratch Cards
   "Scratch Cards": "Gërvisht & Fito",
-  "Scratch 9 boxes and find three of a kind, for up to 1,000 times the price. Every card can be checked.":
-    "Gërvisht 9 kutitë dhe gjej tre të njëjta, deri në 1,000 herë çmimin. Çdo kartë mund të verifikohet.",
+  "Scratch 9 boxes and find three of a kind, for up to 1,000 times the price. Every card can be checked.": "Gërvisht 9 kutitë dhe gjej tre të njëjta, deri në 1,000 herë çmimin. Çdo kartë mund të verifikohet.",
   "{count} card": "{count} kartë",
   "{count} cards": "{count} karta",
   "{count} scratch card": "{count} kartë gërvishtëse",
   "{count} scratch cards": "{count} karta gërvishtëse",
-  "The most a card can cost you is {amount}.":
-    "Më së shumti një kartë mund të të kushtojë {amount}.",
-  "Set from 1 to 1,000 cards, or 0 to keep going until you stop.":
-    "Vendos nga 1 deri në 1,000 karta, ose 0 për të vazhduar derisa ta ndalosh.",
-  "Buy a card and scratch it. Three of a kind wins. Every card can be checked. Played with your balance.":
-    "Bli një kartë dhe gërvishte. Tre të njëjta fitojnë. Çdo kartë mund të verifikohet. Luhet me balancën tënde.",
+  "The most a card can cost you is {amount}.": "Më së shumti një kartë mund të të kushtojë {amount}.",
+  "Set from 1 to 1,000 cards, or 0 to keep going until you stop.": "Vendos nga 1 deri në 1,000 karta, ose 0 për të vazhduar derisa ta ndalosh.",
+  "Buy a card and scratch it. Three of a kind wins. Every card can be checked. Played with your balance.": "Bli një kartë dhe gërvishte. Tre të njëjta fitojnë. Çdo kartë mund të verifikohet. Luhet me balancën tënde.",
   "Cards won": "Karta fituese",
   "Your last cards": "Kartat e tua të fundit",
   "Card details": "Detajet e kartës",
   "Match 3 to win": "Gjej 3 të njëjta",
-  Covered: "E mbuluar",
-  Prizes: "Çmimet",
-  "Buy a card, then scratch the boxes.":
-    "Bli një kartë, pastaj gërvisht kutitë.",
-  "Scratch the boxes, or reveal them all.":
-    "Gërvisht kutitë, ose zbuloji të gjitha.",
+  "Covered": "E mbuluar",
+  "Prizes": "Çmimet",
+  "Buy a card, then scratch the boxes.": "Bli një kartë, pastaj gërvisht kutitë.",
+  "Scratch the boxes, or reveal them all.": "Gërvisht kutitë, ose zbuloji të gjitha.",
   "3 × {symbol}: you won {amount}": "3 × {symbol}: fitove {amount}",
   "3 × {symbol}": "3 × {symbol}",
   "Card price": "Çmimi i kartës",
@@ -917,56 +733,40 @@ export const casino: Record<string, string> = {
   "No cards yet.": "Ende asnjë kartë.",
   "No match": "Pa përputhje",
   "{amount} card": "kartë {amount}",
-  "A card has 9 boxes. Scratch them, or reveal them all at once. Three of the same symbol win that symbol's prize, in times the card's price. A card never has two winning symbols.":
-    "Një kartë ka 9 kuti. Gërvishti, ose zbuloji të gjitha njëherësh. Tre simbole të njëjta fitojnë çmimin e atij simboli, në herë çmimin e kartës. Një kartë nuk ka kurrë dy simbole fituese.",
+  "A card has 9 boxes. Scratch them, or reveal them all at once. Three of the same symbol win that symbol's prize, in times the card's price. A card never has two winning symbols.": "Një kartë ka 9 kuti. Gërvishti, ose zbuloji të gjitha njëherësh. Tre simbole të njëjta fitojnë çmimin e atij simboli, në herë çmimin e kartës. Një kartë nuk ka kurrë dy simbole fituese.",
   "1 card in {count}": "1 kartë në {count}",
-  "About {chance}% of cards win something; three cherries give the price back.":
-    "Rreth {chance}% e kartave fitojnë diçka; tre qershi kthejnë çmimin.",
-  "A card costs {min} to {max}, never more than your max stake. Buying a card takes its price and decides what it holds; scratching shows it and pays its prize. Autoplay buys and reveals cards for you and stops after the number of cards you set, when it reaches your stop on profit or stop on loss, or when you stop it.":
-    "Një kartë kushton nga {min} deri në {max}, kurrë më shumë se limiti yt. Kur e blen, merret çmimi i kartës dhe vendoset çfarë ka; gërvishtja e tregon dhe paguan fitimin. Loja automatike blen dhe zbulon karta për ty dhe ndalon pas numrit të kartave që vendos, kur arrin Ndalo në fitim ose Ndalo në humbje, ose kur e ndalon ti.",
-  "Every card is made on our server from seeds you can check: see Provably fair.":
-    "Çdo kartë bëhet në serverin tonë nga seed-e që mund t'i verifikosh: shiko Ndershmëri e verifikueshme.",
-  "Each card comes from three things: our server seed, your client seed, and a nonce that counts your rounds. Before you buy, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing. When you change seeds, the old server seed is shown, and you can check every card it made. Dice, Keno, Coin Flip and Scratch Cards share the same seeds.":
-    "Çdo kartë del nga tri gjëra: seed-i ynë i serverit, seed-i yt i klientit dhe një nonce që numëron raundet e tua. Para se të blesh, sheh vetëm gjurmën (hash SHA-256) të seed-it të serverit, kështu që ne s'mund ta ndryshojmë pa e vënë re ti. Kur ndryshon seed-et, seed-i i vjetër i serverit shfaqet dhe mund të verifikosh çdo kartë që ka bërë. Zare, Keno, Kokë a Pil dhe Gërvisht & Fito përdorin të njëjtat seed-e.",
+  "About {chance}% of cards win something; three cherries give the price back.": "Rreth {chance}% e kartave fitojnë diçka; tre qershi kthejnë çmimin.",
+  "A card costs {min} to {max}, never more than your max stake. Buying a card takes its price and decides what it holds; scratching shows it and pays its prize. Autoplay buys and reveals cards for you and stops after the number of cards you set, when it reaches your stop on profit or stop on loss, or when you stop it.": "Një kartë kushton nga {min} deri në {max}, kurrë më shumë se limiti yt. Kur e blen, merret çmimi i kartës dhe vendoset çfarë ka; gërvishtja e tregon dhe paguan fitimin. Loja automatike blen dhe zbulon karta për ty dhe ndalon pas numrit të kartave që vendos, kur arrin Ndalo në fitim ose Ndalo në humbje, ose kur e ndalon ti.",
+  "Every card is made on our server from seeds you can check: see Provably fair.": "Çdo kartë bëhet në serverin tonë nga seed-e që mund t'i verifikosh: shiko Ndershmëri e verifikueshme.",
+  "Each card comes from three things: our server seed, your client seed, and a nonce that counts your rounds. Before you buy, you see only a fingerprint (SHA-256 hash) of the server seed, so we can't change it without you noticing. When you change seeds, the old server seed is shown, and you can check every card it made. Dice, Keno, Coin Flip and Scratch Cards share the same seeds.": "Çdo kartë del nga tri gjëra: seed-i ynë i serverit, seed-i yt i klientit dhe një nonce që numëron raundet e tua. Para se të blesh, sheh vetëm gjurmën (hash SHA-256) të seed-it të serverit, kështu që ne s'mund ta ndryshojmë pa e vënë re ti. Kur ndryshon seed-et, seed-i i vjetër i serverit shfaqet dhe mund të verifikosh çdo kartë që ka bërë. Zare, Keno, Kokë a Pil dhe Gërvisht & Fito përdorin të njëjtat seed-e.",
   "Check a card": "Verifiko një kartë",
-  "The i-th number is HMAC_SHA256(serverSeed, clientSeed:nonce:i)[0..3] ÷ 2³². The first picks the prize, the next fill the other boxes, the last shuffle them.":
-    "Numri i i-të është HMAC_SHA256(serverSeed, clientSeed:nonce:i)[0..3] ÷ 2³². I pari zgjedh çmimin, të tjerët mbushin kutitë e tjera, të fundit i përziejnë.",
+  "The i-th number is HMAC_SHA256(serverSeed, clientSeed:nonce:i)[0..3] ÷ 2³². The first picks the prize, the next fill the other boxes, the last shuffle them.": "Numri i i-të është HMAC_SHA256(serverSeed, clientSeed:nonce:i)[0..3] ÷ 2³². I pari zgjedh çmimin, të tjerët mbushin kutitë e tjera, të fundit i përziejnë.",
   "Check this card": "Verifiko këtë kartë",
-  "The server seed is shown once you change seeds. Then you can check this card.":
-    "Seed-i i serverit shfaqet sapo të ndryshosh seed-et. Atëherë mund ta verifikosh këtë kartë.",
-  "Your newest scratch cards. Tap one to see its seeds and check it. They're also in My money, as one Scratch Cards line for each day.":
-    "Kartat e tua gërvishtëse më të fundit. Prek njërën për të parë seed-et dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Gërvisht & Fito për çdo ditë.",
-  Bell: "Zilja",
-  Clover: "Tërfili",
-  Diamond: "Diamanti",
-  Dollar: "Dollar",
+  "The server seed is shown once you change seeds. Then you can check this card.": "Seed-i i serverit shfaqet sapo të ndryshosh seed-et. Atëherë mund ta verifikosh këtë kartë.",
+  "Your newest scratch cards. Tap one to see its seeds and check it. They're also in My money, as one Scratch Cards line for each day.": "Kartat e tua gërvishtëse më të fundit. Prek njërën për të parë seed-et dhe për ta verifikuar. Janë edhe te Paratë e mia, si një rresht Gërvisht & Fito për çdo ditë.",
+  "Bell": "Zilja",
+  "Clover": "Tërfili",
+  "Diamond": "Diamanti",
+  "Dollar": "Dollar",
   // From the server
-  "The Casino is turned off for your account.":
-    "Kazinoja është e fikur për llogarinë tënde.",
+  "The Casino is turned off for your account.": "Kazinoja është e fikur për llogarinë tënde.",
   "A roll costs {bets} ALL": "Një hedhje kushton {bets} ALL",
   "A flip costs {bets} ALL": "Një hedhje monedhe kushton {bets} ALL",
-  "The most a flip can cost you is {amount} ALL":
-    "Më së shumti një hedhje monedhe mund të të kushtojë {amount} ALL",
-  "Your balance is too low for this flip. Lower the stake, or ask your Manager for a top-up.":
-    "Balanca jote është shumë e ulët për këtë hedhje. Ule shumën, ose kërkoji Menaxherit një rimbushje.",
+  "The most a flip can cost you is {amount} ALL": "Më së shumti një hedhje monedhe mund të të kushtojë {amount} ALL",
+  "Your balance is too low for this flip. Lower the stake, or ask your Manager for a top-up.": "Balanca jote është shumë e ulët për këtë hedhje. Ule shumën, ose kërkoji Menaxherit një rimbushje.",
   "Call heads or tails.": "Zgjidh kokë ose pil.",
   "Coin Flip: 1 flip": "Kokë a Pil: 1 hedhje",
   "Coin Flip: {count} flips": "Kokë a Pil: {count} hedhje",
   "A card costs {bets} ALL": "Një kartë kushton {bets} ALL",
-  "The most a card can cost you is {amount} ALL":
-    "Më së shumti një kartë mund të të kushtojë {amount} ALL",
-  "Your balance is too low for this card. Lower the price, or ask your Manager for a top-up.":
-    "Balanca jote është shumë e ulët për këtë kartë. Ul çmimin, ose kërkoji Menaxherit një rimbushje.",
+  "The most a card can cost you is {amount} ALL": "Më së shumti një kartë mund të të kushtojë {amount} ALL",
+  "Your balance is too low for this card. Lower the price, or ask your Manager for a top-up.": "Balanca jote është shumë e ulët për këtë kartë. Ul çmimin, ose kërkoji Menaxherit një rimbushje.",
   "Scratch Cards: 1 card": "Gërvisht & Fito: 1 kartë",
   "Scratch Cards: {count} cards": "Gërvisht & Fito: {count} karta",
-  "Choose red or black, or take the win":
-    "Zgjidh të kuqe ose të zezë, ose merr fitimin",
+  "Choose red or black, or take the win": "Zgjidh të kuqe ose të zezë, ose merr fitimin",
   "Gamble amount": "Shuma në lojë",
   "Red/black": "Kuq/zi",
-  "Red or black after a win: on. Tap to turn it off.":
-    "Kuq ose zi pas një fitoreje: aktiv. Shtyp për ta çaktivizuar.",
-  "Red or black after a win: off. Tap to turn it on.":
-    "Kuq ose zi pas një fitoreje: joaktiv. Shtyp për ta aktivizuar.",
+  "Red or black after a win: on. Tap to turn it off.": "Kuq ose zi pas një fitoreje: aktiv. Shtyp për ta çaktivizuar.",
+  "Red or black after a win: off. Tap to turn it on.": "Kuq ose zi pas një fitoreje: joaktiv. Shtyp për ta aktivizuar.",
   "Gamble to win": "Mund të fitosh",
   "Previous cards": "Letrat e mëparshme",
   "The card: {suit}": "Letra: {suit}",
@@ -974,79 +774,59 @@ export const casino: Record<string, string> = {
   "Stands in for:": "Zëvendëson:",
   "Free games": "Lojëra falas",
   "Special expanding symbol": "Simbol i veçantë që zgjerohet",
-  "Pays in ALL at a {amount} bet. Lines pay from the left reel.":
-    "Fitimet në ALL me bast {amount}. Linjat paguajnë nga rrotulla e majtë.",
-  Paytable: "Tabela e fitimeve",
+  "Pays in ALL at a {amount} bet. Lines pay from the left reel.": "Fitimet në ALL me bast {amount}. Linjat paguajnë nga rrotulla e majtë.",
+  "Paytable": "Tabela e fitimeve",
   "All rules": "Të gjitha rregullat",
   "Back to the game": "Kthehu te loja",
   "Bet/line": "Bast/linjë",
-  Gamble: "Dyfisho",
-  Pays: "Fitimet",
+  "Gamble": "Dyfisho",
+  "Pays": "Fitimet",
   "staked {amount}": "vënë {amount}",
   "won {amount}": "fituar {amount}",
   "Your {game} session": "Sesioni yt në {game}",
   "{count} minute": "{count} minutë",
   "{count} minutes": "{count} minuta",
   "Money Wheel": "Rrota e Parave",
-  Tower: "Kulla",
+  "Tower": "Kulla",
   "{count} climb": "{count} ngjitje",
   "{count} climbs": "{count} ngjitje",
-  Banker: "Bankieri",
-  Tie: "Barazim",
-  "Bet on Player, Banker or Tie. The hand closer to 9 wins.":
-    "Vë bast te Lojtari, Bankieri ose Barazimi. Fiton dora më afër 9-ës.",
+  "Banker": "Bankieri",
+  "Tie": "Barazim",
+  "Bet on Player, Banker or Tie. The hand closer to 9 wins.": "Vë bast te Lojtari, Bankieri ose Barazimi. Fiton dora më afër 9-ës.",
   "{side} wins": "Fiton {side}",
   "Your stake comes back": "Shuma të kthehet",
   "Pick a side, then deal.": "Zgjidh anën, pastaj shpërndaj.",
   "Your bet": "Basti yt",
   "bet on {side}": "bast te {side}",
-  "Bet on Player, Banker or Tie, then deal. Two hands are dealt from a fresh 8-deck shoe; the one whose total is closer to 9 wins.":
-    "Vë bast te Lojtari, Bankieri ose Barazimi, pastaj shpërndaj. Shpërndahen dy duar nga 8 pako të reja letrash; fiton ajo me shumën më afër 9-ës.",
-  "Aces count 1, 2 to 9 their number, tens and pictures 0, and a hand counts only its last digit: 7 and 8 make 5.":
-    "Asi vlen 1, letrat 2 deri 9 numrin e tyre, dhjetat dhe figurat 0, dhe një dorë numëron vetëm shifrën e fundit: 7 dhe 8 bëjnë 5.",
-  "A third card is drawn by the standard rules, nobody chooses: with 8 or 9 on two cards both stand; otherwise Player draws on 0 to 5, and Banker draws by its total and Player's third card.":
-    "Letra e tretë tërhiqet sipas rregullave standarde, askush nuk zgjedh: me 8 ose 9 në dy letra të dy ndalen; përndryshe Lojtari tërheq me 0 deri 5, dhe Bankieri tërheq sipas shumës së vet dhe letrës së tretë të Lojtarit.",
-  "Player pays 1 to 1, Banker 0.95 to 1 (5% commission), Tie 8 to 1. On a tie, Player and Banker bets get their stake back.":
-    "Lojtari paguan 1 me 1, Bankieri 0.95 me 1 (5% komision), Barazimi 8 me 1. Në barazim, bastet te Lojtari dhe Bankieri marrin shumën mbrapsht.",
-  "On average Player pays back {player}%, Banker {banker}% and Tie {tie}% of what's staked.":
-    "Mesatarisht Lojtari kthen {player}%, Bankieri {banker}% dhe Barazimi {tie}% të shumës së vënë.",
-  "Your newest Baccarat hands. They're also in My money, as one Baccarat line for each day.":
-    "Duart e tua më të fundit në Baccarat. Janë edhe te Paratë e mia, si një rresht Baccarat për çdo ditë.",
-  "Set the automatic cash-out to {min}× or more, or leave it empty.":
-    "Vendose tërheqjen automatike {min}× ose më shumë, ose lëre bosh.",
-  "The multiplier climbs until it crashes. Cash out before it does.":
-    "Shumëzuesi ngjitet derisa rrëzohet. Tërhiq para se të rrëzohet.",
+  "Bet on Player, Banker or Tie, then deal. Two hands are dealt from a fresh 8-deck shoe; the one whose total is closer to 9 wins.": "Vë bast te Lojtari, Bankieri ose Barazimi, pastaj shpërndaj. Shpërndahen dy duar nga 8 pako të reja letrash; fiton ajo me shumën më afër 9-ës.",
+  "Aces count 1, 2 to 9 their number, tens and pictures 0, and a hand counts only its last digit: 7 and 8 make 5.": "Asi vlen 1, letrat 2 deri 9 numrin e tyre, dhjetat dhe figurat 0, dhe një dorë numëron vetëm shifrën e fundit: 7 dhe 8 bëjnë 5.",
+  "A third card is drawn by the standard rules, nobody chooses: with 8 or 9 on two cards both stand; otherwise Player draws on 0 to 5, and Banker draws by its total and Player's third card.": "Letra e tretë tërhiqet sipas rregullave standarde, askush nuk zgjedh: me 8 ose 9 në dy letra të dy ndalen; përndryshe Lojtari tërheq me 0 deri 5, dhe Bankieri tërheq sipas shumës së vet dhe letrës së tretë të Lojtarit.",
+  "Player pays 1 to 1, Banker 0.95 to 1 (5% commission), Tie 8 to 1. On a tie, Player and Banker bets get their stake back.": "Lojtari paguan 1 me 1, Bankieri 0.95 me 1 (5% komision), Barazimi 8 me 1. Në barazim, bastet te Lojtari dhe Bankieri marrin shumën mbrapsht.",
+  "On average Player pays back {player}%, Banker {banker}% and Tie {tie}% of what's staked.": "Mesatarisht Lojtari kthen {player}%, Bankieri {banker}% dhe Barazimi {tie}% të shumës së vënë.",
+  "Your newest Baccarat hands. They're also in My money, as one Baccarat line for each day.": "Duart e tua më të fundit në Baccarat. Janë edhe te Paratë e mia, si një rresht Baccarat për çdo ditë.",
+  "Set the automatic cash-out to {min}× or more, or leave it empty.": "Vendose tërheqjen automatike {min}× ose më shumë, ose lëre bosh.",
+  "The multiplier climbs until it crashes. Cash out before it does.": "Shumëzuesi ngjitet derisa rrëzohet. Tërhiq para se të rrëzohet.",
   "Last crash points": "Pikat e fundit të rrëzimit",
   "Cashes out by itself at {auto}×": "Tërhiqet vetë në {auto}×",
   "Cash out before it crashes": "Tërhiq para se të rrëzohet",
   "Crashed at {at}×": "U rrëzua në {at}×",
-  "Cashed out at {at}× · crashed at {crash}× · You won {amount}":
-    "Tërhoqe në {at}× · u rrëzua në {crash}× · Fitove {amount}",
+  "Cashed out at {at}× · crashed at {crash}× · You won {amount}": "Tërhoqe në {at}× · u rrëzua në {crash}× · Fitove {amount}",
   "Place a bet to start": "Vë një bast për të nisur",
   "Automatic cash-out (optional)": "Tërheqje automatike (opsionale)",
   "Cashed out at {at}×": "Tërhoqe në {at}×",
   "crashed at {crash}×": "u rrëzua në {crash}×",
-  "Place a bet and the multiplier starts climbing from 1.00×. It crashes at a point nobody can see. Cash out before it crashes and you're paid your stake times the multiplier at that moment; if it crashes first, the stake is lost.":
-    "Vë një bast dhe shumëzuesi nis të ngjitet nga 1.00×. Rrëzohet në një pikë që s'e sheh askush. Tërhiq para se të rrëzohet dhe merr shumën herë shumëzuesin e atij çasti; nëse rrëzohet më parë, shuma humbet.",
-  "You can set an automatic cash-out: the round cashes out by itself as soon as it reaches that multiplier, if it gets there.":
-    "Mund të vendosësh tërheqje automatike: raundi tërhiqet vetë sapo arrin atë shumëzues, nëse arrin.",
-  "The crash point is drawn when the round starts, so it reaches 2× in about 42% of rounds, 10× in about 8.5%, and about 16% crash at 1.00× straight away. Cashing out at any multiplier pays back {rate}% on average. It goes up to {max}×.":
-    "Pika e rrëzimit hidhet kur nis raundi: arrin 2× në rreth 42% të raundeve, 10× në rreth 8.5%, dhe rreth 16% rrëzohen menjëherë në 1.00×. Tërheqja në çdo shumëzues kthen mesatarisht {rate}%. Shkon deri në {max}×.",
-  "The server's clock decides: a cash-out pays the multiplier when it reaches the server. A round left alone plays itself out.":
-    "Vendos ora e serverit: tërheqja paguan shumëzuesin kur arrin te serveri. Një raund i lënë vazhdon vetë deri në fund.",
-  "Your newest Crash rounds. They're also in My money, as one Crash line for each day.":
-    "Raundet e tua më të fundit në Crash. Janë edhe te Paratë e mia, si një rresht Crash për çdo ditë.",
-  "Guess if the next card is higher or lower. Every right guess raises the multiplier; cash out when you like.":
-    "Gjej nëse letra tjetër është më e lartë apo më e ulët. Çdo gjetje e saktë rrit shumëzuesin; tërhiq kur të duash.",
+  "Place a bet and the multiplier starts climbing from 1.00×. It crashes at a point nobody can see. Cash out before it crashes and you're paid your stake times the multiplier at that moment; if it crashes first, the stake is lost.": "Vë një bast dhe shumëzuesi nis të ngjitet nga 1.00×. Rrëzohet në një pikë që s'e sheh askush. Tërhiq para se të rrëzohet dhe merr shumën herë shumëzuesin e atij çasti; nëse rrëzohet më parë, shuma humbet.",
+  "You can set an automatic cash-out: the round cashes out by itself as soon as it reaches that multiplier, if it gets there.": "Mund të vendosësh tërheqje automatike: raundi tërhiqet vetë sapo arrin atë shumëzues, nëse arrin.",
+  "The crash point is drawn when the round starts, so it reaches 2× in about 42% of rounds, 10× in about 8.5%, and about 16% crash at 1.00× straight away. Cashing out at any multiplier pays back {rate}% on average. It goes up to {max}×.": "Pika e rrëzimit hidhet kur nis raundi: arrin 2× në rreth 42% të raundeve, 10× në rreth 8.5%, dhe rreth 16% rrëzohen menjëherë në 1.00×. Tërheqja në çdo shumëzues kthen mesatarisht {rate}%. Shkon deri në {max}×.",
+  "The server's clock decides: a cash-out pays the multiplier when it reaches the server. A round left alone plays itself out.": "Vendos ora e serverit: tërheqja paguan shumëzuesin kur arrin te serveri. Një raund i lënë vazhdon vetë deri në fund.",
+  "Your newest Crash rounds. They're also in My money, as one Crash line for each day.": "Raundet e tua më të fundit në Crash. Janë edhe te Paratë e mia, si një rresht Crash për çdo ditë.",
+  "Guess if the next card is higher or lower. Every right guess raises the multiplier; cash out when you like.": "Gjej nëse letra tjetër është më e lartë apo më e ulët. Çdo gjetje e saktë rrit shumëzuesin; tërhiq kur të duash.",
   "Cards so far": "Letrat deri tani",
-  "Pick a stake and start: a card is turned.":
-    "Zgjidh shumën dhe nis: kthehet një letër.",
+  "Pick a stake and start: a card is turned.": "Zgjidh shumën dhe nis: kthehet një letër.",
   "Cashed out · You won {amount}": "Tërhoqe · Fitove {amount}",
   "Wrong guess · No win this time": "Gjetje e gabuar · Kësaj here pa fitim",
-  "Cash out now for {amount}, or guess again.":
-    "Tërhiq tani për {amount}, ose gjej sërish.",
-  "Higher or same, or lower or same?":
-    "Më e lartë ose e njëjtë, apo më e ulët ose e njëjtë?",
+  "Cash out now for {amount}, or guess again.": "Tërhiq tani për {amount}, ose gjej sërish.",
+  "Higher or same, or lower or same?": "Më e lartë ose e njëjtë, apo më e ulët ose e njëjtë?",
   "Higher or same": "Më e lartë ose e njëjtë",
   "Lower or same": "Më e ulët ose e njëjtë",
   "Skip this card": "Kalo këtë letër",
@@ -1054,92 +834,63 @@ export const casino: Record<string, string> = {
   "Cashed out": "U tërhoq",
   "Wrong guess": "Gjetje e gabuar",
   "{count} right guesses": "{count} gjetje të sakta",
-  "Start a round and a card is turned. Guess whether the next card is higher or the same, or lower or the same. Aces are low, kings high.":
-    "Nis një raund dhe kthehet një letër. Gjej nëse letra tjetër është më e lartë ose e njëjtë, apo më e ulët ose e njëjtë. Asi është më i ulëti, mbreti më i larti.",
-  "Every card is drawn as from an endless deck: each of the 13 ranks is as likely every time. The fewer ranks your guess wins on, the more it raises the multiplier.":
-    "Çdo letër tërhiqet si nga një pako pa fund: secila nga 13 vlerat ka të njëjtën gjasë çdo herë. Sa më pak vlera të fitojë gjetja jote, aq më shumë rrit shumëzuesin.",
-  "A wrong guess loses the stake. After a right guess you can cash out: you're paid the stake times the multiplier. You can skip a card for free.":
-    "Një gjetje e gabuar humb shumën. Pas një gjetjeje të saktë mund të tërheqësh: merr shumën herë shumëzuesin. Mund ta kalosh një letër falas.",
-  "The multiplier is {rate}% of the fair price of your right guesses, so a round pays back {rate}% on average whatever you do. A round pays at most {max}× the stake.":
-    "Shumëzuesi është {rate}% e çmimit të drejtë të gjetjeve të sakta, kështu një raund kthen mesatarisht {rate}% çfarëdo që të bësh. Një raund paguan më së shumti {max}× shumën.",
-  "A round left alone for 30 minutes is cashed out, or the stake comes back if no right guess was made.":
-    "Një raund i lënë 30 minuta tërhiqet vetë, ose shuma kthehet nëse s'pati asnjë gjetje të saktë.",
-  "Your newest Hi-Lo rounds. They're also in My money, as one Hi-Lo line for each day.":
-    "Raundet e tua më të fundit në Hi-Lo. Janë edhe te Paratë e mia, si një rresht Hi-Lo për çdo ditë.",
-  Easy: "E lehtë",
-  Hard: "E vështirë",
-  Expert: "Ekspert",
-  "Climb the tower one floor at a time. Pick a safe door on each floor; cash out before you hit a trap.":
-    "Ngjitu në kullë kat pas kati. Zgjidh një derë të sigurt në çdo kat; tërhiq para se të bësh një kurth.",
+  "Start a round and a card is turned. Guess whether the next card is higher or the same, or lower or the same. Aces are low, kings high.": "Nis një raund dhe kthehet një letër. Gjej nëse letra tjetër është më e lartë ose e njëjtë, apo më e ulët ose e njëjtë. Asi është më i ulëti, mbreti më i larti.",
+  "Every card is drawn as from an endless deck: each of the 13 ranks is as likely every time. The fewer ranks your guess wins on, the more it raises the multiplier.": "Çdo letër tërhiqet si nga një pako pa fund: secila nga 13 vlerat ka të njëjtën gjasë çdo herë. Sa më pak vlera të fitojë gjetja jote, aq më shumë rrit shumëzuesin.",
+  "A wrong guess loses the stake. After a right guess you can cash out: you're paid the stake times the multiplier. You can skip a card for free.": "Një gjetje e gabuar humb shumën. Pas një gjetjeje të saktë mund të tërheqësh: merr shumën herë shumëzuesin. Mund ta kalosh një letër falas.",
+  "The multiplier is {rate}% of the fair price of your right guesses, so a round pays back {rate}% on average whatever you do. A round pays at most {max}× the stake.": "Shumëzuesi është {rate}% e çmimit të drejtë të gjetjeve të sakta, kështu një raund kthen mesatarisht {rate}% çfarëdo që të bësh. Një raund paguan më së shumti {max}× shumën.",
+  "A round left alone for 30 minutes is cashed out, or the stake comes back if no right guess was made.": "Një raund i lënë 30 minuta tërhiqet vetë, ose shuma kthehet nëse s'pati asnjë gjetje të saktë.",
+  "Your newest Hi-Lo rounds. They're also in My money, as one Hi-Lo line for each day.": "Raundet e tua më të fundit në Hi-Lo. Janë edhe te Paratë e mia, si një rresht Hi-Lo për çdo ditë.",
+  "Easy": "E lehtë",
+  "Hard": "E vështirë",
+  "Expert": "Ekspert",
+  "Climb the tower one floor at a time. Pick a safe door on each floor; cash out before you hit a trap.": "Ngjitu në kullë kat pas kati. Zgjidh një derë të sigurt në çdo kat; tërhiq para se të bësh një kurth.",
   "Floor {floor}, door {door}": "Kati {floor}, dera {door}",
-  "Pick a difficulty and a stake, then start climbing.":
-    "Zgjidh vështirësinë dhe shumën, pastaj nis ngjitjen.",
-  "Cashed out at {multiplier}× · You won {amount}":
-    "Tërhoqe në {multiplier}× · Fitove {amount}",
+  "Pick a difficulty and a stake, then start climbing.": "Zgjidh vështirësinë dhe shumën, pastaj nis ngjitjen.",
+  "Cashed out at {multiplier}× · You won {amount}": "Tërhoqe në {multiplier}× · Fitove {amount}",
   "A trap · No win this time": "Një kurth · Kësaj here pa fitim",
   "Pick a door on the first floor.": "Zgjidh një derë në katin e parë.",
-  "Floor {floor} · cash out {amount} or climb to {next}×":
-    "Kati {floor} · tërhiq {amount} ose ngjitu te {next}×",
+  "Floor {floor} · cash out {amount} or climb to {next}×": "Kati {floor} · tërhiq {amount} ose ngjitu te {next}×",
   "Climb a floor to cash out": "Ngjitu një kat për të tërhequr",
-  Difficulty: "Vështirësia",
+  "Difficulty": "Vështirësia",
   "Climb again": "Ngjitu sërish",
   "Start climbing": "Nis ngjitjen",
   "A trap": "Një kurth",
   "{count} floors": "{count} kate",
-  "Pick a difficulty and a stake, then climb. Each floor has doors with traps behind some; open one door per floor, from the bottom up.":
-    "Zgjidh vështirësinë dhe shumën, pastaj ngjitu. Çdo kat ka dyer me kurthe pas disave; hap një derë për kat, nga poshtë lart.",
-  "Easy: 4 doors, 1 trap. Medium: 3 doors, 1 trap. Hard: 2 doors, 1 trap. Expert: 3 doors, 2 traps.":
-    "E lehtë: 4 dyer, 1 kurth. Mesatare: 3 dyer, 1 kurth. E vështirë: 2 dyer, 1 kurth. Ekspert: 3 dyer, 2 kurthe.",
-  "A safe door takes you a floor higher and raises the multiplier; a trap loses the stake. Cash out after any floor; the top floor cashes out by itself.":
-    "Një derë e sigurt të ngjit një kat më lart dhe rrit shumëzuesin; një kurth humb shumën. Tërhiq pas çdo kati; kati i fundit tërhiqet vetë.",
-  "The multiplier is {rate}% of the fair price of the floors climbed, so a climb pays back {rate}% on average. The traps are placed when you start and shown when the climb ends. A climb pays at most {max}× the stake.":
-    "Shumëzuesi është {rate}% e çmimit të drejtë të kateve të ngjitura, kështu një ngjitje kthen mesatarisht {rate}%. Kurthet vendosen kur nis dhe shfaqen kur mbaron ngjitja. Një ngjitje paguan më së shumti {max}× shumën.",
-  "A climb left alone for 30 minutes is cashed out, or the stake comes back if no floor was climbed.":
-    "Një ngjitje e lënë 30 minuta tërhiqet vetë, ose shuma kthehet nëse s'u ngjit asnjë kat.",
+  "Pick a difficulty and a stake, then climb. Each floor has doors with traps behind some; open one door per floor, from the bottom up.": "Zgjidh vështirësinë dhe shumën, pastaj ngjitu. Çdo kat ka dyer me kurthe pas disave; hap një derë për kat, nga poshtë lart.",
+  "Easy: 4 doors, 1 trap. Medium: 3 doors, 1 trap. Hard: 2 doors, 1 trap. Expert: 3 doors, 2 traps.": "E lehtë: 4 dyer, 1 kurth. Mesatare: 3 dyer, 1 kurth. E vështirë: 2 dyer, 1 kurth. Ekspert: 3 dyer, 2 kurthe.",
+  "A safe door takes you a floor higher and raises the multiplier; a trap loses the stake. Cash out after any floor; the top floor cashes out by itself.": "Një derë e sigurt të ngjit një kat më lart dhe rrit shumëzuesin; një kurth humb shumën. Tërhiq pas çdo kati; kati i fundit tërhiqet vetë.",
+  "The multiplier is {rate}% of the fair price of the floors climbed, so a climb pays back {rate}% on average. The traps are placed when you start and shown when the climb ends. A climb pays at most {max}× the stake.": "Shumëzuesi është {rate}% e çmimit të drejtë të kateve të ngjitura, kështu një ngjitje kthen mesatarisht {rate}%. Kurthet vendosen kur nis dhe shfaqen kur mbaron ngjitja. Një ngjitje paguan më së shumti {max}× shumën.",
+  "A climb left alone for 30 minutes is cashed out, or the stake comes back if no floor was climbed.": "Një ngjitje e lënë 30 minuta tërhiqet vetë, ose shuma kthehet nëse s'u ngjit asnjë kat.",
   "Your last climbs": "Ngjitjet e tua të fundit",
   "No climbs yet.": "Ende asnjë ngjitje.",
-  "Your newest Tower climbs. They're also in My money, as one Tower line for each day.":
-    "Ngjitjet e tua më të fundit në Kullë. Janë edhe te Paratë e mia, si një rresht Kulla për çdo ditë.",
+  "Your newest Tower climbs. They're also in My money, as one Tower line for each day.": "Ngjitjet e tua më të fundit në Kullë. Janë edhe te Paratë e mia, si një rresht Kulla për çdo ditë.",
   "Low risk": "Rrezik i ulët",
   "Medium risk": "Rrezik mesatar",
   "High risk": "Rrezik i lartë",
-  "Pick a risk and spin. The wheel pays the multiplier it stops on.":
-    "Zgjidh rrezikun dhe rrotullo. Rrota paguan shumëzuesin ku ndalon.",
+  "Pick a risk and spin. The wheel pays the multiplier it stops on.": "Zgjidh rrezikun dhe rrotullo. Rrota paguan shumëzuesin ku ndalon.",
   "Spinning…": "Duke u rrotulluar…",
   "{multiplier}× · You won {amount}": "{multiplier}× · Fitove {amount}",
   "Pick a risk, then spin.": "Zgjidh rrezikun, pastaj rrotullo.",
-  "Pick a risk and a stake, then spin. The wheel has 30 segments, each as likely; you're paid your stake times the multiplier the pointer stops on. 0 loses the stake.":
-    "Zgjidh rrezikun dhe shumën, pastaj rrotullo. Rrota ka 30 pjesë, secila me të njëjtën gjasë; merr shumën herë shumëzuesin ku ndalon shigjeta. 0 humb shumën.",
-  "Low risk wins small and often, high risk rarely and big. Every risk pays back {rate}% of what's staked on average.":
-    "Rreziku i ulët fiton pak e shpesh, i larti rrallë e shumë. Çdo rrezik kthen mesatarisht {rate}% të shumës së vënë.",
-  "Your newest Money Wheel spins. They're also in My money, as one Money Wheel line for each day.":
-    "Rrotullimet e tua më të fundit në Rrotën e Parave. Janë edhe te Paratë e mia, si një rresht Rrota e Parave për çdo ditë.",
+  "Pick a risk and a stake, then spin. The wheel has 30 segments, each as likely; you're paid your stake times the multiplier the pointer stops on. 0 loses the stake.": "Zgjidh rrezikun dhe shumën, pastaj rrotullo. Rrota ka 30 pjesë, secila me të njëjtën gjasë; merr shumën herë shumëzuesin ku ndalon shigjeta. 0 humb shumën.",
+  "Low risk wins small and often, high risk rarely and big. Every risk pays back {rate}% of what's staked on average.": "Rreziku i ulët fiton pak e shpesh, i larti rrallë e shumë. Çdo rrezik kthen mesatarisht {rate}% të shumës së vënë.",
+  "Your newest Money Wheel spins. They're also in My money, as one Money Wheel line for each day.": "Rrotullimet e tua më të fundit në Rrotën e Parave. Janë edhe te Paratë e mia, si një rresht Rrota e Parave për çdo ditë.",
   "{count} segment": "{count} pjesë",
   "{count} segments": "{count} pjesë",
-  "The most you can bet on one round is {amount}.":
-    "Më së shumti mund të vësh {amount} në një raund.",
+  "The most you can bet on one round is {amount}.": "Më së shumti mund të vësh {amount} në një raund.",
   "This round is over. Start a new one.": "Ky raund mbaroi. Nis një të ri.",
-  "This round has had its guesses. Cash out.":
-    "Ky raund i bëri të gjitha gjetjet. Tërhiq.",
-  "Make a right guess before you cash out.":
-    "Bëj një gjetje të saktë para se të tërheqësh.",
-  "Guess higher, lower, or skip the card.":
-    "Zgjidh më e lartë, më e ulët, ose kalo letrën.",
-  "An automatic cash-out is from {min}× to {max}×.":
-    "Tërheqja automatike është nga {min}× deri {max}×.",
+  "This round has had its guesses. Cash out.": "Ky raund i bëri të gjitha gjetjet. Tërhiq.",
+  "Make a right guess before you cash out.": "Bëj një gjetje të saktë para se të tërheqësh.",
+  "Guess higher, lower, or skip the card.": "Zgjidh më e lartë, më e ulët, ose kalo letrën.",
+  "An automatic cash-out is from {min}× to {max}×.": "Tërheqja automatike është nga {min}× deri {max}×.",
   "There's no Crash round in play.": "Nuk ka raund Crash në lojë.",
   "Finish your {game} round first.": "Mbaro fillimisht raundin tënd {game}.",
-  "Finish the {game} round you're playing first.":
-    "Mbaro fillimisht raundin {game} që po luan.",
+  "Finish the {game} round you're playing first.": "Mbaro fillimisht raundin {game} që po luan.",
   "This climb is over. Start a new one.": "Kjo ngjitje mbaroi. Nis një të re.",
   "Pick one of the doors on this floor.": "Zgjidh një nga dyert e këtij kati.",
-  "Climb at least one floor before you cash out.":
-    "Ngjitu të paktën një kat para se të tërheqësh.",
-  "Pick low, medium or high risk.":
-    "Zgjidh rrezik të ulët, mesatar ose të lartë.",
+  "Climb at least one floor before you cash out.": "Ngjitu të paktën një kat para se të tërheqësh.",
+  "Pick low, medium or high risk.": "Zgjidh rrezik të ulët, mesatar ose të lartë.",
   "Bet on Player, Banker or Tie.": "Vë bast te Lojtari, Bankieri ose Barazimi.",
-  "Pick easy, medium, hard or expert.":
-    "Zgjidh të lehtë, mesatare, të vështirë ose ekspert.",
+  "Pick easy, medium, hard or expert.": "Zgjidh të lehtë, mesatare, të vështirë ose ekspert.",
   "Money Wheel: 1 spin": "Rrota e Parave: 1 rrotullim",
   "Money Wheel: {count} spins": "Rrota e Parave: {count} rrotullime",
   "Baccarat: 1 hand": "Baccarat: 1 dorë",
@@ -1150,16 +901,10 @@ export const casino: Record<string, string> = {
   "Tower: {count} climbs": "Kulla: {count} ngjitje",
   "Crash: 1 round": "Crash: 1 raund",
   "Crash: {count} rounds": "Crash: {count} raunde",
-  "Player pays 0.47 to 1, Banker 0.43 to 1, Tie 7 to 1. On a tie, Player and Banker bets get their stake back.":
-    "Lojtari paguan 0.47 me 1, Bankieri 0.43 me 1, Barazimi 7 me 1. Në barazim, bastet te Lojtari dhe Bankieri marrin shumën mbrapsht.",
-  "The crash point is drawn when the round starts, and it can crash at 1.00× straight away. It goes up to {max}×.":
-    "Pika e rrëzimit hidhet kur nis raundi dhe mund të rrëzohet menjëherë në 1.00×. Shkon deri në {max}×.",
-  "A round pays at most {max}× the stake.":
-    "Një raund paguan më së shumti {max}× shumën.",
-  "The traps are placed when you start and shown when the climb ends. A climb pays at most {max}× the stake.":
-    "Kurthet vendosen kur nis dhe shfaqen kur mbaron ngjitja. Një ngjitje paguan më së shumti {max}× shumën.",
-  "Low risk wins small and often, high risk rarely and big.":
-    "Rreziku i ulët fiton pak e shpesh, i larti rrallë e shumë.",
-  "Each coin pays more than the last, and never 1.00× or less. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.":
-    "Çdo monedhë paguan më shumë se e mëparshmja, dhe kurrë 1.00× ose më pak. Qindarkat rrumbullakosen poshtë. Shuma është {min} deri {max}, dhe kurrë më shumë se shuma jote maksimale. Një raund i lënë një orë tërhiqet vetë, ose shuma kthehet nëse s'kishe hapur asnjë kuti.",
+  "Player pays 0.47 to 1, Banker 0.43 to 1, Tie 7 to 1. On a tie, Player and Banker bets get their stake back.": "Lojtari paguan 0.47 me 1, Bankieri 0.43 me 1, Barazimi 7 me 1. Në barazim, bastet te Lojtari dhe Bankieri marrin shumën mbrapsht.",
+  "The crash point is drawn when the round starts, and it can crash at 1.00× straight away. It goes up to {max}×.": "Pika e rrëzimit hidhet kur nis raundi dhe mund të rrëzohet menjëherë në 1.00×. Shkon deri në {max}×.",
+  "A round pays at most {max}× the stake.": "Një raund paguan më së shumti {max}× shumën.",
+  "The traps are placed when you start and shown when the climb ends. A climb pays at most {max}× the stake.": "Kurthet vendosen kur nis dhe shfaqen kur mbaron ngjitja. Një ngjitje paguan më së shumti {max}× shumën.",
+  "Low risk wins small and often, high risk rarely and big.": "Rreziku i ulët fiton pak e shpesh, i larti rrallë e shumë.",
+  "Each coin pays more than the last, and never 1.00× or less. Cents are rounded down. The stake is {min} to {max}, and never more than your max stake. A round left for an hour is cashed out, or the stake comes back if you hadn't opened a tile.": "Çdo monedhë paguan më shumë se e mëparshmja, dhe kurrë 1.00× ose më pak. Qindarkat rrumbullakosen poshtë. Shuma është {min} deri {max}, dhe kurrë më shumë se shuma jote maksimale. Një raund i lënë një orë tërhiqet vetë, ose shuma kthehet nëse s'kishe hapur asnjë kuti.",
 };

@@ -8,6 +8,7 @@
 // It prints what each game paid back over the run. Empties tables, so it only
 // runs against a database whose name ends in "_test". Run after `nest build`:
 //   DATABASE_URL=postgresql://…/bastal_test node scripts/casino-soak.mjs [rounds per game=2000]
+// SOAK_ONLY="Hi-Lo,Tower" plays only the games named.
 import { createRequire } from "node:module";
 import { randomInt } from "node:crypto";
 
@@ -92,7 +93,11 @@ async function user(role, parentId, extra = {}) {
 }
 
 /** Plays one game `rounds` times, then checks its money. `kinds` are the CasinoPlayKind rows it writes. */
+/** Only these games, when SOAK_ONLY lists them (comma-separated names, e.g. "Hi-Lo,Tower"). */
+const ONLY = process.env.SOAK_ONLY ? process.env.SOAK_ONLY.split(",").map((name) => name.trim()) : null;
+
 async function run(name, kinds, rounds, playOne) {
+  if (ONLY && !ONLY.includes(name)) return;
   const before = await balanceOf(player.id);
   const playsBefore = await playsOf(player.id, kinds);
   let failures = 0;

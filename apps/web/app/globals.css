@@ -8344,8 +8344,22 @@ button.is-blocked {
     font-size: 0.85rem;
   }
 
-  .roulette-controls .slot-message {
-    min-width: 7rem;
+  /* The chips and buttons keep their size; the message takes what's left (cut short with … if need be), so Spin is never pushed off the screen. */
+  .roulette-controls > * {
+    flex: none;
+  }
+
+  .roulette-controls > .slot-message {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .roulette-controls .slot-message > :is(span, small) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .roulette-controls .slot-message span {
@@ -16614,6 +16628,62 @@ html[data-theme="light"] .role-player {
   }
 }
 
+/*
+ * A phone held upright: the game takes the whole screen below the top bar. The page's title row goes (still read
+ * out by screen readers): the game's own header already shows its name and its ? for the rules, and now its ‹ to
+ * leave as well.
+ */
+@media (orientation: portrait) and (max-width: 600px) {
+  .casino-page > .page-title-row {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .casino-page .slot-marquee .slot-exit {
+    display: grid;
+  }
+
+  .casino-page .slot-marquee {
+    padding-left: 3.1rem;
+  }
+
+  /* No tab bar under a game either, as in a game app: its ‹ leaves, and the game gets the room. */
+  body:has(.casino-page section[class*="-cabinet"]) .mobile-bottom-nav {
+    display: none;
+  }
+
+  body:has(.casino-page section[class*="-cabinet"]) .dashboard-content {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+
+  /* The balance and the visit's totals on one line each, in less height. */
+  .casino-page :is(.dice-readout, .mines-readout) {
+    grid-template-columns: 1.45fr 1fr 1fr;
+    gap: 0.35rem;
+  }
+
+  .casino-page :is(.dice-readout, .mines-readout) span {
+    gap: 0;
+    padding: 0.3rem 0.35rem;
+  }
+
+  .casino-page :is(.dice-readout, .mines-readout) small {
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+  }
+
+  .casino-page :is(.dice-readout, .mines-readout) strong {
+    overflow: hidden;
+    font-size: 0.84rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .role-player .casino-page .slot-cabinet {
   flex: none;
   min-height: 0;
@@ -19364,6 +19434,7 @@ button.cab-field-box:disabled {
 /* A narrow cabinet (a phone): a slimmer readout, so the game itself has the room. */
 @container (max-width: 559.98px) {
   .dice-cabinet .dice-readout {
+    grid-template-columns: 1.45fr 1fr 1fr;
     gap: 0.35rem;
   }
 
@@ -19372,7 +19443,8 @@ button.cab-field-box:disabled {
   }
 
   .dice-cabinet .dice-readout small {
-    font-size: 0.62rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
   }
 
   .dice-cabinet .dice-readout strong {
@@ -19399,17 +19471,17 @@ button.cab-field-box:disabled {
   }
 }
 
-/* A narrow Keno cabinet (a phone): the controls sit under the board, so they're part of the rest too. */
 @container (max-width: 759.98px) {
+  /* A narrow Keno cabinet (a phone): the board is as wide as the cabinet, its numbers big enough to tap; the page scrolls to the controls under it. */
   .keno-board {
-    --keno-rest: 36rem;
+    max-width: none;
   }
 }
 
-/* A narrow Scratch cabinet (a phone): the controls under the ticket are part of the rest. */
+/* A narrow Scratch cabinet (a phone): the ticket as wide as it can be, so its prizes fit; the page scrolls to the controls under it. */
 @container (max-width: 759.98px) {
   .scratch-ticket {
-    --scratch-rest: 32rem;
+    width: min(100%, 17.25rem);
   }
 }
 

@@ -12,6 +12,8 @@ const MIN_GAME_HEIGHT = 340;
 const MIN_SCREEN_GAME_HEIGHT = 260;
 /** A game too tall for its height is shrunk to fit, but never below this share of its size. */
 const MIN_GAME_SCALE = 0.72;
+/** On a phone, a game is shrunk far less: past this its text and buttons get too small to read and tap, so it grows instead. */
+const MIN_PHONE_GAME_SCALE = 0.9;
 /** Overflow this small, px, is rounding (a shadow, a border, a zoomed half pixel), not something out of reach. */
 const FIT_SLACK = 6;
 /** A part of a game sticking out of its place by this much or less, px, is the design (a marquee's buttons). */
@@ -87,14 +89,15 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
      * by its height.
      */
     const shrink = (element: T) => {
+      const least = window.matchMedia("(max-width: 600px)").matches ? MIN_PHONE_GAME_SCALE : MIN_GAME_SCALE;
       scale = 1;
       sizing = 0;
       apply(element);
       for (let pass = 0; pass < 4; pass += 1) {
         const has = element.clientHeight;
         const want = needs(element);
-        if (want <= has + FIT_SLACK || scale <= MIN_GAME_SCALE) break;
-        scale = Math.max(MIN_GAME_SCALE, Math.floor(scale * (has / want) * 0.995 * 1000) / 1000);
+        if (want <= has + FIT_SLACK || scale <= least) break;
+        scale = Math.max(least, Math.floor(scale * (has / want) * 0.995 * 1000) / 1000);
         apply(element);
       }
     };

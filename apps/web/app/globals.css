@@ -6846,7 +6846,7 @@ button.is-blocked {
 
 @media (orientation: portrait) and (max-width: 600px) {
   /* These four games are built for landscape. Upright, only the turn-sideways screen shows. */
-  .slot-rotate,
+  .slot-rotate:not(.is-upright),
   .roulette-rotate {
     display: grid;
   }
@@ -12317,6 +12317,22 @@ button.is-blocked {
   .plinko-history {
     width: 100%;
   }
+}
+
+/* Penalty is built for a phone held upright: held sideways, only the turn-upright screen shows. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .slot-rotate.is-upright {
+    display: grid;
+  }
+
+  .penalty-cabinet {
+    display: none;
+  }
+}
+
+/* The same phone, turning the other way: from sideways back to upright. */
+.slot-rotate.is-upright .slot-rotate-icon {
+  animation-direction: reverse;
 }
 
 /* A phone held upright: Plinko waits to be turned sideways (after its own display rule, so this one wins). */

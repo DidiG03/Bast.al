@@ -12319,6 +12319,162 @@ button.is-blocked {
   }
 }
 
+/* A phone held upright: Plinko waits to be turned sideways (after its own display rule, so this one wins). */
+@media (orientation: portrait) and (max-width: 600px) {
+  .plinko-cabinet {
+    display: none;
+  }
+}
+
+/* A phone held sideways: Plinko fills the screen, like the slots. The controls in a column on the left, the board as tall as the screen allows. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .plinko-cabinet {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    border-radius: 0;
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  .plinko-cabinet .slot-exit {
+    display: grid;
+  }
+
+  .plinko-marquee {
+    padding-block: 0.15rem;
+    padding-right: 9.4rem;
+  }
+
+  .plinko-cabinet .slot-title {
+    font-size: 1.3rem;
+  }
+
+  .plinko-cabinet .plinko-body {
+    display: grid;
+    grid-template-columns: minmax(13rem, 16.5rem) 1fr;
+    min-height: 0;
+  }
+
+  .plinko-controls {
+    order: -1;
+    align-content: center;
+    gap: 0.4rem;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.5rem 0.7rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.16);
+  }
+
+  .plinko-controls .mines-picks,
+  .plinko-settings {
+    justify-content: stretch;
+  }
+
+  .plinko-settings {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .plinko-controls .mines-picks {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.25rem;
+  }
+
+  .plinko-controls .mines-pick {
+    min-width: 0;
+    min-height: 1.85rem;
+    padding: 0.15rem 0.25rem;
+    font-size: 0.74rem;
+    white-space: nowrap;
+  }
+
+  .plinko-auto-limits {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+  }
+
+  .plinko-auto-limits label {
+    display: grid;
+    gap: 0.1rem;
+    font-size: 0.6rem;
+    text-align: center;
+  }
+
+  .plinko-auto-limits select {
+    min-height: 1.85rem;
+    padding: 0.1rem 0.3rem;
+    font-size: 0.74rem;
+  }
+
+  .plinko-label {
+    display: block;
+    margin: 0 0 -0.25rem;
+    color: #9aa3c7;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .plinko-rows-word {
+    display: none;
+  }
+
+  .plinko-rows-number {
+    display: inline;
+  }
+
+  .plinko-actions,
+  .plinko-actions:has(.plinko-auto.is-on) {
+    position: static;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0.3rem;
+    padding: 0;
+    background: none;
+  }
+
+  .plinko-actions .mines-go {
+    flex: 2;
+    min-width: 0;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .plinko-actions .plinko-auto {
+    flex: 1;
+  }
+
+  .plinko-cabinet .plinko-stage {
+    min-height: 0;
+    gap: 0.3rem;
+    padding: 0.3rem 0.8rem 0.4rem;
+  }
+
+  .plinko-cabinet .mines-readout span {
+    padding: 0.15rem 0.4rem;
+  }
+
+  .plinko-cabinet .mines-readout small {
+    font-size: 0.6rem;
+  }
+
+  .plinko-cabinet .mines-readout strong {
+    font-size: 0.85rem;
+  }
+
+  .plinko-history {
+    width: 100%;
+  }
+
+  /* The title bar, the readout and the last results take ~6rem of the screen's height; the board gets the rest. */
+  .plinko-board {
+    width: min(100%, 34rem, max(10rem, (100dvh - 6rem) / 1.08));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .plinko-bucket.is-hit {
     animation: none;

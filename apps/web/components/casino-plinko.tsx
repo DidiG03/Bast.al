@@ -2,7 +2,13 @@
 
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { LastSpins } from "./casino-last-spins";
 import { useConfirm } from "./confirm-dialog";
 import { useI18n } from "./i18n-provider";
@@ -12,8 +18,20 @@ import { useDismiss } from "./use-dismiss";
 import { useRealtime } from "./realtime-provider";
 import { slotSound } from "./slot-sounds";
 import { useToast } from "./toaster";
-import { FullScreenIcon, useFullScreen } from "./use-full-screen";
-import { apiFetch, newIdempotencyKey, type PlinkoBall, type PlinkoDropResult, type PlinkoRisk, type PlinkoRows, type PlinkoState } from "../lib/api";
+import {
+  FullScreenIcon,
+  RotatePhoneIcon,
+  useFullScreen,
+} from "./use-full-screen";
+import {
+  apiFetch,
+  newIdempotencyKey,
+  type PlinkoBall,
+  type PlinkoDropResult,
+  type PlinkoRisk,
+  type PlinkoRows,
+  type PlinkoState,
+} from "../lib/api";
 import { formatMoney, formatStake } from "../lib/format";
 import { msg } from "../lib/i18n/core";
 import { useCasinoSession } from "./use-casino-session";
@@ -40,10 +58,15 @@ const AUTO_LOSS = [5, 10, 25] as const;
 /** The quickest balls can follow each other, however fast Space is pressed: 5 a second, inside the API's limit of 360 a minute. */
 const MIN_GAP_MS = 200;
 
-const RISK_NAMES: Record<PlinkoRisk, string> = { LOW: msg("Low"), MEDIUM: msg("Medium"), HIGH: msg("High") };
+const RISK_NAMES: Record<PlinkoRisk, string> = {
+  LOW: msg("Low"),
+  MEDIUM: msg("Medium"),
+  HIGH: msg("High"),
+};
 
 /** A bucket's colour: gold in the middle, red at the edges. */
-const bucketHue = (bucket: number, rows: number) => 46 - (Math.abs(bucket - rows / 2) / (rows / 2)) * 56;
+const bucketHue = (bucket: number, rows: number) =>
+  46 - (Math.abs(bucket - rows / 2) / (rows / 2)) * 56;
 const times = (multiplier: number) => `${multiplier}×`;
 
 /** The board's layout for a canvas `width` wide: peg spacing, rows, and where everything sits. */
@@ -60,12 +83,25 @@ function layout(width: number, rows: number) {
     ballRadius: Math.max(3.5, gap * 0.23),
     /** Where the ball sits on row `row` after `rights` bounces to the right. Row `rows` is the bucket's mouth. */
     at(row: number, rights: number) {
-      return { x: width / 2 + (rights - row / 2) * gap, y: top + row * rise - this.pegRadius - this.ballRadius };
+      return {
+        x: width / 2 + (rights - row / 2) * gap,
+        y: top + row * rise - this.pegRadius - this.ballRadius,
+      };
     },
   };
 }
 
-type Falling = { id: number; path: number[]; start: number; step: number; rows: number; landed: boolean; onLand: () => void; onPeg: (row: number) => void; pegged: number };
+type Falling = {
+  id: number;
+  path: number[];
+  start: number;
+  step: number;
+  rows: number;
+  landed: boolean;
+  onLand: () => void;
+  onPeg: (row: number) => void;
+  pegged: number;
+};
 
 /** Plinko for a Player: pick the rows, the risk and the stake, and drop balls. */
 export function PlinkoGame() {
@@ -73,7 +109,11 @@ export function PlinkoGame() {
   const { getToken } = useAuth();
   const { t, tn, ts, date } = useI18n();
   const toast = useToast();
-  const { ref: cabinet, mode: fullScreen, toggle: toggleFullScreen } = useFullScreen<HTMLElement>();
+  const {
+    ref: cabinet,
+    mode: fullScreen,
+    toggle: toggleFullScreen,
+  } = useFullScreen<HTMLElement>();
 
   const [state, setState] = useState<PlinkoState | null>(null);
   const [rows, setRows] = useState<PlinkoRows>(16);
@@ -86,8 +126,10 @@ export function PlinkoGame() {
   useDismiss(() => setRulesOpen(false));
   const [soundOn, setSoundOn] = useState(true);
   const [auto, setAuto] = useState(false);
-  const [autoBalls, setAutoBalls] = useState<(typeof AUTO_BALLS)[number]>(AUTO_DEFAULT);
-  const [lossMultiple, setLossMultiple] = useState<(typeof AUTO_LOSS)[number]>(10);
+  const [autoBalls, setAutoBalls] =
+    useState<(typeof AUTO_BALLS)[number]>(AUTO_DEFAULT);
+  const [lossMultiple, setLossMultiple] =
+    useState<(typeof AUTO_LOSS)[number]>(10);
   const [autoLeftShown, setAutoLeftShown] = useState(0);
   const autoOn = useRef(false);
   const autoLeft = useRef(0);
@@ -117,7 +159,8 @@ export function PlinkoGame() {
 
   useEffect(() => setSoundOn(slotSound.on), []);
   useEffect(() => {
-    reducedMotion.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    reducedMotion.current =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   }, []);
 
   const load = useCallback(async () => {
@@ -136,7 +179,12 @@ export function PlinkoGame() {
   }, []);
 
   useRealtime((event) => {
-    if (event.type === "balance.changed" && balls.current.length === 0 && inPlay.balls === 0) setLanded(event.balance);
+    if (
+      event.type === "balance.changed" &&
+      balls.current.length === 0 &&
+      inPlay.balls === 0
+    )
+      setLanded(event.balance);
   });
 
   const balance = Math.round((landed - inPlay.stakes) * 100) / 100;
@@ -160,7 +208,8 @@ export function PlinkoGame() {
         const x = width.current / 2 + (peg - (row + 2) / 2) * geometry.gap;
         const y = geometry.top + row * geometry.rise;
         const flash = pegFlash.current.get(`${row}:${peg}`);
-        const glow = flash === undefined ? 0 : Math.max(0, 1 - (now - flash) / 260);
+        const glow =
+          flash === undefined ? 0 : Math.max(0, 1 - (now - flash) / 260);
         if (glow > 0) {
           ctx.beginPath();
           ctx.fillStyle = `rgba(255, 214, 102, ${0.45 * glow})`;
@@ -187,10 +236,13 @@ export function PlinkoGame() {
         from = { x: to.x, y: -geometry.ballRadius };
       } else {
         const row = Math.min(stepIndex - 1, ball.path.length - 1);
-        const rights = ball.path.slice(0, row).reduce((sum, side) => sum + side, 0);
+        const rights = ball.path
+          .slice(0, row)
+          .reduce((sum, side) => sum + side, 0);
         from = geometry.at(row, rights);
         to = geometry.at(row + 1, rights + ball.path[row]);
-        if (row + 1 === ball.path.length) to = { x: to.x, y: geometry.height + geometry.ballRadius };
+        if (row + 1 === ball.path.length)
+          to = { x: to.x, y: geometry.height + geometry.ballRadius };
         hop = geometry.rise * 0.32;
         // The peg the ball is bouncing off lights up and ticks, once.
         if (ball.pegged < row + 1) {
@@ -201,13 +253,22 @@ export function PlinkoGame() {
       }
       const done = stepIndex > ball.path.length;
       const x = done ? to.x : from.x + (to.x - from.x) * u;
-      const y = done ? to.y : from.y + (to.y - from.y) * u * u - hop * 4 * u * (1 - u);
+      const y = done
+        ? to.y
+        : from.y + (to.y - from.y) * u * u - hop * 4 * u * (1 - u);
       if (done && !ball.landed) {
         ball.landed = true;
         ball.onLand();
         continue;
       }
-      const gradient = ctx.createRadialGradient(x - geometry.ballRadius * 0.35, y - geometry.ballRadius * 0.4, geometry.ballRadius * 0.15, x, y, geometry.ballRadius);
+      const gradient = ctx.createRadialGradient(
+        x - geometry.ballRadius * 0.35,
+        y - geometry.ballRadius * 0.4,
+        geometry.ballRadius * 0.15,
+        x,
+        y,
+        geometry.ballRadius,
+      );
       gradient.addColorStop(0, "#fff7d6");
       gradient.addColorStop(0.5, "#ff5d8f");
       gradient.addColorStop(1, "#b0174a");
@@ -221,11 +282,13 @@ export function PlinkoGame() {
       if (now - at > 300) pegFlash.current.delete(key);
     });
 
-    if (balls.current.length > 0 || pegFlash.current.size > 0) frame.current = window.requestAnimationFrame(draw);
+    if (balls.current.length > 0 || pegFlash.current.size > 0)
+      frame.current = window.requestAnimationFrame(draw);
   }, [rows]);
 
   const redraw = useCallback(() => {
-    if (frame.current === null) frame.current = window.requestAnimationFrame(draw);
+    if (frame.current === null)
+      frame.current = window.requestAnimationFrame(draw);
   }, [draw]);
 
   // The canvas follows the board's width, drawn sharp on any screen.
@@ -259,7 +322,13 @@ export function PlinkoGame() {
   );
 
   const falling = inPlay.balls > 0;
-  const canDrop = !!state && !state.closed && bet > 0 && bet <= state.tableMax && bet <= balance + 1e-9 && inPlay.balls < MAX_IN_FLIGHT;
+  const canDrop =
+    !!state &&
+    !state.closed &&
+    bet > 0 &&
+    bet <= state.tableMax &&
+    bet <= balance + 1e-9 &&
+    inPlay.balls < MAX_IN_FLIGHT;
 
   const stopAuto = useCallback(() => {
     autoOn.current = false;
@@ -281,76 +350,120 @@ export function PlinkoGame() {
   }, [autoBalls, bet, lossMultiple]);
 
   const lastDrop = useRef(0);
-  const drop = useCallback(async (fromAuto = false) => {
-    if (fromAuto && !autoOn.current) return false;
-    if (fromAuto && (autoLeft.current <= 0 || autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9)) {
-      stopAuto();
-      return false;
-    }
-    if (!state || !canDrop) return false;
-    const now = performance.now();
-    // Too soon after the last ball: this press is skipped, not refused, so autoplay carries on.
-    if (now - lastDrop.current < MIN_GAP_MS) return true;
-    lastDrop.current = now;
-    slotSound.unlock();
-    const stake = bet;
-    if (fromAuto) {
-      autoLeft.current -= 1;
-      autoStaked.current = Math.round((autoStaked.current + stake) * 100) / 100;
-      setAutoLeftShown(autoLeft.current);
-      if (autoLeft.current <= 0 || autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9) stopAuto();
-    }
-    setInPlay((current) => ({ balls: current.balls + 1, stakes: current.stakes + stake }));
-    const release = () => setInPlay((current) => ({ balls: current.balls - 1, stakes: Math.round((current.stakes - stake) * 100) / 100 }));
-    let result: PlinkoDropResult;
-    try {
-      const token = await getToken();
-      if (!token) throw new Error(t("You're not signed in"));
-      result = await apiFetch<PlinkoDropResult>("/casino/plinko/drop", token, { method: "POST", body: JSON.stringify({ bet: stake, rows, risk }), idempotencyKey: newIdempotencyKey() });
-    } catch (err) {
-      release();
-      toast.error(err instanceof Error ? ts(err.message) : t("That didn't go through. Try again."));
-      return false;
-    }
-    answered.current += 1;
-    if (fromAuto) {
-      autoWon.current = Math.round((autoWon.current + result.round.win) * 100) / 100;
-      if (autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9) stopAuto();
-    }
-    const order = answered.current;
-    const ball = result.round;
-    ballId.current += 1;
-    balls.current.push({
-      id: ballId.current,
-      path: ball.path,
-      rows: ball.rows,
-      start: performance.now(),
-      step: reducedMotion.current ? STEP_MS_REDUCED : STEP_MS,
-      landed: false,
-      pegged: 0,
-      onPeg: (row) => slotSound.peg(row, ball.rows),
-      onLand: () => {
+  const drop = useCallback(
+    async (fromAuto = false) => {
+      if (fromAuto && !autoOn.current) return false;
+      if (
+        fromAuto &&
+        (autoLeft.current <= 0 ||
+          autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9)
+      ) {
+        stopAuto();
+        return false;
+      }
+      if (!state || !canDrop) return false;
+      const now = performance.now();
+      // Too soon after the last ball: this press is skipped, not refused, so autoplay carries on.
+      if (now - lastDrop.current < MIN_GAP_MS) return true;
+      lastDrop.current = now;
+      slotSound.unlock();
+      const stake = bet;
+      if (fromAuto) {
+        autoLeft.current -= 1;
+        autoStaked.current =
+          Math.round((autoStaked.current + stake) * 100) / 100;
+        setAutoLeftShown(autoLeft.current);
+        if (
+          autoLeft.current <= 0 ||
+          autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9
+        )
+          stopAuto();
+      }
+      setInPlay((current) => ({
+        balls: current.balls + 1,
+        stakes: current.stakes + stake,
+      }));
+      const release = () =>
+        setInPlay((current) => ({
+          balls: current.balls - 1,
+          stakes: Math.round((current.stakes - stake) * 100) / 100,
+        }));
+      let result: PlinkoDropResult;
+      try {
+        const token = await getToken();
+        if (!token) throw new Error(t("You're not signed in"));
+        result = await apiFetch<PlinkoDropResult>(
+          "/casino/plinko/drop",
+          token,
+          {
+            method: "POST",
+            body: JSON.stringify({ bet: stake, rows, risk }),
+            idempotencyKey: newIdempotencyKey(),
+          },
+        );
+      } catch (err) {
         release();
-        if (order > landedOrder.current) {
-          landedOrder.current = order;
-          setLanded(result.balance);
-        }
-        slotSound.bucket(ball.multiplier);
-        setLit((current) => ({ ...current, [ball.bucket]: (current[ball.bucket] ?? 0) + 1 }));
-        setRecent((list) => [ball, ...list].slice(0, HISTORY_KEPT));
-        if (ball.win > ball.bet) setLastWin(ball);
-      },
-    });
-    redraw();
-    return true;
-  }, [state, canDrop, bet, rows, risk, getToken, t, toast, ts, redraw, stopAuto]);
+        toast.error(
+          err instanceof Error
+            ? ts(err.message)
+            : t("That didn't go through. Try again."),
+        );
+        return false;
+      }
+      answered.current += 1;
+      if (fromAuto) {
+        autoWon.current =
+          Math.round((autoWon.current + result.round.win) * 100) / 100;
+        if (autoStaked.current - autoWon.current >= autoLossCap.current - 1e-9)
+          stopAuto();
+      }
+      const order = answered.current;
+      const ball = result.round;
+      ballId.current += 1;
+      balls.current.push({
+        id: ballId.current,
+        path: ball.path,
+        rows: ball.rows,
+        start: performance.now(),
+        step: reducedMotion.current ? STEP_MS_REDUCED : STEP_MS,
+        landed: false,
+        pegged: 0,
+        onPeg: (row) => slotSound.peg(row, ball.rows),
+        onLand: () => {
+          release();
+          if (order > landedOrder.current) {
+            landedOrder.current = order;
+            setLanded(result.balance);
+          }
+          slotSound.bucket(ball.multiplier);
+          setLit((current) => ({
+            ...current,
+            [ball.bucket]: (current[ball.bucket] ?? 0) + 1,
+          }));
+          setRecent((list) => [ball, ...list].slice(0, HISTORY_KEPT));
+          if (ball.win > ball.bet) setLastWin(ball);
+        },
+      });
+      redraw();
+      return true;
+    },
+    [state, canDrop, bet, rows, risk, getToken, t, toast, ts, redraw, stopAuto],
+  );
 
   /** Auto drops many balls at the stake on the table: the total is shown and agreed to first. */
   async function confirmAuto() {
     const total = Math.round(autoBalls * bet * 100) / 100;
     const yes = await confirm({
       title: t("Start autoplay?"),
-      message: t("{balls} × {stake} = {total}. Autoplay stops sooner if you press Stop or lose {times}× the stake.", { balls: tn(autoBalls, "{count} ball", "{count} balls"), stake: formatStake(bet), total: formatMoney(total), times: lossMultiple }),
+      message: t(
+        "{balls} × {stake} = {total}. Autoplay stops sooner if you press Stop or lose {times}× the stake.",
+        {
+          balls: tn(autoBalls, "{count} ball", "{count} balls"),
+          stake: formatStake(bet),
+          total: formatMoney(total),
+          times: lossMultiple,
+        },
+      ),
       confirmLabel: tn(autoBalls, "Drop {count} ball", "Drop {count} balls"),
     });
     if (yes && !autoOn.current && canDrop) startAuto();
@@ -392,7 +505,12 @@ export function PlinkoGame() {
     const onKey = (event: KeyboardEvent) => {
       if (event.code !== "Space" && event.key !== " ") return;
       const target = event.target as HTMLElement | null;
-      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      )
+        return;
       if (rulesOpenRef.current) return;
       // Space would otherwise scroll the page, or press whichever button has focus as well.
       event.preventDefault();
@@ -418,11 +536,20 @@ export function PlinkoGame() {
         <div>
           <div className="game-title-line">
             <h1 style={{ margin: 0 }}>Plinko</h1>
-            <button type="button" className="game-rules-button" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")}>
+            <button
+              type="button"
+              className="game-rules-button"
+              onClick={() => setRulesOpen(true)}
+              aria-label={t("Pays and rules")}
+            >
               ?
             </button>
           </div>
-          <p className="muted report-subtitle">{t("Drop a ball through the pegs and see where it lands. Played with your balance.")}</p>
+          <p className="muted report-subtitle">
+            {t(
+              "Drop a ball through the pegs and see where it lands. Played with your balance.",
+            )}
+          </p>
         </div>
       </div>
 
@@ -431,171 +558,306 @@ export function PlinkoGame() {
           <p style={{ margin: 0 }}>{ts(state.closed)}</p>
         </div>
       ) : (
-        <section ref={cabinet} className={`plinko-cabinet${fullScreen !== "off" ? " is-full" : ""}`} aria-label="Plinko">
-          <header className="slot-marquee plinko-marquee">
-            <Link className="slot-exit" href="/dashboard/casino" aria-label={t("Leave the game")}>
-              ‹
-            </Link>
-            <span className="slot-title">Plinko</span>
-            <button
-              type="button"
-              className="slot-fullscreen plinko-sound"
-              aria-pressed={soundOn}
-              aria-label={soundOn ? t("Sound on. Tap to turn it off.") : t("Sound off. Tap to turn it on.")}
-              title={soundOn ? t("Sound on. Tap to turn it off.") : t("Sound off. Tap to turn it on.")}
-              onClick={() => {
-                slotSound.setOn(!soundOn);
-                setSoundOn(!soundOn);
-                if (!soundOn) slotSound.click();
-              }}
-            >
-              <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
-            </button>
-            <button type="button" className="slot-fullscreen plinko-rules" onClick={() => setRulesOpen(true)} aria-label={t("Pays and rules")} title={t("Pays and rules")}>
-              ?
-            </button>
-            <button
-              type="button"
-              className="slot-fullscreen"
-              onClick={() => void toggleFullScreen()}
-              aria-label={fullScreen === "off" ? t("Full screen") : t("Exit full screen")}
-              title={fullScreen === "off" ? t("Full screen") : t("Exit full screen")}
-            >
-              <FullScreenIcon exit={fullScreen !== "off"} />
-            </button>
-          </header>
+        <>
+          <div className="slot-rotate" role="status">
+            <RotatePhoneIcon />
+            <strong>{t("Turn your phone sideways to play")}</strong>
+            <span className="muted">
+              {t(
+                "{name} plays with the phone held sideways. Turn it and the game opens.",
+                { name: "Plinko" },
+              )}
+            </span>
+          </div>
+          <section
+            ref={cabinet}
+            className={`plinko-cabinet${fullScreen !== "off" ? " is-full" : ""}`}
+            aria-label="Plinko"
+          >
+            <header className="slot-marquee plinko-marquee">
+              <Link
+                className="slot-exit"
+                href="/dashboard/casino"
+                aria-label={t("Leave the game")}
+              >
+                ‹
+              </Link>
+              <span className="slot-title">Plinko</span>
+              <button
+                type="button"
+                className="slot-fullscreen plinko-sound"
+                aria-pressed={soundOn}
+                aria-label={
+                  soundOn
+                    ? t("Sound on. Tap to turn it off.")
+                    : t("Sound off. Tap to turn it on.")
+                }
+                title={
+                  soundOn
+                    ? t("Sound on. Tap to turn it off.")
+                    : t("Sound off. Tap to turn it on.")
+                }
+                onClick={() => {
+                  slotSound.setOn(!soundOn);
+                  setSoundOn(!soundOn);
+                  if (!soundOn) slotSound.click();
+                }}
+              >
+                <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
+              </button>
+              <button
+                type="button"
+                className="slot-fullscreen plinko-rules"
+                onClick={() => setRulesOpen(true)}
+                aria-label={t("Pays and rules")}
+                title={t("Pays and rules")}
+              >
+                ?
+              </button>
+              <button
+                type="button"
+                className="slot-fullscreen"
+                onClick={() => void toggleFullScreen()}
+                aria-label={
+                  fullScreen === "off"
+                    ? t("Full screen")
+                    : t("Exit full screen")
+                }
+                title={
+                  fullScreen === "off"
+                    ? t("Full screen")
+                    : t("Exit full screen")
+                }
+              >
+                <FullScreenIcon exit={fullScreen !== "off"} />
+              </button>
+            </header>
 
-          <div className="plinko-body">
-            <div className="plinko-stage">
-              <div className="mines-readout" aria-live="polite">
-                <span>
-                  <small>{t("Balance")}</small>
-                  <strong>{formatMoney(balance)}</strong>
-                </span>
-                <span>
-                  <small>{t("Stake")}</small>
-                  <strong>{formatStake(bet)}</strong>
-                </span>
-                <span>
-                  <small>{t("Last win")}</small>
-                  <strong>{lastWin ? `${formatMoney(lastWin.win)}` : "—"}</strong>
-                </span>
-              </div>
-              <div className="plinko-history" aria-label={t("Your last balls")}>
-                {recent.slice(0, 6).map((ball) => (
-                  <span key={ball.id} className="plinko-chip" style={{ "--hue": bucketHue(ball.bucket, ball.rows) } as CSSProperties}>
-                    {times(ball.multiplier)}
+            <div className="plinko-body">
+              <div className="plinko-stage">
+                <div className="mines-readout" aria-live="polite">
+                  <span>
+                    <small>{t("Balance")}</small>
+                    <strong>{formatMoney(balance)}</strong>
                   </span>
-                ))}
-              </div>
-              <div className="plinko-board" ref={board}>
-                <canvas ref={canvas} className="plinko-canvas" aria-hidden="true" />
-                <div className="plinko-buckets" style={{ gridTemplateColumns: `repeat(${buckets}, 1fr)`, paddingInline: `${50 / (rows + 2)}%` }}>
-                  {pays.map((multiplier, bucket) => (
+                  <span>
+                    <small>{t("Stake")}</small>
+                    <strong>{formatStake(bet)}</strong>
+                  </span>
+                  <span>
+                    <small>{t("Last win")}</small>
+                    <strong>
+                      {lastWin ? `${formatMoney(lastWin.win)}` : "—"}
+                    </strong>
+                  </span>
+                </div>
+                <div
+                  className="plinko-history"
+                  aria-label={t("Your last balls")}
+                >
+                  {recent.slice(0, 6).map((ball) => (
                     <span
-                      key={`${bucket}-${lit[bucket] ?? 0}`}
-                      className={`plinko-bucket${lit[bucket] ? " is-hit" : ""}${rows === 16 ? " is-small" : ""}`}
-                      style={{ "--hue": bucketHue(bucket, rows) } as CSSProperties}
-                      title={`${multiplier}×`}
+                      key={ball.id}
+                      className="plinko-chip"
+                      style={
+                        {
+                          "--hue": bucketHue(ball.bucket, ball.rows),
+                        } as CSSProperties
+                      }
                     >
-                      {times(multiplier)}
+                      {times(ball.multiplier)}
                     </span>
                   ))}
                 </div>
-              </div>
-            </div>
-
-            <div className="mines-controls plinko-controls">
-              <div className="plinko-settings">
-                <small className="plinko-label" aria-hidden="true">
-                  {t("Risk")}
-                </small>
-                <div className="mines-picks" role="radiogroup" aria-label={t("Risk")}>
-                  {state.game.risks.map((value) => (
-                    <button key={value} type="button" className={`mines-pick${risk === value ? " is-on" : ""}`} aria-pressed={risk === value} disabled={falling || auto} onClick={() => setRisk(value)}>
-                      {t(RISK_NAMES[value])}
-                    </button>
-                  ))}
-                </div>
-                <small className="plinko-label" aria-hidden="true">
-                  {t("Rows")}
-                </small>
-                <div className="mines-picks" role="radiogroup" aria-label={t("Rows")}>
-                  {state.game.rows.map((value) => (
-                    <button key={value} type="button" className={`mines-pick${rows === value ? " is-on" : ""}`} aria-pressed={rows === value} aria-label={t("{count} rows", { count: value })} disabled={falling || auto} onClick={() => setRows(value)}>
-                      <span className="plinko-rows-word">{t("{count} rows", { count: value })}</span>
-                      <span className="plinko-rows-number" aria-hidden="true">
-                        {value}
+                <div className="plinko-board" ref={board}>
+                  <canvas
+                    ref={canvas}
+                    className="plinko-canvas"
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="plinko-buckets"
+                    style={{
+                      gridTemplateColumns: `repeat(${buckets}, 1fr)`,
+                      paddingInline: `${50 / (rows + 2)}%`,
+                    }}
+                  >
+                    {pays.map((multiplier, bucket) => (
+                      <span
+                        key={`${bucket}-${lit[bucket] ?? 0}`}
+                        className={`plinko-bucket${lit[bucket] ? " is-hit" : ""}${rows === 16 ? " is-small" : ""}`}
+                        style={
+                          { "--hue": bucketHue(bucket, rows) } as CSSProperties
+                        }
+                        title={`${multiplier}×`}
+                      >
+                        {times(multiplier)}
                       </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mines-controls plinko-controls">
+                <div className="plinko-settings">
+                  <small className="plinko-label" aria-hidden="true">
+                    {t("Risk")}
+                  </small>
+                  <div
+                    className="mines-picks"
+                    role="radiogroup"
+                    aria-label={t("Risk")}
+                  >
+                    {state.game.risks.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`mines-pick${risk === value ? " is-on" : ""}`}
+                        aria-pressed={risk === value}
+                        disabled={falling || auto}
+                        onClick={() => setRisk(value)}
+                      >
+                        {t(RISK_NAMES[value])}
+                      </button>
+                    ))}
+                  </div>
+                  <small className="plinko-label" aria-hidden="true">
+                    {t("Rows")}
+                  </small>
+                  <div
+                    className="mines-picks"
+                    role="radiogroup"
+                    aria-label={t("Rows")}
+                  >
+                    {state.game.rows.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`mines-pick${rows === value ? " is-on" : ""}`}
+                        aria-pressed={rows === value}
+                        aria-label={t("{count} rows", { count: value })}
+                        disabled={falling || auto}
+                        onClick={() => setRows(value)}
+                      >
+                        <span className="plinko-rows-word">
+                          {t("{count} rows", { count: value })}
+                        </span>
+                        <span className="plinko-rows-number" aria-hidden="true">
+                          {value}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <small className="plinko-label" aria-hidden="true">
+                  {t("Stake")}
+                </small>
+                <div
+                  className="mines-picks"
+                  role="radiogroup"
+                  aria-label={t("Stake")}
+                >
+                  {state.game.bets.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`mines-pick${bet === value ? " is-on" : ""}`}
+                      aria-pressed={bet === value}
+                      disabled={auto || value > state.tableMax}
+                      onClick={() => setBet(value)}
+                    >
+                      {formatStake(value)}
                     </button>
                   ))}
                 </div>
-              </div>
-              <small className="plinko-label" aria-hidden="true">
-                {t("Stake")}
-              </small>
-              <div className="mines-picks" role="radiogroup" aria-label={t("Stake")}>
-                {state.game.bets.map((value) => (
-                  <button key={value} type="button" className={`mines-pick${bet === value ? " is-on" : ""}`} aria-pressed={bet === value} disabled={auto || value > state.tableMax} onClick={() => setBet(value)}>
-                    {formatStake(value)}
+                <div className="plinko-auto-limits">
+                  <label>
+                    <span>{t("Auto balls")}</span>
+                    <select
+                      value={autoBalls}
+                      disabled={auto}
+                      onChange={(event) =>
+                        setAutoBalls(
+                          Number(
+                            event.target.value,
+                          ) as (typeof AUTO_BALLS)[number],
+                        )
+                      }
+                    >
+                      {AUTO_BALLS.map((count) => (
+                        <option key={count} value={count}>
+                          {tn(count, "{count} ball", "{count} balls")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>{t("Stop after losing")}</span>
+                    <select
+                      value={lossMultiple}
+                      disabled={auto}
+                      onChange={(event) =>
+                        setLossMultiple(
+                          Number(
+                            event.target.value,
+                          ) as (typeof AUTO_LOSS)[number],
+                        )
+                      }
+                    >
+                      {AUTO_LOSS.map((times) => (
+                        <option key={times} value={times}>
+                          {t("{times}× the stake", { times })}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="plinko-actions">
+                  <button
+                    type="button"
+                    className="mines-go"
+                    disabled={auto || !canDrop}
+                    onClick={() => void drop()}
+                  >
+                    {t("Drop a ball {amount}", { amount: formatStake(bet) })}
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    className={`mines-pick plinko-auto${auto ? " is-on" : ""}`}
+                    aria-pressed={auto}
+                    disabled={!auto && !canDrop}
+                    onPointerDown={(event) => {
+                      if (!autoOn.current) return;
+                      event.preventDefault();
+                      stopStamp.current = performance.now();
+                      stopAuto();
+                    }}
+                    onClick={() => {
+                      if (performance.now() - stopStamp.current < 700) return;
+                      if (autoOn.current) stopAuto();
+                      else void confirmAuto();
+                    }}
+                  >
+                    {auto ? `${t("Stop")} · ${autoLeftShown}` : t("Auto")}
+                  </button>
+                </div>
+                <p className="plinko-hint">
+                  {t("Press Space to drop a ball.")}
+                </p>
               </div>
-              <div className="plinko-auto-limits">
-                <label>
-                  <span>{t("Auto balls")}</span>
-                  <select value={autoBalls} disabled={auto} onChange={(event) => setAutoBalls(Number(event.target.value) as (typeof AUTO_BALLS)[number])}>
-                    {AUTO_BALLS.map((count) => (
-                      <option key={count} value={count}>
-                        {tn(count, "{count} ball", "{count} balls")}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>{t("Stop after losing")}</span>
-                  <select value={lossMultiple} disabled={auto} onChange={(event) => setLossMultiple(Number(event.target.value) as (typeof AUTO_LOSS)[number])}>
-                    {AUTO_LOSS.map((times) => (
-                      <option key={times} value={times}>
-                        {t("{times}× the stake", { times })}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="plinko-actions">
-                <button type="button" className="mines-go" disabled={auto || !canDrop} onClick={() => void drop()}>
-                  {t("Drop a ball {amount}", { amount: formatStake(bet) })}
-                </button>
-                <button
-                  type="button"
-                  className={`mines-pick plinko-auto${auto ? " is-on" : ""}`}
-                  aria-pressed={auto}
-                  disabled={!auto && !canDrop}
-                  onPointerDown={(event) => {
-                    if (!autoOn.current) return;
-                    event.preventDefault();
-                    stopStamp.current = performance.now();
-                    stopAuto();
-                  }}
-                  onClick={() => {
-                    if (performance.now() - stopStamp.current < 700) return;
-                    if (autoOn.current) stopAuto();
-                    else void confirmAuto();
-                  }}
-                >
-                  {auto ? `${t("Stop")} · ${autoLeftShown}` : t("Auto")}
-                </button>
-              </div>
-              <p className="plinko-hint">{t("Press Space to drop a ball.")}</p>
             </div>
-          </div>
-        </section>
+          </section>
+        </>
       )}
 
-      <LastSpins title="Your last balls" help="Your newest Plinko balls. They're also in My money, as one Plinko line for each day.">
+      <LastSpins
+        title="Your last balls"
+        help="Your newest Plinko balls. They're also in My money, as one Plinko line for each day."
+      >
         {recent.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>{t("No balls yet.")}</p>
+          <p className="muted" style={{ margin: 0 }}>
+            {t("No balls yet.")}
+          </p>
         ) : (
           <div className="report-list">
             {recent.slice(0, historyShown).map((ball) => (
@@ -603,17 +865,28 @@ export function PlinkoGame() {
                 <div>
                   <strong>{times(ball.multiplier)}</strong>
                   <span className="muted">
-                    {date(ball.createdAt, TIME)} · {t("{count} rows", { count: ball.rows })} · {t(RISK_NAMES[ball.risk])} · {t("{amount} stake", { amount: formatMoney(ball.bet) })}
+                    {date(ball.createdAt, TIME)} ·{" "}
+                    {t("{count} rows", { count: ball.rows })} ·{" "}
+                    {t(RISK_NAMES[ball.risk])} ·{" "}
+                    {t("{amount} stake", { amount: formatMoney(ball.bet) })}
                   </span>
                 </div>
-                <strong className={ball.win < ball.bet ? "is-bad" : undefined}>{formatMoney(ball.win)}</strong>
+                <strong className={ball.win < ball.bet ? "is-bad" : undefined}>
+                  {formatMoney(ball.win)}
+                </strong>
               </div>
             ))}
           </div>
         )}
         {recent.length > historyShown ? (
-          <button type="button" className="secondary" onClick={() => setHistoryShown((shown) => shown + HISTORY_PAGE)}>
-            {t("Show more ({count} more)", { count: Math.min(HISTORY_PAGE, recent.length - historyShown) })}
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => setHistoryShown((shown) => shown + HISTORY_PAGE)}
+          >
+            {t("Show more ({count} more)", {
+              count: Math.min(HISTORY_PAGE, recent.length - historyShown),
+            })}
           </button>
         ) : null}
       </LastSpins>
@@ -621,33 +894,62 @@ export function PlinkoGame() {
 
       {rulesOpen ? (
         <div className="modal-backdrop" onClick={() => setRulesOpen(false)}>
-          <section className="modal card casino-rules" role="dialog" aria-modal="true" aria-labelledby="plinko-rules-title" onClick={(event) => event.stopPropagation()}>
+          <section
+            className="modal card casino-rules"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="plinko-rules-title"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="modal-header">
               <h2 id="plinko-rules-title">{t("Pays and rules")}</h2>
-              <button type="button" className="modal-close secondary" onClick={() => setRulesOpen(false)} aria-label={t("Close")}>
+              <button
+                type="button"
+                className="modal-close secondary"
+                onClick={() => setRulesOpen(false)}
+                aria-label={t("Close")}
+              >
                 ×
               </button>
             </div>
             <p>
-              {t("The ball falls through the rows of pegs. At every peg it goes left or right, each just as likely, and lands in a bucket at the bottom. Each bucket pays the stake times its number: the middle ones are hit most and pay least, the edges are rare and pay most.")}
+              {t(
+                "The ball falls through the rows of pegs. At every peg it goes left or right, each just as likely, and lands in a bucket at the bottom. Each bucket pays the stake times its number: the middle ones are hit most and pay least, the edges are rare and pay most.",
+              )}
             </p>
             <p>
-              {t("More rows and more risk make the edges pay more and the middle less. A ball costs {min} to {max}, and never more than your max stake.", {
-                min: formatMoney(state.game.bets[0]),
-                max: formatMoney(state.game.bets[state.game.bets.length - 1]),
-              })}
+              {t(
+                "More rows and more risk make the edges pay more and the middle less. A ball costs {min} to {max}, and never more than your max stake.",
+                {
+                  min: formatMoney(state.game.bets[0]),
+                  max: formatMoney(state.game.bets[state.game.bets.length - 1]),
+                },
+              )}
             </p>
-            <h3 style={{ margin: "0.5rem 0 0.25rem" }}>{t("{count} rows, {risk} risk", { count: rows, risk: t(RISK_NAMES[risk]).toLowerCase() })}</h3>
+            <h3 style={{ margin: "0.5rem 0 0.25rem" }}>
+              {t("{count} rows, {risk} risk", {
+                count: rows,
+                risk: t(RISK_NAMES[risk]).toLowerCase(),
+              })}
+            </h3>
             <div className="plinko-paytable">
               {pays.slice(0, rows / 2 + 1).map((multiplier, bucket) => (
                 <span key={bucket}>
-                  <strong style={{ "--hue": bucketHue(bucket, rows) } as CSSProperties}>{multiplier}×</strong>
+                  <strong
+                    style={
+                      { "--hue": bucketHue(bucket, rows) } as CSSProperties
+                    }
+                  >
+                    {multiplier}×
+                  </strong>
                   <small>{chanceText(bucket, rows)}</small>
                 </span>
               ))}
             </div>
             <p className="muted" style={{ margin: 0 }}>
-              {t("From the edge to the middle; the other side is the same. Under each, how often a ball lands in that bucket or its twin.")}
+              {t(
+                "From the edge to the middle; the other side is the same. Under each, how often a ball lands in that bucket or its twin.",
+              )}
             </p>
           </section>
         </div>
@@ -661,6 +963,7 @@ function chanceText(bucket: number, rows: number): string {
   let ways = 1;
   for (let k = 0; k < bucket; k += 1) ways = (ways * (rows - k)) / (k + 1);
   const chance = (bucket === rows / 2 ? ways : ways * 2) / 2 ** rows;
-  if (chance >= 0.01) return `${(chance * 100).toFixed(chance >= 0.1 ? 0 : 1)}%`;
+  if (chance >= 0.01)
+    return `${(chance * 100).toFixed(chance >= 0.1 ? 0 : 1)}%`;
   return `1 / ${Math.round(1 / chance).toLocaleString()}`;
 }

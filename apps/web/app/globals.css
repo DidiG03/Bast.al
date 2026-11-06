@@ -11483,6 +11483,18 @@ button.is-blocked {
   white-space: nowrap;
 }
 
+/* A narrow pitch (a phone): tighter labels, so Left, Centre and Right each fit their own third and don't run together. */
+@container (max-width: 520px) {
+  .pk-zone {
+    font-size: 0.56rem;
+    letter-spacing: 0;
+  }
+
+  .pk-zone span {
+    padding: 0.2em 0.35em;
+  }
+}
+
 .pk-zone:disabled {
   opacity: 1;
   cursor: default;

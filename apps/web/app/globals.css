@@ -8083,6 +8083,12 @@ button.is-blocked {
   text-transform: uppercase;
 }
 
+/* The lines are drawn over the boxes; a tap goes through them to the box under it. */
+.roulette-lines,
+.roulette-line {
+  pointer-events: none;
+}
+
 .roulette-lines {
   fill: none;
   stroke: #f4f1e6;
@@ -8357,6 +8363,7 @@ button.is-blocked {
 
   .roulette-controls .slot-message > :is(span, small) {
     display: block;
+    text-align: start;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

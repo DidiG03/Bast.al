@@ -147,6 +147,15 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
       room = { under, whole };
       settle();
     };
+    /** The frame each piece of work is waiting for, so it runs once a frame however many changes came in. */
+    const pending = new Map<() => void, number>();
+    const later = (work: () => void) => {
+      window.cancelAnimationFrame(pending.get(work) ?? 0);
+      pending.set(work, window.requestAnimationFrame(() => {
+        pending.delete(work);
+        work();
+      }));
+    };
     const attach = () => {
       const element = ref.current;
       if (!element) {
@@ -155,16 +164,19 @@ export function useFullScreen<T extends HTMLElement>(): { ref: RefObject<T>; mod
       }
       fit();
       // The title above can change height (a note appears, a line wraps), and the screen can turn or resize.
-      watch = new ResizeObserver(fit);
+      // Each change is fitted on the next frame, not inside the observer's own callback (which would resize what
+      // it watches while the browser is still delivering, a "ResizeObserver loop" warning), and once per frame.
+      watch = new ResizeObserver(() => later(fit));
       watch.observe(document.body);
       window.addEventListener("resize", fit);
       // What's in the game changes as it's loaded and played (other buttons in play, a result line): fitted again.
-      inside = new ResizeObserver(settle);
+      inside = new ResizeObserver(() => later(settle));
       for (const child of Array.from(element.children)) inside.observe(child);
     };
     attach();
     return () => {
       window.cancelAnimationFrame(frame);
+      pending.forEach((handle) => window.cancelAnimationFrame(handle));
       watch?.disconnect();
       inside?.disconnect();
       window.removeEventListener("resize", fit);

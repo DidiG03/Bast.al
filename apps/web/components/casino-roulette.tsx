@@ -538,7 +538,6 @@ function RouletteTable({
       {/* The table's lines, drawn over the boxes. */}
       <rect x={0} y={0} width={TABLE_W} height={TABLE_H} className="roulette-lines" />
       <line x1={ZERO_W} y1={0} x2={ZERO_W} y2={NUMBERS_H} className="roulette-line" />
-      <line x1={0} y1={NUMBERS_H / 2} x2={ZERO_W} y2={NUMBERS_H / 2} className="roulette-line" />
       <line x1={ZERO_W} y1={NUMBERS_H} x2={ZERO_W + 12 * CELL} y2={NUMBERS_H} className="roulette-line" />
       {Object.entries(bets).map(([spot, amount]) => {
         const centre = spotCentre(spot);

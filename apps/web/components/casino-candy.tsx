@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CANDY_NAMES, CandyDefs, CandyIcon } from "./candy-symbols";
 import { HouseHistory, HousePage, RulesSheet, useHouseGame } from "./house-game";
 import { useI18n } from "./i18n-provider";
@@ -14,11 +14,23 @@ import { formatMoney } from "../lib/format";
 
 const COLUMNS = 6;
 const ROWS = 5;
-/** How long each part of a spin shows, ms: the board dropping in, the winners glowing, bursting, the rest falling. */
-const DROP_MS = 420;
-const GLOW_MS = 650;
-const BURST_MS = 260;
-const SETTLE_MS = 180;
+/**
+ * How the candies move, ms. A fall of one row takes FALL_MS, of n rows FALL_MS × √n; landing takes LAND_MS more.
+ * Columns start STAGGER_MS apart, and on a new spin each row up a little later than the one under it.
+ */
+const FALL_MS = 165;
+const LAND_MS = 130;
+const COLUMN_STAGGER_MS = 38;
+const ROW_STAGGER_MS = 22;
+const CASCADE_STAGGER_MS = 18;
+/** On a new spin, how long after the old candies start to fall out the new ones follow them. */
+const FOLLOW_MS = 90;
+/** In a tumble, how far behind the candies above that fall the new ones drop in. */
+const REFILL_LAG_MS = 50;
+/** The winners glowing with their pay shown, then bursting, then a beat after everything lands. */
+const GLOW_MS = 700;
+const BURST_MS = 230;
+const AFTER_LANDING_MS = 90;
 const MULTIPLIER_MS = 1100;
 const BETWEEN_FREE_MS = 450;
 /** Turbo (Space held): every pause this much shorter. */
@@ -28,38 +40,42 @@ const AUTO_COUNTS = [10, 25, 50, 100] as const;
 const COST: Record<CandyMode, number> = { NORMAL: 1, ANTE: 1.25, BUY: 100, SUPER: 240 };
 const MAX_BUY_BET = 500;
 
-/** A cell as the board shows it: its candy, how many rows it falls from, and whether it's in a win or bursting. */
-type Shown = { cell: CandyCell; drop: number; win: boolean; burst: boolean; key: number };
+/**
+ * A candy on the board: a piece with an id that stays the same while it's on the board, so when candies
+ * under it burst it visibly falls from where it was to where it lands. Positions are column and row; rows
+ * above the board are negative.
+ */
+type Piece = { id: number; cell: CandyCell; column: number; row: number; win: boolean };
 
 const at = (column: number, row: number) => column * ROWS + row;
 
-/** A board as it first lands: every candy falls in from above. */
-function landed(board: CandyCell[], keyBase: number): Shown[] {
-  return board.map((cell, index) => ({ cell, drop: ROWS, win: false, burst: false, key: keyBase + index }));
+/** Where a piece is drawn: it is one cell big, so 100% moves it one cell. */
+const place = (column: number, row: number, extra = "") => `translate(${column * 100}%, ${row * 100}%)${extra}`;
+
+/** The pieces for a whole board, numbered on from `firstId`. */
+function piecesOf(board: CandyCell[], firstId: number): Piece[] {
+  return board.map((cell, index) => ({ id: firstId + index, cell, column: Math.floor(index / ROWS), row: index % ROWS, win: false }));
 }
 
+/** Easing that speeds up like a falling thing (ease-in quad), so pieces dropping together keep their spacing. */
+const GRAVITY = "cubic-bezier(0.11, 0, 0.5, 0)";
+
 /**
- * The board after a tumble: in each column the candies that stayed fall by as many rows as burst under them,
- * and the new ones fall in from above the board.
+ * A piece falling from row `from` to row `to` in its column, then settling: a quick squash as it lands and a
+ * small give back. The fall's time grows with the square root of the distance, as a real fall's does, so
+ * pieces that start together fall at the same speed and never run into each other.
  */
-function tumbled(previous: Shown[], step: CandyStep, next: CandyCell[], keyBase: number): Shown[] {
-  const gone = new Set(step.wins.flatMap((win) => win.cells));
-  const shown: Shown[] = [];
-  for (let column = 0; column < COLUMNS; column++) {
-    const kept: Shown[] = [];
-    for (let row = 0; row < ROWS; row++) if (!gone.has(at(column, row))) kept.push(previous[at(column, row)]);
-    const fresh = ROWS - kept.length;
-    for (let row = 0; row < ROWS; row++) {
-      if (row < fresh) shown.push({ cell: next[at(column, row)], drop: fresh, win: false, burst: false, key: keyBase + at(column, row) });
-      else {
-        const old = kept[row - fresh];
-        // It was at its old row; now it's `row`. Falls by the difference.
-        const oldRow = previous.indexOf(old) - column * ROWS;
-        shown.push({ ...old, cell: next[at(column, row)], drop: row - oldRow, win: false, burst: false });
-      }
-    }
-  }
-  return shown;
+function fall(column: number, from: number, to: number) {
+  const fallMs = FALL_MS * Math.sqrt(to - from);
+  const duration = fallMs + LAND_MS;
+  const landed = fallMs / duration;
+  const keyframes: Keyframe[] = [
+    { transform: place(column, from), offset: 0, easing: GRAVITY },
+    { transform: place(column, to, " scale(1.05, 0.9)"), offset: landed, easing: "ease-out" },
+    { transform: place(column, to - 0.04, " scale(0.98, 1.03)"), offset: landed + (1 - landed) * 0.45, easing: "ease-in-out" },
+    { transform: place(column, to), offset: 1 },
+  ];
+  return { keyframes, duration };
 }
 
 const quietBoard = (): CandyCell[] => Array.from({ length: COLUMNS * ROWS }, (_, i) => (["PEACH", "GRAPE", "MINT", "LEMON", "ORANGE", "GEM", "MOON", "STAR", "HEART"] as CandyCell[])[(i * 7) % 9]);
@@ -93,7 +109,9 @@ export function CandyGame() {
   const { t, tn } = useI18n();
   const g = useHouseGame<CandyState>("/casino/candy");
   const { ref: cabinet, mode: fullScreen, toggle: toggleFullScreen } = useFullScreen<HTMLElement>();
-  const [shown, setShown] = useState<Shown[]>(() => landed(quietBoard(), 0).map((s) => ({ ...s, drop: 0 })));
+  const [pieces, setPieces] = useState<Piece[]>(() => piecesOf(quietBoard(), 0));
+  /** The pay of each win while its candies glow, shown over the middle of them. */
+  const [pays, setPays] = useState<{ id: number; x: number; y: number; text: string }[]>([]);
   const [message, setMessage] = useState<{ text: string; tone?: "win" | "big" | "free" } | null>(null);
   const [roundWin, setRoundWin] = useState(0);
   const [free, setFree] = useState<{ left: number; won: number } | null>(null);
@@ -110,7 +128,15 @@ export function CandyGame() {
   const [buying, setBuying] = useState<null | "menu" | "BUY" | "SUPER">(null);
   const skip = useRef(false);
   const alive = useRef(true);
-  const keyRef = useRef(1000);
+  const nextId = useRef(1000);
+  const piecesRef = useRef(pieces);
+  /** Each piece's element, by id, to move it. */
+  const nodes = useRef(new Map<number, HTMLElement>());
+  /** The moves under way, so a skip can finish them all at once. */
+  const running = useRef(new Set<Animation>());
+  /** Whoever is waiting for the board to be drawn after a change. */
+  const drawn = useRef<(() => void)[]>([]);
+  const reducedMotion = useRef(false);
   const autoRef = useRef(0);
   autoRef.current = autoLeft;
   /** Space held down: spins follow one another at turbo speed until it's let go. */
@@ -120,6 +146,7 @@ export function CandyGame() {
   useEffect(() => {
     alive.current = true;
     setSoundOn(slotSound.on);
+    reducedMotion.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     return () => {
       alive.current = false;
     };
@@ -127,6 +154,134 @@ export function CandyGame() {
 
   /** Waits (shorter in turbo), unless the Player asked to skip to the end or the page is hidden. */
   const wait = useCallback((ms: number) => (skip.current || document.hidden ? Promise.resolve() : new Promise<void>((resolve) => window.setTimeout(resolve, ms * speed.current))), []);
+
+  // Once a change to the board is on screen (and before it's painted), whoever waited for it carries on.
+  useLayoutEffect(() => {
+    const waiting = drawn.current;
+    drawn.current = [];
+    for (const resolve of waiting) resolve();
+  }, [pieces]);
+
+  /** Puts these pieces on the board and resolves once they're drawn, so they can be moved before anyone sees them. */
+  const draw = useCallback(
+    (next: Piece[]) =>
+      new Promise<void>((resolve) => {
+        piecesRef.current = next;
+        drawn.current.push(resolve);
+        setPieces(next);
+      }),
+    [],
+  );
+
+  /** Moves a piece (shorter in turbo); nothing moves when skipping, with the page hidden, or for reduced motion. */
+  const move = useCallback((id: number, keyframes: Keyframe[], options: { duration: number; delay?: number; fill?: FillMode }): Animation | null => {
+    const node = nodes.current.get(id);
+    if (!node || skip.current || document.hidden || reducedMotion.current || typeof node.animate !== "function") return null;
+    const animation = node.animate(keyframes, { ...options, duration: options.duration * speed.current, delay: (options.delay ?? 0) * speed.current });
+    running.current.add(animation);
+    const done = () => running.current.delete(animation);
+    animation.finished.then(done, done);
+    return animation;
+  }, []);
+
+  /** Resolves once all of these moves are over (or were cut short). */
+  const landedAll = (animations: (Animation | null)[]) =>
+    Promise.all(animations.map((animation) => animation?.finished.then(() => undefined, () => undefined))).then(() => undefined);
+
+  /** A second press: every move under way jumps to its end. */
+  const finishMoves = useCallback(() => {
+    for (const animation of Array.from(running.current)) {
+      try {
+        animation.finish();
+      } catch {
+        animation.cancel();
+      }
+    }
+  }, []);
+
+  /** A new spin: the candies on the board fall out of the bottom and the new board drops in from above, column by column. */
+  const dropIn = useCallback(
+    async (board: CandyCell[]) => {
+      const leaving = piecesRef.current.map((piece) => ({ ...piece, win: false }));
+      const arriving = piecesOf(board, nextId.current);
+      nextId.current += board.length;
+      await draw([...leaving, ...arriving]);
+      const moves: (Animation | null)[] = [];
+      // Bottom row first, then each row above a little later; each column a little after the one before.
+      const delayOf = (piece: Piece) => piece.column * COLUMN_STAGGER_MS + (ROWS - 1 - piece.row) * ROW_STAGGER_MS;
+      for (const piece of leaving) {
+        const out = ROWS + 0.2;
+        moves.push(
+          move(piece.id, [{ transform: place(piece.column, piece.row), easing: GRAVITY }, { transform: place(piece.column, piece.row + out) }], {
+            duration: FALL_MS * Math.sqrt(out),
+            delay: delayOf(piece),
+            fill: "forwards",
+          }),
+        );
+      }
+      for (const piece of arriving) {
+        // The new board starts as a stack just above the board, the whole height of it.
+        const { keyframes, duration } = fall(piece.column, piece.row - ROWS, piece.row);
+        moves.push(move(piece.id, keyframes, { duration, delay: FOLLOW_MS + delayOf(piece), fill: "backwards" }));
+      }
+      await landedAll(moves);
+      await draw(arriving);
+    },
+    [draw, move],
+  );
+
+  /**
+   * A tumble: the winners burst, the candies above them fall straight down their own column into the gaps, in the
+   * same order, and new candies drop in from a stack above the column to fill what's left.
+   */
+  const tumble = useCallback(
+    async (winning: Set<number>, next: CandyCell[]) => {
+      const current = piecesRef.current;
+      // The pop: a quick swell, then gone. The rest stay where they are meanwhile.
+      const pops = current
+        .filter((piece) => winning.has(at(piece.column, piece.row)))
+        .map((piece) =>
+          move(
+            piece.id,
+            [
+              { transform: place(piece.column, piece.row), opacity: 1 },
+              { transform: place(piece.column, piece.row, " scale(1.2)"), opacity: 1, offset: 0.35 },
+              { transform: place(piece.column, piece.row, " scale(0.15)"), opacity: 0 },
+            ],
+            { duration: BURST_MS, fill: "forwards" },
+          ),
+        );
+      await landedAll(pops);
+      if (!alive.current) return;
+      setPays([]);
+      const after: Piece[] = [];
+      const moves: { id: number; column: number; from: number; to: number; delay: number }[] = [];
+      for (let column = 0; column < COLUMNS; column++) {
+        const staying = current.filter((piece) => piece.column === column && !winning.has(at(column, piece.row))).sort((a, b) => a.row - b.row);
+        const fresh = ROWS - staying.length;
+        const delay = column * CASCADE_STAGGER_MS;
+        staying.forEach((piece, index) => {
+          const row = fresh + index;
+          after.push({ ...piece, row, cell: next[at(column, row)], win: false });
+          if (row !== piece.row) moves.push({ id: piece.id, column, from: piece.row, to: row, delay });
+        });
+        for (let row = 0; row < fresh; row++) {
+          const id = nextId.current++;
+          after.push({ id, cell: next[at(column, row)], column, row, win: false });
+          // Stacked above the column in the order they'll land, the lowest just over the top edge.
+          moves.push({ id, column, from: row - fresh, to: row, delay: delay + REFILL_LAG_MS });
+        }
+      }
+      await draw(after.sort((a, b) => a.id - b.id));
+      await landedAll(
+        moves.map((m) => {
+          const { keyframes, duration } = fall(m.column, m.from, m.to);
+          return move(m.id, keyframes, { duration, delay: m.delay, fill: "backwards" });
+        }),
+      );
+    },
+    [draw, move],
+  );
 
   /** Plays a round back from what the API sent: every spin, every tumble. */
   const playBack = useCallback(
@@ -150,31 +305,30 @@ export function CandyGame() {
         }
         setMultiplier(null);
         setMessage(null);
-        keyRef.current += 100;
-        let board = landed(spin.steps[0].board, keyRef.current);
-        setShown(board);
         slotSound.spinStart();
-        await wait(DROP_MS);
+        await dropIn(spin.steps[0].board);
         let spinWin = 0;
         for (let i = 0; i < spin.steps.length && alive.current; i++) {
           const step = spin.steps[i];
           if (step.wins.length === 0) break;
+          await wait(AFTER_LANDING_MS);
           const winning = new Set(step.wins.flatMap((win) => win.cells));
-          board = board.map((cell, index) => ({ ...cell, drop: 0, win: winning.has(index) }));
-          setShown(board);
+          await draw(piecesRef.current.map((piece) => ({ ...piece, win: winning.has(at(piece.column, piece.row)) })));
+          setPays(
+            step.wins.map((win, index) => {
+              const columns = win.cells.map((cell) => Math.floor(cell / ROWS));
+              const rows = win.cells.map((cell) => cell % ROWS);
+              const mean = (list: number[]) => list.reduce((sum, n) => sum + n, 0) / list.length;
+              return { id: nextId.current + index, x: ((mean(columns) + 0.5) / COLUMNS) * 100, y: ((mean(rows) + 0.5) / ROWS) * 100, text: formatMoney(win.pay * bet) };
+            }),
+          );
           const stepPay = step.wins.reduce((sum, win) => sum + win.pay, 0);
           spinWin += stepPay;
           setMessage({ text: step.wins.map((win) => `${win.count} × ${t(CANDY_NAMES[win.symbol])}: ${formatMoney(win.pay * bet)}`).join(" · "), tone: "win" });
           setRoundWin(Math.round((total + spinWin * bet) * 100) / 100);
           slotSound.win(stepPay >= 5);
           await wait(GLOW_MS);
-          board = board.map((cell) => ({ ...cell, burst: cell.win }));
-          setShown(board);
-          await wait(BURST_MS);
-          keyRef.current += 100;
-          board = tumbled(board, step, spin.steps[i + 1].board, keyRef.current);
-          setShown(board);
-          await wait(DROP_MS + SETTLE_MS);
+          await tumble(winning, spin.steps[i + 1].board);
         }
         // A free spin that won: the multipliers on the board add up.
         if (spin.free && spin.multiplier > 1 && spin.tumbleWin > 0) {
@@ -207,7 +361,7 @@ export function CandyGame() {
         setMessage({ text: result.round.capped ? t("Top win! {amount}", { amount: formatMoney(won) }) : times >= 20 ? t("Big win! {amount} ({times}×)", { amount: formatMoney(won), times }) : t("You won {amount}", { amount: formatMoney(won) }), tone: times >= 20 ? "big" : "win" });
       } else setMessage(null);
     },
-    [t, wait],
+    [t, wait, draw, dropIn, tumble],
   );
 
   const costTable = g.state?.game.cost ?? COST;
@@ -221,6 +375,7 @@ export function CandyGame() {
     if (playing) {
       // A second press while it plays: straight to the end.
       skip.current = true;
+      finishMoves();
       return;
     }
     if (mode === spinMode ? problem : costOf(mode) > g.balance + 1e-9) return;
@@ -255,7 +410,7 @@ export function CandyGame() {
     skip.current = false;
     setPlaying(false);
     g.setBusy(false);
-  }, [g, playBack, playing, spinMode, problem, costOf]);
+  }, [g, playBack, playing, spinMode, problem, costOf, finishMoves]);
 
   const spin = useCallback(() => play(spinMode), [play, spinMode]);
 
@@ -402,22 +557,27 @@ export function CandyGame() {
                 </div>
               ) : null}
               <div className={`candy-board${free ? " is-free" : ""}`} role="img" aria-label={t("The board")}>
-                {Array.from({ length: COLUMNS }, (_, column) => (
-                  <div className="candy-column" key={column}>
-                    {Array.from({ length: ROWS }, (_, row) => {
-                      const cell = shown[at(column, row)];
-                      return (
-                        <span
-                          key={cell.key}
-                          className={`candy-cell${cell.win ? " is-win" : ""}${cell.burst ? " is-burst" : ""}${cell.drop > 0 ? " is-dropping" : ""}`}
-                          style={{ "--drop": cell.drop, "--col": column, "--speed": turbo ? TURBO : 1 } as CSSProperties}
-                        >
-                          <CandyIcon cell={cell.cell} />
-                        </span>
-                      );
-                    })}
-                  </div>
-                ))}
+                {/* The pieces sit in one layer clipped to the board: what's above or below it doesn't show. */}
+                <div className="candy-grid" style={{ "--speed": turbo ? TURBO : 1 } as CSSProperties}>
+                  {pieces.map((piece) => (
+                    <span
+                      key={piece.id}
+                      ref={(node) => {
+                        if (node) nodes.current.set(piece.id, node);
+                        else nodes.current.delete(piece.id);
+                      }}
+                      className={`candy-piece${piece.win ? " is-win" : ""}`}
+                      style={{ transform: place(piece.column, piece.row) }}
+                    >
+                      <CandyIcon cell={piece.cell} />
+                    </span>
+                  ))}
+                  {pays.map((pay) => (
+                    <span key={pay.id} className="candy-pay" style={{ left: `${pay.x}%`, top: `${pay.y}%` }}>
+                      {pay.text}
+                    </span>
+                  ))}
+                </div>
                 {multiplier ? (
                   <div className="candy-multiplier-burst" aria-live="polite">
                     ×{multiplier}

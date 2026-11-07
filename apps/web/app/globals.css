@@ -20484,9 +20484,7 @@ button.candy-box:disabled {
 .candy-board {
   --candy-rest: 13.5rem;
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.25rem;
+  display: block;
   width: min(100%, 44rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * 1.2));
   padding: 0.4rem;
   border: 7px solid transparent;
@@ -20503,19 +20501,63 @@ button.candy-box:disabled {
     repeating-linear-gradient(45deg, #ffb01f 0 10px, #fff 10px 20px) border-box;
 }
 
-/* Each column hides what's above it, so new candies appear to drop in from the board's top edge. */
-.candy-column {
-  display: grid;
-  grid-template-rows: repeat(5, auto);
-  gap: 0.25rem;
+/*
+ * The candies: one layer as big as the 6 × 5 board, clipped to it, with every candy a piece of its own placed by a
+ * transform (each piece is one cell, so translate(100%, 0) is one column over). The space between candies is each
+ * piece's padding. A piece's moves are run from the script; transform-origin at the bottom makes a landing squash
+ * down onto the candy beneath.
+ */
+.candy-grid {
+  position: relative;
+  aspect-ratio: 6 / 5;
   overflow: hidden;
   border-radius: 10px;
+  contain: layout paint;
 }
 
-.candy-cell {
-  display: block;
-  aspect-ratio: 1;
-  min-width: 0;
+.candy-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(100% / 6);
+  height: 20%;
+  padding: 0.125rem;
+  transform-origin: 50% 100%;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* The pay of a win, over the middle of its candies while they glow. */
+.candy-pay {
+  position: absolute;
+  z-index: 2;
+  translate: -50% -50%;
+  padding: 0.05rem 0.5rem;
+  color: #fff;
+  font-family: "Arial Black", Arial, sans-serif;
+  font-size: clamp(0.95rem, 4.2cqi, 1.6rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: -2px -2px 0 #b0126b, 2px -2px 0 #b0126b, -2px 2px 0 #b0126b, 2px 2px 0 #b0126b, 0 0 14px rgba(255, 210, 63, 0.9);
+  pointer-events: none;
+  animation: candy-pay calc(700ms * var(--speed, 1)) ease-out both;
+}
+
+@keyframes candy-pay {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  55%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .candy-icon {
@@ -20534,21 +20576,7 @@ button.candy-box:disabled {
   font-weight: 900;
 }
 
-.candy-cell.is-dropping {
-  animation: candy-drop calc(420ms * var(--speed, 1)) cubic-bezier(0.35, 0, 0.55, 1.2) both;
-  animation-delay: calc(var(--col) * 45ms * var(--speed, 1));
-}
-
-@keyframes candy-drop {
-  from {
-    transform: translateY(calc(var(--drop) * -100% - var(--drop) * 0.25rem));
-  }
-  to {
-    transform: none;
-  }
-}
-
-.candy-cell.is-win .candy-icon {
+.candy-piece.is-win .candy-icon {
   animation: candy-glow 650ms ease-in-out infinite alternate;
   filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 12px #ffe14a);
 }
@@ -20559,17 +20587,6 @@ button.candy-box:disabled {
   }
   to {
     transform: scale(1.12);
-  }
-}
-
-.candy-cell.is-burst .candy-icon {
-  animation: candy-burst calc(260ms * var(--speed, 1)) ease-in forwards;
-}
-
-@keyframes candy-burst {
-  to {
-    transform: scale(1.6);
-    opacity: 0;
   }
 }
 
@@ -20921,9 +20938,8 @@ button.candy-box:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .candy-cell.is-dropping,
-  .candy-cell.is-win .candy-icon,
-  .candy-cell.is-burst .candy-icon,
+  .candy-piece.is-win .candy-icon,
+  .candy-pay,
   .candy-multiplier-burst,
   .candy-spin.is-spinning .candy-spin-arrows {
     animation-duration: 1ms;

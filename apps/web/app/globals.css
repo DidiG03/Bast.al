@@ -20006,10 +20006,10 @@ button.cab-field-box:disabled {
   flex-direction: column;
   overflow: hidden;
   border-radius: 16px;
+  /* The candy land picture, with a soft violet shade along the bottom so the bar's lettering stays easy to read. */
   background:
-    radial-gradient(ellipse 30% 22% at 12% 18%, rgba(255, 255, 255, 0.55), transparent 70%),
-    radial-gradient(ellipse 26% 18% at 88% 12%, rgba(255, 255, 255, 0.5), transparent 70%),
-    radial-gradient(ellipse 60% 30% at 50% 108%, rgba(255, 150, 210, 0.9), transparent 70%),
+    linear-gradient(180deg, transparent 62%, rgba(70, 14, 110, 0.35) 100%),
+    url("/casino/candy/background.webp") 50% 55% / cover no-repeat,
     linear-gradient(180deg, #8fd3ff 0%, #c8a8ff 45%, #ff9fd2 100%);
   box-shadow: 0 0 0 4px #2a0b4a, 0 18px 40px rgba(0, 0, 0, 0.45);
   color: #fff;

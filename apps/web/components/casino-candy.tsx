@@ -681,7 +681,7 @@ export function CandyGame() {
                         disabled={costOf("ANTE") > g.balance + 1e-9 && !ante}
                       >
                         <SpecialStars count={1} />
-                        <span className="candy-special-name">{t("Ante Bet 1")}</span>
+                        <span className="candy-special-name">{t("Special Bet")}</span>
                         <strong className="candy-special-price">{formatMoney(costOf("ANTE"))}</strong>
                         <span className="candy-special-blurb">{t("About 2× chance of free spins")}</span>
                       </button>
@@ -693,7 +693,7 @@ export function CandyGame() {
                         title={buyNote ?? undefined}
                       >
                         <SpecialStars count={2} />
-                        <span className="candy-special-name">{t("Ante Bet 2")}</span>
+                        <span className="candy-special-name">{t("Free spins")}</span>
                         <strong className="candy-special-price">{formatMoney(costOf("BUY"))}</strong>
                         <span className="candy-special-blurb">{t("{count} free spins, straight away", { count: state.game.freeSpins })}</span>
                       </button>
@@ -704,25 +704,11 @@ export function CandyGame() {
                         disabled={!!buyNote || costOf("SUPER") > g.balance + 1e-9}
                         title={buyNote ?? undefined}
                       >
-                        <SpecialStars count={3} />
-                        <span className="candy-special-name">{t("Super Spins 1")}</span>
-                        <strong className="candy-special-price">{formatMoney(costOf("SUPER"))}</strong>
-                        <span className="candy-special-blurb">{t("1 multiplier guaranteed to hit every spin")}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="candy-special-option is-super-max"
-                        onClick={() => setBuying("SUPER")}
-                        disabled={!!buyNote || costOf("SUPER") > g.balance + 1e-9}
-                        title={buyNote ?? undefined}
-                      >
-                        <SpecialStars count={5} gold />
-                        <span className="candy-special-name">{t("Super Spins 2")}</span>
+                        <SpecialStars count={3} gold />
+                        <span className="candy-special-name">{t("Super free spins")}</span>
                         <strong className="candy-special-price">{formatMoney(costOf("SUPER"))}</strong>
                         <span className="candy-special-blurb">
-                          {t("1 multiplier guaranteed to hit every spin with minimum {min}×", {
-                            min: (state.game.superMultipliers ?? [5])[0],
-                          })}
+                          {t("{count} free spins, every multiplier candy {min}× or more", { count: state.game.freeSpins, min: (state.game.superMultipliers ?? [5])[0] })}
                         </span>
                       </button>
                     </div>

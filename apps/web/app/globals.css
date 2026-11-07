@@ -20421,10 +20421,6 @@ button.candy-chip:disabled {
 }
 
 .candy-special-option.is-super {
-  background: linear-gradient(180deg, #4a90f0, #2458d0);
-}
-
-.candy-special-option.is-super-max {
   border-color: #ffe14a;
   background: linear-gradient(180deg, #3a6fe0, #1a3cb0 55%, #4a1a9a);
   box-shadow: 0 6px 0 rgba(80, 40, 0, 0.35), 0 0 0 2px rgba(255, 210, 40, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.3);

@@ -940,4 +940,10 @@ export const casino: Record<string, string> = {
   "Bonbon": "Bonbone",
   "Lollipop": "Lëpirëse",
   "The weights don't add up": "Peshat nuk përputhen",
+  "Turbo spin": "Rrotullim i shpejtë",
+  "Hold Space for turbo spin": "Mbaj Space për rrotullim të shpejtë",
+  "Win up to {times}× bet": "Fito deri në {times}× bastin",
+  "Total win": "Fitimi total",
+  "{count} lollipops or more": "{count} lëpirëse ose më shumë",
+  "Spin with the round button, or press Space; press again to skip to the end. Hold Space down for turbo spins, one after another, until you let go. − and + change the bet; Autoplay plays 10 to 100 spins.": "Rrotullo me butonin e rrumbullakët, ose shtyp Space; shtyp sërish për të kaluar në fund. Mbaje Space të shtypur për rrotullime të shpejta, njëri pas tjetrit, derisa ta lëshosh. − dhe + ndryshojnë bastin; Luaj automatikisht luan 10 deri në 100 rrotullime.",
 };

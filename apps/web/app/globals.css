@@ -19994,98 +19994,226 @@ button.cab-field-box:disabled {
 }
 
 /*
- * Candy Cascade: a 6-by-5 board of candies on a pink-and-violet cabinet. Candies fall in from above the board
- * (each column a little after the one before), winners glow and burst, and the rest fall into place.
+ * Candy Cascade: a candy-sky cabinet with a banner on top, the board in a candy-cane frame (a side panel beside
+ * it on a wide screen), and a bar along the bottom: round keys, credit and bet, what's happening, and − / spin / +
+ * with Autoplay under the spin button. Candies fall in from above the board (each column a little after the one
+ * before), winners glow and burst, and the rest fall into place.
  */
-.house-cabinet.is-candy {
-  background: radial-gradient(ellipse at 50% 0%, #ff8fd0 0%, #b24fe6 45%, #4a1fa8 100%);
-}
-
-.house-cabinet.is-candy .house-marquee {
-  background: linear-gradient(180deg, #ff6fb5, #c2185b 60%, #7a0f4a);
-}
-
-.house-cabinet.is-candy .slot-title {
-  color: #fff4a8;
-  text-shadow: 0 2px 0 #7a0f4a, 0 0 12px rgba(255, 210, 63, 0.55);
-}
-
-/* On a phone the long name fits between the way out and the three buttons, cut short with … rather than running under them. */
-.house-cabinet.is-candy .slot-title {
-  max-width: 100%;
-}
-
-@media (max-width: 560px) {
-  .house-cabinet.is-candy .house-marquee {
-    padding-right: 9.4rem;
-  }
-
-  .house-cabinet.is-candy .slot-title {
-    font-size: clamp(1rem, 5.2vw, 1.45rem);
-  }
-}
-
-.house-cabinet.is-candy .dice-readout span {
-  background: rgba(40, 8, 70, 0.45);
-}
-
-.house-cabinet.is-candy .dice-controls {
-  background: rgba(40, 8, 70, 0.35);
-}
-
-.house-cabinet.is-candy .candy-go {
-  background: linear-gradient(180deg, #ffe14a, #ffab1f);
-  color: #5a1a00;
-  box-shadow: 0 4px 0 #b55a00, 0 8px 16px rgba(60, 10, 60, 0.35);
-}
-
-.candy-stage {
+.candy-cabinet {
+  container-type: inline-size;
+  position: relative;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse 30% 22% at 12% 18%, rgba(255, 255, 255, 0.55), transparent 70%),
+    radial-gradient(ellipse 26% 18% at 88% 12%, rgba(255, 255, 255, 0.5), transparent 70%),
+    radial-gradient(ellipse 60% 30% at 50% 108%, rgba(255, 150, 210, 0.9), transparent 70%),
+    linear-gradient(180deg, #8fd3ff 0%, #c8a8ff 45%, #ff9fd2 100%);
+  box-shadow: 0 0 0 4px #2a0b4a, 0 18px 40px rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+.candy-cabinet.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.candy-cabinet:fullscreen {
+  width: 100%;
+  height: 100%;
+}
+
+/* Lettering with a thick violet outline, like candy on a sign. */
+.candy-headline,
+.candy-money dt,
+.candy-money dd,
+.candy-say,
+.candy-side small,
+.candy-side strong,
+.candy-auto-pill {
+  font-family: "Arial Black", "Arial Rounded MT Bold", Arial, sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow:
+    -2px -2px 0 #5a17a8, 2px -2px 0 #5a17a8, -2px 2px 0 #5a17a8, 2px 2px 0 #5a17a8,
+    0 3px 0 #3a0b70, 0 4px 8px rgba(40, 8, 70, 0.45);
+}
+
+.candy-top {
+  position: relative;
+  padding: 0.55rem 3.4rem 0.15rem;
+  text-align: center;
+}
+
+.candy-headline {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1rem, 3.3cqi, 2.1rem);
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+
+.candy-round-key,
+.candy-step,
+.candy-spin {
+  /* Round, whatever the site's buttons are. */
+  --radius-control: 50%;
+  border-radius: 50%;
+}
+
+.candy-round-key {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  background: rgba(58, 14, 100, 0.6);
+  color: #fff;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.15rem;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(40, 8, 70, 0.4);
+}
+
+.candy-round-key svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.candy-exit {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.6rem;
+  font-family: inherit;
+  font-size: 1.6rem;
+  font-style: normal;
+}
+
+.candy-middle {
+  display: grid;
   flex: 1;
+  grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  min-height: 0;
+  padding: 0.35rem 1.1rem;
+}
+
+/* The side panel: a pink candy plate with white icing. */
+.candy-side {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.2rem;
+  min-height: 11rem;
+  padding: 1rem 0.7rem;
+  border: 5px solid #fff;
+  border-radius: 24px;
+  background: radial-gradient(circle at 50% 30%, #ffc2e3, #ff6fb5 60%, #d43d93);
+  box-shadow: 0 0 0 3px #ff6fb5, 0 10px 22px rgba(90, 20, 120, 0.4), inset 0 -6px 0 rgba(160, 20, 90, 0.35);
+  text-align: center;
+}
+
+.candy-side.is-free {
+  background: radial-gradient(circle at 50% 30%, #fff2a8, #ffb01f 60%, #e2601f);
+  box-shadow: 0 0 0 3px #ffb01f, 0 0 26px rgba(255, 210, 63, 0.75), inset 0 -6px 0 rgba(160, 60, 0, 0.35);
+}
+
+.candy-side small {
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.candy-side strong {
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+.candy-side .candy-side-big {
+  color: #ffe14a;
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.candy-side .candy-side-big.is-money {
+  font-size: clamp(1.1rem, 2.4cqi, 1.6rem);
+}
+
+.candy-side-note {
+  max-width: 9rem;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.candy-board-wrap {
+  display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
+  gap: 0.35rem;
   min-height: 0;
 }
 
-.candy-banner {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.25rem 0.9rem;
-  min-height: 2rem;
-  padding: 0.35rem 1rem;
+.candy-phone-win {
+  display: none;
+  padding: 0.2rem 1rem;
+  border: 2px solid #fff;
   border-radius: 999px;
-  background: rgba(40, 8, 70, 0.5);
+  background: linear-gradient(90deg, #ff6fb5, #b24fe6);
   color: #fff;
-  font-weight: 800;
+  font-family: "Arial Black", Arial, sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 4px 10px rgba(90, 20, 120, 0.35);
+}
+
+.candy-phone-win span {
+  color: #ffe14a;
+}
+
+.candy-free-strip {
+  padding: 0.2rem 0.9rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffb01f, #ff3d7f);
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
 }
 
-.candy-banner.is-free {
-  background: linear-gradient(90deg, #ffb01f, #ff3d7f);
-  box-shadow: 0 0 0 2px #fff4a8, 0 0 18px rgba(255, 210, 63, 0.6);
-}
-
-/* The board: as wide as the cabinet allows, and no taller than the game's height leaves for it (6 by 5 cells). */
+/* The board in a candy-cane frame: as wide as the cabinet allows, and no taller than the game's height leaves for it. */
 .candy-board {
-  --candy-rest: 16.5rem;
+  --candy-rest: 13.5rem;
   position: relative;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.25rem;
-  width: min(100%, 40rem, max(16rem, (var(--game-h, 100dvh) - var(--candy-rest)) * 1.2));
+  width: min(100%, 44rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * 1.2));
   padding: 0.4rem;
-  border: 3px solid rgba(255, 255, 255, 0.55);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.12));
-  box-shadow: inset 0 0 24px rgba(80, 10, 120, 0.35), 0 10px 26px rgba(40, 8, 70, 0.35);
+  border: 7px solid transparent;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, #eef8ff, #ffe6f5) padding-box,
+    repeating-linear-gradient(45deg, #ff5fa8 0 10px, #fff 10px 20px) border-box;
+  box-shadow: 0 12px 28px rgba(60, 10, 100, 0.35), inset 0 0 22px rgba(255, 255, 255, 0.6);
 }
 
 .candy-board.is-free {
-  border-color: #ffd23f;
-  box-shadow: inset 0 0 24px rgba(255, 180, 30, 0.35), 0 0 0 3px rgba(255, 61, 127, 0.5), 0 10px 26px rgba(40, 8, 70, 0.35);
+  background:
+    linear-gradient(180deg, #fff8dc, #ffe2be) padding-box,
+    repeating-linear-gradient(45deg, #ffb01f 0 10px, #fff 10px 20px) border-box;
 }
 
 /* Each column hides what's above it, so new candies appear to drop in from the board's top edge. */
@@ -20120,8 +20248,8 @@ button.cab-field-box:disabled {
 }
 
 .candy-cell.is-dropping {
-  animation: candy-drop 420ms cubic-bezier(0.35, 0, 0.55, 1.2) both;
-  animation-delay: calc(var(--col) * 45ms);
+  animation: candy-drop calc(420ms * var(--speed, 1)) cubic-bezier(0.35, 0, 0.55, 1.2) both;
+  animation-delay: calc(var(--col) * 45ms * var(--speed, 1));
 }
 
 @keyframes candy-drop {
@@ -20148,7 +20276,7 @@ button.cab-field-box:disabled {
 }
 
 .candy-cell.is-burst .candy-icon {
-  animation: candy-burst 260ms ease-in forwards;
+  animation: candy-burst calc(260ms * var(--speed, 1)) ease-in forwards;
 }
 
 @keyframes candy-burst {
@@ -20163,11 +20291,11 @@ button.cab-field-box:disabled {
   inset: 0;
   display: grid;
   place-items: center;
-  color: #fff4a8;
+  color: #ffe14a;
   font-family: "Arial Black", Arial, sans-serif;
-  font-size: clamp(2.6rem, 10cqi, 5rem);
+  font-size: clamp(2.6rem, 10cqi, 5.5rem);
   font-weight: 900;
-  text-shadow: 0 4px 0 #b0126b, 0 0 24px rgba(255, 210, 63, 0.9);
+  text-shadow: -3px -3px 0 #b0126b, 3px -3px 0 #b0126b, -3px 3px 0 #b0126b, 3px 3px 0 #b0126b, 0 0 24px rgba(255, 210, 63, 0.9);
   pointer-events: none;
   animation: candy-pop 1100ms ease-out both;
 }
@@ -20191,49 +20319,272 @@ button.cab-field-box:disabled {
   }
 }
 
-.candy-message {
-  min-height: 1.6rem;
+/* The bar along the bottom. */
+.candy-bar {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "keys money say spin";
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.35rem 1.1rem 0.7rem;
+}
+
+.candy-keys {
+  grid-area: keys;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.candy-money {
+  grid-area: money;
+  display: grid;
+  gap: 0.05rem;
+  margin: 0;
+}
+
+.candy-money div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.candy-money dt {
+  min-width: 4.6rem;
+  color: #ffd23f;
+  font-size: 1.05rem;
+  text-align: right;
+}
+
+.candy-money dd {
   margin: 0;
   color: #fff;
-  text-align: center;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.candy-message.is-big {
-  color: #fff4a8;
-  font-size: 1.15rem;
-  text-shadow: 0 2px 0 #b0126b;
-}
-
-.candy-message.is-free {
-  color: #ffe14a;
-  font-size: 1.15rem;
-}
-
-.candy-auto-row {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.candy-auto-row select {
-  flex: 1;
-  min-height: 44px;
-  padding: 0.2rem 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.3);
+.candy-say {
+  grid-area: say;
+  min-width: 0;
+  margin: 0;
   color: #fff;
-  font: inherit;
-  font-weight: 700;
+  font-size: clamp(0.8rem, 1.7cqi, 1.3rem);
+  line-height: 1.15;
+  text-align: center;
+  text-wrap: balance;
 }
 
-.candy-auto-row button {
-  flex: 1;
-  min-height: 44px;
+.candy-say.is-win {
+  color: #ffe14a;
 }
 
-.candy-auto-stop {
+.candy-say.is-big,
+.candy-say.is-free {
+  color: #ffe14a;
+  font-size: clamp(1rem, 2.6cqi, 1.8rem);
+}
+
+.candy-spin-group {
+  grid-area: spin;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.candy-step {
+  display: grid;
+  place-items: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  min-width: 0;
+  padding: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: rgba(58, 14, 100, 0.55);
+  color: #fff;
+  font-size: 1.9rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 3px 8px rgba(40, 8, 70, 0.4);
+}
+
+.candy-step:disabled {
+  opacity: 0.45;
+}
+
+.candy-spin-stack {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+
+.candy-spin {
+  display: grid;
+  place-items: center;
+  width: 5.8rem;
+  height: 5.8rem;
+  min-width: 0;
+  padding: 0;
+  border: 5px solid #fff;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #7a4ad6, #3a1580 65%, #24094f);
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(90, 23, 168, 0.6), 0 8px 18px rgba(40, 8, 70, 0.5), inset 0 -6px 0 rgba(0, 0, 0, 0.25);
+  touch-action: manipulation;
+}
+
+.candy-spin:hover:not(:disabled) {
+  background: radial-gradient(circle at 50% 35%, #8f5df0, #4a1ea0 65%, #2c0b60);
+}
+
+.candy-spin:disabled {
+  opacity: 0.5;
+}
+
+.candy-spin-arrows {
+  width: 58%;
+  height: 58%;
+}
+
+.candy-spin.is-spinning .candy-spin-arrows {
+  animation: candy-spin-turn 700ms linear infinite;
+}
+
+@keyframes candy-spin-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.candy-auto-pill {
+  position: relative;
+  z-index: 1;
+  margin-top: -0.75rem;
+  min-height: 0;
+  padding: 0.2rem 0.95rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #2a0b4a;
+  color: #fff;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: none;
+}
+
+.candy-auto-pill.is-on {
   border-color: #ffd23f;
   color: #ffd23f;
+}
+
+.candy-auto-menu {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  border: 2px solid #fff;
+  border-radius: 14px;
+  background: #2a0b4a;
+  transform: translateX(-50%);
+  box-shadow: 0 10px 22px rgba(20, 4, 40, 0.5);
+}
+
+.candy-auto-menu button {
+  min-width: 2.8rem;
+  min-height: 2.6rem;
+  padding: 0 0.4rem;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 10px;
+  background: #5a17a8;
+  color: #fff;
+  font-weight: 900;
+}
+
+/* Only a computer has a Space bar to hold. */
+.candy-hint {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .candy-hint {
+    display: inline;
+  }
+}
+
+/* A narrower cabinet (a phone, a small window): no side panel, and the bar stacks: what's happening on top, then the money and the keys beside the spin button. */
+@container (max-width: 720px) {
+  .candy-middle {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.3rem 0.55rem;
+  }
+
+  .candy-side {
+    display: none;
+  }
+
+  .candy-board {
+    --candy-rest: 17rem;
+    border-width: 5px;
+    padding: 0.3rem;
+  }
+
+  .candy-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "say say"
+      "spin spin"
+      "money keys";
+    gap: 0.45rem 0.6rem;
+    padding: 0.2rem 0.7rem 0.7rem;
+  }
+
+  .candy-spin-group {
+    justify-content: center;
+    gap: 1.4rem;
+  }
+
+  /* What this spin has won, over the board (the side panel's job on a wide screen). */
+  .candy-phone-win {
+    display: block;
+  }
+
+  .candy-say {
+    min-height: 1.4rem;
+    font-size: clamp(0.85rem, 4.2cqi, 1.2rem);
+  }
+
+  .candy-money dt {
+    min-width: 0;
+    font-size: 0.85rem;
+    text-align: left;
+  }
+
+  .candy-money dd {
+    font-size: 0.95rem;
+  }
+
+  .candy-keys .candy-round-key {
+    width: 2.3rem;
+    height: 2.3rem;
+  }
+
+  .candy-step {
+    width: 2.6rem;
+    height: 2.6rem;
+    font-size: 1.6rem;
+  }
+
+  .candy-spin {
+    width: 4.9rem;
+    height: 4.9rem;
+  }
+
+  .candy-spin-group {
+    gap: 0.45rem;
+  }
 }
 
 /* The rules: a pay table with each candy's picture. */
@@ -20278,7 +20629,8 @@ button.cab-field-box:disabled {
   .candy-cell.is-dropping,
   .candy-cell.is-win .candy-icon,
   .candy-cell.is-burst .candy-icon,
-  .candy-multiplier-burst {
+  .candy-multiplier-burst,
+  .candy-spin.is-spinning .candy-spin-arrows {
     animation-duration: 1ms;
   }
 }

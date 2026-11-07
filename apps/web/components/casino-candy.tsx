@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CANDY_NAMES, CandyDefs, CandyIcon } from "./candy-symbols";
-import { HouseCabinet, HouseHistory, HousePage, RulesSheet, StakeChips, useHouseGame } from "./house-game";
+import { HouseHistory, HousePage, RulesSheet, useHouseGame } from "./house-game";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { slotSound } from "./slot-sounds";
 import { useCasinoSession } from "./use-casino-session";
+import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import type { CandyCell, CandyPaying, CandyRecord, CandySpinResult, CandyState, CandyStep } from "../lib/api";
 import { formatMoney } from "../lib/format";
 
@@ -19,6 +21,8 @@ const BURST_MS = 260;
 const SETTLE_MS = 180;
 const MULTIPLIER_MS = 1100;
 const BETWEEN_FREE_MS = 450;
+/** Turbo (Space held): every pause this much shorter. */
+const TURBO = 0.35;
 const AUTO_COUNTS = [10, 25, 50, 100] as const;
 
 /** A cell as the board shows it: its candy, how many rows it falls from, and whether it's in a win or bursting. */
@@ -57,11 +61,24 @@ function tumbled(previous: Shown[], step: CandyStep, next: CandyCell[], keyBase:
 
 const quietBoard = (): CandyCell[] => Array.from({ length: COLUMNS * ROWS }, (_, i) => (["PEACH", "GRAPE", "MINT", "LEMON", "ORANGE", "GEM", "MOON", "STAR", "HEART"] as CandyCell[])[(i * 7) % 9]);
 
+/** The round arrows on the spin button. */
+function SpinArrows() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true" className="candy-spin-arrows">
+      <path d="M38 20a15 15 0 0 0-27-6" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+      <path d="M8 7v9h9" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 28a15 15 0 0 0 27 6" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+      <path d="M40 41v-9h-9" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** Candy Cascade for a Player: 8 or more of a candy anywhere pay, winners burst and new candies tumble in. */
 export function CandyGame() {
   useCasinoSession("candy", "Candy Cascade");
   const { t, tn } = useI18n();
   const g = useHouseGame<CandyState>("/casino/candy");
+  const { ref: cabinet, mode: fullScreen, toggle: toggleFullScreen } = useFullScreen<HTMLElement>();
   const [shown, setShown] = useState<Shown[]>(() => landed(quietBoard(), 0).map((s) => ({ ...s, drop: 0 })));
   const [message, setMessage] = useState<{ text: string; tone?: "win" | "big" | "free" } | null>(null);
   const [roundWin, setRoundWin] = useState(0);
@@ -70,22 +87,28 @@ export function CandyGame() {
   const [playing, setPlaying] = useState(false);
   const [rules, setRules] = useState(false);
   const [autoLeft, setAutoLeft] = useState(0);
-  const [autoCount, setAutoCount] = useState<number>(AUTO_COUNTS[0]);
+  const [autoMenu, setAutoMenu] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const [turbo, setTurbo] = useState(false);
   const skip = useRef(false);
   const alive = useRef(true);
   const keyRef = useRef(1000);
   const autoRef = useRef(0);
   autoRef.current = autoLeft;
+  /** Space held down: spins follow one another at turbo speed until it's let go. */
+  const held = useRef(false);
+  const speed = useRef(1);
 
   useEffect(() => {
     alive.current = true;
+    setSoundOn(slotSound.on);
     return () => {
       alive.current = false;
     };
   }, []);
 
-  /** Waits, unless the Player asked to skip to the end or the page is hidden. */
-  const wait = useCallback((ms: number) => (skip.current || document.hidden ? Promise.resolve() : new Promise<void>((resolve) => window.setTimeout(resolve, ms))), []);
+  /** Waits (shorter in turbo), unless the Player asked to skip to the end or the page is hidden. */
+  const wait = useCallback((ms: number) => (skip.current || document.hidden ? Promise.resolve() : new Promise<void>((resolve) => window.setTimeout(resolve, ms * speed.current))), []);
 
   /** Plays a round back from what the API sent: every spin, every tumble. */
   const playBack = useCallback(
@@ -158,7 +181,7 @@ export function CandyGame() {
       if (won > 0) {
         const times = Math.round((won / bet) * 100) / 100;
         setMessage({ text: result.round.capped ? t("Top win! {amount}", { amount: formatMoney(won) }) : times >= 20 ? t("Big win! {amount} ({times}×)", { amount: formatMoney(won), times }) : t("You won {amount}", { amount: formatMoney(won) }), tone: times >= 20 ? "big" : "win" });
-      } else setMessage({ text: t("No win this time"), tone: undefined });
+      } else setMessage(null);
     },
     [t, wait],
   );
@@ -171,6 +194,7 @@ export function CandyGame() {
       return;
     }
     skip.current = false;
+    setAutoMenu(false);
     setPlaying(true);
     g.setBusy(true);
     slotSound.unlock();
@@ -182,6 +206,7 @@ export function CandyGame() {
       setPlaying(false);
       g.setBusy(false);
       setAutoLeft(0);
+      held.current = false;
       return;
     }
     g.setBalance(Math.round((g.balance - bet) * 100) / 100);
@@ -199,39 +224,72 @@ export function CandyGame() {
     g.setBusy(false);
   }, [g, playBack, playing]);
 
-  // Autoplay: the next spin once one ends, while spins are left.
+  // Autoplay, and Space held down: the next spin once one ends.
   useEffect(() => {
-    if (playing || autoLeft <= 0 || !g.state) return;
+    if (playing || !g.state) return;
+    if (autoLeft <= 0 && !held.current) return;
     if (g.stakeProblem) {
       setAutoLeft(0);
+      held.current = false;
       return;
     }
-    const timer = window.setTimeout(() => {
-      if (autoRef.current <= 0) return;
-      setAutoLeft((left) => left - 1);
-      void spin();
-    }, 500);
+    const timer = window.setTimeout(
+      () => {
+        if (autoRef.current > 0) setAutoLeft((left) => left - 1);
+        else if (!held.current) return;
+        void spin();
+      },
+      held.current ? 120 : 500,
+    );
     return () => window.clearTimeout(timer);
-  }, [playing, autoLeft, g.state, g.stakeProblem, spin]);
+  }, [playing, autoLeft, g.state, g.stakeProblem, spin, turbo]);
 
-  // Space spins (or skips to the end), on a computer.
+  // Space: a press spins (or skips to the end); held down, it keeps spinning in turbo until it's let go.
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.code !== "Space" || event.repeat) return;
-      const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName)) return;
+    const typing = (target: EventTarget | null) => {
+      const el = target as HTMLElement | null;
+      return !!el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
+    };
+    const down = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || typing(event.target)) return;
       event.preventDefault();
+      if (event.repeat) {
+        if (!held.current) {
+          held.current = true;
+          speed.current = TURBO;
+          setTurbo(true);
+        }
+        return;
+      }
       void spin();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const up = (event: KeyboardEvent) => {
+      if (event.code !== "Space") return;
+      held.current = false;
+      speed.current = 1;
+      setTurbo(false);
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
   }, [spin]);
 
   const state = g.state;
   const payRows = useMemo(() => (state ? state.game.paying.map((symbol) => [symbol, state.game.pays[symbol]] as [CandyPaying, [number, number, number]]) : []), [state]);
+  const allowed = useMemo(() => (state ? state.game.bets.filter((value) => value <= state.tableMax) : []), [state]);
 
   if (!state) return <PageLoading label="Loading the Casino" />;
-  const busy = playing;
+  const stakeIndex = allowed.indexOf(g.stake);
+  const stepStake = (by: number) => {
+    const next = allowed[stakeIndex + by];
+    if (next === undefined || playing || autoLeft > 0) return;
+    g.setStake(next);
+    slotSound.click();
+  };
+  const hint = turbo ? t("Turbo spin") : t("Hold Space for turbo spin");
 
   return (
     <HousePage
@@ -240,25 +298,48 @@ export function CandyGame() {
       closed={state.closed}
       onRules={() => setRules(true)}
       cabinet={
-        <HouseCabinet
-          game="candy"
-          title="Candy Cascade"
-          balance={g.balance}
-          visit={g.visit}
-          onRules={() => setRules(true)}
-          stage={
-            <div className="candy-stage">
-              <CandyDefs />
-              <div className={`candy-banner${free ? " is-free" : ""}`} aria-live="polite">
-                {free ? (
-                  <>
-                    <strong>{tn(free.left, "{count} free spin left", "{count} free spins left")}</strong>
-                    <span>{t("Free spins win: {amount}", { amount: formatMoney(free.won) })}</span>
-                  </>
-                ) : (
-                  <span>{t("Win: {amount}", { amount: formatMoney(roundWin) })}</span>
-                )}
-              </div>
+        <section ref={cabinet} className={`candy-cabinet${fullScreen !== "off" ? " is-full" : ""}${free ? " is-free" : ""}`} aria-label="Candy Cascade">
+          <CandyDefs />
+          <header className="candy-top">
+            <Link className="candy-round-key candy-exit" href="/dashboard/casino" aria-label={t("Leave the game")}>
+              ‹
+            </Link>
+            <p className="candy-headline">
+              {t("Win up to {times}× bet", { times: state.game.maxWin.toLocaleString() })}
+            </p>
+          </header>
+
+          <div className="candy-middle">
+            {/* Beside the board on a wide screen: the free spins, and what this spin has won. */}
+            <aside className={`candy-side${free ? " is-free" : ""}`} aria-live="polite">
+              {free ? (
+                <>
+                  <small>{t("Free spins")}</small>
+                  <strong className="candy-side-big">{free.left}</strong>
+                  <small>{t("Total win")}</small>
+                  <strong>{formatMoney(free.won)}</strong>
+                </>
+              ) : (
+                <>
+                  <small>{t("Win")}</small>
+                  <strong className="candy-side-big is-money">{formatMoney(roundWin)}</strong>
+                  <small>{t("Free spins")}</small>
+                  <span className="candy-side-note">{t("{count} lollipops or more", { count: state.game.scattersForFree })}</span>
+                </>
+              )}
+            </aside>
+
+            <div className="candy-board-wrap">
+              {!free ? (
+                <div className="candy-phone-win" aria-hidden="true">
+                  {t("Win")} <span>{formatMoney(roundWin)}</span>
+                </div>
+              ) : null}
+              {free ? (
+                <div className="candy-free-strip" aria-hidden="true">
+                  {tn(free.left, "{count} free spin left", "{count} free spins left")} · {formatMoney(free.won)}
+                </div>
+              ) : null}
               <div className={`candy-board${free ? " is-free" : ""}`} role="img" aria-label={t("The board")}>
                 {Array.from({ length: COLUMNS }, (_, column) => (
                   <div className="candy-column" key={column}>
@@ -268,7 +349,7 @@ export function CandyGame() {
                         <span
                           key={cell.key}
                           className={`candy-cell${cell.win ? " is-win" : ""}${cell.burst ? " is-burst" : ""}${cell.drop > 0 ? " is-dropping" : ""}`}
-                          style={{ "--drop": cell.drop, "--col": column } as CSSProperties}
+                          style={{ "--drop": cell.drop, "--col": column, "--speed": turbo ? TURBO : 1 } as CSSProperties}
                         >
                           <CandyIcon cell={cell.cell} />
                         </span>
@@ -282,43 +363,89 @@ export function CandyGame() {
                   </div>
                 ) : null}
               </div>
-              <p className={`house-result candy-message${message?.tone ? ` is-${message.tone}` : ""}`} aria-live="polite">
-                {message ? message.text : t("Pick a stake, then spin.")}
-              </p>
             </div>
-          }
-          controls={
-            <>
-              <button type="button" className="dice-go candy-go" disabled={!!g.stakeProblem && !playing} onClick={() => void spin()}>
-                {playing ? t("Skip") : t("Spin {amount}", { amount: formatMoney(g.stake) })}
+          </div>
+
+          <footer className="candy-bar">
+            <div className="candy-keys">
+              <button type="button" className="candy-round-key" onClick={() => setRules(true)} aria-label={t("Pays and rules")} title={t("Pays and rules")}>
+                i
               </button>
-              {g.stakeProblem ? <p className="dice-problem">{g.stakeProblem}</p> : null}
-              <StakeChips bets={state.game.bets} tableMax={state.tableMax} stake={g.stake} onStake={g.setStake} disabled={busy || autoLeft > 0} />
-              <div className="dice-field candy-auto">
-                <small>{t("Autoplay")}</small>
-                <div className="candy-auto-row">
-                  <select value={autoCount} onChange={(event) => setAutoCount(Number(event.target.value))} disabled={autoLeft > 0} aria-label={t("Spins to play")}>
-                    {AUTO_COUNTS.map((count) => (
-                      <option key={count} value={count}>
-                        {tn(count, "{count} spin", "{count} spins")}
-                      </option>
-                    ))}
-                  </select>
-                  {autoLeft > 0 ? (
-                    <button type="button" className="secondary candy-auto-stop" onClick={() => setAutoLeft(0)}>
-                      {t("Stop ({count} left)", { count: autoLeft })}
-                    </button>
-                  ) : (
-                    <button type="button" className="secondary" disabled={busy || !!g.stakeProblem} onClick={() => setAutoLeft(autoCount)}>
-                      {t("Start autoplay")}
-                    </button>
-                  )}
-                </div>
+              <button
+                type="button"
+                className="candy-round-key"
+                aria-pressed={soundOn}
+                aria-label={soundOn ? t("Sound on. Tap to turn it off.") : t("Sound off. Tap to turn it on.")}
+                title={soundOn ? t("Sound on. Tap to turn it off.") : t("Sound off. Tap to turn it on.")}
+                onClick={() => {
+                  slotSound.setOn(!soundOn);
+                  setSoundOn(!soundOn);
+                  if (!soundOn) slotSound.click();
+                }}
+              >
+                <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
+              </button>
+              <button type="button" className="candy-round-key" onClick={() => void toggleFullScreen()} aria-label={fullScreen === "off" ? t("Full screen") : t("Exit full screen")} title={fullScreen === "off" ? t("Full screen") : t("Exit full screen")}>
+                <FullScreenIcon exit={fullScreen !== "off"} />
+              </button>
+            </div>
+
+            <dl className="candy-money">
+              <div>
+                <dt>{t("Credit")}</dt>
+                <dd>{formatMoney(g.balance)}</dd>
               </div>
-              <p className="game-keys-hint candy-keys">{t("Press Space to spin, and again to skip to the end.")}</p>
-            </>
-          }
-        />
+              <div>
+                <dt>{t("Bet")}</dt>
+                <dd>{formatMoney(g.stake)}</dd>
+              </div>
+            </dl>
+
+            <p className={`candy-say${message?.tone ? ` is-${message.tone}` : ""}`} aria-live="polite">
+              {g.stakeProblem ? g.stakeProblem : message ? message.text : <span className="candy-hint">{hint}</span>}
+            </p>
+
+            <div className="candy-spin-group">
+              <button type="button" className="candy-step" onClick={() => stepStake(-1)} disabled={playing || autoLeft > 0 || stakeIndex <= 0} aria-label={t("Lower the bet")}>
+                −
+              </button>
+              <div className="candy-spin-stack">
+                <button type="button" className={`candy-spin${playing ? " is-spinning" : ""}`} disabled={!!g.stakeProblem && !playing} onClick={() => void spin()} aria-label={playing ? t("Skip") : t("Spin {amount}", { amount: formatMoney(g.stake) })}>
+                  <SpinArrows />
+                </button>
+                {autoLeft > 0 ? (
+                  <button type="button" className="candy-auto-pill is-on" onClick={() => setAutoLeft(0)}>
+                    {t("Stop ({count} left)", { count: autoLeft })}
+                  </button>
+                ) : (
+                  <button type="button" className="candy-auto-pill" disabled={playing || !!g.stakeProblem} aria-expanded={autoMenu} onClick={() => setAutoMenu((open) => !open)}>
+                    {t("Autoplay")}
+                  </button>
+                )}
+                {autoMenu && autoLeft === 0 ? (
+                  <div className="candy-auto-menu" role="menu" aria-label={t("Spins to play")}>
+                    {AUTO_COUNTS.map((count) => (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        key={count}
+                        onClick={() => {
+                          setAutoMenu(false);
+                          setAutoLeft(count);
+                        }}
+                      >
+                        {count}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <button type="button" className="candy-step" onClick={() => stepStake(1)} disabled={playing || autoLeft > 0 || stakeIndex >= allowed.length - 1} aria-label={t("Raise the bet")}>
+                +
+              </button>
+            </div>
+          </footer>
+        </section>
       }
       history={
         <HouseHistory<CandyRecord>
@@ -378,6 +505,7 @@ export function CandyGame() {
                 })}
               </span>
             </p>
+            <p>{t("Spin with the round button, or press Space; press again to skip to the end. Hold Space down for turbo spins, one after another, until you let go. − and + change the bet; Autoplay plays 10 to 100 spins.")}</p>
             <p>{t("A spin, with every free spin it gives, pays at most {times} times the stake. The free spins play out with the spin that gave them, so a spin is settled at once, even if you leave.", { times: state.game.maxWin.toLocaleString() })}</p>
           </RulesSheet>
         ) : null

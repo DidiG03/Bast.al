@@ -171,7 +171,7 @@ test("what a round pays is rounded down to the cent, and the record is in times 
   assert.equal(rec.spins[0].steps[0].board.length, Candy.CELLS);
 });
 
-test("it pays back about 84.9% over many rounds", () => {
+test("it pays back about 84.7% over many rounds", () => {
   const draw = seeded(2026);
   const rounds = 400_000;
   let paid = 0;

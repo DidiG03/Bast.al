@@ -29,7 +29,7 @@ export const CELLS = COLUMNS * ROWS;
 /** What a spin can cost, in ALL, like every Casino game. The Player's max stake applies too. */
 export const BETS = [50, 100, 250, 500, 1000, 2500] as const;
 /** What spins pay back on average, in percent of what they cost, as measured by scripts/candy-rtp.mjs. */
-export const PAYOUT_RATE = 84.9;
+export const PAYOUT_RATE = 84.7;
 /** The fewest of one candy that pay. */
 export const MIN_COUNT = 8;
 export const FREE_SPINS = 10;

@@ -114,6 +114,7 @@ const GAME_OF_KIND: Record<CasinoPlayKind, LastGame["game"]> = {
   HILO: "hilo",
   TOWER: "tower",
   CRASH: "crash",
+  CANDY: "candy",
 };
 
 export type LastGame = {
@@ -542,11 +543,11 @@ export class CasinoService {
       WHERE ${scope} AND s.created_at >= ${period.from} AND s.created_at < ${period.to}
       GROUP BY s.player_id, u.username
     `;
-    // Money Wheel, Baccarat, Hi-Lo, Tower and Crash, per Player and game.
+    // Money Wheel, Baccarat, Hi-Lo, Tower, Crash and Candy Cascade, per Player and game.
     const houseRows = await this.prisma.$queryRaw<Array<{ player_id: string; kind: string; rounds: bigint; staked: Prisma.Decimal | null; won: Prisma.Decimal | null }>>`
       SELECT s.player_id, s.kind::text AS kind, COUNT(*) AS rounds, SUM(s.stake) AS staked, SUM(s.win) AS won
       FROM casino_spins s
-      WHERE ${scope} AND s.created_at >= ${period.from} AND s.created_at < ${period.to} AND s.kind::text IN ('WHEEL', 'BACCARAT', 'HILO', 'TOWER', 'CRASH')
+      WHERE ${scope} AND s.created_at >= ${period.from} AND s.created_at < ${period.to} AND s.kind::text IN ('WHEEL', 'BACCARAT', 'HILO', 'TOWER', 'CRASH', 'CANDY')
       GROUP BY s.player_id, s.kind
     `;
     const gameOfKind = Object.fromEntries(Object.entries(HOUSE_KINDS).map(([game, kind]) => [kind, game as HouseGame]));

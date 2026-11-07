@@ -15,17 +15,18 @@ type Tx = Prisma.TransactionClient;
 type Team = { ownerId: string | null; managerId: string | null; ownerRate: Prisma.Decimal; managerRate: Prisma.Decimal };
 
 /** The games played through here, with their round kind and how the day's ledger line counts them. */
-export type HouseGame = Extract<CasinoGame, "wheel" | "baccarat" | "hilo" | "tower" | "crash">;
-export const HOUSE_GAMES: readonly HouseGame[] = ["crash", "baccarat", "hilo", "wheel", "tower"];
-export const HOUSE_KINDS: Record<HouseGame, CasinoPlayKind> = { wheel: "WHEEL", baccarat: "BACCARAT", hilo: "HILO", tower: "TOWER", crash: "CRASH" };
+export type HouseGame = Extract<CasinoGame, "wheel" | "baccarat" | "hilo" | "tower" | "crash" | "candy">;
+export const HOUSE_GAMES: readonly HouseGame[] = ["crash", "baccarat", "hilo", "wheel", "tower", "candy"];
+export const HOUSE_KINDS: Record<HouseGame, CasinoPlayKind> = { wheel: "WHEEL", baccarat: "BACCARAT", hilo: "HILO", tower: "TOWER", crash: "CRASH", candy: "CANDY" };
 const LEDGER_NAMES: Record<HouseGame, { name: string; one: string; many: string }> = {
   wheel: { name: "Money Wheel", one: "spin", many: "spins" },
   baccarat: { name: "Baccarat", one: "hand", many: "hands" },
   hilo: { name: "Hi-Lo", one: "round", many: "rounds" },
   tower: { name: "Tower", one: "climb", many: "climbs" },
   crash: { name: "Crash", one: "round", many: "rounds" },
+  candy: { name: "Candy Cascade", one: "spin", many: "spins" },
 };
-const NAMES: Record<HouseGame, string> = { wheel: "Money Wheel", baccarat: "Baccarat", hilo: "Hi-Lo", tower: "Tower", crash: "Crash" };
+const NAMES: Record<HouseGame, string> = { wheel: "Money Wheel", baccarat: "Baccarat", hilo: "Hi-Lo", tower: "Tower", crash: "Crash", candy: "Candy Cascade" };
 
 /** Each game has its own line per Player per day in their balance ledger. */
 export const houseLedgerLineId = (game: HouseGame, playerId: string, at: Date) => `${game}_${playerId}_${dayKey(at)}`;
@@ -42,7 +43,7 @@ export type StepResult<S> = { state: S; over: boolean; payoutCents: number };
 export type IdleSettle<S> = (state: S, now: number) => { state: S; payoutCents: number } | "refund";
 
 /**
- * The money side of Money Wheel, Baccarat, Hi-Lo, Tower and Crash, the same
+ * The money side of Money Wheel, Baccarat, Hi-Lo, Tower, Crash and Candy Cascade, the same
  * as every other Casino game: the stake leaves the balance in one
  * transaction with the round, the win comes back with it, each finished round
  * is a CasinoSpin with a settlement journal row for Commissions, and the day

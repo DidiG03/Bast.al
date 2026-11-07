@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { Actor } from "../auth/permissions";
 import * as Baccarat from "./baccarat";
+import * as Candy from "./candy";
 import * as Crash from "./crash";
 import * as Hilo from "./hilo";
 import { HouseService } from "./house.service";
@@ -8,7 +9,7 @@ import * as Tower from "./tower";
 import * as Wheel from "./wheel";
 
 /**
- * Money Wheel, Baccarat, Hi-Lo, Tower and Crash: each game's rules (in its
+ * Money Wheel, Baccarat, Hi-Lo, Tower, Crash and Candy Cascade: each game's rules (in its
  * own file) on the shared money side (HouseService). Every request returns the
  * new balance, so the page never has to guess it.
  */
@@ -39,6 +40,50 @@ export class HouseGamesService {
       return { payoutCents: Wheel.winCents(stakeCents, spun.multiplier), record: { risk, segment: spun.segment, multiplier: spun.multiplier / 100 } };
     });
     return { id: result.id, balance: result.balance, risk, segment: spun.segment, multiplier: spun.multiplier / 100, bet, win: Wheel.winCents(Math.round(bet * 100), spun.multiplier) / 100 };
+  }
+
+  // ——— Candy Cascade ———
+
+  async candyState(actor: Actor) {
+    const basics = await this.house.basics(actor, "candy", Candy.BETS);
+    return {
+      ...basics,
+      // The history only needs each round's headline, not every board it went through.
+      recent: basics.recent.map((row) => {
+        const round = row.round as { win?: number; freeSpins?: number; capped?: boolean } | null;
+        return { ...row, round: round ? { game: "candy" as const, win: round.win ?? 0, freeSpins: round.freeSpins ?? 0, capped: round.capped ?? false } : null };
+      }),
+      game: {
+        name: Candy.GAME_NAME,
+        bets: Candy.BETS,
+        columns: Candy.COLUMNS,
+        rows: Candy.ROWS,
+        paying: Candy.PAYING,
+        scatter: Candy.SCATTER,
+        minCount: Candy.MIN_COUNT,
+        /** What 8–9, 10–11 and 12 or more of each candy pay, in times the stake. */
+        pays: Object.fromEntries(Candy.PAYING.map((symbol) => [symbol, Candy.PAYS[symbol].map((pay) => pay / 100)])),
+        /** Lollipops anywhere: 4, 5 and 6 or more, in times the stake. */
+        scatterPays: { 4: Candy.SCATTER_PAYS[4] / 100, 5: Candy.SCATTER_PAYS[5] / 100, 6: Candy.SCATTER_PAYS[6] / 100 },
+        freeSpins: Candy.FREE_SPINS,
+        moreFreeSpins: Candy.MORE_FREE_SPINS,
+        scattersForFree: Candy.SCATTERS_FOR_FREE,
+        scattersForMore: Candy.SCATTERS_FOR_MORE,
+        multipliers: Candy.MULTIPLIERS.map(([value]) => value),
+        maxWin: Candy.MAX_WIN,
+      },
+    };
+  }
+
+  /** A paid spin with every free spin it gives, settled at once; the page plays them back from what this returns. */
+  async candySpin(actor: Actor, bet: number) {
+    let round: Candy.Round | null = null;
+    const result = await this.house.instant(actor, "candy", bet, Candy.BETS, (stakeCents, draw) => {
+      round = Candy.play(draw);
+      return { payoutCents: Candy.winCents(stakeCents, round.win), record: Candy.record(round) };
+    });
+    const played = round as unknown as Candy.Round;
+    return { id: result.id, balance: result.balance, bet, win: Candy.winCents(Math.round(bet * 100), played.win) / 100, round: Candy.record(played) };
   }
 
   // ——— Baccarat ———

@@ -219,6 +219,7 @@ async function main() {
   await run("Coin Flip", ["COIN_FLIP"], ROUNDS, () => coin.flip(player, pick(STAKES), pick(["HEADS", "TAILS"])));
   await run("Scratch", ["SCRATCH"], ROUNDS, () => scratch.buy(player, pick(STAKES)));
   await run("Money Wheel", ["WHEEL"], ROUNDS, () => games.wheelSpin(player, pick(STAKES), pick(["LOW", "MEDIUM", "HIGH"])));
+  await run("Candy Cascade", ["CANDY"], ROUNDS, () => games.candySpin(player, pick(STAKES)));
   await run("Baccarat", ["BACCARAT"], ROUNDS, () => games.baccaratDeal(player, pick(STAKES), pick(["PLAYER", "BANKER", "TIE"])));
 
   await run("Hi-Lo", ["HILO"], ROUNDS, async () => {

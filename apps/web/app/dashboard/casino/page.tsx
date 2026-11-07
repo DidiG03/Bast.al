@@ -46,7 +46,7 @@ const NEW_GAMES: Array<[CasinoGame, string, string, string]> = [
 ];
 
 /** Crash, Baccarat, Hi-Lo, Money Wheel and Tower, in the lobby's order. */
-const HOUSE_KEYS = ["crash", "baccarat", "hilo", "wheel", "tower"] as const;
+const HOUSE_KEYS = ["crash", "baccarat", "hilo", "wheel", "tower", "candy"] as const;
 
 /** The games' names on the staff switches; the slots keep their own names. */
 const GAME_LABELS: Record<CasinoGame, string> = {
@@ -66,6 +66,7 @@ const GAME_LABELS: Record<CasinoGame, string> = {
   hilo: "Hi-Lo",
   wheel: msg("Money Wheel"),
   tower: msg("Tower"),
+  candy: "Candy Cascade",
 };
 
 /** The Player's lobby: one tile per game. */
@@ -119,6 +120,16 @@ function CasinoLobby() {
               </span>
               <span className="casino-tile-body">
                 <strong>Book of Ra</strong>
+              </span>
+            </Link>
+          ) : null}
+          {has("candy") ? (
+            <Link className="casino-tile is-candy has-cover" href="/dashboard/casino/candy">
+              <span className="casino-tile-art" aria-hidden="true">
+                <CoverArt src="/casino/candy-cascade.svg" fit="cover" />
+              </span>
+              <span className="casino-tile-body">
+                <strong>Candy Cascade</strong>
               </span>
             </Link>
           ) : null}
@@ -449,6 +460,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
               ["roulette", t("Roulette"), tn(data.games.roulette.spins, "{count} round", "{count} rounds")],
               ["blackjack", t("Blackjack"), tn(data.games.blackjack.spins, "{count} hand", "{count} hands")],
               ["book", "Book of Ra", `${tn(data.games.book.spins, "{count} spin", "{count} spins")} · ${tn(data.games.book.freeSpins, "{count} free spin", "{count} free spins")}`],
+              ["candy", "Candy Cascade", tn(data.games.candy?.spins ?? 0, "{count} spin", "{count} spins")],
               ["mines", t("Mines"), tn(data.games.mines.spins, "{count} round", "{count} rounds")],
               ["penalty", t("Penalty"), tn(data.games.penalty.spins, "{count} round", "{count} rounds")],
               ["plinko", "Plinko", tn(data.games.plinko.spins, "{count} ball", "{count} balls")],
@@ -503,7 +515,7 @@ function CasinoOverview({ me }: { me: MeResponse }) {
                     {player.keno.rounds > 0 ? ` · ${tn(player.keno.rounds, "{count} Keno round", "{count} Keno rounds")}` : ""}
                     {player.coinFlip.flips > 0 ? ` · ${tn(player.coinFlip.flips, "{count} coin flip", "{count} coin flips")}` : ""}
                     {player.scratch.cards > 0 ? ` · ${tn(player.scratch.cards, "{count} scratch card", "{count} scratch cards")}` : ""}
-                    {HOUSE_KEYS.map((key) => (player.house?.[key].rounds ? ` · ${t(GAME_LABELS[key])}: ${player.house[key].rounds}` : "")).join("")} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
+                    {HOUSE_KEYS.map((key) => (player.house?.[key]?.rounds ? ` · ${t(GAME_LABELS[key])}: ${player.house[key].rounds}` : "")).join("")} · {t("{amount} staked", { amount: formatMoney(player.staked) })} · {t("{amount} paid out", { amount: formatMoney(player.won) })}
                   </span>
                 </div>
                 <strong className={player.net < 0 ? "is-bad" : undefined}>{formatSignedMoney(player.net)}</strong>

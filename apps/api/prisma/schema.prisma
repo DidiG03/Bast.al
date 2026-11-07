@@ -914,6 +914,8 @@ enum CasinoPlayKind {
   TOWER
   /// A round of Crash, cashed out or crashed.
   CRASH
+  /// A paid spin of Candy Cascade with every free spin it gave (played out at once).
+  CANDY
 }
 
 /// A Player's provably fair seed pair, for Dice, Keno, Coin Flip and Scratch Cards. Each roll is the HMAC-SHA256

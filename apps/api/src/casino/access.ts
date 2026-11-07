@@ -2,7 +2,7 @@ import { BalanceTransactionType, Prisma } from "@prisma/client";
 import { assertOnTeam } from "../bets/team";
 
 /** Every Casino game, by the key its switches, stats and "Continue playing" use. */
-export const CASINO_GAMES = ["slot", "book", "roulette", "blackjack", "penalty", "mines", "plinko", "dice", "keno", "coinflip", "scratch", "crash", "baccarat", "hilo", "wheel", "tower"] as const;
+export const CASINO_GAMES = ["slot", "book", "candy", "roulette", "blackjack", "penalty", "mines", "plinko", "dice", "keno", "coinflip", "scratch", "crash", "baccarat", "hilo", "wheel", "tower"] as const;
 export type CasinoGame = (typeof CASINO_GAMES)[number];
 export const isCasinoGame = (value: unknown): value is CasinoGame => typeof value === "string" && (CASINO_GAMES as readonly string[]).includes(value);
 

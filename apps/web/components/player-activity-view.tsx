@@ -39,6 +39,7 @@ const GAME_NAMES: Record<CasinoGameKey, string> = {
   hilo: "Hi-Lo",
   wheel: "Money Wheel",
   tower: "Tower",
+  candy: "Candy Cascade",
 };
 
 export function PlayerActivityView({ data }: { data: PlayerActivity }) {

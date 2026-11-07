@@ -9,7 +9,7 @@ import { serverNow } from "../lib/clock";
 import { formatMoney } from "../lib/format";
 
 /** The lobby's games, as GET /casino/session names them. */
-export type CasinoSessionGame = "slot" | "book" | "blackjack" | "roulette" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch" | "crash" | "baccarat" | "hilo" | "wheel" | "tower";
+export type CasinoSessionGame = "slot" | "book" | "blackjack" | "roulette" | "mines" | "penalty" | "plinko" | "dice" | "keno" | "coinflip" | "scratch" | "crash" | "baccarat" | "hilo" | "wheel" | "tower" | "candy";
 
 type Session = { rounds: number; gambles: number; staked: number; won: number; net: number };
 

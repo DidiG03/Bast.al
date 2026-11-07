@@ -26,6 +26,7 @@ const Baccarat = require("../dist/casino/baccarat.js");
 const Hilo = require("../dist/casino/hilo.js");
 const Tower = require("../dist/casino/tower.js");
 const Crash = require("../dist/casino/crash.js");
+const Candy = require("../dist/casino/candy.js");
 const Slot = require("../dist/casino/game.js");
 
 const scale = Number(process.argv[2] ?? 1);
@@ -535,6 +536,30 @@ section("Sizzling Hot (exact, every reel stop)");
     if (Math.abs(rtp * 100 - Slot.PAYOUT_RATE) > 0.15) flag("NOTE", "Sizzling Hot", `${lines} lines pay back ${pct(rtp)}; the game says ${Slot.PAYOUT_RATE}%.`);
     if (rtp > 0.86) flag("LEAK", "Sizzling Hot", `${lines} lines pay back ${pct(rtp)}.`);
   }
+}
+
+// ——— Candy Cascade ———
+section("Candy Cascade (simulated: cascades and free spins have no closed form)");
+{
+  const draw = seeded(58);
+  const rounds = N(2_000_000);
+  let paid = 0;
+  let sq = 0;
+  let capped = 0;
+  for (let i = 0; i < rounds; i++) {
+    const round = Candy.play(draw);
+    const x = Candy.winCents(5000, round.win) / 5000;
+    paid += x;
+    sq += x * x;
+    if (round.capped) capped++;
+    if (round.win > Candy.MAX_WIN * 100) flag("BUG", "Candy Cascade", `a round paid ${round.win / 100}× the stake, over the ${Candy.MAX_WIN}× cap.`);
+  }
+  const mean = paid / rounds;
+  const se = Math.sqrt(Math.max(sq / rounds - mean * mean, 0) / rounds);
+  console.log(`  ${rounds.toLocaleString()} rounds: ${pct(mean)} ± ${pct(se)} (the rules say ${Candy.PAYOUT_RATE}%), ${capped} reached the cap`);
+  // Above 85% by more than 4 standard errors: a leak.
+  if (mean - 4 * se > 0.85) flag("LEAK", "Candy Cascade", `pays back ${pct(mean)} ± ${pct(se)}.`);
+  checkSim("Candy Cascade", "the stated payout rate", paid, rounds, sq, rounds, Candy.PAYOUT_RATE / 100);
 }
 
 section("Findings");

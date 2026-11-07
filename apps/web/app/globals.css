@@ -19992,3 +19992,293 @@ button.cab-field-box:disabled {
     background: linear-gradient(to right, transparent, var(--surface-1) 70%);
   }
 }
+
+/*
+ * Candy Cascade: a 6-by-5 board of candies on a pink-and-violet cabinet. Candies fall in from above the board
+ * (each column a little after the one before), winners glow and burst, and the rest fall into place.
+ */
+.house-cabinet.is-candy {
+  background: radial-gradient(ellipse at 50% 0%, #ff8fd0 0%, #b24fe6 45%, #4a1fa8 100%);
+}
+
+.house-cabinet.is-candy .house-marquee {
+  background: linear-gradient(180deg, #ff6fb5, #c2185b 60%, #7a0f4a);
+}
+
+.house-cabinet.is-candy .slot-title {
+  color: #fff4a8;
+  text-shadow: 0 2px 0 #7a0f4a, 0 0 12px rgba(255, 210, 63, 0.55);
+}
+
+/* On a phone the long name fits between the way out and the three buttons, cut short with … rather than running under them. */
+.house-cabinet.is-candy .slot-title {
+  max-width: 100%;
+}
+
+@media (max-width: 560px) {
+  .house-cabinet.is-candy .house-marquee {
+    padding-right: 9.4rem;
+  }
+
+  .house-cabinet.is-candy .slot-title {
+    font-size: clamp(1rem, 5.2vw, 1.45rem);
+  }
+}
+
+.house-cabinet.is-candy .dice-readout span {
+  background: rgba(40, 8, 70, 0.45);
+}
+
+.house-cabinet.is-candy .dice-controls {
+  background: rgba(40, 8, 70, 0.35);
+}
+
+.house-cabinet.is-candy .candy-go {
+  background: linear-gradient(180deg, #ffe14a, #ffab1f);
+  color: #5a1a00;
+  box-shadow: 0 4px 0 #b55a00, 0 8px 16px rgba(60, 10, 60, 0.35);
+}
+
+.candy-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 0;
+}
+
+.candy-banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 0.9rem;
+  min-height: 2rem;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  background: rgba(40, 8, 70, 0.5);
+  color: #fff;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.candy-banner.is-free {
+  background: linear-gradient(90deg, #ffb01f, #ff3d7f);
+  box-shadow: 0 0 0 2px #fff4a8, 0 0 18px rgba(255, 210, 63, 0.6);
+}
+
+/* The board: as wide as the cabinet allows, and no taller than the game's height leaves for it (6 by 5 cells). */
+.candy-board {
+  --candy-rest: 16.5rem;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.25rem;
+  width: min(100%, 40rem, max(16rem, (var(--game-h, 100dvh) - var(--candy-rest)) * 1.2));
+  padding: 0.4rem;
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.12));
+  box-shadow: inset 0 0 24px rgba(80, 10, 120, 0.35), 0 10px 26px rgba(40, 8, 70, 0.35);
+}
+
+.candy-board.is-free {
+  border-color: #ffd23f;
+  box-shadow: inset 0 0 24px rgba(255, 180, 30, 0.35), 0 0 0 3px rgba(255, 61, 127, 0.5), 0 10px 26px rgba(40, 8, 70, 0.35);
+}
+
+/* Each column hides what's above it, so new candies appear to drop in from the board's top edge. */
+.candy-column {
+  display: grid;
+  grid-template-rows: repeat(5, auto);
+  gap: 0.25rem;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.candy-cell {
+  display: block;
+  aspect-ratio: 1;
+  min-width: 0;
+}
+
+.candy-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.candy-multiplier-text {
+  fill: #fff;
+  stroke: #7a1406;
+  stroke-width: 5px;
+  paint-order: stroke;
+  font-family: "Arial Black", Arial, sans-serif;
+  font-weight: 900;
+}
+
+.candy-cell.is-dropping {
+  animation: candy-drop 420ms cubic-bezier(0.35, 0, 0.55, 1.2) both;
+  animation-delay: calc(var(--col) * 45ms);
+}
+
+@keyframes candy-drop {
+  from {
+    transform: translateY(calc(var(--drop) * -100% - var(--drop) * 0.25rem));
+  }
+  to {
+    transform: none;
+  }
+}
+
+.candy-cell.is-win .candy-icon {
+  animation: candy-glow 650ms ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 12px #ffe14a);
+}
+
+@keyframes candy-glow {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.12);
+  }
+}
+
+.candy-cell.is-burst .candy-icon {
+  animation: candy-burst 260ms ease-in forwards;
+}
+
+@keyframes candy-burst {
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.candy-multiplier-burst {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff4a8;
+  font-family: "Arial Black", Arial, sans-serif;
+  font-size: clamp(2.6rem, 10cqi, 5rem);
+  font-weight: 900;
+  text-shadow: 0 4px 0 #b0126b, 0 0 24px rgba(255, 210, 63, 0.9);
+  pointer-events: none;
+  animation: candy-pop 1100ms ease-out both;
+}
+
+@keyframes candy-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.candy-message {
+  min-height: 1.6rem;
+  margin: 0;
+  color: #fff;
+  text-align: center;
+}
+
+.candy-message.is-big {
+  color: #fff4a8;
+  font-size: 1.15rem;
+  text-shadow: 0 2px 0 #b0126b;
+}
+
+.candy-message.is-free {
+  color: #ffe14a;
+  font-size: 1.15rem;
+}
+
+.candy-auto-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.candy-auto-row select {
+  flex: 1;
+  min-height: 44px;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+
+.candy-auto-row button {
+  flex: 1;
+  min-height: 44px;
+}
+
+.candy-auto-stop {
+  border-color: #ffd23f;
+  color: #ffd23f;
+}
+
+/* The rules: a pay table with each candy's picture. */
+.candy-paytable {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.candy-paytable-head,
+.candy-paytable-row {
+  display: grid;
+  grid-template-columns: 2.6rem repeat(3, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  text-align: right;
+}
+
+.candy-paytable-head small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.candy-paytable-row span {
+  display: block;
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.candy-rule-line {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.candy-rule-line .candy-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .candy-cell.is-dropping,
+  .candy-cell.is-win .candy-icon,
+  .candy-cell.is-burst .candy-icon,
+  .candy-multiplier-burst {
+    animation-duration: 1ms;
+  }
+}

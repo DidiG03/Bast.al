@@ -37,7 +37,7 @@ function rangeDays(range: Range): { from: string; to: string } {
   return { from: "", to: "" };
 }
 /** A day's casino line: `{game}_{playerId}_{day}`. Scratch's buy and result lines are already one card each. */
-const CASINO_DAY = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch|crash|baccarat|hilo|wheel|tower)_.+_\d{4}-\d{2}-\d{2}$/;
+const CASINO_DAY = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch|crash|baccarat|hilo|wheel|tower|candy)_.+_\d{4}-\d{2}-\d{2}$/;
 
 type CasinoRound = { id: string; at: string; stake: number; win: number; label: string };
 

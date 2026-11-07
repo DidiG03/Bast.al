@@ -833,8 +833,8 @@ export type CasinoFreeSpins = { remaining: number; bet: number };
 /** The Player's Casino: whether they can play (`closed` says why not), the rules, and where they stand. */
 /** Every Casino game, by the key its switches use (the API's CASINO_GAMES). */
 export type CasinoGame = "slot" | "book" | "roulette" | "blackjack" | "penalty" | "mines" | "plinko" | "dice" | "keno" | "coinflip" | "scratch" | HouseGameKey;
-/** Crash, Baccarat, Hi-Lo, Money Wheel and Tower. */
-export type HouseGameKey = "crash" | "baccarat" | "hilo" | "wheel" | "tower";
+/** Crash, Baccarat, Hi-Lo, Money Wheel, Tower and Candy Cascade. */
+export type HouseGameKey = "crash" | "baccarat" | "hilo" | "wheel" | "tower" | "candy";
 
 export type CasinoState = {
   /** Why the slot can't be played (the Casino's reason, or the slot being off), or null. */
@@ -1463,6 +1463,38 @@ export type WheelRisk = "LOW" | "MEDIUM" | "HIGH";
 export type WheelRecord = { game: "wheel"; risk: WheelRisk; segment: number; multiplier: number };
 export type WheelState = HouseBasics<WheelRecord> & { game: { name: string; bets: number[]; risks: WheelRisk[]; wheels: Record<WheelRisk, number[]> } };
 export type WheelSpin = { id: string; balance: number; risk: WheelRisk; segment: number; multiplier: number; bet: number; win: number };
+
+/** Candy Cascade's candies, as the API names them; "X5" and so on are multiplier candies. */
+export type CandyPaying = "HEART" | "STAR" | "MOON" | "GEM" | "ORANGE" | "LEMON" | "MINT" | "GRAPE" | "PEACH";
+export type CandyCell = CandyPaying | "LOLLIPOP" | `X${number}`;
+/** A board is 30 candies, column by column, top to bottom: (column, row) is at column * rows + row. */
+export type CandyWin = { symbol: CandyPaying; count: number; cells: number[]; pay: number };
+export type CandyStep = { board: CandyCell[]; wins: CandyWin[] };
+/** One spin of a round (the paid one, or a free one): its boards, tumble by tumble. Amounts are in times the stake. */
+export type CandySpinPlay = { free: boolean; steps: CandyStep[]; scatters: number; scatterPay: number; tumbleWin: number; multiplier: number; win: number; freeSpinsWon: number };
+export type CandyRound = { win: number; capped: boolean; freeSpins: number; spins: CandySpinPlay[] };
+/** A round as the history keeps it: what it paid, in times the stake, and how many free spins it had. */
+export type CandyRecord = { game: "candy"; win: number; freeSpins: number; capped: boolean };
+export type CandyState = HouseBasics<CandyRecord> & {
+  game: {
+    name: string;
+    bets: number[];
+    columns: number;
+    rows: number;
+    paying: CandyPaying[];
+    scatter: "LOLLIPOP";
+    minCount: number;
+    pays: Record<CandyPaying, [number, number, number]>;
+    scatterPays: Record<"4" | "5" | "6", number>;
+    freeSpins: number;
+    moreFreeSpins: number;
+    scattersForFree: number;
+    scattersForMore: number;
+    multipliers: number[];
+    maxWin: number;
+  };
+};
+export type CandySpinResult = { id: string; balance: number; bet: number; win: number; round: CandyRound };
 
 export type BaccaratSide = "PLAYER" | "BANKER" | "TIE";
 export type BaccaratHand = { player: PlayingCard[]; banker: PlayingCard[]; playerTotal: number; bankerTotal: number; winner: BaccaratSide };

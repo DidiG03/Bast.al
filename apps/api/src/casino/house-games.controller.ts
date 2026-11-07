@@ -64,7 +64,7 @@ class CrashStartDto extends StakeDto {
 }
 
 /**
- * Money Wheel, Baccarat, Hi-Lo, Tower and Crash. Every move that touches the
+ * Money Wheel, Baccarat, Hi-Lo, Tower, Crash and Candy Cascade. Every move that touches the
  * balance takes an Idempotency-Key, so a repeated request gets the first answer back.
  */
 @ApiTags("casino")
@@ -86,6 +86,20 @@ export class HouseGamesController {
   @Idempotent()
   wheelSpin(@CurrentActor() actor: Actor, @Body() body: WheelDto) {
     return this.games.wheelSpin(actor, body.bet, body.risk);
+  }
+
+  @Get("candy")
+  @Roles(Role.PLAYER)
+  candyState(@CurrentActor() actor: Actor) {
+    return this.games.candyState(actor);
+  }
+
+  @Post("candy/spin")
+  @Roles(Role.PLAYER)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Idempotent()
+  candySpin(@CurrentActor() actor: Actor, @Body() body: StakeDto) {
+    return this.games.candySpin(actor, body.bet);
   }
 
   @Get("baccarat")

@@ -29,6 +29,7 @@ const GAME_OF_KIND: Record<string, string> = {
   HILO: "hilo",
   TOWER: "tower",
   CRASH: "crash",
+  CANDY: "candy",
 };
 
 function round(value: number): number {

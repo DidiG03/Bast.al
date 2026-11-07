@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400">
+  <!-- Candy Cascade's lobby cover: Shtatat.al's own artwork. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff9fd2"/>
+      <stop offset="0.55" stop-color="#c46bff"/>
+      <stop offset="1" stop-color="#5b2bd1"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="60%">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="heart" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#ff8aa3"/><stop offset="0.55" stop-color="#f0193f"/><stop offset="1" stop-color="#a30020"/></radialGradient>
+    <radialGradient id="star" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#e6b3ff"/><stop offset="0.55" stop-color="#9b3ff0"/><stop offset="1" stop-color="#5a14a8"/></radialGradient>
+    <radialGradient id="moon" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#b9ffb0"/><stop offset="0.55" stop-color="#2fcf4d"/><stop offset="1" stop-color="#11802a"/></radialGradient>
+    <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bfeaff"/><stop offset="0.5" stop-color="#2b9cf2"/><stop offset="1" stop-color="#0b4fa8"/></linearGradient>
+    <radialGradient id="bomb" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff3b0"/><stop offset="0.5" stop-color="#ffb21f"/><stop offset="1" stop-color="#e2401f"/></radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#2a0a4a" flood-opacity="0.45"/></filter>
+  </defs>
+  <rect width="640" height="400" fill="url(#sky)"/>
+  <rect width="640" height="400" fill="url(#glow)"/>
+  <!-- Sprinkles -->
+  <g stroke-linecap="round" stroke-width="6" opacity="0.8">
+    <path d="M40 40 l14 8" stroke="#fff"/><path d="M120 90 l-10 12" stroke="#ffe14a"/><path d="M590 60 l12 10" stroke="#7ff0d8"/>
+    <path d="M520 130 l-14 6" stroke="#fff"/><path d="M80 330 l12 -10" stroke="#7ff0d8"/><path d="M600 320 l-12 -8" stroke="#ffe14a"/>
+    <path d="M300 30 l10 10" stroke="#ff4f8a"/><path d="M450 360 l12 -6" stroke="#fff"/><path d="M190 370 l-8 -12" stroke="#ff4f8a"/>
+  </g>
+  <!-- Big lollipop -->
+  <g filter="url(#shadow)" transform="translate(470 170) rotate(12)">
+    <rect x="-9" y="40" width="18" height="150" rx="9" fill="#fff" stroke="#d9c6e6" stroke-width="2"/>
+    <circle r="78" fill="#fff" stroke="#c2185b" stroke-width="5"/>
+    <g fill="none" stroke-width="13" stroke-linecap="round">
+      <circle r="62" stroke="#ff3d7f" stroke-dasharray="120 400"/>
+      <circle r="62" stroke="#ffb01f" stroke-dasharray="120 400" transform="rotate(120)"/>
+      <circle r="62" stroke="#2b9cf2" stroke-dasharray="120 400" transform="rotate(240)"/>
+      <circle r="40" stroke="#2fcf4d" stroke-dasharray="80 300" transform="rotate(60)"/>
+      <circle r="40" stroke="#9b3ff0" stroke-dasharray="80 300" transform="rotate(240)"/>
+      <circle r="20" stroke="#ff3d7f" stroke-dasharray="50 200"/>
+    </g>
+    <ellipse cx="-30" cy="-40" rx="24" ry="11" fill="#fff" opacity="0.6" transform="rotate(-25 -30 -40)"/>
+  </g>
+  <!-- Heart -->
+  <g filter="url(#shadow)" transform="translate(60 120) scale(1.25)">
+    <path d="M50 88 C18 64 8 46 14 30 C20 14 42 12 50 30 C58 12 80 14 86 30 C92 46 82 64 50 88Z" fill="url(#heart)" stroke="#7a0016" stroke-width="2.5"/>
+    <ellipse cx="38" cy="30" rx="16" ry="9" fill="#fff" opacity="0.45" transform="rotate(-25 38 30)"/>
+  </g>
+  <!-- Star -->
+  <g filter="url(#shadow)" transform="translate(185 40) rotate(-10)">
+    <path d="M50 8 L61 36 L91 38 L68 57 L76 87 L50 70 L24 87 L32 57 L9 38 L39 36Z" fill="url(#star)" stroke="#3f0b7a" stroke-width="2.5" stroke-linejoin="round"/>
+    <ellipse cx="38" cy="30" rx="12" ry="7" fill="#fff" opacity="0.45" transform="rotate(-25 38 30)"/>
+  </g>
+  <!-- Moon -->
+  <g filter="url(#shadow)" transform="translate(40 250) scale(0.95)">
+    <path d="M64 10 C36 12 16 32 16 56 C16 76 34 92 56 90 C70 89 82 82 88 70 C80 74 70 76 62 74 C44 70 34 54 38 36 C41 24 50 14 64 10Z" fill="url(#moon)" stroke="#0b5c1d" stroke-width="2.5"/>
+  </g>
+  <!-- Gem -->
+  <g filter="url(#shadow)" transform="translate(330 250) rotate(8) scale(0.95)">
+    <path d="M24 16 H76 L92 40 L50 90 L8 40Z" fill="url(#gem)" stroke="#073a7d" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M8 40 H92 M24 16 L38 40 L50 90 L62 40 L76 16 M38 40 L50 16 L62 40" fill="none" stroke="#e9f7ff" stroke-width="1.6" opacity="0.7"/>
+  </g>
+  <!-- Multiplier candy -->
+  <g filter="url(#shadow)" transform="translate(560 270)">
+    <circle r="44" fill="url(#bomb)" stroke="#9c1f0a" stroke-width="3"/>
+    <text y="12" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="34" fill="#fff" stroke="#7a1406" stroke-width="3" paint-order="stroke">50×</text>
+  </g>
+  <!-- Title -->
+  <g font-family="Arial Black, Arial Rounded MT Bold, Arial, sans-serif" font-weight="900" text-anchor="middle" filter="url(#shadow)">
+    <text x="250" y="200" font-size="64" fill="#fff" stroke="#b0126b" stroke-width="10" paint-order="stroke" stroke-linejoin="round" transform="rotate(-4 250 200)">CANDY</text>
+    <text x="260" y="262" font-size="54" fill="#ffe14a" stroke="#6a1fb8" stroke-width="10" paint-order="stroke" stroke-linejoin="round" transform="rotate(-4 260 262)">CASCADE</text>
+  </g>
+</svg>

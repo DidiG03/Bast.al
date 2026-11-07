@@ -1,4 +1,4 @@
-// Money Wheel, Baccarat, Hi-Lo, Tower and Crash, end to end against a real
+// Money Wheel, Baccarat, Hi-Lo, Tower, Crash and Candy Cascade, end to end against a real
 // Postgres: each moves the balance with its round in one transaction, writes
 // the settlement journal and the day's ledger line for its game, keeps one
 // round in play at a time, settles abandoned rounds, and shows up in the
@@ -86,6 +86,44 @@ test("Money Wheel: the segment's multiplier is paid, in one go, with the ledger 
   const entry = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpin: { kind: "WHEEL" } } });
   assert.deepEqual([Number(entry.stake), Number(entry.payout), entry.ownerId, entry.managerId], [100, 1500, owner.id, manager.id]);
   await assert.rejects(games.wheelSpin(ana, 75, "LOW"), /costs 50.00, 100.00/);
+  assert.equal(await ledgerTotal(ana), await balanceOf(ana));
+});
+
+test("Candy Cascade: a spin and every free spin it gives are paid in one go, with the ledger and the journal", async () => {
+  // A draw that's random but repeatable, played until a spin wins something, so the payout is checked too.
+  let seed = 12345;
+  house.draw = (below) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return Math.floor((seed / 2147483648) * below);
+  };
+  const before = await balanceOf(ana);
+  let spent = 0;
+  let paid = 0;
+  let spin;
+  for (let i = 0; i < 40; i++) {
+    spin = await games.candySpin(ana, 50);
+    spent += 50;
+    paid += spin.win;
+    assert.equal(spin.win, Math.floor(50 * 100 * spin.round.win) / 100, "the win is the round's multiple of the stake, to the cent");
+    assert.ok(spin.round.win <= 5000);
+    assert.equal(spin.round.spins.length - 1, spin.round.freeSpins);
+  }
+  assert.ok(paid > 0, "some spin won");
+  assert.equal(await balanceOf(ana), Math.round((before - spent + paid) * 100) / 100);
+  assert.equal(spin.balance, await balanceOf(ana));
+  assert.equal((await line("candy", ana)).reason, "Candy Cascade: 40 spins");
+  assert.equal(Number((await line("candy", ana)).amount), Math.round((paid - spent) * 100) / 100);
+  assert.equal(await prisma.settlementEntry.count({ where: { casinoSpin: { kind: "CANDY" } } }), 40);
+  const stored = await prisma.casinoSpin.findFirstOrThrow({ where: { kind: "CANDY" }, orderBy: { createdAt: "desc" } });
+  assert.equal(stored.house.game, "candy");
+  assert.equal(stored.house.spins.length, spin.round.spins.length);
+  // The history keeps each round's headline.
+  const state = await games.candyState(ana);
+  assert.equal(state.recent.length, 20);
+  assert.equal(state.recent[0].round.game, "candy");
+  assert.ok(!("spins" in state.recent[0].round));
+  await assert.rejects(games.candySpin(ana, 75), /costs 50.00, 100.00/);
+  assert.equal(await prisma.casinoRound.count(), 0, "nothing is left in play");
   assert.equal(await ledgerTotal(ana), await balanceOf(ana));
 });
 
@@ -184,6 +222,8 @@ test("the Casino stats count each new game as itself, not as the slot", async ()
   assert.equal(stats.games.slot.spins, 0);
   assert.equal(stats.games.slot.staked, 0);
   assert.equal(stats.games.wheel.spins, 1);
+  assert.equal(stats.games.candy.spins, 40);
+  assert.equal(stats.games.candy.staked, 2000);
   assert.equal(stats.games.baccarat.spins, 1);
   assert.equal(stats.games.hilo.spins, 1);
   assert.equal(stats.games.tower.spins, 1);

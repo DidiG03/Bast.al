@@ -686,7 +686,7 @@ export class UsersService {
    * `lineId` is that line's id, `{game}_{playerId}_{day}`.
    */
   async casinoLineRounds(actor: Actor, id: string, lineId: string) {
-    const match = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch|wheel|baccarat|hilo|tower|crash)_(.+)_(\d{4}-\d{2}-\d{2})$/.exec(lineId ?? "");
+    const match = /^(casino|book|blackjack|roulette|mines|penalty|plinko|dice|keno|coinflip|scratch|wheel|baccarat|hilo|tower|crash|candy)_(.+)_(\d{4}-\d{2}-\d{2})$/.exec(lineId ?? "");
     if (!match || match[2] !== id) throw new NotFoundException("That line isn't on this account");
     const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
     if (!target) throw new NotFoundException("User not found");
@@ -703,7 +703,7 @@ export class UsersService {
     if (prefix === "casino") where.OR = [{ kind: "SPIN" }, { kind: "GAMBLE", NOT: { gamble: bookGuess } }];
     else if (prefix === "book") where.OR = [{ kind: "BOOK" }, { kind: "GAMBLE", gamble: bookGuess }];
     else {
-      const kind = { blackjack: "BLACKJACK", roulette: "ROULETTE", mines: "MINES", penalty: "PENALTY", plinko: "PLINKO", dice: "DICE", keno: "KENO", coinflip: "COIN_FLIP", scratch: "SCRATCH", wheel: "WHEEL", baccarat: "BACCARAT", hilo: "HILO", tower: "TOWER", crash: "CRASH" } as const;
+      const kind = { blackjack: "BLACKJACK", roulette: "ROULETTE", mines: "MINES", penalty: "PENALTY", plinko: "PLINKO", dice: "DICE", keno: "KENO", coinflip: "COIN_FLIP", scratch: "SCRATCH", wheel: "WHEEL", baccarat: "BACCARAT", hilo: "HILO", tower: "TOWER", crash: "CRASH", candy: "CANDY" } as const;
       const played = kind[prefix as keyof typeof kind];
       if (!played) throw new NotFoundException("That line isn't on this account");
       where.kind = played;

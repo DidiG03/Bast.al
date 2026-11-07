@@ -26,6 +26,7 @@ const TITLES: Array<[string, string]> = [
   ["/dashboard/casino/hilo", "Hi-Lo"],
   ["/dashboard/casino/wheel", msg("Money Wheel")],
   ["/dashboard/casino/tower", msg("Tower")],
+  ["/dashboard/casino/candy", "Candy Cascade"],
   ["/dashboard/casino", msg("Casino")],
   ["/dashboard/money", msg("My money")],
   ["/dashboard/security", msg("My account")],

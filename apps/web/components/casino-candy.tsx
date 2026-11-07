@@ -92,14 +92,15 @@ function SpinArrows() {
   );
 }
 
-/** The Special Bet's slide switch: a pink candy knob that moves across when it's on. */
-function AnteSwitch({ on, disabled, onToggle, label }: { on: boolean; disabled: boolean; onToggle: () => void; label: string }) {
+/** Stars over a special-bet option, matching the candy cabinet look. */
+function SpecialStars({ count, gold = false }: { count: number; gold?: boolean }) {
+  if (count <= 0) return null;
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} className={`candy-switch${on ? " is-on" : ""}`} disabled={disabled} onClick={onToggle}>
-      <span className="candy-switch-knob" aria-hidden="true">
-        →
-      </span>
-    </button>
+    <span className={`candy-special-stars${gold ? " is-gold" : ""}`} aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => (
+        <span key={i}>★</span>
+      ))}
+    </span>
   );
 }
 
@@ -124,7 +125,7 @@ export function CandyGame() {
   const [turbo, setTurbo] = useState(false);
   /** The Special Bet: on, every spin costs 25% more and lands lollipops more often. */
   const [ante, setAnte] = useState(false);
-  /** The Buy Feature menu: closed, open, or a purchase to confirm. */
+  /** The Special Bet menu: closed, the option list, or a purchase to confirm. */
   const [buying, setBuying] = useState<null | "menu" | "BUY" | "SUPER">(null);
   const skip = useRef(false);
   const alive = useRef(true);
@@ -482,9 +483,10 @@ export function CandyGame() {
   const hint = turbo ? t("Turbo spin") : t("Hold Space for turbo spin");
   const maxBuyBet = state.game.maxBuyBet ?? MAX_BUY_BET;
   const buyNote = g.stake > maxBuyBet ? t("Bets up to {amount}", { amount: formatMoney(maxBuyBet) }) : null;
-  const canBuy = !playing && autoLeft === 0 && !free && !buyNote && !!state.game.cost;
-  const toggleAnte = () => {
-    setAnte((on) => !on);
+  const canSpecial = !playing && autoLeft === 0 && !free;
+  const openSpecial = () => {
+    if (!canSpecial) return;
+    setBuying("menu");
     slotSound.click();
   };
 
@@ -507,17 +509,12 @@ export function CandyGame() {
           </header>
 
           <div className="candy-middle">
-            {/* Beside the board on a wide screen: Buy Feature, the Special Bet, and the win or the free spins. */}
+            {/* Beside the board on a wide screen: Special Bet and the win or the free spins. */}
             <aside className="candy-side">
-              <button type="button" className="candy-box is-buy" onClick={() => setBuying("menu")} disabled={!canBuy} title={buyNote ?? undefined}>
-                <strong>{t("Buy feature")}</strong>
-                <small>{buyNote ?? t("2 options")}</small>
-              </button>
-              <div className={`candy-box is-ante${ante ? " is-on" : ""}`}>
+              <button type="button" className={`candy-box is-ante${ante ? " is-on" : ""}`} onClick={openSpecial} disabled={!canSpecial} title={buyNote ?? undefined}>
                 <strong>{t("Special Bet")}</strong>
-                <small>{t("Double chance · +25%")}</small>
-                <AnteSwitch on={ante} disabled={playing || autoLeft > 0 || !!free} onToggle={toggleAnte} label={t("Special Bet")} />
-              </div>
+                <small>{ante ? t("Double chance · +25%") : t("Ante, free spins & more")}</small>
+              </button>
               <div className={`candy-box is-info${free ? " is-free" : ""}`} aria-live="polite">
                 {free ? (
                   <>
@@ -536,15 +533,11 @@ export function CandyGame() {
             </aside>
 
             <div className="candy-board-wrap">
-              {/* On a phone: Buy Feature and the Special Bet, small, over the board. */}
+              {/* On a phone: Special Bet, small, over the board. */}
               <div className="candy-extras">
-                <button type="button" className="candy-chip is-buy" onClick={() => setBuying("menu")} disabled={!canBuy}>
-                  {t("Buy feature")}
-                </button>
-                <span className={`candy-chip is-ante${ante ? " is-on" : ""}`}>
+                <button type="button" className={`candy-chip is-ante${ante ? " is-on" : ""}`} onClick={openSpecial} disabled={!canSpecial}>
                   {t("Special Bet")}
-                  <AnteSwitch on={ante} disabled={playing || autoLeft > 0 || !!free} onToggle={toggleAnte} label={t("Special Bet")} />
-                </span>
+                </button>
               </div>
               {!free ? (
                 <div className="candy-phone-win" aria-hidden="true">
@@ -669,22 +662,83 @@ export function CandyGame() {
 
           {buying ? (
             <div className="candy-buy-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setBuying(null)}>
-              <div className="candy-buy" role="dialog" aria-modal="true" aria-label={t("Buy feature")}>
-                <button type="button" className="candy-round-key candy-buy-close" onClick={() => setBuying(null)} aria-label={t("Close")}>
+              <div className="candy-special" role="dialog" aria-modal="true" aria-label={t("Select a special bet")}>
+                <button type="button" className="candy-special-close" onClick={() => setBuying(null)} aria-label={t("Close")}>
                   ×
                 </button>
-                <h2>{t("Buy feature")}</h2>
+                <h2>{t("Select a special bet")}</h2>
                 {buying === "menu" ? (
-                  <div className="candy-buy-options">
-                    {(["BUY", "SUPER"] as const).map((mode) => (
-                      <button type="button" key={mode} className={`candy-buy-option is-${mode.toLowerCase()}`} onClick={() => setBuying(mode)} disabled={costOf(mode) > g.balance + 1e-9}>
-                        <strong>{mode === "SUPER" ? t("Super free spins") : t("Free spins")}</strong>
-                        <span>{mode === "SUPER" ? t("{count} free spins, every multiplier candy {min}× or more", { count: state.game.freeSpins, min: (state.game.superMultipliers ?? [5])[0] }) : t("{count} free spins, straight away", { count: state.game.freeSpins })}</span>
-                        <b>{formatMoney(costOf(mode))}</b>
-                        {costOf(mode) > g.balance + 1e-9 ? <small>{t("Your balance is too low for this.")}</small> : null}
+                  <>
+                    <div className="candy-special-options">
+                      <button
+                        type="button"
+                        className={`candy-special-option is-ante${ante ? " is-picked" : ""}`}
+                        onClick={() => {
+                          setAnte((on) => !on);
+                          slotSound.click();
+                          setBuying(null);
+                        }}
+                        disabled={costOf("ANTE") > g.balance + 1e-9 && !ante}
+                      >
+                        <SpecialStars count={1} />
+                        <span className="candy-special-name">{t("Ante Bet 1")}</span>
+                        <strong className="candy-special-price">{formatMoney(costOf("ANTE"))}</strong>
+                        <span className="candy-special-blurb">{t("About 2× chance of free spins")}</span>
                       </button>
-                    ))}
-                  </div>
+                      <button
+                        type="button"
+                        className="candy-special-option is-buy"
+                        onClick={() => setBuying("BUY")}
+                        disabled={!!buyNote || costOf("BUY") > g.balance + 1e-9}
+                        title={buyNote ?? undefined}
+                      >
+                        <SpecialStars count={2} />
+                        <span className="candy-special-name">{t("Ante Bet 2")}</span>
+                        <strong className="candy-special-price">{formatMoney(costOf("BUY"))}</strong>
+                        <span className="candy-special-blurb">{t("{count} free spins, straight away", { count: state.game.freeSpins })}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="candy-special-option is-super"
+                        onClick={() => setBuying("SUPER")}
+                        disabled={!!buyNote || costOf("SUPER") > g.balance + 1e-9}
+                        title={buyNote ?? undefined}
+                      >
+                        <SpecialStars count={3} />
+                        <span className="candy-special-name">{t("Super Spins 1")}</span>
+                        <strong className="candy-special-price">{formatMoney(costOf("SUPER"))}</strong>
+                        <span className="candy-special-blurb">{t("1 multiplier guaranteed to hit every spin")}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="candy-special-option is-super-max"
+                        onClick={() => setBuying("SUPER")}
+                        disabled={!!buyNote || costOf("SUPER") > g.balance + 1e-9}
+                        title={buyNote ?? undefined}
+                      >
+                        <SpecialStars count={5} gold />
+                        <span className="candy-special-name">{t("Super Spins 2")}</span>
+                        <strong className="candy-special-price">{formatMoney(costOf("SUPER"))}</strong>
+                        <span className="candy-special-blurb">
+                          {t("1 multiplier guaranteed to hit every spin with minimum {min}×", {
+                            min: (state.game.superMultipliers ?? [5])[0],
+                          })}
+                        </span>
+                      </button>
+                    </div>
+                    <div className="candy-special-base">
+                      <span>{t("Base bet")}</span>
+                      <div className="candy-special-base-row">
+                        <button type="button" className="candy-special-step" onClick={() => stepStake(-1)} disabled={stakeIndex <= 0} aria-label={t("Lower the bet")}>
+                          −
+                        </button>
+                        <strong>{formatMoney(g.stake)}</strong>
+                        <button type="button" className="candy-special-step" onClick={() => stepStake(1)} disabled={stakeIndex >= allowed.length - 1} aria-label={t("Raise the bet")}>
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="candy-buy-confirm">
                     <p>
@@ -700,6 +754,7 @@ export function CandyGame() {
                         className="candy-buy-go"
                         onClick={() => {
                           const mode = buying;
+                          setAnte(false);
                           setBuying(null);
                           void play(mode);
                         }}

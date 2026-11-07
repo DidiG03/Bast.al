@@ -136,17 +136,34 @@ export class HouseService implements OnModuleInit, OnModuleDestroy {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${playerId} FOR UPDATE`;
   }
 
-  /** A round that's over in one go (Money Wheel, Baccarat): the stake, `play` (what it pays, in cents, and the record), the pay-out. */
-  async instant<R extends object>(actor: Actor, game: HouseGame, bet: number, bets: readonly number[], play: (stakeCents: number, draw: (below: number) => number) => { payoutCents: number; record: R }) {
+  /**
+   * A round that's over in one go (Money Wheel, Baccarat, Candy Cascade): the stake, `play` (what it pays, in cents,
+   * and the record), the pay-out. `price` makes the round cost more than its bet (Candy Cascade's Special Bet and
+   * bought free spins): that's what leaves the balance and counts as the stake, against the Player's max stake and
+   * daily loss limit; `play` still gets the bet, which the round's wins are counted from.
+   */
+  async instant<R extends object>(
+    actor: Actor,
+    game: HouseGame,
+    bet: number,
+    bets: readonly number[],
+    play: (stakeCents: number, draw: (below: number) => number) => { payoutCents: number; record: R },
+    price?: (betCents: number) => number,
+  ) {
     this.assertPlayer(actor);
-    const stakeCents = await this.stakeCents(actor, game, bet, bets);
+    const betCents = await this.stakeCents(actor, game, bet, bets);
+    const stakeCents = price ? price(betCents) : betCents;
+    if (stakeCents > betCents) {
+      const max = await maxStakeOf(this.prisma, actor.id);
+      if (max !== null && stakeCents > Math.round(max * 100)) throw new BadRequestException(`This costs ${formatAll(stakeCents / 100)}, more than your max stake of ${formatAll(max)}.`);
+    }
     const team = await assertOnTeam(this.prisma, actor);
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lock(tx, actor.id);
       // A slot win still open to double or nothing is taken as it is: it's already in the balance.
       await tx.casinoGamble.deleteMany({ where: { playerId: actor.id } });
-      await this.limits.assertCanPlace(actor.id, bet, 0, tx);
-      const { payoutCents, record } = play(stakeCents, this.draw);
+      await this.limits.assertCanPlace(actor.id, stakeCents / 100, 0, tx);
+      const { payoutCents, record } = play(betCents, this.draw);
       const net = dollars(payoutCents - stakeCents);
       const moved = await tx.user.updateMany({ where: { id: actor.id, balance: { gte: dollars(stakeCents) } }, data: { balance: { increment: net } } });
       if (moved.count === 0) throw new BadRequestException("Your balance is too low for this bet. Pick a smaller one, or ask your Manager for a top-up.");
@@ -157,7 +174,7 @@ export class HouseService implements OnModuleInit, OnModuleDestroy {
     });
     await this.realtime.publishBalances([actor.id]);
     if (result.net.isNegative()) await this.users.alertLowBalance(actor.id, Number(result.net.abs()));
-    return { id: result.spin.id, balance: result.balance };
+    return { id: result.spin.id, balance: result.balance, stake: stakeCents / 100 };
   }
 
   /** Starts a round that's played over several requests: the stake leaves now, `make` sets the round up. */

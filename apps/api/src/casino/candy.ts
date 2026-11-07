@@ -42,6 +42,19 @@ export const MAX_FREE_SPINS = 100;
 /** The most a paid spin, with its free spins, pays: this many times the bet. */
 export const MAX_WIN = 5000;
 
+/**
+ * How a round is played, and what it costs in times the bet:
+ * - NORMAL: a paid spin (free spins if it lands 4 lollipops).
+ * - ANTE: the Special Bet, 25% more for a spin that lands lollipops more often (about twice the free spins).
+ * - BUY: free spins bought outright, without the paid spin.
+ * - SUPER: super free spins bought outright: more multiplier candies, and never below 5x.
+ */
+export const MODES = ["NORMAL", "ANTE", "BUY", "SUPER"] as const;
+export type Mode = (typeof MODES)[number];
+export const COST: Record<Mode, number> = { NORMAL: 1, ANTE: 1.25, BUY: 100, SUPER: 240 };
+/** Free spins can be bought only at a bet up to this, in ALL (so a purchase costs at most COST.SUPER times it). */
+export const MAX_BUY_BET = 500;
+
 export const PAYING = ["HEART", "STAR", "MOON", "GEM", "ORANGE", "LEMON", "MINT", "GRAPE", "PEACH"] as const;
 export type Paying = (typeof PAYING)[number];
 export const SCATTER = "LOLLIPOP";
@@ -64,6 +77,20 @@ export const PAYS: Record<Paying, [number, number, number]> = {
 
 /** Lollipops anywhere, in hundredths of the bet: 4, 5, and 6 or more. */
 export const SCATTER_PAYS: Record<4 | 5 | 6, number> = { 4: 300, 5: 500, 6: 10000 };
+
+/** In super free spins: no multiplier candy below 5x. */
+export const SUPER_MULTIPLIERS: Array<[value: number, weight: number]> = [
+  [5, 100],
+  [6, 60],
+  [8, 48],
+  [10, 40],
+  [12, 30],
+  [15, 20],
+  [20, 16],
+  [25, 8],
+  [50, 4],
+  [100, 2],
+];
 
 /** The multiplier candies and how often each lands, relative to the others. */
 export const MULTIPLIERS: Array<[value: number, weight: number]> = [
@@ -88,10 +115,18 @@ export const MULTIPLIERS: Array<[value: number, weight: number]> = [
  * the payout rate (PAYOUT_RATE), measured by scripts/candy-rtp.mjs: change a
  * number, run it again, and update PAYOUT_RATE.
  */
-export const WEIGHTS: { base: Record<Paying | typeof SCATTER, number>; free: Record<Paying | typeof SCATTER | "X", number> } = {
+type Candies = Record<Paying | typeof SCATTER, number>;
+type FreeCandies = Record<Paying | typeof SCATTER | "X", number>;
+export const WEIGHTS: { base: Candies; ante: Candies; free: FreeCandies; bought: FreeCandies; super: FreeCandies } = {
   base: { HEART: 20, STAR: 30, MOON: 40, GEM: 50, ORANGE: 70, LEMON: 85, MINT: 100, GRAPE: 120, PEACH: 140, LOLLIPOP: 10 },
+  // The Special Bet: the same candies, more lollipops (in twentieths, so it can be set finely).
+  ante: { HEART: 400, STAR: 600, MOON: 800, GEM: 1000, ORANGE: 1400, LEMON: 1700, MINT: 2000, GRAPE: 2400, PEACH: 2800, LOLLIPOP: 239 },
   // Free spins land the low candies a little more often, so they win more often, and the multiplier candies (X) on top.
   free: { HEART: 20, STAR: 30, MOON: 40, GEM: 50, ORANGE: 80, LEMON: 100, MINT: 130, GRAPE: 160, PEACH: 200, LOLLIPOP: 13, X: 57 },
+  // Bought free spins, priced at COST.BUY.
+  bought: { HEART: 20, STAR: 30, MOON: 40, GEM: 50, ORANGE: 80, LEMON: 100, MINT: 130, GRAPE: 160, PEACH: 200, LOLLIPOP: 13, X: 43 },
+  // Super free spins, priced at COST.SUPER: multiplier candies from SUPER_MULTIPLIERS.
+  super: { HEART: 20, STAR: 30, MOON: 40, GEM: 50, ORANGE: 80, LEMON: 100, MINT: 130, GRAPE: 160, PEACH: 200, LOLLIPOP: 13, X: 100 },
 };
 
 export type Draw = (below: number) => number;
@@ -112,28 +147,38 @@ function pick<T>(entries: Array<[T, number]>, total: number, draw: Draw): T {
   throw new Error("The weights don't add up");
 }
 
+/** Which candies a spin draws from: a paid spin's, the Special Bet's, natural free spins', bought ones' or super ones'. */
+export type Feel = "base" | "ante" | "free" | "bought" | "super";
+/** true and false still mean a free spin and a paid one. */
+const feelOf = (feel: Feel | boolean): Feel => (feel === true ? "free" : feel === false ? "base" : feel);
+const isFreeFeel = (feel: Feel) => feel === "free" || feel === "bought" || feel === "super";
+
 type Table<T> = { entries: Array<[T, number]>; total: number };
 const tableOf = <T>(entries: Array<[T, number]>): Table<T> => ({ entries, total: entries.reduce((sum, [, weight]) => sum + weight, 0) });
 /** The weights as lists to draw from, made again only if the weights are replaced (the payout-rate script tries others). */
-let tables: { from: [object, object, object]; base: Table<Cell>; free: Table<Cell | "X">; multipliers: Table<number> } | null = null;
+let tables: { from: object[]; feel: Record<Feel, Table<Cell | "X">>; multipliers: Table<number>; superMultipliers: Table<number> } | null = null;
 function weightTables() {
-  if (!tables || tables.from[0] !== WEIGHTS.base || tables.from[1] !== WEIGHTS.free || tables.from[2] !== MULTIPLIERS) {
+  const from = [WEIGHTS.base, WEIGHTS.ante, WEIGHTS.free, WEIGHTS.bought, WEIGHTS.super, MULTIPLIERS, SUPER_MULTIPLIERS];
+  if (!tables || from.some((part, i) => tables!.from[i] !== part)) {
+    const of = (weights: object) => tableOf(Object.entries(weights) as Array<[Cell | "X", number]>);
     tables = {
-      from: [WEIGHTS.base, WEIGHTS.free, MULTIPLIERS],
-      base: tableOf(Object.entries(WEIGHTS.base) as Array<[Cell, number]>),
-      free: tableOf(Object.entries(WEIGHTS.free) as Array<[Cell | "X", number]>),
+      from,
+      feel: { base: of(WEIGHTS.base), ante: of(WEIGHTS.ante), free: of(WEIGHTS.free), bought: of(WEIGHTS.bought), super: of(WEIGHTS.super) },
       multipliers: tableOf(MULTIPLIERS),
+      superMultipliers: tableOf(SUPER_MULTIPLIERS),
     };
   }
   return tables;
 }
 
 /** One new candy dropping in. */
-function dropOne(free: boolean, draw: Draw): Cell {
+function dropOne(feel: Feel, draw: Draw): Cell {
   const t = weightTables();
-  if (!free) return pick(t.base.entries, t.base.total, draw);
-  const cell = pick(t.free.entries, t.free.total, draw);
-  return cell === "X" ? (`X${pick(t.multipliers.entries, t.multipliers.total, draw)}` as Multiplier) : cell;
+  const table = t.feel[feel];
+  const cell = pick(table.entries, table.total, draw);
+  if (cell !== "X") return cell;
+  const values = feel === "super" ? t.superMultipliers : t.multipliers;
+  return `X${pick(values.entries, values.total, draw)}` as Multiplier;
 }
 
 export const isMultiplier = (cell: Cell): cell is Multiplier => cell.startsWith("X");
@@ -197,21 +242,23 @@ export function winsOn(board: Board): Win[] {
 }
 
 /** The winning candies burst; in each column the rest fall to the bottom and new ones drop in above them. */
-export function tumble(board: Board, wins: Win[], free: boolean, draw: Draw): Board {
+export function tumble(board: Board, wins: Win[], feel: Feel | boolean, draw: Draw): Board {
+  const kind = feelOf(feel);
   const gone = new Set(wins.flatMap((win) => win.cells));
   const next: Board = [];
   for (let column = 0; column < COLUMNS; column++) {
     const kept: Cell[] = [];
     for (let row = 0; row < ROWS; row++) if (!gone.has(at(column, row))) kept.push(board[at(column, row)]);
-    const fresh = Array.from({ length: ROWS - kept.length }, () => dropOne(free, draw));
+    const fresh = Array.from({ length: ROWS - kept.length }, () => dropOne(kind, draw));
     next.push(...fresh, ...kept);
   }
   return next;
 }
 
 /** A fresh board. */
-export function land(free: boolean, draw: Draw = randomInt): Board {
-  return Array.from({ length: CELLS }, () => dropOne(free, draw));
+export function land(feel: Feel | boolean, draw: Draw = randomInt): Board {
+  const kind = feelOf(feel);
+  return Array.from({ length: CELLS }, () => dropOne(kind, draw));
 }
 
 /** What a finished spin's lollipops pay. */
@@ -221,8 +268,10 @@ export function scatterPayFor(count: number): number {
 }
 
 /** One spin, paid or free, with all its tumbles. crypto.randomInt unless a test or the simulation passes its own draw. */
-export function spinOnce(free: boolean, draw: Draw = randomInt, start?: Board): SpinResult {
-  let board = start ?? land(free, draw);
+export function spinOnce(feel: Feel | boolean, draw: Draw = randomInt, start?: Board): SpinResult {
+  const kind = feelOf(feel);
+  const free = isFreeFeel(kind);
+  let board = start ?? land(kind, draw);
   const steps: Step[] = [];
   let tumbleWin = 0;
   // A board always has 30 candies and every tumble takes 8 or more away, but new ones can win again: bounded all the same.
@@ -231,7 +280,7 @@ export function spinOnce(free: boolean, draw: Draw = randomInt, start?: Board): 
     steps.push({ board, wins });
     if (wins.length === 0) break;
     tumbleWin += wins.reduce((sum, win) => sum + win.pay, 0);
-    board = tumble(board, wins, free, draw);
+    board = tumble(board, wins, kind, draw);
   }
   const final = steps[steps.length - 1].board;
   const scatters = final.filter((cell) => cell === SCATTER).length;
@@ -243,7 +292,10 @@ export function spinOnce(free: boolean, draw: Draw = randomInt, start?: Board): 
 }
 
 export type Round = {
-  /** The paid spin, then each free spin it gave, in order. */
+  mode: Mode;
+  /** Free spins bought outright (BUY and SUPER), before any won again; 0 for a paid spin. */
+  bought: number;
+  /** The paid spin, then each free spin it gave, in order; a bought round has only free spins. */
   spins: SpinResult[];
   /** What the whole round pays, in hundredths of the bet, after the MAX_WIN cap. */
   win: number;
@@ -251,23 +303,33 @@ export type Round = {
   capped: boolean;
 };
 
-/** A paid spin and every free spin it gives, played out. */
-export function play(draw: Draw = randomInt): Round {
+/** A paid spin and every free spin it gives, played out; or (BUY, SUPER) the free spins bought, played out. */
+export function play(draw: Draw = randomInt, mode: Mode = "NORMAL"): Round {
   const cap = MAX_WIN * 100;
-  const first = spinOnce(false, draw);
-  const spins = [first];
-  let total = first.win;
-  let remaining = first.freeSpinsWon;
+  const bought = mode === "BUY" || mode === "SUPER" ? FREE_SPINS : 0;
+  const freeFeel: Feel = mode === "BUY" ? "bought" : mode === "SUPER" ? "super" : "free";
+  const spins: SpinResult[] = [];
+  let total = 0;
+  let remaining = bought;
+  if (!bought) {
+    const first = spinOnce(mode === "ANTE" ? "ante" : "base", draw);
+    spins.push(first);
+    total = first.win;
+    remaining = first.freeSpinsWon;
+  }
   let played = 0;
   while (remaining > 0 && total < cap && played < MAX_FREE_SPINS) {
-    const next = spinOnce(true, draw);
+    const next = spinOnce(freeFeel, draw);
     spins.push(next);
     total += next.win;
     played += 1;
     remaining += next.freeSpinsWon - 1;
   }
-  return { spins, win: Math.min(total, cap), capped: total >= cap };
+  return { mode, bought, spins, win: Math.min(total, cap), capped: total >= cap };
 }
+
+/** What a round of this mode costs, in cents, for a bet in cents. */
+export const costCents = (betCents: number, mode: Mode) => Math.round(betCents * COST[mode]);
 
 /** What a round pays in cents, for a stake in cents, rounded down to the cent. */
 export const winCents = (stakeCents: number, winHundredths: number) => Math.floor((stakeCents * winHundredths) / 100);
@@ -275,9 +337,11 @@ export const winCents = (stakeCents: number, winHundredths: number) => Math.floo
 /** A round as stored and shown: the boards as short strings, to keep it small. */
 export function record(round: Round) {
   return {
+    mode: round.mode,
+    bought: round.bought,
     win: round.win / 100,
     capped: round.capped,
-    freeSpins: round.spins.length - 1,
+    freeSpins: round.spins.filter((spin) => spin.free).length,
     spins: round.spins.map((spin) => ({
       free: spin.free,
       steps: spin.steps.map((step) => ({ board: step.board, wins: step.wins.map((win) => ({ symbol: win.symbol, count: win.count, cells: win.cells, pay: win.pay / 100 })) })),

@@ -1472,9 +1472,12 @@ export type CandyWin = { symbol: CandyPaying; count: number; cells: number[]; pa
 export type CandyStep = { board: CandyCell[]; wins: CandyWin[] };
 /** One spin of a round (the paid one, or a free one): its boards, tumble by tumble. Amounts are in times the stake. */
 export type CandySpinPlay = { free: boolean; steps: CandyStep[]; scatters: number; scatterPay: number; tumbleWin: number; multiplier: number; win: number; freeSpinsWon: number };
-export type CandyRound = { win: number; capped: boolean; freeSpins: number; spins: CandySpinPlay[] };
-/** A round as the history keeps it: what it paid, in times the stake, and how many free spins it had. */
-export type CandyRecord = { game: "candy"; win: number; freeSpins: number; capped: boolean };
+/** A normal spin, the Special Bet (25% more, more lollipops), or free spins bought outright (normal or super). */
+export type CandyMode = "NORMAL" | "ANTE" | "BUY" | "SUPER";
+/** `bought`: the free spins bought outright (10), before any won again; 0 for a paid spin, whose spins[0] is the paid one. */
+export type CandyRound = { mode: CandyMode; bought: number; win: number; capped: boolean; freeSpins: number; spins: CandySpinPlay[] };
+/** A round as the history keeps it: what it paid, in times the bet, how many free spins it had, and how it was played. */
+export type CandyRecord = { game: "candy"; win: number; freeSpins: number; capped: boolean; mode?: CandyMode; bet?: number };
 export type CandyState = HouseBasics<CandyRecord> & {
   game: {
     name: string;
@@ -1491,10 +1494,15 @@ export type CandyState = HouseBasics<CandyRecord> & {
     scattersForFree: number;
     scattersForMore: number;
     multipliers: number[];
+    superMultipliers?: number[];
     maxWin: number;
+    /** What each way to play costs, in times the bet. Missing from an API older than the website. */
+    cost?: Record<CandyMode, number>;
+    maxBuyBet?: number;
   };
 };
-export type CandySpinResult = { id: string; balance: number; bet: number; win: number; round: CandyRound };
+/** `cost`: what the round cost (the bet, or more for the Special Bet and bought free spins). */
+export type CandySpinResult = { id: string; balance: number; bet: number; mode?: CandyMode; cost?: number; win: number; round: CandyRound };
 
 export type BaccaratSide = "PLAYER" | "BANKER" | "TIE";
 export type BaccaratHand = { player: PlayingCard[]; banker: PlayingCard[]; playerTotal: number; bankerTotal: number; winner: BaccaratSide };

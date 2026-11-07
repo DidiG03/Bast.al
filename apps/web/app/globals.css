@@ -20111,51 +20111,338 @@ button.cab-field-box:disabled {
   padding: 0.35rem 1.1rem;
 }
 
-/* The side panel: a pink candy plate with white icing. */
+/* The side column: three candy boxes in striped frames (Buy Feature pink, Special Bet blue, the win violet). */
 .candy-side {
+  display: grid;
+  align-content: center;
+  gap: 0.75rem;
+}
+
+.candy-box {
+  position: relative;
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 0.2rem;
-  min-height: 11rem;
-  padding: 1rem 0.7rem;
-  border: 5px solid #fff;
-  border-radius: 24px;
-  background: radial-gradient(circle at 50% 30%, #ffc2e3, #ff6fb5 60%, #d43d93);
-  box-shadow: 0 0 0 3px #ff6fb5, 0 10px 22px rgba(90, 20, 120, 0.4), inset 0 -6px 0 rgba(160, 20, 90, 0.35);
+  gap: 0.25rem;
+  min-height: 7.4rem;
+  padding: 0.8rem 0.6rem;
+  border: 7px solid transparent;
+  border-radius: 22px;
+  color: #fff;
   text-align: center;
+  box-shadow: 0 10px 22px rgba(90, 20, 120, 0.35), inset 0 -6px 0 rgba(0, 0, 0, 0.12);
 }
 
-.candy-side.is-free {
-  background: radial-gradient(circle at 50% 30%, #fff2a8, #ffb01f 60%, #e2601f);
-  box-shadow: 0 0 0 3px #ffb01f, 0 0 26px rgba(255, 210, 63, 0.75), inset 0 -6px 0 rgba(160, 60, 0, 0.35);
+button.candy-box {
+  width: 100%;
+  min-width: 0;
+  cursor: pointer;
+  font: inherit;
+  transition: transform 120ms ease, filter 120ms ease;
 }
 
-.candy-side small {
+button.candy-box:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.05);
+}
+
+button.candy-box:disabled {
+  cursor: default;
+  filter: grayscale(0.45) brightness(0.92);
+}
+
+.candy-box strong,
+.candy-box small {
+  font-family: "Arial Black", "Arial Rounded MT Bold", Arial, sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.candy-box strong {
+  color: #f3f0ff;
+  font-size: clamp(1.05rem, 2.3cqi, 1.55rem);
+  line-height: 1.05;
+  text-shadow: -2px -2px 0 #4a3a8a, 2px -2px 0 #4a3a8a, -2px 2px 0 #4a3a8a, 2px 2px 0 #4a3a8a, 0 4px 0 #2e2260;
+}
+
+.candy-box small {
+  color: #ffd23f;
+  font-size: clamp(0.72rem, 1.4cqi, 0.95rem);
+  text-shadow: -1.5px -1.5px 0 #a3420a, 1.5px -1.5px 0 #a3420a, -1.5px 1.5px 0 #a3420a, 1.5px 1.5px 0 #a3420a, 0 3px 0 #6e2a00;
+}
+
+.candy-box.is-buy {
+  background:
+    radial-gradient(circle at 50% 40%, #ffd0ea, #ff8fc8 55%, #f0609f) padding-box,
+    repeating-linear-gradient(45deg, #ff6fb5 0 10px, #fff 10px 20px) border-box;
+}
+
+.candy-box.is-ante {
+  background:
+    radial-gradient(circle at 50% 35%, #a8e6ff, #45b4f0 55%, #2276cc) padding-box,
+    repeating-linear-gradient(45deg, #5fc4ff 0 10px, #fff 10px 20px) border-box;
+}
+
+.candy-box.is-ante.is-on {
+  box-shadow: 0 0 0 3px #ffd23f, 0 0 22px rgba(255, 210, 63, 0.7), 0 10px 22px rgba(90, 20, 120, 0.35);
+}
+
+.candy-box.is-info {
+  min-height: 8.2rem;
+  border-color: #b98af0;
+  background: linear-gradient(180deg, #a35cf0, #7a2fd6 60%, #6420bf);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.35), inset 0 -6px 0 rgba(40, 0, 90, 0.35), 0 10px 22px rgba(90, 20, 120, 0.35);
+}
+
+.candy-box.is-info.is-free {
+  border-color: #ffd23f;
+  background: linear-gradient(180deg, #ffb01f, #f0602f 70%);
+}
+
+.candy-box.is-info small {
   color: #fff;
-  font-size: 0.85rem;
 }
 
-.candy-side strong {
-  color: #fff;
-  font-size: 1.05rem;
-}
-
-.candy-side .candy-side-big {
+.candy-box .candy-side-big {
   color: #ffe14a;
-  font-size: 2.6rem;
+  font-size: 2.4rem;
   line-height: 1;
 }
 
-.candy-side .candy-side-big.is-money {
-  font-size: clamp(1.1rem, 2.4cqi, 1.6rem);
+.candy-box .candy-side-big.is-money {
+  font-size: clamp(1.05rem, 2.2cqi, 1.5rem);
 }
 
-.candy-side-note {
-  max-width: 9rem;
+/* The Special Bet's switch: a dark track with a pink candy knob, across to the right when it's on. */
+.candy-switch {
+  --radius-control: 999px;
+  position: relative;
+  width: 7.2rem;
+  height: 2.1rem;
+  min-width: 0;
+  min-height: 0;
+  margin-top: 0.25rem;
+  padding: 0;
+  border: 3px solid #fff;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #123a7a, #1d4f9e);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.45);
+}
+
+.candy-switch.is-on {
+  background: linear-gradient(180deg, #e2900f, #ffcc33);
+}
+
+.candy-switch:disabled {
+  opacity: 0.6;
+}
+
+.candy-switch-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  display: grid;
+  place-items: center;
+  width: 55%;
+  height: calc(100% - 2px);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffb3d4, #ff6fae 60%, #e2468c);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 2px 4px rgba(0, 0, 0, 0.35);
   color: #fff;
+  font-size: 1.1rem;
+  font-weight: 900;
+  text-shadow: 0 1px 2px rgba(120, 0, 60, 0.6);
+  transition: left 180ms ease;
+}
+
+.candy-switch.is-on .candy-switch-knob {
+  left: calc(45% - 1px);
+}
+
+/* On a phone the two buttons sit over the board, small. */
+.candy-extras {
+  display: none;
+  gap: 0.5rem;
+}
+
+.candy-chip {
+  --radius-control: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0.2rem 0.7rem;
+  border: 3px solid #fff;
+  border-radius: 999px;
+  color: #fff;
+  font-family: "Arial Black", Arial, sans-serif;
   font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(60, 10, 90, 0.6);
+  box-shadow: 0 4px 10px rgba(90, 20, 120, 0.35);
+}
+
+.candy-chip.is-buy {
+  background: linear-gradient(180deg, #ff9fd0, #f0609f);
+}
+
+.candy-chip.is-buy:disabled {
+  filter: grayscale(0.45);
+}
+
+.candy-chip.is-ante {
+  padding-right: 0.3rem;
+  background: linear-gradient(180deg, #6fcaff, #2276cc);
+}
+
+.candy-chip .candy-switch {
+  width: 3.6rem;
+  height: 1.7rem;
+  margin: 0;
+  border-width: 2px;
+}
+
+.candy-chip .candy-switch-knob {
+  font-size: 0.8rem;
+}
+
+/* Buying free spins: a candy card over the game (inside it, so it works in full screen too). */
+.candy-buy-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(40, 8, 70, 0.55);
+}
+
+.candy-buy {
+  position: relative;
+  width: min(100%, 34rem);
+  padding: 1.1rem;
+  border: 6px solid transparent;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, #fff0fa, #ffd7ee) padding-box,
+    repeating-linear-gradient(45deg, #ff6fb5 0 10px, #fff 10px 20px) border-box;
+  color: #4a1a6a;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(30, 4, 60, 0.5);
+}
+
+.candy-buy h2 {
+  margin: 0 0 0.8rem;
+  color: #fff;
+  font-family: "Arial Black", Arial, sans-serif;
+  font-size: 1.6rem;
+  text-transform: uppercase;
+  text-shadow: -2px -2px 0 #b0126b, 2px -2px 0 #b0126b, -2px 2px 0 #b0126b, 2px 2px 0 #b0126b, 0 4px 0 #7a0f4a;
+}
+
+.candy-buy-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-family: inherit;
+  font-size: 1.4rem;
+  font-style: normal;
+}
+
+.candy-buy-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.candy-buy-option {
+  --radius-control: 18px;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.9rem 0.6rem;
+  border: 4px solid #fff;
+  border-radius: 18px;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgba(90, 20, 120, 0.3);
+}
+
+.candy-buy-option.is-buy {
+  background: linear-gradient(180deg, #ff9fd0, #e2468c);
+}
+
+.candy-buy-option.is-super {
+  background: linear-gradient(180deg, #ffd85a, #f08a1f);
+}
+
+.candy-buy-option:disabled {
+  cursor: default;
+  filter: grayscale(0.6);
+}
+
+.candy-buy-option strong {
+  font-family: "Arial Black", Arial, sans-serif;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  text-shadow: 0 2px 0 rgba(90, 10, 60, 0.5);
+}
+
+.candy-buy-option span {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.candy-buy-option b {
+  padding: 0.2rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(40, 8, 70, 0.55);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.candy-buy-option small {
+  font-size: 0.75rem;
+}
+
+.candy-buy-confirm p {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
   font-weight: 800;
+}
+
+.candy-buy-confirm .candy-buy-small {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.candy-buy-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.candy-buy-actions button {
+  --radius-control: 999px;
+  min-height: 44px;
+  padding: 0.4rem 1.2rem;
+  border: 3px solid #fff;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.candy-buy-cancel {
+  background: #7a5a9a;
+  color: #fff;
+}
+
+.candy-buy-go {
+  background: linear-gradient(180deg, #ffe14a, #ffab1f);
+  color: #5a1a00;
 }
 
 .candy-board-wrap {
@@ -20526,7 +20813,7 @@ button.cab-field-box:disabled {
   }
 
   .candy-board {
-    --candy-rest: 17rem;
+    --candy-rest: 20rem;
     border-width: 5px;
     padding: 0.3rem;
   }
@@ -20549,6 +20836,14 @@ button.cab-field-box:disabled {
   /* What this spin has won, over the board (the side panel's job on a wide screen). */
   .candy-phone-win {
     display: block;
+  }
+
+  .candy-extras {
+    display: flex;
+  }
+
+  .candy-buy-options {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .candy-say {

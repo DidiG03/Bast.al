@@ -127,6 +127,37 @@ test("Candy Cascade: a spin and every free spin it gives are paid in one go, wit
   assert.equal(await ledgerTotal(ana), await balanceOf(ana));
 });
 
+test("Candy Cascade: the Special Bet costs 25% more, and free spins are bought outright at bets up to 500", async () => {
+  // The Special Bet: 62.50 for a 50 bet, wins counted from the 50.
+  let before = await balanceOf(ana);
+  const ante = await games.candySpin(ana, 50, "ANTE");
+  assert.equal(ante.cost, 62.5);
+  assert.equal(ante.round.mode, "ANTE");
+  assert.equal(ante.win, Math.floor(50 * 100 * ante.round.win) / 100);
+  assert.equal(await balanceOf(ana), Math.round((before - 62.5 + ante.win) * 100) / 100);
+  const anteRow = await prisma.casinoSpin.findFirstOrThrow({ where: { kind: "CANDY" }, orderBy: { createdAt: "desc" } });
+  assert.equal(Number(anteRow.stake), 62.5, "the stake on record is what it cost");
+  // Buying is for bets up to 500, and the full price counts against the max stake.
+  await assert.rejects(games.candySpin(ana, 1000, "BUY"), /bought at a bet of up to 500.00 ALL/);
+  await assert.rejects(games.candySpin(ana, 50, "WHATEVER"), /Pick a normal spin/);
+  await prisma.bettingLimit.upsert({ where: { playerId: ana.id }, create: { playerId: ana.id, ownerMaxStake: 1000 }, update: { ownerMaxStake: 1000 } });
+  await assert.rejects(games.candySpin(ana, 50, "BUY"), /This costs 5,000.00 ALL, more than your max stake of 1,000.00 ALL/);
+  await prisma.bettingLimit.delete({ where: { playerId: ana.id } });
+  // Bought: 100 times the bet, and only free spins, at least the 10 bought.
+  before = await balanceOf(ana);
+  const bought = await games.candySpin(ana, 50, "BUY");
+  assert.equal(bought.cost, 5000);
+  assert.equal(bought.round.bought, 10);
+  assert.ok(bought.round.spins.length >= 10);
+  assert.ok(bought.round.spins.every((spin) => spin.free));
+  assert.equal(await balanceOf(ana), Math.round((before - 5000 + bought.win) * 100) / 100);
+  // More than the balance: refused, nothing moves.
+  before = await balanceOf(ana);
+  if (before < 12000) await assert.rejects(games.candySpin(ana, 50, "SUPER"), /balance is too low/);
+  assert.equal(await balanceOf(ana), before);
+  assert.equal(await ledgerTotal(ana), await balanceOf(ana));
+});
+
 test("Baccarat: a hand is dealt by the rules and paid by the side", async () => {
   house.draw = (below) => Math.floor(Math.random() * below);
   const before = await balanceOf(ana);
@@ -222,8 +253,8 @@ test("the Casino stats count each new game as itself, not as the slot", async ()
   assert.equal(stats.games.slot.spins, 0);
   assert.equal(stats.games.slot.staked, 0);
   assert.equal(stats.games.wheel.spins, 1);
-  assert.equal(stats.games.candy.spins, 40);
-  assert.equal(stats.games.candy.staked, 2000);
+  assert.equal(stats.games.candy.spins, 42);
+  assert.equal(stats.games.candy.staked, 2000 + 62.5 + 5000);
   assert.equal(stats.games.baccarat.spins, 1);
   assert.equal(stats.games.hilo.spins, 1);
   assert.equal(stats.games.tower.spins, 1);

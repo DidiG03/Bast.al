@@ -50,8 +50,11 @@ export class HouseGamesService {
       ...basics,
       // The history only needs each round's headline, not every board it went through.
       recent: basics.recent.map((row) => {
-        const round = row.round as { win?: number; freeSpins?: number; capped?: boolean } | null;
-        return { ...row, round: round ? { game: "candy" as const, win: round.win ?? 0, freeSpins: round.freeSpins ?? 0, capped: round.capped ?? false } : null };
+        const round = row.round as { win?: number; freeSpins?: number; capped?: boolean; mode?: string; bet?: number } | null;
+        return {
+          ...row,
+          round: round ? { game: "candy" as const, win: round.win ?? 0, freeSpins: round.freeSpins ?? 0, capped: round.capped ?? false, mode: (round.mode ?? "NORMAL") as Candy.Mode, bet: round.bet ?? row.bet } : null,
+        };
       }),
       game: {
         name: Candy.GAME_NAME,
@@ -70,20 +73,41 @@ export class HouseGamesService {
         scattersForFree: Candy.SCATTERS_FOR_FREE,
         scattersForMore: Candy.SCATTERS_FOR_MORE,
         multipliers: Candy.MULTIPLIERS.map(([value]) => value),
+        superMultipliers: Candy.SUPER_MULTIPLIERS.map(([value]) => value),
         maxWin: Candy.MAX_WIN,
+        /** What each way to play costs, in times the bet. */
+        cost: Candy.COST,
+        /** Free spins can be bought only at a bet up to this. */
+        maxBuyBet: Candy.MAX_BUY_BET,
       },
     };
   }
 
-  /** A paid spin with every free spin it gives, settled at once; the page plays them back from what this returns. */
-  async candySpin(actor: Actor, bet: number) {
+  /**
+   * A paid spin with every free spin it gives, settled at once; the page plays them back from what this returns.
+   * `mode`: a normal spin, the Special Bet (ANTE: 25% more, more lollipops), or free spins bought outright (BUY,
+   * SUPER), which only bets up to Candy.MAX_BUY_BET can do.
+   */
+  async candySpin(actor: Actor, bet: number, mode: string = "NORMAL") {
+    if (!(Candy.MODES as readonly string[]).includes(mode)) throw new BadRequestException("Pick a normal spin, the Special Bet, or free spins to buy.");
+    const how = mode as Candy.Mode;
+    if ((how === "BUY" || how === "SUPER") && bet > Candy.MAX_BUY_BET) {
+      throw new BadRequestException(`Free spins can be bought at a bet of up to ${Candy.MAX_BUY_BET.toFixed(2)} ALL.`);
+    }
     let round: Candy.Round | null = null;
-    const result = await this.house.instant(actor, "candy", bet, Candy.BETS, (stakeCents, draw) => {
-      round = Candy.play(draw);
-      return { payoutCents: Candy.winCents(stakeCents, round.win), record: Candy.record(round) };
-    });
+    const result = await this.house.instant(
+      actor,
+      "candy",
+      bet,
+      Candy.BETS,
+      (betCents, draw) => {
+        round = Candy.play(draw, how);
+        return { payoutCents: Candy.winCents(betCents, round.win), record: { ...Candy.record(round), bet } };
+      },
+      how === "NORMAL" ? undefined : (betCents) => Candy.costCents(betCents, how),
+    );
     const played = round as unknown as Candy.Round;
-    return { id: result.id, balance: result.balance, bet, win: Candy.winCents(Math.round(bet * 100), played.win) / 100, round: Candy.record(played) };
+    return { id: result.id, balance: result.balance, bet, mode: how, cost: result.stake, win: Candy.winCents(Math.round(bet * 100), played.win) / 100, round: Candy.record(played) };
   }
 
   // ——— Baccarat ———

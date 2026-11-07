@@ -561,6 +561,24 @@ section("Candy Cascade (simulated: cascades and free spins have no closed form)"
   if (mean - 4 * se > 0.85) flag("LEAK", "Candy Cascade", `pays back ${pct(mean)} ± ${pct(se)}.`);
   checkSim("Candy Cascade", "the stated payout rate", paid, rounds, sq, rounds, Candy.PAYOUT_RATE / 100);
 }
+{
+  // The Special Bet and bought free spins: each against what it costs.
+  for (const [mode, n, seed] of [["ANTE", 2_000_000, 61], ["BUY", 200_000, 62], ["SUPER", 150_000, 63]]) {
+    const draw = seeded(seed);
+    const rounds = N(n);
+    let paid = 0;
+    let sq = 0;
+    for (let i = 0; i < rounds; i++) {
+      const x = Candy.play(draw, mode).win / 100 / Candy.COST[mode];
+      paid += x;
+      sq += x * x;
+    }
+    const mean = paid / rounds;
+    const se = Math.sqrt(Math.max(sq / rounds - mean * mean, 0) / rounds);
+    console.log(`  ${mode.padEnd(6)} ${rounds.toLocaleString()} rounds at ${Candy.COST[mode]}× the bet: ${pct(mean)} ± ${pct(se)}`);
+    if (mean - 4 * se > 0.85) flag("LEAK", "Candy Cascade", `${mode} pays back ${pct(mean)} ± ${pct(se)} of what it costs.`);
+  }
+}
 
 section("Findings");
 if (findings.length === 0) console.log("  none");

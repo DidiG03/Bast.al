@@ -186,3 +186,40 @@ test("it pays back about 84.7% over many rounds", () => {
   // Within four standard errors of the stated rate (scripts/candy-rtp.mjs measures it over 20 million rounds).
   assert.ok(Math.abs(mean - Candy.PAYOUT_RATE / 100) < 4 * se, `measured ${(mean * 100).toFixed(2)}% ± ${(se * 100).toFixed(2)}%`);
 });
+
+test("the Special Bet and bought free spins: what they cost, and how they play", () => {
+  assert.deepEqual(Candy.COST, { NORMAL: 1, ANTE: 1.25, BUY: 100, SUPER: 240 });
+  assert.equal(Candy.costCents(5000, "ANTE"), 6250);
+  assert.equal(Candy.costCents(5000, "BUY"), 500000);
+  assert.equal(Candy.costCents(5000, "SUPER"), 1200000);
+  const draw = seeded(9);
+  for (let i = 0; i < 300; i++) {
+    const bought = Candy.play(draw, "BUY");
+    assert.equal(bought.bought, 10);
+    assert.ok(bought.spins.length >= 10 && bought.spins.every((spin) => spin.free));
+    const superRound = Candy.play(draw, "SUPER");
+    // Super free spins' multiplier candies are never below 5x.
+    for (const spin of superRound.spins) for (const step of spin.steps) for (const cell of step.board) if (cell.startsWith("X")) assert.ok(Number(cell.slice(1)) >= 5);
+    const ante = Candy.play(draw, "ANTE");
+    assert.equal(ante.bought, 0);
+    assert.equal(ante.spins[0].free, false);
+  }
+});
+
+test("every way to play pays back about the same, near 85% of what it costs", () => {
+  for (const [mode, rounds, seed] of [["ANTE", 300_000, 11], ["BUY", 30_000, 12], ["SUPER", 25_000, 13]]) {
+    const draw = seeded(seed);
+    let paid = 0;
+    let squares = 0;
+    for (let i = 0; i < rounds; i++) {
+      const x = Candy.play(draw, mode).win / 100 / Candy.COST[mode];
+      paid += x;
+      squares += x * x;
+    }
+    const mean = paid / rounds;
+    const se = Math.sqrt((squares / rounds - mean * mean) / rounds);
+    // Within four standard errors of the normal spin's stated rate (scripts/candy-rtp.mjs measures each closely).
+    assert.ok(Math.abs(mean - Candy.PAYOUT_RATE / 100) < 4 * se + 0.01, `${mode}: measured ${(mean * 100).toFixed(2)}% ± ${(se * 100).toFixed(2)}%`);
+  }
+});
+

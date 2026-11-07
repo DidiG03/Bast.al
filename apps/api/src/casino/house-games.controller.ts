@@ -12,6 +12,7 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { Idempotent } from "../idempotency/idempotency.interceptor";
 import { SIDES as BACCARAT_SIDES } from "./baccarat";
+import { MODES as CANDY_MODES } from "./candy";
 import { GUESSES } from "./hilo";
 import { HouseGamesService } from "./house-games.service";
 import { LEVELS } from "./tower";
@@ -27,6 +28,13 @@ class WheelDto extends StakeDto {
   @ApiProperty({ enum: RISKS })
   @IsIn([...RISKS])
   risk!: string;
+}
+
+class CandySpinDto extends StakeDto {
+  @ApiProperty({ enum: CANDY_MODES, required: false, description: "A normal spin (default), the Special Bet, or free spins to buy" })
+  @IsOptional()
+  @IsIn([...CANDY_MODES])
+  mode?: string;
 }
 
 class BaccaratDto extends StakeDto {
@@ -98,8 +106,8 @@ export class HouseGamesController {
   @Roles(Role.PLAYER)
   @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Idempotent()
-  candySpin(@CurrentActor() actor: Actor, @Body() body: StakeDto) {
-    return this.games.candySpin(actor, body.bet);
+  candySpin(@CurrentActor() actor: Actor, @Body() body: CandySpinDto) {
+    return this.games.candySpin(actor, body.bet, body.mode ?? "NORMAL");
   }
 
   @Get("baccarat")

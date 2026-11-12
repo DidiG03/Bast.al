@@ -84,7 +84,12 @@ export type FeedLiveOdds = {
 };
 
 /** A competition with a season in progress, for Super Admin's league picker. */
-export type FeedLeague = { id: number; name: string; type: "League" | "Cup"; country: string };
+/**
+ * `coverage`: whether the feed sends this league's goal events (who scored, in
+ * which minute) and match statistics (corners, cards), which the goal-order,
+ * goalscorer, corners and cards markets settle on. Null when the feed didn't say.
+ */
+export type FeedLeague = { id: number; name: string; type: "League" | "Cup"; country: string; coverage?: { events: boolean; statistics: boolean } | null };
 
 export type FeedFixture = {
   externalId: string;
@@ -1416,8 +1421,22 @@ export class ApiFootballClient {
 
   /** Every league with a season in progress, in one request. */
   async currentLeagues(): Promise<FeedLeague[]> {
-    const res = (await this.fetchJson("/leagues", { current: "true" })) as ApiResponse<{ league: { id: number; name: string; type?: string }; country: { name: string } }>;
-    return res.response.map((row) => ({ id: row.league.id, name: row.league.name, type: row.league.type === "Cup" ? "Cup" : "League", country: row.country.name }));
+    type Coverage = { fixtures?: { events?: boolean; statistics_fixtures?: boolean } };
+    const res = (await this.fetchJson("/leagues", { current: "true" })) as ApiResponse<{
+      league: { id: number; name: string; type?: string };
+      country: { name: string };
+      seasons?: Array<{ current?: boolean; coverage?: Coverage }>;
+    }>;
+    return res.response.map((row) => {
+      const fixtures = (row.seasons?.find((season) => season.current) ?? row.seasons?.[0])?.coverage?.fixtures;
+      return {
+        id: row.league.id,
+        name: row.league.name,
+        type: row.league.type === "Cup" ? "Cup" : "League",
+        country: row.country.name,
+        coverage: fixtures ? { events: fixtures.events === true, statistics: fixtures.statistics_fixtures === true } : null,
+      };
+    });
   }
 
   /** In-play odds for every match the feed is pricing live, in one request. */
@@ -1430,6 +1449,20 @@ export class ApiFootballClient {
   async liveOddsFor(fixtureId: string): Promise<RawLiveOdds | null> {
     const res = (await this.fetchJson("/odds/live", { fixture: fixtureId })) as ApiResponse<RawLiveOdds>;
     return res.response.find((row) => String(row.fixture.id) === fixtureId) ?? null;
+  }
+
+  /**
+   * Pre-match odds for every match one bookmaker prices on one day, whatever
+   * the league: up to `maxPages` pages of 10 matches, while `more()` allows.
+   */
+  async oddsByDate(date: string, bookmakerId: number, maxPages: number, more: () => boolean = () => true): Promise<RawOdds[]> {
+    const all: RawOdds[] = [];
+    for (let page = 1; page <= maxPages; page++) {
+      const res = (await this.fetchJson("/odds", { date, bookmaker: bookmakerId, page })) as ApiResponse<RawOdds>;
+      all.push(...res.response);
+      if (!res.paging || res.paging.current >= res.paging.total || !more()) break;
+    }
+    return all;
   }
 
   /** Pre-match odds for one league on one day, every page. */

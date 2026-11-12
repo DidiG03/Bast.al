@@ -311,6 +311,10 @@ model Event {
   homeLogo           String?          @map("home_logo")
   awayLogo           String?          @map("away_logo")
   /// The competition's crest and the country's flag, when the feed sends them.
+  /// Listed from a league outside the synced list because the bookmaker prices
+  /// it, and the feed doesn't send that league's goal events and match
+  /// statistics: only markets that settle from the score are offered.
+  scoreOnly          Boolean          @default(false) @map("score_only")
   leagueLogo         String?          @map("league_logo")
   countryFlag        String?          @map("country_flag")
   homeScore          Int?             @map("home_score")

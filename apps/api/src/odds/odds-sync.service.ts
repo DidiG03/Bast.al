@@ -3,9 +3,9 @@ import { BetStatus, EventStatus, Prisma } from "@prisma/client";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
-import { GOAL_MARKET_KEYS } from "../bets/goals";
+import { GOAL_MARKET_KEYS, isGoalMarket } from "../bets/goals";
 import type { FeedMark, LateTimeline } from "../bets/late";
-import { ApiFootballClient, FeedFixture, FeedLeague, FeedLiveMarket, FeedLiveOdds, FeedMarket, feedMarkOf, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseLiveTimeline, parseMarkets, parseMatchCentre, readingStopped } from "./api-football";
+import { ApiFootballClient, FeedFixture, FeedLeague, RawOdds, FeedLiveMarket, FeedLiveOdds, FeedMarket, feedMarkOf, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseLiveTimeline, parseMarkets, parseMatchCentre, readingStopped } from "./api-football";
 import { feedDelay, goalForScore, goalLag } from "./feed-delay";
 import { savedCrests, savedMarks } from "./crest";
 import { PREMATCH_REFRESH_MS, RICH_PLAN, isDailyLimitError, msUntilReset, pacedInterval, quotaReserve } from "./feed-budget";
@@ -132,6 +132,16 @@ const LIVE_SCORE_SOURCE_MS = 60_000;
  */
 const LIVE_ALL_DISCOVER_MS = 60_000;
 /**
+ * With API_FOOTBALL_ALL_PRICED (on by default), every match the bookmaker
+ * prices before kick-off is listed, whatever its league, for today and the
+ * next ALL_PRICED_DAYS - 1 days; later days keep to the synced leagues. Its
+ * odds come ten matches a request, at most ALL_PRICED_MAX_PAGES requests a
+ * day's refresh, which replaces the one request a league the synced list
+ * costs.
+ */
+const ALL_PRICED_DAYS = Math.min(7, Math.max(1, Number(process.env.API_FOOTBALL_ALL_PRICED_DAYS) || 3));
+const ALL_PRICED_MAX_PAGES = Number(process.env.API_FOOTBALL_ALL_PRICED_MAX_PAGES) || 150;
+/**
  * A live match whose goal certainly reached the site later than this after it
  * went in (GoalSeen.lagMinMs) takes no more live bets: no wait a Player
  * would sit through covers that feed. LIVE_SLOW_MATCH_MS=0 turns it off.
@@ -228,8 +238,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   private leagues = new Set<number>();
   private countries = new Set<string>();
   private custom = false;
-  /** API_FOOTBALL_LIVE_ALL as set; null when unset, which means on unless Super Admin picked the leagues. */
+  /**
+   * API_FOOTBALL_LIVE_ALL and API_FOOTBALL_ALL_PRICED as set ("true" or
+   * "false"); null when unset, which means on until Super Admin saves a league
+   * pick on the Odds page, so a pick really limits the board.
+   */
   private readonly liveAllEnv: boolean | null;
+  private readonly allPricedEnv: boolean | null;
   /** The fixture ids the bookmaker priced in play on the last reading of the live board (see LIVE_ALL_DISCOVER_MS). */
   private livePriced = new Set<string>();
   /** When the live scores and the live prices were last read while nothing on the board was live. */
@@ -289,14 +304,33 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       countries: listEnv("API_FOOTBALL_COUNTRIES") ?? DEFAULT_COUNTRIES,
     };
     this.useChoice(this.defaults, false);
-    const liveAll = process.env.API_FOOTBALL_LIVE_ALL?.trim().toLowerCase();
-    this.liveAllEnv = liveAll === "true" ? true : liveAll === "false" ? false : null;
+    this.liveAllEnv = flagEnv("API_FOOTBALL_LIVE_ALL");
+    this.allPricedEnv = flagEnv("API_FOOTBALL_ALL_PRICED");
     this.days = Math.min(7, Math.max(1, Number(process.env.ODDS_SYNC_DAYS) || 7));
   }
 
-  /** Whether live matches outside the synced leagues are listed while the bookmaker prices them in play. */
+  /** Whether live matches from any league are listed while the bookmaker prices them in play. */
   private get liveAll(): boolean {
     return this.liveAllEnv ?? !this.custom;
+  }
+
+  /** Whether every match the bookmaker prices before kick-off is listed, whatever its league (ALL_PRICED_DAYS). */
+  private get allPriced(): boolean {
+    return this.allPricedEnv ?? !this.custom;
+  }
+
+  /**
+   * Whether a match gets only the markets that settle from the score: it's
+   * from a league outside the synced list (listed because the bookmaker
+   * prices it), and the feed doesn't send that league's goal events and
+   * match statistics, or we don't know whether it does. Goalscorer,
+   * goal-order, corners and cards bets on it couldn't be settled.
+   */
+  private scoreOnly(fixture: FeedFixture): boolean {
+    if (this.leagues.has(fixture.leagueId) || this.countries.has(fixture.country.toLowerCase())) return false;
+    if (this.mode === "mock") return false;
+    const coverage = this.leagueList?.leagues.find((league) => league.id === fixture.leagueId)?.coverage;
+    return !(coverage?.events && coverage.statistics);
   }
 
   onModuleInit() {
@@ -719,6 +753,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     let refreshed = 0;
     let saving = false;
     const schedule = (this.quotaLimit ?? 0) >= RICH_PLAN ? PREMATCH_REFRESH_MS.rich : PREMATCH_REFRESH_MS.lean;
+    // The leagues' coverage (scoreOnly) is kept for 12 hours; one request.
+    if (this.allPriced || this.liveAll) await this.availableLeagues().catch(() => null);
     for (let day = 0; day < this.days; day++) {
       const date = new Date(Date.now() + day * 86_400_000).toISOString().slice(0, 10);
       if (day > 0 && this.quotaLeft !== null && this.quotaLeft < quotaReserve(this.quotaLimit)) {
@@ -730,7 +766,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       const kickOffs = new Map(
         (await this.prisma.event.findMany({ where: { provider: this.provider(), externalId: { in: all.map((f) => f.externalId) } }, select: { externalId: true, startsAt: true } })).map((e) => [e.externalId!, e.startsAt]),
       );
-      const fixtures = all.filter((f) => this.wanted(f, new Set(kickOffs.keys())));
+      // Every match the bookmaker prices that day, in a few pages: those are listed too, whatever their league.
+      const everyPriced = this.allPriced && day < ALL_PRICED_DAYS;
+      const pricedOdds = everyPriced
+        ? await client.oddsByDate(date, this.bookmakerId, ALL_PRICED_MAX_PAGES, () => this.quotaLeft === null || this.quotaLeft > quotaReserve(this.quotaLimit))
+        : [];
+      const priced = new Set(pricedOdds.map((raw) => String(raw.fixture.id)));
+      const fixtures = all.filter((f) => this.wanted(f, new Set(kickOffs.keys())) || priced.has(f.externalId));
       const ids = new Map<string, string>();
       for (const fixture of fixtures) ids.set(fixture.externalId, await this.upsertEvent(fixture, kickOffs.get(fixture.externalId)));
       events += fixtures.length;
@@ -741,16 +783,23 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         const key = `${fixture.leagueId}:${fixture.season}`;
         byLeague.set(key, [...(byLeague.get(key) ?? []), fixture]);
       }
-      for (const [key, leagueFixtures] of byLeague) {
-        const [leagueId, season] = key.split(":").map(Number);
-        const odds = await client.odds(leagueId, season, date, this.bookmakerId);
-        for (const raw of odds) {
-          const fixture = leagueFixtures.find((f) => f.externalId === String(raw.fixture.id));
-          const eventId = fixture && ids.get(fixture.externalId);
-          if (!fixture || !eventId) continue;
-          const parsed = parseMarkets(raw, fixture.homeTeam, fixture.awayTeam, this.bookmakerId);
-          await this.upsertMarkets(eventId, parsed);
-          markets += parsed.length;
+      const save = async (raw: RawOdds, fixture: FeedFixture | undefined) => {
+        const eventId = fixture && ids.get(fixture.externalId);
+        if (!fixture || !eventId) return;
+        const parsed = parseMarkets(raw, fixture.homeTeam, fixture.awayTeam, this.bookmakerId);
+        const offered = this.scoreOnly(fixture) ? parsed.filter((market) => settlesFromScore(market.key)) : parsed;
+        await this.upsertMarkets(eventId, offered);
+        markets += offered.length;
+      };
+      if (everyPriced) {
+        // The day's pages already carry every league's odds: no request a league.
+        const upcoming = new Map(fixtures.filter((f) => f.status === EventStatus.UPCOMING).map((f) => [f.externalId, f]));
+        for (const raw of pricedOdds) await save(raw, upcoming.get(String(raw.fixture.id)));
+      } else {
+        for (const [key, leagueFixtures] of byLeague) {
+          const [leagueId, season] = key.split(":").map(Number);
+          const odds = await client.odds(leagueId, season, date, this.bookmakerId);
+          for (const raw of odds) await save(raw, leagueFixtures.find((f) => f.externalId === String(raw.fixture.id)));
         }
       }
       await this.markRefreshed(date, schedule[Math.min(day, schedule.length - 1)]);
@@ -801,7 +850,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const missing = [...this.leagues].filter((id) => !byId.has(id));
     const countries = [...this.countries].filter((country) => !known.some((league) => league.country.toLowerCase() === country));
     this.logger.log(
-      `Syncing ${this.leagues.size - missing.length} leagues and every league in: ${[...this.countries].join(", ") || "no countries"}${this.liveAll ? "; plus live matches from any league the bookmaker prices in play" : ""}`,
+      `Syncing ${this.leagues.size - missing.length} leagues and every league in: ${[...this.countries].join(", ") || "no countries"}${this.allPriced ? `; plus every match the bookmaker prices in the next ${ALL_PRICED_DAYS} days` : ""}${this.liveAll ? "; plus live matches from any league the bookmaker prices in play" : ""}`,
     );
     if (missing.length > 0) this.logger.warn(`API-Football has no current season for league ids ${missing.join(", ")}; check ${this.custom ? "the Leagues list on the Odds page" : "API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES"}`);
     if (countries.length > 0) this.logger.warn(`API-Football has no current leagues for ${countries.join(", ")}; check ${this.custom ? "the Leagues list on the Odds page" : "API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES"}`);
@@ -1509,8 +1558,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     if (this.readings.size > 500) for (const [id, reading] of this.readings) if (Date.now() - reading.at.getTime() > 3_600_000) this.readings.delete(id);
     const before = await this.prisma.event.findUniqueOrThrow({
       where: { id: eventId },
-      select: { homeScore: true, awayScore: true, elapsed: true, liveStopped: true, liveSlowFeed: true, liveCooldownUntil: true, liveCooldownReason: true, liveScoreAhead: true, liveOddsAt: true, status: true, startsAt: true, period: true },
+      select: { homeScore: true, awayScore: true, elapsed: true, liveStopped: true, liveSlowFeed: true, liveCooldownUntil: true, liveCooldownReason: true, liveScoreAhead: true, liveOddsAt: true, status: true, startsAt: true, period: true, scoreOnly: true },
     });
+    // A league whose goal events and statistics the feed doesn't send: only markets that settle from the score.
+    if (before.scoreOnly) odds = { ...odds, markets: odds.markets.filter((market) => settlesFromScore(market.key)) };
     const scored = odds.homeScore !== null && odds.awayScore !== null;
     // Half-time: the feed stops the clock but keeps its prices up, so the match stays open (readingStopped).
     const stopped = readingStopped(odds, before.period);
@@ -1686,6 +1737,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       period: fixture.period,
       homeScore: fixture.homeScore,
       awayScore: fixture.awayScore,
+      scoreOnly: this.scoreOnly(fixture),
       syncedAt: new Date(),
     };
     const provider = this.provider();
@@ -1937,6 +1989,17 @@ const finiteOr = (ms: number) => (Number.isFinite(ms) ? Math.round(ms) : null);
 function scoreOf(value: string | null): { home: number; away: number } | null {
   const match = value ? /^(\d+):(\d+)$/.exec(value) : null;
   return match ? { home: Number(match[1]), away: Number(match[2]) } : null;
+}
+
+/** Whether a market settles from the score alone, not from goal events (goalscorers, goal order) or match statistics (corners, cards). */
+function settlesFromScore(key: string): boolean {
+  return !isGoalMarket(key) && !STATS_MARKET_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
+/** A "true" or "false" setting; null when unset or anything else. */
+function flagEnv(name: string): boolean | null {
+  const value = process.env[name]?.trim().toLowerCase();
+  return value === "true" ? true : value === "false" ? false : null;
 }
 
 function listEnv(name: string): string[] | null {

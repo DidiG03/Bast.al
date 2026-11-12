@@ -161,7 +161,7 @@ export function mockFetchJson(clock: () => number = Date.now, anchor: number = c
       return { response: params.fixture ? rows.filter((row) => String(row.fixture.id) === String(params.fixture)) : rows };
     }
     if (path === "/odds") {
-      const response = MATCHES.filter((m) => m.league[0] === Number(params.league) && utcDate(anchor + m.kickoff * 60_000) === params.date).map(odds);
+      const response = MATCHES.filter((m) => (params.league === undefined || m.league[0] === Number(params.league)) && utcDate(anchor + m.kickoff * 60_000) === params.date).map(odds);
       return { paging: { current: 1, total: 1 }, response };
     }
     if (path === "/leagues") {

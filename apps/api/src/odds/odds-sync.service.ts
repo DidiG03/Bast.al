@@ -20,37 +20,51 @@ export type MatchMoment = { kind: "goal" | "red"; home: number | null; away: num
 
 /**
  * Leagues synced when API_FOOTBALL_LEAGUES isn't set (API-Football ids), picked
- * so there's football every day of the year, international breaks included.
- * Every league from the countries in API_FOOTBALL_COUNTRIES (Albania and
- * Kosovo by default) is synced as well. The first sync logs any id the feed
- * doesn't know.
+ * so there's football every day of the year, international breaks included:
+ * about 200 competitions. Every league from the countries in
+ * API_FOOTBALL_COUNTRIES (Albania and Kosovo by default) is synced as well.
+ * The first sync logs any id the feed doesn't know. A league the bookmaker
+ * doesn't price on a given day costs nothing: odds are asked for per league
+ * only on days it has matches.
  */
 const DEFAULT_LEAGUES = [
-  // England, Spain, Italy, Germany, France: top two divisions and main cup
-  39, 40, 45, 48, 140, 141, 143, 135, 136, 137, 78, 79, 81, 61, 62, 66,
-  // England's League One and Two, Germany's 3. Liga, and the second divisions of the Netherlands, Portugal, Turkey, Scotland and Belgium
-  41, 42, 80, 89, 95, 204, 180, 145,
+  // England, Spain, Italy, Germany, France: top two divisions, main cups and super cups
+  39, 40, 45, 48, 528, 140, 141, 143, 556, 135, 136, 137, 547, 78, 79, 81, 529, 61, 62, 66, 526,
+  // England's League One, Two, National League and EFL Trophy; Germany's 3. Liga; the second divisions of the
+  // Netherlands, Portugal, Turkey, Scotland and Belgium; Scotland's League One and Two
+  41, 42, 43, 46, 80, 89, 95, 204, 180, 145, 183, 184,
   // The rest of Europe's top divisions
-  88, 94, 203, 144, 179, 197, 207, 218, 119, 113, 103, 106, 210, 286, 283, 345, 333,
+  88, 94, 203, 144, 179, 197, 207, 218, 119, 113, 103, 106, 210, 286, 283, 345, 333, 235, 244, 357,
+  // Their cups and second divisions: Netherlands, Portugal, Belgium, Greece, Switzerland, Austria, Denmark, Sweden,
+  // Norway, Poland, Czechia, Croatia, Romania, Russia, Hungary, Finland, Ireland, Israel, Slovenia
+  90, 96, 550, 97, 147, 199, 208, 209, 219, 220, 120, 121, 114, 115, 104, 105, 107, 108, 346, 347, 211, 284, 285, 236, 237, 272, 245, 246, 358, 359, 382, 374, 375,
   // Near Albania and Kosovo: North Macedonia, Montenegro, Bosnia, Slovenia, Bulgaria, Hungary, Cyprus, Israel, Slovakia
   371, 355, 315, 373, 172, 271, 318, 383, 332,
-  // Women: Champions League, England, Germany, France
-  525, 44, 82, 64,
-  // UEFA club competitions
-  2, 3, 848, 531,
-  // National teams: tournaments, qualifiers and friendlies
-  1, 4, 5, 6, 9, 10, 32, 34, 29, 30, 31, 960,
-  // Americas
-  253, 71, 72, 128, 262, 239, 265, 13, 11,
-  // Africa, Asia and Oceania
-  233, 200, 307, 98, 292, 169, 188, 17,
-  // More important competitions (odds-covered) that the core list above still skipped
-  // Domestic tops: Russia, Finland, Ireland, Uruguay, Peru, India, UAE, Qatar, Iran, South Africa
-  235, 244, 357, 268, 281, 323, 301, 305, 290, 288,
-  // Second tiers / cups players often bet: Austria 2. Liga, Swiss Challenge, Superettan, KNVB Beker, Turkish Cup, Taça da Liga, Copa do Brasil, Copa Argentina, Scottish cups
-  219, 208, 114, 90, 206, 97, 73, 130, 181, 185,
-  // Continental / world: CAF CL + Confed, CONCACAF CL + Gold Cup, Club World Cup, Intercontinental, Recopa, AFC CL Two, club friendlies
-  12, 20, 16, 22, 15, 1168, 541, 18, 667,
+  // The smaller European leagues the bookmaker prices: Belarus, Lithuania, Latvia, Estonia, Iceland (two tiers),
+  // Faroe Islands, Luxembourg, Malta, Georgia, Armenia, Azerbaijan, Kazakhstan, Moldova, Wales, Northern Ireland, Andorra
+  116, 362, 365, 329, 164, 165, 367, 261, 393, 327, 342, 419, 389, 394, 110, 408, 312,
+  // Women: Champions League, World Cup, England, Germany, France, Spain, Italy, the NWSL
+  525, 8, 44, 82, 64, 142, 139, 254,
+  // UEFA club competitions, the Super Cup and the Youth League
+  2, 3, 848, 531, 14,
+  // National teams: tournaments, qualifiers, friendlies, the Olympics and the under-21s
+  1, 4, 5, 6, 7, 9, 10, 32, 34, 29, 30, 31, 33, 35, 36, 37, 960, 480, 524, 38, 19, 28,
+  // Americas: MLS, USL, US Open Cup, Canada, Mexico (two tiers), Brazil (four tiers, Copa do Brasil and the Paulista,
+  // Carioca, Mineiro and Gaúcho state championships), Argentina (two tiers and both cups), Colombia (two tiers and the
+  // cup), Chile (two tiers and the cup), Uruguay (two tiers), Peru, Ecuador, Paraguay (both halves), Venezuela, Bolivia,
+  // Costa Rica
+  253, 255, 257, 479, 262, 263, 71, 72, 75, 76, 73, 475, 476, 477, 478, 128, 129, 130, 131, 239, 240, 241, 265, 266, 267, 268, 270, 281, 242, 250, 252, 299, 344, 162,
+  // Continental in the Americas: Libertadores, Sudamericana, Recopa, CONCACAF Champions Cup, Gold Cup, Nations League
+  13, 11, 541, 16, 22, 536,
+  // Asia and Oceania: Japan (three tiers and both cups), South Korea (two tiers and the cup), China (two tiers), Australia
+  // (league and cup), Saudi Arabia (league and King Cup), UAE, Qatar, Iran, India (ISL and I-League), Indonesia, Malaysia,
+  // Thailand, Vietnam, Uzbekistan
+  98, 99, 100, 101, 102, 292, 293, 294, 169, 170, 188, 189, 307, 504, 301, 305, 290, 323, 324, 274, 278, 296, 340, 302,
+  // Africa: Egypt (league and cup), Morocco, Tunisia, Algeria, South Africa, Nigeria
+  233, 234, 200, 202, 186, 288, 399,
+  // World: Club World Cup, Intercontinental Cup, CAF Champions League and Confederation Cup, AFC Champions League Elite and
+  // Two, AFC Cup, OFC Champions League, International Champions Cup, club friendlies
+  15, 1168, 12, 20, 17, 18, 27, 26, 667,
 ];
 const DEFAULT_COUNTRIES = ["Albania", "Kosovo"];
 
@@ -110,6 +124,13 @@ const QUOTED_EVERY_MS = 30_000;
 const LIVE_WRITERS = 6;
 /** A match's score comes from the live odds while they're this fresh; the fixtures list lags behind them. */
 const LIVE_SCORE_SOURCE_MS = 60_000;
+/**
+ * With API_FOOTBALL_LIVE_ALL (on by default while the built-in league list
+ * applies), a live match from any league is listed as soon as the bookmaker
+ * prices it in play, and takes live bets like any other. While nothing is
+ * live on the board, the live feeds are looked at this often to find one.
+ */
+const LIVE_ALL_DISCOVER_MS = 60_000;
 /**
  * A live match whose goal certainly reached the site later than this after it
  * went in (GoalSeen.lagMinMs) takes no more live bets: no wait a Player
@@ -207,6 +228,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   private leagues = new Set<number>();
   private countries = new Set<string>();
   private custom = false;
+  /** API_FOOTBALL_LIVE_ALL as set; null when unset, which means on unless Super Admin picked the leagues. */
+  private readonly liveAllEnv: boolean | null;
+  /** The fixture ids the bookmaker priced in play on the last reading of the live board (see LIVE_ALL_DISCOVER_MS). */
+  private livePriced = new Set<string>();
+  /** When the live scores and the live prices were last read while nothing on the board was live. */
+  private lastIdleScoresAt = 0;
+  private lastIdleOddsAt = 0;
   private leagueList: { at: number; leagues: FeedLeague[] } | null = null;
   private readonly days: number;
   /** Requests left on today's API-Football quota, and the plan's daily total, from its last answer. */
@@ -261,7 +289,14 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       countries: listEnv("API_FOOTBALL_COUNTRIES") ?? DEFAULT_COUNTRIES,
     };
     this.useChoice(this.defaults, false);
+    const liveAll = process.env.API_FOOTBALL_LIVE_ALL?.trim().toLowerCase();
+    this.liveAllEnv = liveAll === "true" ? true : liveAll === "false" ? false : null;
     this.days = Math.min(7, Math.max(1, Number(process.env.ODDS_SYNC_DAYS) || 7));
+  }
+
+  /** Whether live matches outside the synced leagues are listed while the bookmaker prices them in play. */
+  private get liveAll(): boolean {
+    return this.liveAllEnv ?? !this.custom;
   }
 
   onModuleInit() {
@@ -765,7 +800,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const byId = new Map(known.map((league) => [league.id, league]));
     const missing = [...this.leagues].filter((id) => !byId.has(id));
     const countries = [...this.countries].filter((country) => !known.some((league) => league.country.toLowerCase() === country));
-    this.logger.log(`Syncing ${this.leagues.size - missing.length} leagues and every league in: ${[...this.countries].join(", ") || "no countries"}`);
+    this.logger.log(
+      `Syncing ${this.leagues.size - missing.length} leagues and every league in: ${[...this.countries].join(", ") || "no countries"}${this.liveAll ? "; plus live matches from any league the bookmaker prices in play" : ""}`,
+    );
     if (missing.length > 0) this.logger.warn(`API-Football has no current season for league ids ${missing.join(", ")}; check ${this.custom ? "the Leagues list on the Odds page" : "API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES"}`);
     if (countries.length > 0) this.logger.warn(`API-Football has no current leagues for ${countries.join(", ")}; check ${this.custom ? "the Leagues list on the Odds page" : "API_FOOTBALL_LEAGUES / API_FOOTBALL_COUNTRIES"}`);
   }
@@ -782,17 +819,26 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       where: { provider, externalId: { not: null }, OR: [{ status: EventStatus.LIVE }, { status: EventStatus.UPCOMING, startsAt: { lte: new Date() } }] },
       select: { id: true, externalId: true, status: true, elapsed: true, homeScore: true, awayScore: true, liveStopped: true, liveOddsAt: true, liveCooldownUntil: true, liveCooldownReason: true, period: true, finishedAt: true },
     });
-    if (tracked.length === 0) return null;
+    // Nothing live on the board: look only now and then for a match from another league the bookmaker is pricing.
+    if (tracked.length === 0 && !(this.liveAll && this.livePriced.size > 0 && Date.now() - this.lastIdleScoresAt >= LIVE_ALL_DISCOVER_MS)) return null;
+    if (tracked.length === 0) this.lastIdleScoresAt = Date.now();
     const live = await client.liveFixtures();
     const seen = new Set(live.map((f) => f.externalId));
     const trackedIds = new Set(tracked.map((e) => e.externalId!));
     const trackedBy = new Map(tracked.map((e) => [e.externalId!, e]));
+    /** Matches whose state the pages show changed here (kick-off, full time, the minute, a score): pushed to them below. */
+    const changed: string[] = [];
+    // Live matches from leagues outside the synced list, now that the bookmaker prices them in play: listed from here on,
+    // and priced by the next reading of the live board. Costs no requests; the live list already carries everything.
+    if (this.liveAll) {
+      const newcomers = live.filter((f) => !trackedIds.has(f.externalId) && this.livePriced.has(f.externalId) && f.status === EventStatus.LIVE);
+      for (const fixture of newcomers) changed.push(await this.upsertEvent(fixture));
+      if (newcomers.length > 0) this.logger.log(`Listed ${newcomers.length} live ${newcomers.length === 1 ? "match" : "matches"} from other leagues the bookmaker is pricing in play`);
+    }
     // Matches that dropped off the live list have finished (or been stopped): fetch them by id for the final state.
     const missing = [...trackedIds].filter((id) => !seen.has(id));
     const finished: FeedFixture[] = [];
     for (let i = 0; i < missing.length; i += 20) finished.push(...(await client.fixturesByIds(missing.slice(i, i + 20))));
-    /** Matches whose state the pages show changed here (kick-off, full time, the minute, a score): pushed to them below. */
-    const changed: string[] = [];
     for (const fixture of [...live.filter((f) => trackedIds.has(f.externalId)), ...finished]) {
       const saved = trackedBy.get(fixture.externalId)!;
       // While the live odds are fresh they carry the newer score; the fixtures list lags and would flip it back and forth.
@@ -1414,9 +1460,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       where: { provider, externalId: { not: null }, status: EventStatus.LIVE },
       select: { id: true, externalId: true, homeTeam: true, awayTeam: true, name: true },
     });
-    if (live.length === 0) return 0;
+    // Nothing live on the board: the live prices are still read now and then, to see which matches the bookmaker is
+    // pricing in play, so one from another league can be listed (syncLive).
+    if (live.length === 0 && !(this.liveAll && Date.now() - this.lastIdleOddsAt >= LIVE_ALL_DISCOVER_MS)) return 0;
+    if (live.length === 0) this.lastIdleOddsAt = Date.now();
     const byExternal = new Map(live.map((e) => [e.externalId!, e]));
     const feed = await this.client!.liveOdds();
+    this.livePriced = new Set(feed.map((raw) => String(raw.fixture.id)));
     const readings = feed.flatMap((raw) => {
       const event = byExternal.get(String(raw.fixture.id));
       return event ? [{ eventId: event.id, odds: parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? "") }] : [];

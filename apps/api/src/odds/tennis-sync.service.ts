@@ -6,6 +6,8 @@ import { OddsSyncService, movedLater } from "./odds-sync.service";
 import { type FeedMatch, type RawTennisMatch, type RawTennisOdds, TENNIS_PROVIDER, TENNIS_TIMEZONE, parseTennisMatch, parseTennisOdds, setsWon, tennisResultOf } from "./tennis";
 
 const LOCK_KEY = "tennis:sync";
+/** ATP and WTA singles and doubles, and the ATP Challenger Tour: all come in the same two requests a sync. */
+export const DEFAULT_TENNIS_TOURS = "Atp Singles,Wta Singles,Atp Doubles,Wta Doubles,Challenger Men Singles";
 /** Started matches are checked for their result for this long after they were due. */
 const RESULT_WINDOW_MS = 36 * 3_600_000;
 /** Matches due to start within this long are watched, so bets close the moment one goes on court early. */
@@ -40,14 +42,14 @@ export function tennisFetch(apiKey: string): TennisFetch {
  *   not; and, when one should be over, those days' matches again for the
  *   results (one more).
  * TENNIS_TOURS picks the competitions, by the feed's names (default
- * "Atp Singles,Wta Singles"); TENNIS_BOOKMAKER the prices (bet365).
+ * DEFAULT_TENNIS_TOURS); TENNIS_BOOKMAKER the prices (bet365).
  */
 @Injectable()
 export class TennisSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TennisSyncService.name);
   private readonly timers: NodeJS.Timeout[] = [];
   private readonly get?: TennisFetch;
-  private readonly tours = new Set((process.env.TENNIS_TOURS ?? "Atp Singles,Wta Singles").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean));
+  private readonly tours = new Set((process.env.TENNIS_TOURS ?? DEFAULT_TENNIS_TOURS).split(",").map((t) => t.trim().toLowerCase()).filter(Boolean));
   private readonly bookmaker = process.env.TENNIS_BOOKMAKER?.trim() || "bet365";
   private readonly days = Math.min(7, Math.max(1, Number(process.env.TENNIS_DAYS) || 2));
   private redis?: Redis;

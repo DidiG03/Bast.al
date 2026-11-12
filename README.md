@@ -149,7 +149,8 @@ Super Admin picks which competitions are synced under **Odds → Leagues**: sing
 | Variable | Purpose |
 | --- | --- |
 | `API_FOOTBALL_KEY` | API key from the API-Football dashboard. Without it the feed is off. |
-| `API_FOOTBALL_LEAGUES` | Optional comma-separated league ids, used until Super Admin picks leagues on the Odds page. Defaults to about 60 competitions (list in `apps/api/src/odds/odds-sync.service.ts`): the top two divisions and main cups of England, Spain, Italy, Germany and France, the rest of Europe's top divisions, UEFA club competitions, national-team tournaments, qualifiers and friendlies, and the main leagues of the Americas, Asia and Australia. Unknown ids are logged at startup. |
+| `API_FOOTBALL_LEAGUES` | Optional comma-separated league ids, used until Super Admin picks leagues on the Odds page. Defaults to about 200 competitions (list in `apps/api/src/odds/odds-sync.service.ts`): the top two divisions, cups and super cups of England, Spain, Italy, Germany and France, England's third to fifth tiers, every European top division with most second divisions and cups, the smaller European leagues the bookmaker prices, women's leagues, UEFA club competitions and the Youth League, national-team tournaments, qualifiers, friendlies and the Olympics, and the main leagues, cups and continental competitions of the Americas, Asia, Africa and Oceania. A league costs requests only on days it has matches. Unknown ids are logged at startup. |
+| `API_FOOTBALL_LIVE_ALL` | `true` or `false`. While on, a live match from any league is listed as soon as the bookmaker prices it in play, and takes live bets like any other (it costs no extra requests: the live lists already carry every match). Defaults to on while the built-in or `API_FOOTBALL_LEAGUES` list applies, and off once Super Admin picks leagues on the Odds page, so a pick really limits the board. |
 | `API_FOOTBALL_COUNTRIES` | Optional comma-separated countries whose leagues are all synced. Defaults to `Albania,Kosovo`. |
 | `API_FOOTBALL_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `8` (Bet365). |
 | `ODDS_SYNC_DAYS`, `ODDS_SYNC_INTERVAL_MS`, `ODDS_LIVE_INTERVAL_MS`, `LIVE_ODDS_INTERVAL_MS` | Optional tuning: days ahead (7, at most 7), how often to check which days are due (10 min), live scores (15 s), live prices while anyone is on the site (5 s). |
@@ -228,7 +229,7 @@ Matches come from [API-Tennis](https://api-tennis.com): fixtures, set-by-set sco
 | Variable | Purpose |
 | --- | --- |
 | `TENNIS_API_KEY` | API key from API-Tennis. Without it tennis is off. `TENNIS_FEED=off` turns it off too. |
-| `TENNIS_TOURS` | Competitions to list, by the feed's names, comma-separated. Defaults to `Atp Singles,Wta Singles`; add e.g. `Challenger Men Singles`. |
+| `TENNIS_TOURS` | Competitions to list, by the feed's names, comma-separated. Defaults to `Atp Singles,Wta Singles,Atp Doubles,Wta Doubles,Challenger Men Singles`, all from the same two requests a sync; `Itf Men Singles` and `Itf Women Singles` can be added. |
 | `TENNIS_DAYS` | Days of matches fetched, from today. Defaults to `2` (up to 7). |
 | `TENNIS_SYNC_INTERVAL_MS`, `TENNIS_LIVE_INTERVAL_MS` | Defaults 30 minutes (matches and prices, two requests) and 5 minutes (matches on court and results, only while a match is due or under way). |
 | `TENNIS_BOOKMAKER` | Bookmaker whose prices we start from. Defaults to `bet365`, else the first that prices the whole market. |

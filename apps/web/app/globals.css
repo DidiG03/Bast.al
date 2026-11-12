@@ -16277,6 +16277,16 @@ button.is-blocked {
 }
 
 /* A closed market with a pick on the slip. */
+/* The shop code beside a football market ([TG_L/P]), pushed to the end of the heading, in Albanian only. */
+.odds-market-code {
+  flex: none;
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
 .odds-market-picked {
   flex: none;
   width: 0.55rem;

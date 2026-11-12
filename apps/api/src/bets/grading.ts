@@ -55,6 +55,29 @@ export function gradeSelection(
     return inRange(selectionKey, stats.cornersHome + stats.cornersAway);
   }
 
+  // Corners Over / Exactly / Under at a whole line: corners_3way_8.
+  const corners3 = /^corners_3way_(\d+)$/.exec(marketKey);
+  if (corners3) {
+    if (!stats) return null;
+    const count = stats.cornersHome + stats.cornersAway;
+    const at = Number(corners3[1]);
+    if (selectionKey === "over") return won(count > at);
+    if (selectionKey === "exact") return won(count === at);
+    if (selectionKey === "under") return won(count < at);
+    return null;
+  }
+
+  // The rest of the match from a score (rest_1_1), or of the 1st half (h1_rest_0_1): the goals scored after it.
+  const rest = /^(rest|h1_rest)_(\d+)_(\d+)$/.exec(marketKey);
+  if (rest) {
+    const score = rest[1] === "h1_rest" ? half : full;
+    if (!score) return null;
+    const after = { home: score.home - Number(rest[2]), away: score.away - Number(rest[3]) };
+    // Fewer goals than the score it was priced at: a corrected score, for Super Admin.
+    if (after.home < 0 || after.away < 0) return null;
+    return result(selectionKey, after);
+  }
+
   // Corners and cards: corners_9_5, home_corners_4_5, cards_3_5, away_cards_1_5 …
   const counted = /^(corners|home_corners|away_corners|cards|home_cards|away_cards)_(\d+)_5$/.exec(marketKey);
   if (counted) {

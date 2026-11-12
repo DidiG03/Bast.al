@@ -650,6 +650,14 @@ type LiveSpec = (
   | { kind: "exact"; key: string; name: Namer; order: string; top: number }
   | { kind: "scorers"; key: string; name: string; order: string }
   | { kind: "scores"; key: string; name: string; order: string }
+  /** Over / Exactly / Under at a whole line ("Match Corners": Over 8, Exactly 8, Under 8): `{prefix}_3way_8`. */
+  | { kind: "lines3"; prefix: string; name: (line: string) => string; order: string }
+  /**
+   * Who wins the rest of the match (or of the 1st half) from the score now:
+   * `{prefix}_1_1` from 1:1, settled on the goals scored after it. The score
+   * comes from the same reading, so the key always says what it's priced for.
+   */
+  | { kind: "rest"; prefix: string; name: (score: string) => string; order: string; half: boolean }
 ) & {
   /** Sort position when there's no pre-match bet to sit with (the extra-time markets: first, as they're the only ones open then). */
   rank?: number;
@@ -771,10 +779,19 @@ const LIVE_MARKETS: Record<string, LiveSpec> = {
   "away team to score in both halves": { kind: "fixed", key: "away_score_both_halves", name: (_h, away) => `${away} to score in both halves`, order: "To Score In Both Halves By Teams", values: liveYesNo },
   // Corners and cards settle from the match statistics fetched after full time.
   "total corners": { kind: "lines", prefix: "corners", name: (_h, _a, line) => `Total corners ${line}`, order: "Corners Over Under" },
-  "match corners": { kind: "lines", prefix: "corners", name: (_h, _a, line) => `Total corners ${line}`, order: "Corners Over Under" },
+  // Over / Exactly / Under at a whole line, plus the .5 lines when the feed sends those.
+  "match corners": { kind: "lines3", prefix: "corners", name: (line) => `Total corners 3-way ${line}`, order: "Corners Over Under" },
   "asian corners": { kind: "lines", prefix: "corners", name: (_h, _a, line) => `Total corners ${line}`, order: "Corners Over Under" },
   "home total corners": { kind: "lines", prefix: "home_corners", name: (home, _a, line) => `${home} corners ${line}`, order: "Home Corners Over/Under" },
   "away total corners": { kind: "lines", prefix: "away_corners", name: (_h, away, line) => `${away} corners ${line}`, order: "Away Corners Over/Under" },
+  "rest of the match": { kind: "rest", prefix: "rest", name: (score) => `Rest of the match (${score})`, order: "Match Winner", half: false },
+  "rest of match": { kind: "rest", prefix: "rest", name: (score) => `Rest of the match (${score})`, order: "Match Winner", half: false },
+  "1x2 rest of the match": { kind: "rest", prefix: "rest", name: (score) => `Rest of the match (${score})`, order: "Match Winner", half: false },
+  "rest of the match result": { kind: "rest", prefix: "rest", name: (score) => `Rest of the match (${score})`, order: "Match Winner", half: false },
+  "rest of the 1st half": { kind: "rest", prefix: "h1_rest", name: (score) => `1st half rest of the half (${score})`, order: "First Half Winner", half: true },
+  "rest of 1st half": { kind: "rest", prefix: "h1_rest", name: (score) => `1st half rest of the half (${score})`, order: "First Half Winner", half: true },
+  "rest of the match (1st half)": { kind: "rest", prefix: "h1_rest", name: (score) => `1st half rest of the half (${score})`, order: "First Half Winner", half: true },
+  "1st half - rest of the half": { kind: "rest", prefix: "h1_rest", name: (score) => `1st half rest of the half (${score})`, order: "First Half Winner", half: true },
   "corners 1x2": { kind: "fixed", key: "corners_1x2", name: () => "Most corners", order: "Corners 1x2", values: liveOutcomes },
   "total cards": { kind: "lines", prefix: "cards", name: (_h, _a, line) => `Total cards ${line}`, order: "Cards Over/Under" },
   "home team total cards": { kind: "lines", prefix: "home_cards", name: (home, _a, line) => `${home} cards ${line}`, order: "Home Team Total Cards" },
@@ -812,8 +829,27 @@ function outcomeHeld(value?: LiveValue): boolean {
   return !value || value.suspended === true || liveOdd(value) === 0;
 }
 
-function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: string): FeedLiveMarket[] {
+function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: string, score: { home: number; away: number } | null = null): FeedLiveMarket[] {
   const base = spec.rank ?? (MARKET_INDEX.get(spec.order)?.index ?? MARKETS.length) * 10;
+  if (spec.kind === "lines3") return [...liveLines3(values, spec.prefix, spec.name, base), ...liveLines(values, spec.prefix, (line) => `Total corners ${line}`, base)];
+  if (spec.kind === "rest") {
+    // Without the score now the key couldn't say what the prices are for, so nothing is taken.
+    if (!score) return [];
+    const key = `${spec.prefix}_${score.home}_${score.away}`;
+    const selections = liveOutcomes.map(([aliases, selectionKey, name], sortOrder) => {
+      const found = values.find((v) => aliases.includes(normalize(v.value)));
+      return { key: selectionKey, name: name(home, away), odds: liveOdd(found), held: outcomeHeld(found), sortOrder };
+    });
+    return [
+      {
+        key,
+        name: spec.name(`${score.home}:${score.away}`),
+        sortOrder: base + 1,
+        selections: selections.map(({ key: k, name, odds, sortOrder }) => ({ key: k, name, odds, sortOrder })),
+        suspended: selections.some((selection) => selection.held),
+      },
+    ];
+  }
   if (spec.kind === "fixed") {
     const selections = spec.values.map(([aliases, key, name], sortOrder) => {
       const found = values.find((v) => aliases.includes(normalize(v.value)));
@@ -879,7 +915,10 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
   for (const bet of raw.odds ?? []) {
     const spec = liveSpecFor(bet.name);
     if (!spec) continue;
-    for (const market of liveMarkets(spec, bet.values, homeTeam, awayTeam)) if (!markets.has(market.key)) markets.set(market.key, market);
+    const homeGoals = goals(raw.teams?.home?.goals);
+    const awayGoals = goals(raw.teams?.away?.goals);
+    const score = homeGoals !== null && awayGoals !== null ? { home: homeGoals, away: awayGoals } : null;
+    for (const market of liveMarkets(spec, bet.values, homeTeam, awayTeam, score)) if (!markets.has(market.key)) markets.set(market.key, market);
   }
   return {
     externalId: String(raw.fixture.id),
@@ -932,6 +971,43 @@ function liveLines(values: LiveValue[], prefix: string, name: (line: string) => 
     })
     .filter((market) => market.selections.some((selection) => selection.odds > 0))
     .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * Over / Exactly / Under at whole lines ("Over 8", "Exactly 8", "Under 8",
+ * or the line in `handicap`): one `{prefix}_3way_8` market per line, all
+ * three outcomes priced or the market held.
+ */
+function liveLines3(values: LiveValue[], prefix: string, name: (line: string) => string, base: number): FeedLiveMarket[] {
+  const byLine = new Map<string, { over?: LiveValue; exact?: LiveValue; under?: LiveValue }>();
+  for (const value of values) {
+    const [, side, inValue] = /^(over|exactly|exact|under)(?:\s+(\d+))?$/i.exec(String(value.value).trim()) ?? [];
+    const line = String(value.handicap ?? "").trim() || inValue;
+    if (!side || !line || !/^\d+$/.test(line)) continue;
+    const entry = byLine.get(line) ?? {};
+    const kind = side.toLowerCase().startsWith("exact") ? "exact" : (side.toLowerCase() as "over" | "under");
+    entry[kind] ??= value;
+    byLine.set(line, entry);
+  }
+  return [...byLine]
+    .map(([line, { over, exact, under }]) => ({
+      key: `${prefix}_3way_${line}`,
+      name: name(line),
+      sortOrder: base + Math.min(9, Number(line)),
+      selections: [
+        { key: "over", name: `Over ${line}`, odds: liveOdd(over), sortOrder: 0 },
+        { key: "exact", name: `Exactly ${line}`, odds: liveOdd(exact), sortOrder: 1 },
+        { key: "under", name: `Under ${line}`, odds: liveOdd(under), sortOrder: 2 },
+      ],
+      suspended: outcomeHeld(over) || outcomeHeld(exact) || outcomeHeld(under),
+    }))
+    .filter((market) => market.selections.some((selection) => selection.odds > 0))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/** In-play bet names we don't offer, for the log: the feed's names change, and a market named differently would go unnoticed. */
+export function unknownLiveBets(raw: RawLiveOdds): string[] {
+  return (raw.odds ?? []).map((bet) => bet.name).filter((name) => !liveSpecFor(name));
 }
 
 /** Live handicap lines send Home/Away (and Draw) with mirrored handicaps; the home team's line is the market key. */

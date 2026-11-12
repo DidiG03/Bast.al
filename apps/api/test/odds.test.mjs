@@ -172,7 +172,8 @@ test("a real /odds/live answer maps onto our markets", () => {
 
   const open = parseLiveOdds(response[1], "Chile", "Switzerland");
   const byKey = Object.fromEntries(open.markets.map((m) => [m.key, m]));
-  assert.deepEqual(Object.keys(byKey).sort(), ["away_goals_1_5", "away_goals_2_5", "h1_goals_0_5", "h1_goals_1_5", "h1_winner", "ht_ft"], "whole corner lines (Over/Exactly/Under 8) are skipped");
+  assert.deepEqual(Object.keys(byKey).sort(), ["away_goals_1_5", "away_goals_2_5", "corners_3way_8", "h1_goals_0_5", "h1_goals_1_5", "h1_winner", "ht_ft"], "whole corner lines (Over/Exactly/Under 8) become one 3-way market");
+  assert.deepEqual(byKey.corners_3way_8.selections.map((s) => s.key), ["over", "exact", "under"]);
   assert.deepEqual(byKey.h1_winner.selections.map((s) => [s.name, s.odds]), [["Chile", 3.1], ["Draw", 1.615], ["Switzerland", 7]]);
   assert.equal(byKey.ht_ft.selections.length, 9, "1/X-style HT/FT values all map");
   assert.equal(byKey.ht_ft.selections.find((s) => s.key === "draw_away").odds, 8.5);

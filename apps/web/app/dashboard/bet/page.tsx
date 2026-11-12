@@ -1473,7 +1473,7 @@ const MatchCard = memo(function MatchCard({
     const scorers = entry.key.startsWith("scorer_");
     return (
       <div key={key} className={`odds-market${open ? " is-open" : ""}`}>
-        <MarketHead title={ts(entry.name)} suspended={entry.suspended} paused={Boolean(entry.paused)} after={Boolean(entry.after)} quiet={quiet} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
+        <MarketHead title={ts(entry.name)} marketKey={entry.key} suspended={entry.suspended} paused={Boolean(entry.paused)} after={Boolean(entry.after)} quiet={quiet} open={open} onToggle={() => flip(key)} picked={hasPick([entry])} starred={starred} onStar={() => starMarket(entry)}>
           {scorers ? null : <MarketPriceHistory selections={entry.selections} compact />}
         </MarketHead>
         {open ? marketOutcomes(entry) : null}

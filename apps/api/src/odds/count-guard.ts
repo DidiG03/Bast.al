@@ -34,7 +34,7 @@ export function countForMarket(key: string, stats: CountStats): number | null {
   const total = (pair: CountPair | null) => (pair ? pair[0] + pair[1] : null);
   if (/^home_corners_\d+_5$/.test(key)) return stats.corners ? stats.corners[0] : null;
   if (/^away_corners_\d+_5$/.test(key)) return stats.corners ? stats.corners[1] : null;
-  if (/^corners_\d+_5$/.test(key)) return total(stats.corners);
+  if (/^corners_\d+_5$/.test(key) || /^corners_3way_\d+$/.test(key)) return total(stats.corners);
   if (/^home_cards_\d+_5$/.test(key)) return stats.cards ? stats.cards[0] : null;
   if (/^away_cards_\d+_5$/.test(key)) return stats.cards ? stats.cards[1] : null;
   if (/^cards_\d+_5$/.test(key)) return total(stats.cards);
@@ -51,6 +51,13 @@ const lineOf = (key: string) => {
  * already broken. `count` is the live total for that market.
  */
 export function countLineDead(marketKey: string, selectionKey: string, count: number): boolean {
+  // Over / Exactly / Under at a whole line: Over has won and Exactly lost once past it; Under has lost from it on.
+  const whole = /^corners_3way_(\d+)$/.exec(marketKey);
+  if (whole) {
+    const at = Number(whole[1]);
+    if (selectionKey === "under") return count >= at;
+    return count > at;
+  }
   const line = lineOf(marketKey);
   if (line === null) return false;
   if (selectionKey !== "over" && selectionKey !== "under") return false;
@@ -59,7 +66,7 @@ export function countLineDead(marketKey: string, selectionKey: string, count: nu
 
 /** A corners or cards over/under market (the ones the live count can close). */
 export function isCountMarket(key: string): boolean {
-  return /^(home_|away_)?(corners|cards)_\d+_5$/.test(key);
+  return /^(home_|away_)?(corners|cards)_\d+_5$/.test(key) || /^corners_3way_\d+$/.test(key);
 }
 
 /** Any corners or cards market, including ranges and handicaps. */

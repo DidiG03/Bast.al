@@ -15,6 +15,12 @@
  *   don't keep the half-time score or the corner count to check them against).
  */
 export function liveScoreBlocked(marketKey: string, score: { home: number | null | undefined; away: number | null | undefined }, period: string | null | undefined): boolean {
+  // The rest of the match (or 1st half) from a score: only at that score, priced for it. A goal makes it another market.
+  const rest = /^(rest|h1_rest)_(\d+)_(\d+)$/.exec(marketKey);
+  if (rest) {
+    if (rest[1] === "h1_rest" && period !== "1H") return true;
+    return score.home !== Number(rest[2]) || score.away !== Number(rest[3]);
+  }
   const guarded = /^(first_team_score|scorer_first|nth_goal_\d+|(ah|eh|h1_ah|h1_eh|h2_ah|h2_eh|corners_ah)_.+)$/.test(marketKey);
   if (!guarded) return false;
   if (/^(h2_ah|h2_eh|corners_ah)_/.test(marketKey)) return true;

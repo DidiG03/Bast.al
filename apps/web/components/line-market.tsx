@@ -64,6 +64,52 @@ export function bundleLines<T extends LinedMarket>(markets: T[]): Array<T | { ki
   return bundled;
 }
 
+/**
+ * The short code Albanian betting shops print beside a football market
+ * ([TG_L/P] for the total goals lines, [DSh] for double chance…), so a
+ * Player used to them finds the market at a glance. Null for markets
+ * without one.
+ */
+const MARKET_CODES: Array<[RegExp, string]> = [
+  [/^match_winner$/, "1x2"],
+  [/^goals_\d+_5$/, "TG_L/P"],
+  [/^nth_goal_\d+$/, "G"],
+  [/^draw_no_bet$/, "BSB"],
+  [/^double_chance$/, "DSh"],
+  [/^btts$/, "ShDE"],
+  [/^rest_\d+_\d+$/, "FPMN"],
+  [/^ht_ft$/, "P1/KP"],
+  [/^home_exact_goals$/, "E1_NSTG"],
+  [/^away_exact_goals$/, "E2_NSTG"],
+  [/^home_goals_\d+_5$/, "E1_TG_L/P"],
+  [/^away_goals_\d+_5$/, "E2_TG_L/P"],
+  [/^h1_winner$/, "P1_1x2"],
+  [/^h1_goals_\d+_5$/, "P1_TG_L/P"],
+  [/^h1_rest_\d+_\d+$/, "P1_FPM"],
+  [/^h1_eh_/, "P1_H"],
+  [/^h1_ah_/, "P1_HA"],
+  [/^h1_double_chance$/, "P1_DSh"],
+  [/^h1_btts$/, "P1_ShDE"],
+  [/^h1_correct_score$/, "RSP1"],
+  [/^h2_winner$/, "P2_1x2"],
+  [/^h2_goals_\d+_5$/, "P2_TG_L/P"],
+  [/^h2_btts$/, "P2_ShDE"],
+  [/^eh_/, "H"],
+  [/^ah_/, "HA"],
+  [/^correct_score$/, "RS"],
+  [/^odd_even$/, "TG_T/Ç"],
+  [/^first_team_score$/, "EShP"],
+  [/^last_team_score$/, "EShF"],
+  [/^corners_\d+_5$/, "TGK_L/P"],
+  [/^corners_3way_\d+$/, "TGK_3Z"],
+  [/^scorer_anytime$/, "LShG_GjKRr"],
+];
+
+export function marketCode(key: string | undefined): string | null {
+  if (!key) return null;
+  return MARKET_CODES.find(([pattern]) => pattern.test(key))?.[1] ?? null;
+}
+
 /** The 1 X 2 heading over a match row, when the main market is the result. */
 export function resultHeads(selections: Array<{ key: string }> | undefined): string[] {
   if (!selections || selections.length !== 3) return [];
@@ -84,6 +130,7 @@ export function visibleCountry(country: string | null, flag: string | null): str
  */
 export function MarketHead({
   title,
+  marketKey,
   suspended,
   paused,
   after = false,
@@ -96,6 +143,8 @@ export function MarketHead({
   children,
 }: {
   title: string;
+  /** The market's key, for its short code in Albanian (marketCode). */
+  marketKey?: string;
   suspended?: boolean;
   /** Paused for a moment after a goal or a card, rather than off the board. */
   paused?: boolean;
@@ -111,7 +160,8 @@ export function MarketHead({
   quiet?: boolean;
   children?: ReactNode;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const code = lang === "sq" ? marketCode(marketKey) : null;
   return (
     <div className="odds-market-head">
       <button type="button" className="text-button odds-market-toggle" aria-expanded={open} onClick={onToggle}>
@@ -123,6 +173,7 @@ export function MarketHead({
           {suspended && !quiet ? <span className="muted"> · {paused ? t("Paused") : after ? t("New prices coming") : t("Suspended")}</span> : null}
         </span>
         {picked && !open ? <span className="odds-market-picked" role="img" aria-label={t("On your slip")} title={t("On your slip")} /> : null}
+        {code ? <span className="odds-market-code muted">[{code}]</span> : null}
       </button>
       {open ? children : null}
       <button
@@ -200,7 +251,7 @@ export function LineFamily<T extends LinedMarket>({
   if (!market) return null;
   return (
     <div className={`odds-market${open ? " is-open" : ""}`}>
-      <MarketHead title={title} suspended={market.suspended} paused={Boolean(market.paused)} after={Boolean(market.after)} quiet={quiet} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
+      <MarketHead title={title} marketKey={market.key} suspended={market.suspended} paused={Boolean(market.paused)} after={Boolean(market.after)} quiet={quiet} open={open} onToggle={onToggle} picked={picked} starred={starred} onStar={onStar}>
         <span className="line-stepper">
           <button type="button" disabled={at === 0} onClick={() => step(at - 1)} aria-label={t("Lower line")}>
             ‹

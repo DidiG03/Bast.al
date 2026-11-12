@@ -273,7 +273,7 @@ export function goalsHelp(marketKey: string, selectionKey: string | undefined, b
   const was = before.home - before.away;
   const now = home - away;
   const key = selectionKey;
-  if (/^(match_winner|h1_winner|h2_winner|et_winner)$/.test(marketKey)) return key === "home" ? now > was : key === "away" ? now < was : key === "draw" ? Math.abs(now) < Math.abs(was) : true;
+  if (/^(match_winner|h1_winner|h2_winner|et_winner)$/.test(marketKey) || /^(h1_)?rest_\d+_\d+$/.test(marketKey)) return key === "home" ? now > was : key === "away" ? now < was : key === "draw" ? Math.abs(now) < Math.abs(was) : true;
   if (/^(h1_|et_)?double_chance$/.test(marketKey)) return key === "home_draw" ? now > was : key === "draw_away" ? now < was : key === "home_away" ? Math.abs(now) > Math.abs(was) : true;
   if (marketKey === "draw_no_bet" || marketKey === "to_qualify" || /^(h1_|h2_)?(ah|eh)_/.test(marketKey)) return key === "home" ? now > was : key === "away" ? now < was : true;
   if (/^(h1_|h2_|et_)?goals_\d+_5$/.test(marketKey)) return key === "over";
@@ -296,7 +296,7 @@ export function goalsHelp(marketKey: string, selectionKey: string | undefined, b
 export function redHelps(marketKey: string, selectionKey: string | undefined, side: Side): boolean {
   if (selectionKey === undefined) return true;
   const other = side === "home" ? "away" : "home";
-  if (/^(match_winner|h1_winner|h2_winner|draw_no_bet)$/.test(marketKey) || /^(h1_|h2_)?(ah|eh)_/.test(marketKey)) return selectionKey === "draw" || selectionKey === other;
+  if (/^(match_winner|h1_winner|h2_winner|draw_no_bet)$/.test(marketKey) || /^(h1_|h2_)?(ah|eh)_/.test(marketKey) || /^(h1_)?rest_\d+_\d+$/.test(marketKey)) return selectionKey === "draw" || selectionKey === other;
   if (/^(h1_)?double_chance$/.test(marketKey)) return selectionKey === "home_away" || selectionKey === `${other === "home" ? "home_draw" : "draw_away"}`;
   return true;
 }
@@ -323,6 +323,8 @@ export function cornerMarksOf(centre: unknown): CornerMark[] {
 export function cornerHelps(marketKey: string, selectionKey: string | undefined, side: Side | "either"): boolean {
   if (selectionKey === undefined) return true;
   if (/^corners_\d+_5$/.test(marketKey)) return selectionKey === "over";
+  // A corner moves the count up: towards Over and Exactly, never Under.
+  if (/^corners_3way_\d+$/.test(marketKey)) return selectionKey !== "under";
   if (/^home_corners_\d+_5$/.test(marketKey)) return selectionKey === "over" && (side === "home" || side === "either");
   if (/^away_corners_\d+_5$/.test(marketKey)) return selectionKey === "over" && (side === "away" || side === "either");
   return false;

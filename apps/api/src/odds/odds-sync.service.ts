@@ -5,7 +5,7 @@ import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { GOAL_MARKET_KEYS, isGoalMarket } from "../bets/goals";
 import type { FeedMark, LateTimeline } from "../bets/late";
-import { ApiFootballClient, FeedFixture, FeedLeague, RawOdds, FeedLiveMarket, FeedLiveOdds, FeedMarket, feedMarkOf, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseLiveTimeline, parseMarkets, parseMatchCentre, readingStopped } from "./api-football";
+import { ApiFootballClient, FeedFixture, FeedLeague, RawOdds, FeedLiveMarket, FeedLiveOdds, FeedMarket, feedMarkOf, httpFetchJson, parseGoalRecord, parseLateTimeline, parseLiveOdds, parseLiveTimeline, parseMarkets, parseMatchCentre, readingStopped, unknownLiveBets } from "./api-football";
 import { feedDelay, goalForScore, goalLag } from "./feed-delay";
 import { savedCrests, savedMarks } from "./crest";
 import { PREMATCH_REFRESH_MS, RICH_PLAN, isDailyLimitError, msUntilReset, pacedInterval, quotaReserve } from "./feed-budget";
@@ -250,6 +250,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   /** When the live scores and the live prices were last read while nothing on the board was live. */
   private lastIdleScoresAt = 0;
   private lastIdleOddsAt = 0;
+  /** In-play bet names we don't offer, logged once each per start (unknownLiveBets). */
+  private readonly unknownBets = new Set<string>();
   private leagueList: { at: number; leagues: FeedLeague[] } | null = null;
   private readonly days: number;
   /** Requests left on today's API-Football quota, and the plan's daily total, from its last answer. */
@@ -1516,6 +1518,11 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const byExternal = new Map(live.map((e) => [e.externalId!, e]));
     const feed = await this.client!.liveOdds();
     this.livePriced = new Set(feed.map((raw) => String(raw.fixture.id)));
+    const unknown = [...new Set(feed.flatMap(unknownLiveBets))].filter((name) => !this.unknownBets.has(name));
+    if (unknown.length > 0 && this.unknownBets.size < 500) {
+      for (const name of unknown) this.unknownBets.add(name);
+      this.logger.log(`In-play markets in the feed we don't offer: ${unknown.sort().join(", ")}`);
+    }
     const readings = feed.flatMap((raw) => {
       const event = byExternal.get(String(raw.fixture.id));
       return event ? [{ eventId: event.id, odds: parseLiveOdds(raw, event.homeTeam ?? event.name, event.awayTeam ?? "") }] : [];

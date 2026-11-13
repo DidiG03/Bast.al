@@ -58,11 +58,32 @@ export function parseScores(body: unknown): SportScoreScore[] {
   return out;
 }
 
+/**
+ * SportScore answers from a cache: the day's list is refreshed about once a
+ * minute, a single match about every 30 seconds. A query parameter of our
+ * own (`_`) asks past it, where their servers allow; `bust` turns it on.
+ */
+const fresh = (bust: boolean) => (bust ? `&_=${Date.now()}${Math.floor(Math.random() * 1000)}` : "");
+
+const headersFor = (apiKey?: string | null): Record<string, string> => ({ accept: "application/json", "cache-control": "no-cache", ...(apiKey ? { "X-Api-Key": apiKey } : {}) });
+
 /** The scores of today's live football matches, in one request. `apiKey` raises SportScore's rate limit. */
-export async function fetchLiveScores(day: string, fetcher: typeof fetch = fetch, apiKey?: string | null): Promise<SportScoreScore[]> {
-  const url = `${FIXTURES_URL}?sport=football&status=live&date=${day}&limit=200&src=${SOURCE}`;
-  const response = await fetcher(url, { headers: { accept: "application/json", ...(apiKey ? { "X-Api-Key": apiKey } : {}) }, signal: AbortSignal.timeout(8_000) });
+export async function fetchLiveScores(day: string, fetcher: typeof fetch = fetch, apiKey?: string | null, bust = false): Promise<SportScoreScore[]> {
+  const url = `${FIXTURES_URL}?sport=football&status=live&date=${day}&limit=200&src=${SOURCE}${fresh(bust)}`;
+  const response = await fetcher(url, { headers: headersFor(apiKey), signal: AbortSignal.timeout(8_000) });
   if (!response.ok) throw new Error(`SportScore scores: HTTP ${response.status}`);
   return parseScores(await response.json());
 }
 
+const MATCH_URL = "https://sportscore.com/api/v1/match/";
+
+/** One match's score by its slug (fresher than the day's list), or null when SportScore doesn't have it or has no whole score. */
+export async function fetchMatchScore(slug: string, fetcher: typeof fetch = fetch, apiKey?: string | null, bust = true, timeoutMs = 4_000): Promise<SportScoreScore | null> {
+  const url = `${MATCH_URL}?sport=football&slug=${encodeURIComponent(slug)}&src=${SOURCE}${fresh(bust)}`;
+  const response = await fetcher(url, { headers: headersFor(apiKey), signal: AbortSignal.timeout(timeoutMs) });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`SportScore match: HTTP ${response.status}`);
+  const body = (await response.json()) as { match?: Record<string, unknown> } | null;
+  const [row] = parseScores({ matches: body?.match ? [{ ...body.match, slug }] : [] });
+  return row ?? null;
+}

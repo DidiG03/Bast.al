@@ -17,6 +17,6 @@ import { OddsService } from "./odds.service";
   imports: [AuthModule, SecurityModule, AuditModule],
   controllers: [OddsController],
   providers: [OddsService, OddsSyncService, EarlyGoalService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService, VolleyballSyncService, HandballSyncService],
-  exports: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService, VolleyballSyncService, HandballSyncService],
+  exports: [OddsService, OddsSyncService, EarlyGoalService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService, VolleyballSyncService, HandballSyncService],
 })
 export class OddsModule {}

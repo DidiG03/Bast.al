@@ -15813,6 +15813,14 @@ button.is-blocked {
   text-align: center;
 }
 
+/* A score our feed hasn't confirmed yet (a goal SportScore shows, or one it took back): the same score as the tracker, marked. */
+.bm-score.is-pending,
+.player-top-score.is-pending {
+  color: var(--warning);
+  text-decoration: underline dotted;
+  text-underline-offset: 0.18em;
+}
+
 .bm-settled {
   display: flex;
   grid-column: 1 / -1;

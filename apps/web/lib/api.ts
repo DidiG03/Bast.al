@@ -383,6 +383,36 @@ export class ApiError extends Error {
 const revalidated = new Map<string, { etag: string; body: unknown }>();
 const REVALIDATED_KEPT = 40;
 
+/** A sign-in token with less than this left is swapped for a fresh one before it's sent. */
+const TOKEN_MIN_LIFE_MS = 20_000;
+
+/** When a Clerk session token runs out (its `exp`), or null when it can't be read. */
+function tokenExpiry(token: string): number | null {
+  const payload = token.split(".")[1];
+  if (!payload) return null;
+  try {
+    const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(payload.length / 4) * 4, "=")));
+    return typeof json.exp === "number" ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Browser only: `token`, or a fresh one from Clerk when it has less than
+ * TOKEN_MIN_LIFE_MS left. Clerk hands out its cached token until a few
+ * seconds before it runs out (60 s in all), so a request sent with it and
+ * answered a little slowly arrived expired: a 401, retried, but logged in the
+ * console every time. Asking for a fresh one first avoids that.
+ */
+export async function liveToken(token: string | null | undefined): Promise<string | null> {
+  if (typeof window === "undefined" || !token) return token ?? null;
+  const exp = tokenExpiry(token);
+  if (exp === null || exp - Date.now() >= TOKEN_MIN_LIFE_MS) return token;
+  const clerk = (window as unknown as { Clerk?: { session?: { getToken: (options: { skipCache: boolean }) => Promise<string | null> } | null } }).Clerk;
+  return (await clerk?.session?.getToken({ skipCache: true }).catch(() => null)) ?? token;
+}
+
 export async function apiFetch<T>(
   path: string,
   token: string,
@@ -390,6 +420,8 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const normalized = path.startsWith("/") ? path.slice(1) : path;
   const { idempotencyKey, revalidate, retried, ...rest } = init ?? {};
+  // A token about to run out is swapped first, rather than sent and answered 401.
+  if (!retried) token = (await liveToken(token)) ?? token;
   const url = `${apiBase()}/${normalized}`;
   const cached = revalidate && typeof window !== "undefined" && (rest.method ?? "GET") === "GET" ? revalidated.get(url) : undefined;
   const res = await fetch(url, {
@@ -513,6 +545,8 @@ export type OddsEvent = {
   period?: string | null;
   homeScore: number | null;
   awayScore: number | null;
+  /** Live: a score a faster source shows that our feed hasn't confirmed yet (a goal, or one taken back). Shown as pending. */
+  pendingScore?: { home: number; away: number } | null;
   hidden: boolean;
   suspended: boolean;
   provider: string;

@@ -387,3 +387,17 @@ test("a corners bet placed after a corner the site hadn't shown is void when tha
   assert.equal(lateDecision({ state: { ...showing, corners: 3, cornersHome: 2 }, placedAt: placed, marketKey: "corners_8_5", selectionKey: "over", timeline: null, cornerMarks: marks }).late, false, "the site had already shown that count");
   assert.equal(lateDecision({ state: state(1, 0, 40), placedAt: placed, marketKey: "corners_8_5", selectionKey: "over", timeline: timeline([goal(39, "home")]) }).late, false, "a goal does not void corners");
 });
+
+test("a bet placed on a score with a goal later disallowed is void, whatever the market; a goal the site showed promptly is not mistaken for one", () => {
+  // It showed 1–1; the away goal was taken back and the match ended 1–0.
+  const ended = lateDecision({ state: state(1, 1, 30), placedAt: firstHalf(30), marketKey: "goals_2_5", selectionKey: "under", timeline: null, seen: [], result: { home: 1, away: 0 } });
+  assert.equal(ended.late, true);
+  assert.equal(ended.reason, "placed on a goal that was later disallowed");
+  assert.equal(lateDecision({ state: state(1, 1, 30), placedAt: firstHalf(30), marketKey: "corners_9_5", selectionKey: "over", timeline: null, result: { home: 1, away: 0 } }).late, true, "corners too");
+  // By the timeline: 1–1 showing, but the away side's only goal came in the 40th minute, after the bet.
+  const line = timeline([goal(20, "home"), goal(40, "away")]);
+  assert.equal(lateDecision({ state: state(1, 1, 30), placedAt: firstHalf(30), marketKey: "match_winner", selectionKey: "home", timeline: line, seen: [], result: { home: 1, away: 1 } }).reason, "placed on a goal that was later disallowed");
+  // The home goal of the 20th minute, showing on a bet placed in the 21st (or even counted a minute early): stands.
+  assert.equal(lateDecision({ state: state(1, 0, 21), placedAt: firstHalf(21), marketKey: "match_winner", selectionKey: "home", timeline: line, seen: [], result: { home: 1, away: 1 } }).late, false);
+  assert.equal(lateDecision({ state: state(1, 0, 19), placedAt: firstHalf(19, 30), marketKey: "match_winner", selectionKey: "home", timeline: line, seen: [], result: { home: 1, away: 1 } }).late, false);
+});

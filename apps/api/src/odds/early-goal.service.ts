@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import { EventStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
-import { fetchLiveScores, type SportScoreScore } from "./sportscore-scores";
+import { fetchLiveScores, fetchMatchScore, type SportScoreScore } from "./sportscore-scores";
 import { OddsSyncService } from "./odds-sync.service";
 
 /** Lets tests hand in their own fetch. */
@@ -9,31 +9,43 @@ export const EARLY_GOAL_FETCH = "EARLY_GOAL_FETCH";
 
 /**
  * How often SportScore's live scores are read while one of our live football
- * matches is linked to it: every 4 s with a SportScore key (6,000 requests a
- * minute), every 10 s without one (their anonymous tier allows about 10,000 a
- * day per IP, and this only runs while matches are live).
+ * matches is linked to it: every 2 s with a SportScore key (6,000 requests a
+ * minute), every 4 s without one, held to EARLY_GOAL_DAILY_BUDGET requests a
+ * day (their anonymous tier allows about 10,000 per IP).
  */
-const KEYED_MS = 4_000;
-const ANONYMOUS_MS = 10_000;
+const KEYED_MS = 2_000;
+const ANONYMOUS_MS = 4_000;
+const ANONYMOUS_DAILY_BUDGET = 9_000;
 /** While nothing linked is live, the next look is this far off. */
 const IDLE_MS = 30_000;
 /** After a failed read, the next one waits this long, doubling up to the cap. */
-const BACKOFF_MS = 15_000;
-const BACKOFF_MAX_MS = 5 * 60_000;
+const BACKOFF_MS = 10_000;
+const BACKOFF_MAX_MS = 2 * 60_000;
+/** A live slip's own check (checkNow) waits this long for SportScore, then goes ahead on what's known. */
+const CHECK_TIMEOUT_MS = 2_000;
+/** Slips on the same match within this long share one check. */
+const CHECK_SHARE_MS = 1_000;
 
 /**
  * Early goal signals. SportScore usually shows a goal some seconds before
- * API-Football, our odds feed. This reads SportScore's live scores (one
- * request for every live match) and, for each of our live football matches
- * linked to a SportScore match (the tracker's mapping), hands a score ahead
- * of our board to OddsSyncService.earlyGoal: every market of the match pauses
- * at once, server-side, and live slips on it are refused until our feed
- * catches up. The late check then counts the goal from when SportScore showed
- * it (EarlyGoal), so a bet placed after the real goal is voided, never paid.
+ * API-Football, our odds feed, and takes back a disallowed one sooner too.
+ * This reads SportScore's live scores and hands each linked live football
+ * match's score to OddsSyncService.sourceScore: when it differs from our
+ * board, every market of the match pauses at once, server-side, and live
+ * slips on it are refused until our feed agrees (or the hold ends). The late
+ * check counts a goal from when SportScore showed it (EarlyGoal), so a bet
+ * placed after the real goal is voided, never paid.
+ *
+ * - The day's list is read on a timer, asked past SportScore's own cache (it
+ *   refreshes it about once a minute otherwise).
+ * - A live slip reads its matches' own scores at submission and again at the
+ *   end of its wait (checkNow), so a click in the gap between two reads is
+ *   refused even before the board has paused.
  *
  * A failed read changes nothing: our own feed's goal pauses and the late
  * check stand without it. EARLY_GOALS=off turns it off; SPORTSCORE_API_KEY
- * raises the rate limit; EARLY_GOAL_INTERVAL_MS sets the pace.
+ * raises the rate limit; EARLY_GOAL_INTERVAL_MS and EARLY_GOAL_DAILY_BUDGET
+ * set the pace.
  */
 @Injectable()
 export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
@@ -44,6 +56,13 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
   private readonly fetcher: typeof fetch;
   private readonly apiKey = process.env.SPORTSCORE_API_KEY?.trim() || null;
   private readonly everyMs = Number(process.env.EARLY_GOAL_INTERVAL_MS) || (this.apiKey ? KEYED_MS : ANONYMOUS_MS);
+  /** Requests a UTC day; none without a key means the anonymous default, a key means no daily cap of ours. */
+  private readonly dailyBudget = Number(process.env.EARLY_GOAL_DAILY_BUDGET) || (this.apiKey ? Infinity : ANONYMOUS_DAILY_BUDGET);
+  private day = "";
+  private used = 0;
+  /** Each match's last check for a slip: when, and the promise slips on it share. */
+  private readonly checks = new Map<string, { at: number; done: Promise<SportScoreScore | null> }>();
+  readonly enabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -51,17 +70,40 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     @Optional() @Inject(EARLY_GOAL_FETCH) fetcher?: typeof fetch,
   ) {
     this.fetcher = fetcher ?? fetch;
+    this.enabled = process.env.EARLY_GOALS !== "off";
   }
 
   onModuleInit() {
-    if (process.env.NODE_ENV === "test" || process.env.EARLY_GOALS === "off" || this.sync.mode === "off") return;
-    this.logger.log(`Early goal signals from SportScore: every ${this.everyMs / 1000} s while a linked football match is live`);
+    if (process.env.NODE_ENV === "test" || !this.enabled || this.sync.mode === "off") return;
+    this.logger.log(
+      `Early goal signals from SportScore: every ${this.everyMs / 1000} s while a linked football match is live${Number.isFinite(this.dailyBudget) ? `, up to ${this.dailyBudget} requests a day` : ""}, and on each live slip`,
+    );
     this.schedule(IDLE_MS);
   }
 
   onModuleDestroy() {
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
+  }
+
+  /** Requests left today (UTC), counting `cost` more as used when given. */
+  private budget(cost = 0): number {
+    const today = new Date().toISOString().slice(0, 10);
+    if (today !== this.day) {
+      this.day = today;
+      this.used = 0;
+    }
+    this.used += cost;
+    return this.dailyBudget - this.used;
+  }
+
+  /** The wait before the next timed read: the interval, spread out so the day's budget lasts (a quarter is kept for slips). */
+  private nextDelay(): number {
+    const left = this.budget() * 0.75;
+    if (!Number.isFinite(left)) return this.everyMs;
+    if (left <= 0) return IDLE_MS;
+    const msLeft = 86_400_000 - (Date.now() % 86_400_000);
+    return Math.max(this.everyMs, Math.ceil(msLeft / left));
   }
 
   private schedule(ms: number) {
@@ -75,7 +117,7 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     try {
       const linked = await this.run();
       this.failures = 0;
-      if (linked > 0) next = this.everyMs;
+      if (linked > 0) next = this.nextDelay();
     } catch (error) {
       this.failures += 1;
       next = Math.min(BACKOFF_MAX_MS, BACKOFF_MS * 2 ** (this.failures - 1));
@@ -84,29 +126,79 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     this.schedule(next);
   }
 
+  /** Our live football matches linked to SportScore (the tracker's mapping), optionally only these. */
+  private linked(eventIds?: string[]) {
+    return this.prisma.event.findMany({
+      where: { sport: "football", status: EventStatus.LIVE, trackerMapping: { externalId: { not: null } }, ...(eventIds ? { id: { in: eventIds } } : {}) },
+      select: { id: true, homeScore: true, awayScore: true, trackerMapping: { select: { externalId: true } } },
+    });
+  }
+
   /**
-   * One read: our live football matches linked to SportScore, their scores
-   * there, and an early goal for each one ahead of our board. Returns how
-   * many linked matches are live (0: nothing was fetched).
+   * One timed read: the day's live list and, for each linked live match, its
+   * score there handed to sourceScore. Returns how many linked matches are
+   * live (0: nothing was fetched).
    */
   async run(now: Date = new Date(), scores?: SportScoreScore[]): Promise<number> {
     await this.sync.settleEarlyScores(now);
-    const live = await this.prisma.event.findMany({
-      where: { sport: "football", status: EventStatus.LIVE, trackerMapping: { externalId: { not: null } } },
-      select: { id: true, homeScore: true, awayScore: true, trackerMapping: { select: { externalId: true } } },
-    });
+    const live = await this.linked();
     if (live.length === 0) return 0;
-    const day = now.toISOString().slice(0, 10);
-    const read = scores ?? (await fetchLiveScores(day, this.fetcher, this.apiKey));
+    let read = scores;
+    if (!read) {
+      if (this.budget() <= 0) return live.length;
+      this.budget(1);
+      read = await fetchLiveScores(now.toISOString().slice(0, 10), this.fetcher, this.apiKey, true);
+    }
     const bySlug = new Map(read.map((row) => [row.id, row]));
     for (const event of live) {
       const there = bySlug.get(event.trackerMapping!.externalId!);
-      if (!there) continue;
-      if (there.home + there.away <= (event.homeScore ?? 0) + (event.awayScore ?? 0)) continue;
-      await this.sync.earlyGoal(event.id, { home: there.home, away: there.away }, "sportscore", now).catch((error) =>
-        this.logger.warn(`Early goal on event ${event.id} not applied: ${error instanceof Error ? error.message : String(error)}`),
-      );
+      if (there) await this.apply(event.id, there, now);
     }
     return live.length;
+  }
+
+  private apply(eventId: string, score: SportScoreScore, now: Date) {
+    return this.sync.sourceScore(eventId, { home: score.home, away: score.away }, "sportscore", now).catch((error) => {
+      this.logger.warn(`SportScore score on event ${eventId} not applied: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    });
+  }
+
+  /**
+   * For a live slip: these matches' own scores straight from SportScore (each
+   * read shared by slips within CHECK_SHARE_MS), applied like a timed read.
+   * Returns the matches whose score there differs from ours: the slip is
+   * refused on them. Gives up after CHECK_TIMEOUT_MS, or with the day's
+   * budget spent, and returns what it has (a failed read refuses nothing).
+   * `shareMs`: how old a read other slips started may be to be used; 0 for a
+   * read of its own (the end of a slip's wait must not reuse the one from
+   * when it came in).
+   */
+  async checkNow(eventIds: string[], now: Date = new Date(), shareMs = CHECK_SHARE_MS): Promise<Array<{ eventId: string; score: string }>> {
+    if (!this.enabled || eventIds.length === 0) return [];
+    const live = await this.linked(eventIds);
+    const differing: Array<{ eventId: string; score: string }> = [];
+    await Promise.all(
+      live.map(async (event) => {
+        const slug = event.trackerMapping!.externalId!;
+        const shared = this.checks.get(slug);
+        let done = shared && Date.now() - shared.at < shareMs ? shared.done : null;
+        if (!done) {
+          if (this.budget() <= 0) return;
+          this.budget(1);
+          done = fetchMatchScore(slug, this.fetcher, this.apiKey, true, CHECK_TIMEOUT_MS).catch((error) => {
+            this.logger.warn(`SportScore check for event ${event.id} failed: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+          });
+          this.checks.set(slug, { at: Date.now(), done });
+          if (this.checks.size > 200) for (const [key, check] of this.checks) if (Date.now() - check.at > 60_000) this.checks.delete(key);
+        }
+        const score = await done;
+        if (!score) return;
+        await this.apply(event.id, score, now);
+        if (score.home + score.away !== (event.homeScore ?? 0) + (event.awayScore ?? 0)) differing.push({ eventId: event.id, score: `${score.home}:${score.away}` });
+      }),
+    );
+    return differing;
   }
 }

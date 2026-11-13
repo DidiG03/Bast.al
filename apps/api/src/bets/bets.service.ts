@@ -1,9 +1,10 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { BalanceTransactionType, BetKind, BetStatus, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { BettingLimitsService } from "../commissions/betting-limits.service";
 import { EARLY_GOAL_HOLD_MS, OddsSyncService } from "../odds/odds-sync.service";
+import { EarlyGoalService } from "../odds/early-goal.service";
 import { OddsService } from "../odds/odds.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
@@ -38,14 +39,15 @@ const LAG_MIN_GOALS_COMPETITION = 5;
 const LAG_REFRESH_MS = 5 * 60_000;
 
 /**
- * Whether a match has a goal a faster source (SportScore) showed that our
- * feed's score doesn't have yet, still within its hold (Event.liveEarlyScore,
- * OddsSyncService.earlyGoal).
+ * Whether a faster source (SportScore) has a score for the match that our
+ * feed's doesn't agree with: a goal ours doesn't have yet, or one it took
+ * back that ours still counts, within its hold (Event.liveEarlyScore,
+ * OddsSyncService.sourceScore).
  */
-function earlyGoalAhead(event: { homeScore: number | null; awayScore: number | null; liveEarlyScore: string | null; liveEarlyAt: Date | null }, now: Date): boolean {
+function scoreInDoubt(event: { homeScore: number | null; awayScore: number | null; liveEarlyScore: string | null; liveEarlyAt: Date | null }, now: Date): boolean {
   const match = event.liveEarlyScore ? /^(\d+):(\d+)$/.exec(event.liveEarlyScore) : null;
   if (!match || !event.liveEarlyAt || now.getTime() - event.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS) return false;
-  return Number(match[1]) + Number(match[2]) > (event.homeScore ?? 0) + (event.awayScore ?? 0);
+  return Number(match[1]) + Number(match[2]) !== (event.homeScore ?? 0) + (event.awayScore ?? 0);
 }
 
 /** Resolves as `work` does, or rejects with `late()` after `ms` (0: only if it's already settled). */
@@ -201,6 +203,8 @@ export class BetsService {
     private readonly audit: AuditService,
     private readonly risk: RiskService,
     private readonly sync: OddsSyncService,
+    /** SportScore's live scores, read again for each live slip (EarlyGoalService.checkNow). Absent in some tests. */
+    @Optional() private readonly early?: EarlyGoalService,
   ) {}
 
   /**
@@ -644,11 +648,14 @@ export class BetsService {
         select: { id: true, name: true, provider: true, league: true, liveOddsAt: true, liveCooldownUntil: true, matchCentre: true, liveVersion: true, homeScore: true, awayScore: true, liveEarlyScore: true, liveEarlyAt: true },
       })).map((event) => [event.id, event]),
     );
-    // A goal a faster source (SportScore) shows and our feed doesn't have yet: no live bet on that match until it does.
-    const earlyAtSubmit = [...atSubmit.values()].find((event) => earlyGoalAhead(event, submittedAt));
-    if (earlyAtSubmit) {
-      this.logger.warn(`Live slip refused for player ${playerId}: ${earlyAtSubmit.name} has a goal (${earlyAtSubmit.liveEarlyScore}) our feed hasn't confirmed`);
-      throw new ConflictException(`Live betting on ${earlyAtSubmit.name} is paused: a goal is being confirmed. Your stake was not taken.`);
+    // SportScore's score for these matches, read now (not only on its timer): a click in the gap before the board
+    // has paused is refused here. A goal it shows that our feed doesn't have yet, or one it took back that our feed
+    // still counts: no live bet on that match until our feed agrees.
+    const differing = new Set((await this.early?.checkNow(liveIds, submittedAt).catch(() => []) ?? []).map((row) => row.eventId));
+    const doubtful = [...atSubmit.values()].find((event) => differing.has(event.id) || scoreInDoubt(event, submittedAt));
+    if (doubtful) {
+      this.logger.warn(`Live slip refused for player ${playerId}: ${doubtful.name} has a score (${doubtful.liveEarlyScore ?? "from SportScore just now"}) our feed hasn't confirmed`);
+      throw new ConflictException(`Live betting on ${doubtful.name} is paused: a goal is being confirmed. Your stake was not taken.`);
     }
     const { delay, longerBecause, waits } = await this.waitFor(atSubmit, submittedAt);
     this.logger.log(
@@ -694,9 +701,12 @@ export class BetsService {
       : null;
     // Handled below; this keeps a check that fails while we wait from counting as unhandled meanwhile.
     verify?.catch(() => undefined);
+    // SportScore again at the end of the wait, alongside the feed's own checks.
+    const lateCheck = this.early ? this.early.checkNow(liveIds, new Date(), 0).catch(() => []) : Promise.resolve([]);
     if (lead > 0) await wait(lead);
     if (verify) await verify;
     const checkMs = checking ? Date.now() - checkStarted - lead : null;
+    const differingAfter = new Set((await lateCheck).map((row) => row.eventId));
     // The read from when the slip came in has had the whole wait to answer; one that hasn't by now doesn't count.
     const marksAtSubmit = await withDeadline(markingAtSubmit, 0, () => null).catch(() => null);
     for (const pick of picks.filter((p) => !p.live)) {
@@ -737,8 +747,8 @@ export class BetsService {
         throw refuse(`${what} It was not placed, and your stake was not taken.`);
       }
       const event = shown.get(pick.eventId);
-      // A goal a faster source showed during the wait, that our feed hasn't confirmed.
-      if (event && earlyGoalAhead(event, new Date())) {
+      // A goal a faster source showed (or took back) during the wait, that our feed hasn't confirmed.
+      if (differingAfter.has(pick.eventId) || (event && scoreInDoubt(event, new Date()))) {
         throw refuse(`A goal is being confirmed in the match while your bet on ${pick.label} was waiting. It was not placed, and your stake was not taken.`);
       }
       // Anything the site saw change in the match during the wait (a score, a pause, the bookmaker blocking or reopening it).

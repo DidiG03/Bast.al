@@ -1410,6 +1410,8 @@ const MatchCard = memo(function MatchCard({
   };
   const toggleLabel = expanded ? t("Fewer markets") : tn(more, "{count} more market", "{count} more markets");
   const scored = (event.live || over) && event.homeScore !== null && event.awayScore !== null;
+  // A score a faster source has and our feed hasn't confirmed: shown, marked pending, as the pause banner says.
+  const pending = playing && event.pendingScore ? event.pendingScore : null;
   const mainHeld = Boolean(playing && inRow && (inRow.suspended || inRow.selections.every((selection) => selection.suspended)));
   const rowOpen = (market: OddsEvent["markets"][number]) => !market.suspended && !market.stale && market.selections.some((selection) => !selection.suspended);
   const winnerHeld = playing && event.bettable && !event.marketPause && Boolean(inRow && inRow.key === "match_winner" && mainHeld && event.markets.some((market) => market.id !== inRow.id && rowOpen(market)));
@@ -1548,8 +1550,24 @@ const MatchCard = memo(function MatchCard({
             ) : null}
           </div>
           <div className="bm-score-col">
-            {scored ? <span className="bm-score">{event.homeScore}</span> : null}
-            {scored && event.awayTeam ? <span className="bm-score">{event.awayScore}</span> : null}
+            {pending ? (
+              <>
+                <span className="bm-score is-pending" title={t("Score not confirmed yet")}>
+                  {pending.home}
+                </span>
+                {event.awayTeam ? (
+                  <span className="bm-score is-pending" title={t("Score not confirmed yet")}>
+                    {pending.away}
+                  </span>
+                ) : null}
+                <span className="sr-only">{t("Score not confirmed yet")}</span>
+              </>
+            ) : (
+              <>
+                {scored ? <span className="bm-score">{event.homeScore}</span> : null}
+                {scored && event.awayTeam ? <span className="bm-score">{event.awayScore}</span> : null}
+              </>
+            )}
           </div>
           <div className="bm-tools">
             {hasStats ? (

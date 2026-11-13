@@ -10,7 +10,7 @@ import { rowWord } from "./live-rules.mjs";
  */
 export type LiveDelta = {
   id: string;
-  header?: Pick<OddsEvent, "status" | "live" | "elapsed" | "elapsedAt" | "period" | "homeScore" | "awayScore" | "bettable" | "livePause" | "allMarketsSuspended" | "marketPause">;
+  header?: Pick<OddsEvent, "status" | "live" | "elapsed" | "elapsedAt" | "period" | "homeScore" | "awayScore" | "pendingScore" | "bettable" | "livePause" | "allMarketsSuspended" | "marketPause">;
   markets?: Array<[string, boolean, boolean, string | null, (string | null)?]>;
   prices?: Array<[string, number, boolean]>;
 };

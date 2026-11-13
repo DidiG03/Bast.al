@@ -42,6 +42,8 @@ export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; s
   const href = `/dashboard/bet?${sport === "football" ? "" : `sport=${sport}&`}event=${encodeURIComponent(event.id)}`;
   const playing = event.status === "LIVE";
   const scored = event.homeScore !== null && event.awayScore !== null && (playing || event.status === "COMPLETED");
+  /** A score a faster source has and our feed hasn't confirmed: shown, marked pending. */
+  const pending = playing && event.pendingScore ? event.pendingScore : null;
   const market = event.markets[0];
   const selections = market && market.selections.length > 0 && market.selections.length <= 3 ? market.selections : [];
 
@@ -115,13 +117,13 @@ export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; s
             <span className="player-top-side">
               <TeamCrest name={event.homeTeam ?? event.name} logo={event.homeLogo} />
               <span>{event.homeTeam ?? event.name}</span>
-              {scored ? <strong className="player-top-score">{event.homeScore}</strong> : null}
+              {scored ? <strong className={`player-top-score${pending ? " is-pending" : ""}`} title={pending ? t("Score not confirmed yet") : undefined}>{pending ? pending.home : event.homeScore}</strong> : null}
             </span>
             {event.awayTeam ? (
               <span className="player-top-side">
                 <TeamCrest name={event.awayTeam} logo={event.awayLogo} />
                 <span>{event.awayTeam}</span>
-                {scored ? <strong className="player-top-score">{event.awayScore}</strong> : null}
+                {scored ? <strong className={`player-top-score${pending ? " is-pending" : ""}`} title={pending ? t("Score not confirmed yet") : undefined}>{pending ? pending.away : event.awayScore}</strong> : null}
               </span>
             ) : null}
           </div>

@@ -265,7 +265,9 @@ export type LateDecision = { late: boolean; undecided?: boolean; reason: string 
 /** Why a bet whose later goal can't be timed is void. */
 export const UNTIMED_REASON = "couldn't confirm it was placed before a goal the feed reported late";
 /** Every reason the late check voids a bet with, to tell its voids from Super Admin's own. */
-export const LATE_REASONS = ["placed after a goal that hadn't shown yet", "placed after a red card that hadn't shown yet", "placed after a card that hadn't shown yet", "placed after a corner that hadn't shown yet", UNTIMED_REASON];
+/** Why a live bet placed on a score with a goal that was later taken back is void. */
+export const TAKEN_BACK_REASON = "placed on a goal that was later disallowed";
+export const LATE_REASONS = ["placed after a goal that hadn't shown yet", "placed after a red card that hadn't shown yet", "placed after a card that hadn't shown yet", "placed after a corner that hadn't shown yet", UNTIMED_REASON, TAKEN_BACK_REASON];
 
 const iso = (ms: number | null) => (ms === null ? "unknown" : new Date(ms).toISOString());
 const minuteText = (moment: Moment) => (moment.extra ? `${moment.minute}+${moment.extra}'` : `${moment.minute}'`);
@@ -397,6 +399,11 @@ export function lateDecision(input: {
   const done = (decision: LateDecision): LateDecision => ({ ...decision, version: LATE_RULE_VERSION });
   const kept = (what: string) => done({ late: false, reason: null, detail: `not voided because ${what} didn't help ${pick}; ${showed}` });
 
+  // Placed on a score with a goal that was later taken back (VAR, a correction): its price assumed a goal that never
+  // counted. Void, on every market.
+  const cancelled = goalTakenBack(state, timeline, input.result ?? null, before, betMinute);
+  if (cancelled) return done({ late: true, reason: TAKEN_BACK_REASON, detail: `${cancelled}; ${showed}` });
+
   // Every live bet placed after a goal it hadn't shown is void, corners and cards bets too (LATE_KEEP_HURT).
   if (!LATE_KEEP_HURT && (isCardsMarket(marketKey) || isCornersMarket(marketKey))) {
     const missed = missedGoal(state, timeline, seen, before);
@@ -491,6 +498,40 @@ export function lateDecision(input: {
 }
 
 const c = (moment: Moment) => `${moment.side} ${minuteText(moment)}`;
+
+/**
+ * Whether the score a bet was placed on had a goal that never counted, as
+ * text, or null:
+ * - the match ended with fewer goals for a side than the bet showed (a score
+ *   only goes down when a goal is taken back);
+ * - or, by the feed's timeline (only kept when its goals add up to the final
+ *   score), fewer goals for a side by the bet's time than it showed. A goal
+ *   up to two minutes after the bet's minute, or within the buffer of its
+ *   time, still counts as before it, so a goal the site showed promptly
+ *   never voids a bet here.
+ */
+function goalTakenBack(
+  state: LiveState,
+  timeline: LateTimeline | null,
+  result: { home: number; away: number } | null,
+  before: (moment: Moment, received: number | null) => { yes: boolean; how: string },
+  betMinute: { minute: number; extra: number } | null,
+): string | null {
+  if (result && (state.home > result.home || state.away > result.away)) {
+    return `it showed ${state.home}–${state.away}, and the match ended ${result.home}–${result.away}: a goal it counted was taken back`;
+  }
+  if (!timeline) return null;
+  let home = 0;
+  let away = 0;
+  for (const goal of timeline.goals) {
+    const earlier = before(goal, null).yes || (betMinute !== null && atOrBefore(goal, { minute: betMinute.minute + 2, extra: betMinute.extra }));
+    if (!earlier) continue;
+    if (goal.side === "home") home++;
+    else away++;
+  }
+  if (state.home > home || state.away > away) return `it showed ${state.home}–${state.away}, and the feed's timeline has ${home}–${away} by then: a goal it counted was taken back`;
+  return null;
+}
 
 /**
  * The first goal a bet was placed after without showing it, as text, or

@@ -226,6 +226,105 @@ test("without the feed's timeline, SportScore's sighting is when we knew of the 
   assert.equal(settled.voidReason, "placed after a goal that hadn't shown yet");
 });
 
+// SportScore as the bet API reads it for a slip: each test sets what its match endpoint answers.
+const sportScore = new Map();
+const fakeFetch = async (url) => {
+  const slug = new URL(url).searchParams.get("slug");
+  const score = slug ? sportScore.get(slug) : null;
+  if (!score) return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
+  const value = typeof score === "function" ? score() : score;
+  return new Response(JSON.stringify({ sport: "football", match: { home_score: String(value[0]), away_score: String(value[1]), url: `/football/match/${slug}/x1/` } }), { status: 200 });
+};
+const checking = new EarlyGoalService(prisma, sync, fakeFetch);
+const betsChecked = new BetsService(prisma, odds, new BettingLimitsService(prisma, hierarchy), realtime, users, audit, new RiskService(prisma, audit), sync, checking);
+async function placeChecked(event, market = "match_winner", key = "home") {
+  const selection = pick(event, market, key);
+  const price = (await odds.priceForPlayer(player.id, selection.id)).odds;
+  return betsChecked.place(actor, { bets: [{ selectionId: selection.id, stake: 10, odds: price }] });
+}
+
+test("a click in the gap: SportScore has the goal, no timed read has happened, the board isn't paused; the bet API reads SportScore itself and refuses", async () => {
+  const match = await liveMatch("Click in the gap", "gap-1");
+  sportScore.set("gap-1", [1, 0]);
+  const start = await balance();
+  // Nothing has paused the match yet: the price is open, as it was on the Player's screen.
+  assert.equal((await odds.priceForPlayer(player.id, pick(match, "match_winner", "home").id)).bettable, true);
+  await assert.rejects(placeChecked(match), /goal is being confirmed/);
+  assert.equal(await prisma.bet.count({ where: { selection: { market: { eventId: match.id } } } }), 0);
+  assert.equal(await balance(), start, "no money moved");
+  // The read paused the match for everyone, there and then.
+  const after = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  assert.equal(after.liveEarlyScore, "1:0");
+  for (const market of await prisma.market.findMany({ where: { eventId: match.id } })) assert.equal(market.livePauseReason, "ahead");
+});
+
+test("SportScore shows the goal while the slip waits: the check at the end of the wait refuses it", async () => {
+  const match = await liveMatch("Goal in the wait, read for the slip", "gap-2");
+  let reads = 0;
+  sportScore.set("gap-2", () => (++reads === 1 ? [0, 0] : [0, 1]));
+  const start = await balance();
+  await assert.rejects(placeChecked(match), /goal is being confirmed|Something happened in the match|paused while your bet/);
+  assert.ok(reads >= 2, "SportScore was read at submission and again after the wait");
+  assert.equal(await prisma.bet.count({ where: { selection: { market: { eventId: match.id } } } }), 0);
+  assert.equal(await balance(), start, "no money moved");
+});
+
+test("with SportScore agreeing, a live slip goes in", async () => {
+  const match = await liveMatch("Agreeing", "gap-3");
+  sportScore.set("gap-3", [0, 0]);
+  const placed = await placeChecked(match);
+  assert.equal(placed.bets.length, 1);
+  assert.equal((await prisma.bet.findUniqueOrThrow({ where: { id: placed.bets[0].id } })).status, "OPEN");
+});
+
+test("a goal taken back: SportScore shows 3–0 while our feed still has 3–1; every market pauses, slips are refused, and it ends when our feed agrees", async () => {
+  const match = await liveMatch("Disallowed", "var-1");
+  await prisma.event.update({ where: { id: match.id }, data: { homeScore: 3, awayScore: 1 } });
+  const before = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  await early.run(new Date(), [{ id: "var-1", home: 3, away: 0 }]);
+  const after = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  assert.equal(after.liveEarlyScore, "3:0");
+  assert.equal(after.liveVersion, before.liveVersion + 1);
+  for (const market of await prisma.market.findMany({ where: { eventId: match.id } })) assert.equal(market.livePauseReason, "ahead", `${market.key} paused`);
+  // Even with the pauses lifted, the slip is refused while our feed still counts the goal.
+  await prisma.market.updateMany({ where: { eventId: match.id }, data: { livePausedUntil: null, livePausedAt: null, liveReopenFrom: null, livePauseReason: null } });
+  sportScore.set("var-1", [3, 0]);
+  await assert.rejects(placeChecked(match), /goal is being confirmed/);
+  // Our feed takes the goal back too: the match is ours again.
+  await prisma.event.update({ where: { id: match.id }, data: { awayScore: 0 } });
+  await early.run(new Date(), [{ id: "var-1", home: 3, away: 0 }]);
+  assert.equal((await prisma.event.findUniqueOrThrow({ where: { id: match.id } })).liveEarlyScore, null);
+});
+
+test("bets placed at prices that counted a goal later disallowed are void at settlement; one placed on the right score is paid", async () => {
+  const match = await liveMatch("Placed on a disallowed goal", "var-2");
+  const home = pick(match, "match_winner", "home");
+  const over = pick(match, "goals_2_5", "over");
+  const team = await prisma.user.findUniqueOrThrow({ where: { id: player.id }, select: { parentId: true } });
+  const manager = await prisma.user.findUniqueOrThrow({ where: { id: team.parentId } });
+  const owner = await prisma.user.findUniqueOrThrow({ where: { id: manager.parentId } });
+  const placedAt = new Date(Date.now() - 5 * 60_000);
+  const bet = (selection, state, odds) =>
+    prisma.bet.create({ data: { playerId: player.id, selectionId: selection.id, stake: 10, odds, description: "live", placedAt, live: state, ownerId: owner.id, managerId: manager.id, ownerRate: 10, managerRate: 20 } });
+  // Placed while our board showed 3–1: the away goal was then disallowed.
+  const onWrong = await bet(home, { home: 3, away: 1, minute: 70, cards: 0, reds: 0 }, 1.5);
+  const overOnWrong = await bet(over, { home: 3, away: 1, minute: 70, cards: 0, reds: 0 }, 1.01);
+  // Placed once it showed 3–0.
+  const onRight = await bet(home, { home: 3, away: 0, minute: 72, cards: 0, reds: 0 }, 1.2);
+  await prisma.event.update({
+    where: { id: match.id },
+    data: { status: "COMPLETED", period: "FT", homeScore: 3, awayScore: 0, resultHome: 3, resultAway: 0, resultHalfHome: 2, resultHalfAway: 0, finishedAt: new Date(Date.now() - 4 * 3_600_000) },
+  });
+  await settlement.settleEvent(match.id);
+  for (const id of [onWrong.id, overOnWrong.id]) {
+    const settled = await prisma.bet.findUniqueOrThrow({ where: { id } });
+    assert.equal(settled.status, "VOID");
+    assert.equal(settled.voidReason, "placed on a goal that was later disallowed");
+    assert.equal(Number(settled.payout), 10);
+  }
+  assert.equal((await prisma.bet.findUniqueOrThrow({ where: { id: onRight.id } })).status, "WON");
+});
+
 test("teardown", async () => {
   await prisma.$disconnect();
 });

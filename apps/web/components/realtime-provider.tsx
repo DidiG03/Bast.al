@@ -9,7 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import type { NotificationItem } from "../lib/api";
+import { liveToken, type NotificationItem } from "../lib/api";
 import type { LiveDelta } from "../lib/live-push";
 
 /** Mirrors the API's RealtimeEvent, plus `resync` which fires after a dropped stream comes back. */
@@ -69,14 +69,27 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         mine.abort();
       }, 5_000);
       try {
-        const token = await getToken();
+        // A token with only a few seconds left would be refused by the time the stream opens: a fresh one then.
+        const token = await liveToken(await getToken());
         if (stopped || controller !== mine) return;
         if (!token) throw new Error("no session");
-        const response = await fetch("/api/backend/realtime/stream", {
+        let response = await fetch("/api/backend/realtime/stream", {
           headers: { Accept: "text/event-stream", Authorization: `Bearer ${token}` },
           cache: "no-store",
           signal: mine.signal,
         });
+        // Refused for the token all the same (it ran out on the way): once more at once with a fresh one, rather than backing off.
+        if (response.status === 401) {
+          const fresh = await getToken({ skipCache: true }).catch(() => null);
+          if (stopped || controller !== mine) return;
+          if (fresh && fresh !== token) {
+            response = await fetch("/api/backend/realtime/stream", {
+              headers: { Accept: "text/event-stream", Authorization: `Bearer ${fresh}` },
+              cache: "no-store",
+              signal: mine.signal,
+            });
+          }
+        }
         if (!response.ok || !response.body)
           throw new Error(`stream unavailable (${response.status})`);
         const reader = response.body.getReader();

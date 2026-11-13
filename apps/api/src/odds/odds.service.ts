@@ -6,7 +6,7 @@ import { Actor } from "../auth/permissions";
 import { PrismaService } from "../prisma.service";
 import { type LiveDelta, RealtimeService, STAFF_TOPIC, teamTopic } from "../realtime/realtime.service";
 import type { MatchCentre } from "./api-football";
-import { OddsSyncService } from "./odds-sync.service";
+import { EARLY_GOAL_HOLD_MS, OddsSyncService } from "./odds-sync.service";
 import { GreyhoundSyncService } from "./greyhound-sync.service";
 import { competitionKey, feedDelay, lagGate, lagStats } from "./feed-delay";
 import { LATE_REASONS, timelineOf } from "../bets/late";
@@ -53,6 +53,19 @@ const LIST_SELECT = {
   ...Object.fromEntries(Object.values(Prisma.EventScalarFieldEnum).filter((field) => !LARGE_FIELDS.has(field)).map((field) => [field, true])),
   ...COUNT_MARKETS,
 } as Prisma.EventSelect;
+/**
+ * A live match's score from a faster source (SportScore, Event.liveEarlyScore)
+ * that differs from ours and is still within its hold: shown as pending, the
+ * same as the pause banner says, until our feed agrees. Null otherwise.
+ */
+function pendingScore(event: { status: string; homeScore: number | null; awayScore: number | null; liveEarlyScore?: string | null; liveEarlyAt?: Date | null }, now: Date): { home: number; away: number } | null {
+  if (event.status !== EventStatus.LIVE || !event.liveEarlyScore || !event.liveEarlyAt || now.getTime() - event.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS) return null;
+  const match = /^(\d+):(\d+)$/.exec(event.liveEarlyScore);
+  if (!match) return null;
+  const score = { home: Number(match[1]), away: Number(match[2]) };
+  return score.home === event.homeScore && score.away === event.awayScore ? null : score;
+}
+
 /** A row read with LIST_SELECT, with the left-out records as empty. */
 const withoutLarge = <E extends object>(row: E) => ({ ...row, matchCentre: null, resultGoals: null, lateCheck: null, fightResult: null }) as E;
 
@@ -282,6 +295,7 @@ export class OddsService {
           period: live ? event.period : event.status === EventStatus.COMPLETED ? "FT" : null,
           homeScore: event.homeScore,
           awayScore: event.awayScore,
+          pendingScore: pendingScore(event, now),
           bettable: eventOpen(event, now),
           livePause: livePause(event, now),
           allMarketsSuspended: live && event.markets.length > 0 && event.markets.every((market) => market.liveSuspended),
@@ -796,6 +810,8 @@ export class OddsService {
       period: event.status === EventStatus.LIVE ? event.period : event.status === EventStatus.COMPLETED ? "FT" : null,
       homeScore: event.homeScore,
       awayScore: event.awayScore,
+      /** Live: a score a faster source (SportScore) shows that our feed hasn't confirmed (a goal, or one taken back); the board shows it as pending. */
+      pendingScore: pendingScore(event, now),
       hidden: event.hidden,
       suspended: event.suspended,
       provider: event.provider,

@@ -95,7 +95,7 @@ const liveRaw = (overrides = {}) => ({
   ...overrides,
 });
 
-test("live odds map onto our markets, and a suspended outcome suspends its market", () => {
+test("live odds map onto our markets, and a suspended outcome is held on its own", () => {
   const parsed = parseLiveOdds(liveRaw(), "Tirana", "Partizani");
   assert.equal(parsed.externalId, "7");
   assert.equal(parsed.stopped, false);
@@ -106,8 +106,10 @@ test("live odds map onto our markets, and a suspended outcome suspends its marke
   const [low, goals] = parsed.markets.slice(1);
   assert.equal(low.name, "Total goals 1.5");
   assert.deepEqual(low.selections.map((s) => [s.key, s.odds]), [["over", 1.3], ["under", 0]]);
-  assert.equal(low.suspended, true, "no Under 1.5 price");
-  assert.equal(goals.suspended, true, "Under 2.5 is suspended");
+  assert.equal(low.suspended, false, "Over 1.5 stays open without an Under price");
+  assert.deepEqual(low.selections.map((s) => s.held), [false, true], "no Under 1.5 price: only Under is held");
+  assert.equal(goals.suspended, false, "Over 2.5 stays open");
+  assert.deepEqual(goals.selections.map((s) => s.held), [false, true], "Under 2.5 is suspended on its own");
   assert.equal(goals.selections[0].odds, 2.1, "each line keeps its own price");
   assert.equal(goals.selections[1].odds, 1.7, "a suspended price is kept, so a pause can see that it moved");
   assert.equal(parseLiveOdds(liveRaw({ status: { stopped: false, blocked: true } }), "A", "B").stopped, true);
@@ -146,8 +148,10 @@ test("the wider in-play markets map onto the markets we already settle", () => {
   const byKey = Object.fromEntries(parsed.markets.map((m) => [m.key, m]));
   assert.deepEqual(Object.keys(byKey).sort(), ["corners_9_5", "correct_score", "draw_no_bet", "h1_winner", "h2_goals_0_5", "h2_winner", "home_goals_1_5", "ht_ft", "nth_goal_2", "odd_even", "result_btts"]);
   assert.deepEqual(byKey.h1_winner.selections.map((s) => [s.key, s.odds]), [["home", 3], ["draw", 1.8], ["away", 5]], "1X2 symbols count as Home/Draw/Away");
-  assert.equal(byKey.h2_winner.suspended, true, "a three-way market is off while one outcome is");
-  assert.equal(byKey.nth_goal_2.suspended, true, "next-goal needs home, away and no goal");
+  assert.equal(byKey.h2_winner.suspended, false, "a three-way market stays open while one outcome is held");
+  assert.deepEqual(byKey.h2_winner.selections.map((s) => [s.key, s.held]), [["home", false], ["draw", true], ["away", false]]);
+  assert.equal(byKey.nth_goal_2.suspended, false, "next goal stays open on the outcome the feed prices");
+  assert.deepEqual(byKey.nth_goal_2.selections.filter((s) => !s.held).map((s) => s.key), ["home"]);
   assert.equal(byKey.home_goals_1_5.name, "Tirana goals 1.5");
   assert.deepEqual(byKey.correct_score.selections.map((s) => s.key), ["1-0", "2-1"], "a suspended scoreline is left out");
   assert.equal(byKey.correct_score.suspended, false);

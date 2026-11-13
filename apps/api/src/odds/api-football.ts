@@ -128,7 +128,8 @@ export type FeedMarket = {
   key: string;
   name: string;
   sortOrder: number;
-  selections: Array<{ key: string; name: string; odds: number; sortOrder: number }>;
+  /** `held` (live only): the bookmaker has this outcome off the board; the others stay open. */
+  selections: Array<{ key: string; name: string; odds: number; sortOrder: number; held?: boolean }>;
 };
 
 const LIVE = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
@@ -845,8 +846,8 @@ function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: st
         key,
         name: spec.name(`${score.home}:${score.away}`),
         sortOrder: base + 1,
-        selections: selections.map(({ key: k, name, odds, sortOrder }) => ({ key: k, name, odds, sortOrder })),
-        suspended: selections.some((selection) => selection.held),
+        selections,
+        suspended: selections.every((selection) => selection.held),
       },
     ];
   }
@@ -856,10 +857,11 @@ function liveMarkets(spec: LiveSpec, values: LiveValue[], home: string, away: st
       return { key, name: name(home, away), odds: liveOdd(found), held: outcomeHeld(found), sortOrder };
     });
     const priced = selections.filter((s) => s.odds > 0).length;
-    // A two- or three-way market is off the board if any outcome is; a partial one while none is priced.
-    // The number is kept either way, so a pause can tell a new price from the one before the event.
-    const suspended = spec.partial ? priced === 0 : selections.some((selection) => selection.held);
-    const published = selections.map((selection) => ({ key: selection.key, name: selection.name, odds: selection.odds, sortOrder: selection.sortOrder }));
+    // An outcome the bookmaker holds is locked on its own (Real Madrid in Next goal); the market is off the
+    // board only when every outcome is, or a partial one while none is priced. The number is kept either way,
+    // so a pause can tell a new price from the one before the event.
+    const suspended = spec.partial ? priced === 0 : selections.every((selection) => selection.held);
+    const published = selections.map((selection) => ({ key: selection.key, name: selection.name, odds: selection.odds, held: selection.held, sortOrder: selection.sortOrder }));
     return [{ key: spec.key, name: spec.name(home, away), sortOrder: base, selections: spec.partial ? published.filter((s) => s.odds > 0) : published, suspended }];
   }
   if (spec.kind === "scores") {
@@ -958,15 +960,15 @@ function liveLines(values: LiveValue[], prefix: string, name: (line: string) => 
   return [...byLine]
     .map(([line, { over, under }]) => {
       const selections = [
-        { key: "over", name: `Over ${line}`, odds: liveOdd(over), sortOrder: 0 },
-        { key: "under", name: `Under ${line}`, odds: liveOdd(under), sortOrder: 1 },
+        { key: "over", name: `Over ${line}`, odds: liveOdd(over), held: outcomeHeld(over), sortOrder: 0 },
+        { key: "under", name: `Under ${line}`, odds: liveOdd(under), held: outcomeHeld(under), sortOrder: 1 },
       ];
       return {
         key: `${prefix}_${line.replace(".", "_")}`,
         name: name(line),
         sortOrder: base + Math.min(9, Math.floor(Number(line))),
         selections,
-        suspended: outcomeHeld(over) || outcomeHeld(under),
+        suspended: outcomeHeld(over) && outcomeHeld(under),
       };
     })
     .filter((market) => market.selections.some((selection) => selection.odds > 0))
@@ -995,11 +997,11 @@ function liveLines3(values: LiveValue[], prefix: string, name: (line: string) =>
       name: name(line),
       sortOrder: base + Math.min(9, Number(line)),
       selections: [
-        { key: "over", name: `Over ${line}`, odds: liveOdd(over), sortOrder: 0 },
-        { key: "exact", name: `Exactly ${line}`, odds: liveOdd(exact), sortOrder: 1 },
-        { key: "under", name: `Under ${line}`, odds: liveOdd(under), sortOrder: 2 },
+        { key: "over", name: `Over ${line}`, odds: liveOdd(over), held: outcomeHeld(over), sortOrder: 0 },
+        { key: "exact", name: `Exactly ${line}`, odds: liveOdd(exact), held: outcomeHeld(exact), sortOrder: 1 },
+        { key: "under", name: `Under ${line}`, odds: liveOdd(under), held: outcomeHeld(under), sortOrder: 2 },
       ],
-      suspended: outcomeHeld(over) || outcomeHeld(exact) || outcomeHeld(under),
+      suspended: outcomeHeld(over) && outcomeHeld(exact) && outcomeHeld(under),
     }))
     .filter((market) => market.selections.some((selection) => selection.odds > 0))
     .sort((a, b) => a.sortOrder - b.sortOrder);
@@ -1063,6 +1065,7 @@ function liveHandicaps(
           key: side,
           name: side === "home" ? `${home} ${signedLine(line)}` : side === "away" ? `${away} ${signedLine(-line)}` : `Draw (${signedLine(line)})`,
           odds: liveOdd(value),
+          held: outcomeHeld(value),
           sortOrder,
         };
       });
@@ -1071,7 +1074,7 @@ function liveHandicaps(
         name: name(signedLine(line)),
         sortOrder: base + index,
         selections,
-        suspended: sides.some((side) => outcomeHeld(prices[side])),
+        suspended: selections.every((selection) => selection.held),
       };
     });
 }
@@ -1090,8 +1093,9 @@ function liveExact(values: LiveValue[], key: string, name: string, top: number, 
       return { key: `${top}+`, name: `${top}+ goals`, odds: liveOdd(found), held: outcomeHeld(found), sortOrder: top };
     })(),
   ];
-  if (selections.some((selection) => selection.held)) return [];
-  return [{ key, name, sortOrder: base, selections: selections.map(({ key: k, name: n, odds, sortOrder }) => ({ key: k, name: n, odds, sortOrder })), suspended: false }];
+  // A count the bookmaker holds is locked on its own; the market is off only when every count is.
+  if (selections.every((selection) => selection.odds === 0)) return [];
+  return [{ key, name, sortOrder: base, selections, suspended: selections.every((selection) => selection.held) }];
 }
 
 /** Goalscorer lists: every priced player, shortest price first, plus "No goalscorer" when offered. */

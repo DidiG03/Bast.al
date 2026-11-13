@@ -76,3 +76,35 @@ test("late check: a goal or a corner after the bet voids it only where it helped
   assert.equal(cornerHelps("corners_3way_8", "exact", "either"), true);
   assert.equal(cornerHelps("corners_3way_8", "under", "either"), false);
 });
+
+test("one outcome the bookmaker holds is locked on its own; the rest of the market stays open", () => {
+  const parsed = parseLiveOdds(
+    reading([
+      { id: 3, name: "Which team will score the 2nd goal?", values: [{ value: "1", odd: "2.10", suspended: true }, { value: "No goal", odd: "3.40" }, { value: "2", odd: "2.60" }] },
+      { id: 4, name: "Over/Under Line", values: [{ value: "Over", handicap: "2.5", odd: "1.90", suspended: true }, { value: "Under", handicap: "2.5", odd: "1.90" }] },
+      { id: 5, name: "Fulltime Result", values: [{ value: "Home", odd: "2", suspended: true }, { value: "Draw", odd: "3", suspended: true }, { value: "Away", odd: "4", suspended: true }] },
+    ]),
+    "Real Madrid",
+    "Barcelona",
+  );
+  const next = parsed.markets.find((m) => m.key === "nth_goal_2");
+  assert.equal(next.suspended, false, "Next goal stays open");
+  const byKey = Object.fromEntries(next.selections.map((s) => [s.key, s]));
+  assert.deepEqual([byKey.home.held, byKey.none.held, byKey.away.held], [true, false, false]);
+  assert.equal(byKey.home.odds, 2.1, "the held price is kept for the pause checks");
+  const goals = parsed.markets.find((m) => m.key === "goals_2_5");
+  assert.equal(goals.suspended, false);
+  assert.deepEqual(goals.selections.map((s) => s.held), [true, false]);
+  assert.equal(parsed.markets.find((m) => m.key === "match_winner").suspended, true, "every outcome held: the market is off");
+});
+
+test("a held outcome can't be bet on; the others in its market can", () => {
+  const { selectionQuote } = require("../dist/odds/pricing.js");
+  const now = new Date();
+  const event = { status: "LIVE", sport: "football", startsAt: new Date(now.getTime() - 30 * 60_000), liveOddsAt: now, liveStopped: false, liveSlowFeed: false, elapsed: 30, period: "1H", homeScore: 1, awayScore: 0, suspended: false, hidden: false };
+  const market = { key: "nth_goal_2", liveSuspended: false, liveQuotedAt: now, livePausedUntil: null, livePausedAt: null, livePauseReason: null, liveReopenFrom: null };
+  const quote = (liveHeld) => selectionQuote({ event, market, selection: { feedOdds: 2, liveOdds: 2.1, result: null, liveHeld }, baseMargin: 0, ownerMargin: 0, override: null, now });
+  assert.equal(quote(true).bettable, false);
+  assert.equal(quote(true).suspended, true);
+  assert.equal(quote(false).bettable, true);
+});

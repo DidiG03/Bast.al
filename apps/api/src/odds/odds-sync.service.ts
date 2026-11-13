@@ -1861,7 +1861,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.market.findMany({
         where: { eventId },
-        select: { id: true, key: true, liveSuspended: true, liveQuotedAt: true, livePausedAt: true, livePausedUntil: true, livePauseReason: true, liveMovedAt: true, selections: { select: { id: true, key: true, liveOdds: true } } },
+        select: { id: true, key: true, liveSuspended: true, liveQuotedAt: true, livePausedAt: true, livePausedUntil: true, livePauseReason: true, liveMovedAt: true, selections: { select: { id: true, key: true, liveOdds: true, liveHeld: true } } },
       });
       const byKey = new Map(existing.map((market) => [market.key, market]));
       const priceOf = (odds: number) => (odds > 1 ? odds.toFixed(2) : null);
@@ -1893,6 +1893,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       const moved: string[] = [];
       const pricedMarkets = new Set<string>();
       const prices: Array<{ id: string; price: string | null }> = [];
+      /** Outcomes the bookmaker just took off the board on their own, or put back (Selection.liveHeld). */
+      const held: string[] = [];
+      const freed: string[] = [];
       const added: Prisma.SelectionCreateManyInput[] = [];
       for (const market of markets) {
         const row = byKey.get(market.key);
@@ -1913,7 +1916,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
               selections: {
                 create: market.selections.map((selection) => {
                   const price = priceOf(selection.odds);
-                  return { key: selection.key, name: selection.name, feedOdds: new Prisma.Decimal(price ?? "1.01"), liveOdds: price === null ? null : new Prisma.Decimal(price), sortOrder: selection.sortOrder };
+                  return { key: selection.key, name: selection.name, feedOdds: new Prisma.Decimal(price ?? "1.01"), liveOdds: price === null ? null : new Prisma.Decimal(price), liveHeld: selection.held === true, sortOrder: selection.sortOrder };
                 }),
               },
             },
@@ -1929,12 +1932,13 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           const price = priceOf(selection.odds);
           const was = old.get(selection.key);
           if (!was) {
-            added.push({ marketId: row.id, key: selection.key, name: selection.name, feedOdds: new Prisma.Decimal(price ?? "1.01"), liveOdds: price === null ? null : new Prisma.Decimal(price), sortOrder: selection.sortOrder });
+            added.push({ marketId: row.id, key: selection.key, name: selection.name, feedOdds: new Prisma.Decimal(price ?? "1.01"), liveOdds: price === null ? null : new Prisma.Decimal(price), liveHeld: selection.held === true, sortOrder: selection.sortOrder });
             if (price !== null) movedHere = true;
           } else if ((was.liveOdds === null ? null : was.liveOdds.toFixed(2)) !== price) {
             prices.push({ id: was.id, price });
             if (price !== null) movedHere = true;
           }
+          if (was && was.liveHeld !== (selection.held === true)) (selection.held ? held : freed).push(was.id);
         }
         if (movedHere) moved.push(row.id);
         // The bookmaker's own flag. A long run of it, with no open quote, moves the market off the board (marketStale).
@@ -1964,6 +1968,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           WHERE id = ANY(${touched}::text[])`;
       }
       if (added.length) await tx.selection.createMany({ data: added, skipDuplicates: true });
+      if (held.length) await tx.selection.updateMany({ where: { id: { in: held } }, data: { liveHeld: true } });
+      if (freed.length) await tx.selection.updateMany({ where: { id: { in: freed } }, data: { liveHeld: false } });
       if (prices.length) {
         // One JSON value rather than arrays: a connection whose first array held only missing prices kept that
         // array's type, and every later price not exactly 4 characters long ("12.00") failed on it.

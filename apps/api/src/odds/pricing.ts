@@ -218,7 +218,8 @@ export function selectionQuote(input: {
   event: LiveEventState;
   market: LiveMarketState;
   /** `withdrawn`: the feed stopped pricing this outcome before kick-off (see Selection.withdrawn). */
-  selection: { feedOdds: number; liveOdds: number | null; result: string | null; withdrawn?: boolean };
+  /** `liveHeld`: during play, the bookmaker has this one outcome off the board (Selection.liveHeld). */
+  selection: { feedOdds: number; liveOdds: number | null; result: string | null; withdrawn?: boolean; liveHeld?: boolean };
   baseMargin: number;
   ownerMargin: number;
   override: number | null;
@@ -242,7 +243,7 @@ export function selectionQuote(input: {
   const outOfPhase = football && !marketInPhase(input.market.key!, input.event.period);
   // Decided by the goals already in, or priced for the rest of the match while we settle on all of it (live-score-guard.ts).
   const scoreBlocked = football && liveScoreBlocked(input.market.key!, { home: input.event.homeScore, away: input.event.awayScore }, input.event.period);
-  const suspended = outOfPhase || scoreBlocked || input.market.liveSuspended || input.selection.liveOdds === null || marketPause(input.market, input.now) !== null || marketStale(input.event, input.market, input.now, input.selection.liveOdds !== null);
+  const suspended = outOfPhase || scoreBlocked || input.market.liveSuspended || input.selection.liveOdds === null || input.selection.liveHeld === true || marketPause(input.market, input.now) !== null || marketStale(input.event, input.market, input.now, input.selection.liveOdds !== null);
   const price = applyMargin(input.selection.liveOdds ?? input.selection.feedOdds, teamMargin(input.baseMargin, input.ownerMargin));
   return { price, bettable: open && !suspended, live, suspended };
 }

@@ -250,7 +250,7 @@ export class OddsService {
               liveReopenFrom: true,
               livePauseReason: true,
               liveQuotedAt: true,
-              selections: { select: { id: true, key: true, feedOdds: true, liveOdds: true, result: true, withdrawn: true } },
+              selections: { select: { id: true, key: true, feedOdds: true, liveOdds: true, result: true, withdrawn: true, liveHeld: true } },
             },
           },
         },
@@ -304,7 +304,7 @@ export class OddsService {
             const quote = selectionQuote({
               event,
               market,
-              selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn },
+              selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn, liveHeld: selection.liveHeld },
               baseMargin,
               ownerMargin: team.margin,
               override: null,
@@ -638,7 +638,7 @@ export class OddsService {
         const quote = selectionQuote({
           event,
           market: row.market,
-          selection: { feedOdds: Number(row.feedOdds), liveOdds: num(row.liveOdds), result: row.result, withdrawn: row.withdrawn },
+          selection: { feedOdds: Number(row.feedOdds), liveOdds: num(row.liveOdds), result: row.result, withdrawn: row.withdrawn, liveHeld: row.liveHeld },
           baseMargin,
           ownerMargin,
           override: live ? null : overrideBy.get(row.id) ?? null,
@@ -698,7 +698,7 @@ export class OddsService {
         .map((market) => {
           const selection = market.selections.find((candidate) => candidate.key === row.key);
           if (!selection) return null;
-          const quote = selectionQuote({ event: market.event, market, selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn }, baseMargin, ownerMargin, override: null, now });
+          const quote = selectionQuote({ event: market.event, market, selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn, liveHeld: selection.liveHeld }, baseMargin, ownerMargin, override: null, now });
           if (!quote.bettable || countAvailability(market.event, market.key, now) !== "ok" || countSelectionDead(market.event.matchCentre, market.event.matchCentreAt, market.key, selection.key, now)) return null;
           return { id: selection.id, market: market.name, name: selection.name, price: quote.price, distance: Math.abs(lineOf(market.key)! - line) };
         })
@@ -824,7 +824,7 @@ export class OddsService {
           const feedOdds = Number(selection.feedOdds);
           const liveOdds = num(selection.liveOdds);
           const override = live ? null : overrideBy.get(selection.id) ?? null;
-          const quote = selectionQuote({ event, market, selection: { feedOdds, liveOdds, result: selection.result, withdrawn: selection.withdrawn }, baseMargin, ownerMargin, override, now });
+          const quote = selectionQuote({ event, market, selection: { feedOdds, liveOdds, result: selection.result, withdrawn: selection.withdrawn, liveHeld: selection.liveHeld }, baseMargin, ownerMargin, override, now });
           const held = quote.suspended || (live && (countStatsStale(event.matchCentre, event.matchCentreAt, market.key, now) || countSelectionDead(event.matchCentre, event.matchCentreAt, market.key, selection.key, now)));
           return {
             id: selection.id,
@@ -1246,7 +1246,7 @@ export class OddsService {
       const quote = selectionQuote({
         event,
         market: selection.market,
-        selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn },
+        selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn, liveHeld: selection.liveHeld },
         baseMargin,
         ownerMargin,
         override: overrideBy.get(selection.id) ?? null,

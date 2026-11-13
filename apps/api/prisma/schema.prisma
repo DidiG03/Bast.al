@@ -497,6 +497,10 @@ model Selection {
   /// "manual" when Super Admin settled this outcome by hand; settlement then keeps it.
   resultSource String?          @map("result_source")
   /// The feed stopped pricing this outcome while still pricing the rest of its market (a player left out of the squad, a line taken down). No bets until it's back.
+  /// Live: the bookmaker has this one outcome off the board right now. The
+  /// rest of its market stays open; liveOdds keeps the last number so a pause
+  /// can tell a new price from the one before an event.
+  liveHeld     Boolean          @default(false) @map("live_held")
   withdrawn    Boolean          @default(false)
   /// Greyhounds: the dog's trap and trainer (Winner), or both dogs' traps (Forecast).
   info         Json?

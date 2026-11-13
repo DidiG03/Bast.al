@@ -409,24 +409,26 @@ test("bets the late check voided under an older rule, that the rule in force let
   const team = { ownerId: won.ownerId, managerId: won.managerId, ownerRate: won.ownerRate, managerRate: won.managerRate };
   const away = match.markets[0].selections.find((s) => s.key === "away");
   const lost = await prisma.bet.create({ data: { playerId: player.id, selectionId: away.id, stake: 100, odds: 4, description: "away", placedAt: won.placedAt, live: won.live, ...team } });
-  // The match ends 1–0 to the home side; the goal was in the 31st minute, the bets' minute.
-  await finish(match, 31);
-  // Voided under the old rule (version 3, which didn't ask whether the goal helped): stakes refunded.
+  // The match ends 1–0 to the home side; the goal was in the 44th minute, well after the bets (placed in the 31st).
+  await finish(match, 44);
+  // Voided under an old rule (version 3) all the same: stakes refunded.
   for (const bet of [won, lost]) {
     await prisma.bet.update({ where: { id: bet.id }, data: { status: "VOID", payout: bet.stake, voidReason: "placed after a goal that hadn't shown yet", settledAt: new Date(), live: { ...won.live, late: { late: true, version: 3, when: "settlement", reason: "placed after a goal that hadn't shown yet", detail: "x", checkedAt: new Date().toISOString() } } } });
   }
-  // The away bet: the home goal didn't help it (it got a worse price than it should have). The home bet: it did.
+  // The rule in force lets both stand: they were placed before the goal.
   const before = await balance();
   settlement.sweptAt = 0;
   const done = await settlement.recheckLate({ since: new Date(Date.now() - 86_400_000), unchecked: true });
-  assert.equal(done.reinstated, 1);
-  const keptVoid = await reload(won.id);
-  assert.equal(keptVoid.status, "VOID", "the home goal helped the home bet: still void");
-  assert.equal(keptVoid.live.late.version, 5);
+  assert.equal(done.reinstated, 2);
+  const paid = await reload(won.id);
+  assert.equal(paid.status, "WON", "put back and settled: the home side won");
+  assert.equal(paid.live.late.version, 5);
+  assert.equal(paid.voidReason, null);
   const back = await reload(lost.id);
   assert.equal(back.status, "LOST", "put back and settled: the away side lost");
   assert.equal(back.voidReason, null);
-  assert.equal(await balance(), before - 100, "the refunded stake went back off the balance");
+  // The home bet's refunded stake becomes its winnings; the away bet's refunded stake goes back off the balance.
+  assert.equal(await balance(), Math.round((before - Number(won.stake) + Number(paid.payout) - 100) * 100) / 100);
   const ledger = await prisma.balanceTransaction.findFirst({ where: { betId: lost.id, reason: { startsWith: "Bet reinstated" } } });
   assert.ok(ledger);
 });

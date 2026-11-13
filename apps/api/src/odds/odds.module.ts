@@ -9,13 +9,14 @@ import { HandballSyncService, VolleyballSyncService } from "./team-sports-sync.s
 import { MmaSyncService } from "./mma-sync.service";
 import { TennisSyncService } from "./tennis-sync.service";
 import { OddsSyncService } from "./odds-sync.service";
+import { EarlyGoalService } from "./early-goal.service";
 import { OddsController } from "./odds.controller";
 import { OddsService } from "./odds.service";
 
 @Module({
   imports: [AuthModule, SecurityModule, AuditModule],
   controllers: [OddsController],
-  providers: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService, VolleyballSyncService, HandballSyncService],
+  providers: [OddsService, OddsSyncService, EarlyGoalService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService, VolleyballSyncService, HandballSyncService],
   exports: [OddsService, OddsSyncService, GreyhoundSyncService, MmaSyncService, BasketballSyncService, NflSyncService, TennisSyncService, VolleyballSyncService, HandballSyncService],
 })
 export class OddsModule {}

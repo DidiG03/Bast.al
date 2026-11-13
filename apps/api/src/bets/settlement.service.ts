@@ -556,9 +556,24 @@ export class SettlementService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** When the site first saw each score of a match (GoalSeen), for the late check. */
+  /**
+   * When we first knew of each score on a match: our own feed's sightings
+   * (GoalSeen) and a faster source's (EarlyGoal, SportScore), the earlier of
+   * the two for each score. A bet placed after that, on a score without it,
+   * was placed after a goal we could have shown.
+   */
   private async seenScores(eventId: string): Promise<SeenScore[]> {
-    const rows = await this.prisma.goalSeen.findMany({ where: { eventId }, select: { homeScore: true, awayScore: true, seenAt: true } });
-    return rows.map((row) => ({ home: row.homeScore, away: row.awayScore, seenAt: row.seenAt }));
+    const [ours, early] = await Promise.all([
+      this.prisma.goalSeen.findMany({ where: { eventId }, select: { homeScore: true, awayScore: true, seenAt: true } }),
+      this.prisma.earlyGoal.findMany({ where: { eventId }, select: { homeScore: true, awayScore: true, seenAt: true } }),
+    ]);
+    const first = new Map<string, SeenScore>();
+    for (const row of [...ours, ...early]) {
+      const key = `${row.homeScore}:${row.awayScore}`;
+      const was = first.get(key);
+      if (!was || row.seenAt < was.seenAt) first.set(key, { home: row.homeScore, away: row.awayScore, seenAt: row.seenAt });
+    }
+    return [...first.values()];
   }
 
   /**

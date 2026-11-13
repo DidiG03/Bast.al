@@ -34,9 +34,11 @@ export interface TrackerFixtureInput {
 export type TrackerView = { show: false } | { show: true; provider: string; src: string; attributionUrl: string };
 
 /**
- * The live match tracker: display only. Nothing here is read by odds,
- * pauses, bet acceptance or settlement, and this service reads none of
- * their state beyond whether a match is live.
+ * The live match tracker. The widget is display only. The link it keeps from
+ * each of our matches to SportScore's (TrackerMapping) is also read by the
+ * early goal signals (odds/early-goal.service.ts), so matches are linked
+ * whenever those are on, even with the widget off. This service reads none of
+ * the betting state beyond whether a match is live.
  */
 @Injectable()
 export class TrackerService implements OnModuleInit, OnModuleDestroy {
@@ -76,7 +78,8 @@ export class TrackerService implements OnModuleInit, OnModuleDestroy {
    * already has a tracker (or a manual choice), so it only calls out when needed.
    */
   async sync(now = new Date()): Promise<{ fetched: number; matched: number } | null> {
-    if (!trackerEnabled()) return null;
+    // The widget, or the early goal signals (which pause betting on a goal SportScore shows first), need the links.
+    if (!trackerEnabled() && process.env.EARLY_GOALS === "off") return null;
     // One read at a time: a page view during a read waits for that read.
     if (this.syncing) return this.syncing;
     this.syncing = this.runSync(now).finally(() => {

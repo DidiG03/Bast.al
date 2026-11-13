@@ -314,6 +314,12 @@ model Event {
   /// Listed from a league outside the synced list because the bookmaker prices
   /// it, and the feed doesn't send that league's goal events and match
   /// statistics: only markets that settle from the score are offered.
+  /// A goal a faster source (SportScore) showed before our feed: the score it
+  /// showed ("1:0") and when. Every market stays paused, and live slips are
+  /// refused, until our own score catches up (or EARLY_GOAL_HOLD_MS passes).
+  liveEarlyScore     String?          @map("live_early_score") @db.VarChar(9)
+  liveEarlyAt        DateTime?        @map("live_early_at")
+  earlyGoals         EarlyGoal[]
   scoreOnly          Boolean          @default(false) @map("score_only")
   leagueLogo         String?          @map("league_logo")
   countryFlag        String?          @map("country_flag")
@@ -1110,4 +1116,23 @@ model CasinoRound {
 
   @@index([updatedAt])
   @@map("casino_rounds")
+}
+
+/// A score a faster source than our odds feed showed first (SportScore's live
+/// scores), with when we first saw it. Kept apart from GoalSeen, which is our
+/// own feed's sightings (its delay sizes the live wait): the late check takes
+/// the earlier of the two as when we knew of the goal.
+model EarlyGoal {
+  id        String   @id @default(cuid())
+  eventId   String   @map("event_id")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  homeScore Int      @map("home_score")
+  awayScore Int      @map("away_score")
+  /// "sportscore", or another early source.
+  source    String   @db.VarChar(20)
+  seenAt    DateTime @default(now()) @map("seen_at")
+
+  @@unique([eventId, homeScore, awayScore, source])
+  @@index([seenAt])
+  @@map("early_goals")
 }

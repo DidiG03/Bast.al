@@ -44,7 +44,20 @@ export const LATE_BUFFER_MS = envMs("LATE_BUFFER_MS", 30_000);
 export const LATE_ASSUMED_LAG_MS = envMs("LATE_ASSUMED_LAG_MS", 30_000);
 /** How far behind our feed can be: with no usable minute for a goal, it's taken to have gone in this long before we saw it. */
 export const LATE_MAX_FEED_LAG_MS = envMs("LATE_MAX_FEED_LAG_MS", 120_000);
-/** The late rule's version, kept with each decision: a bet decided under an older one is checked again. */
+/**
+ * A live bet placed after a goal we hadn't shown is void whether the goal
+ * helped it or not: one placed between the real goal and our feed's
+ * confirmation is never paid. LATE_KEEP_HURT_BETS=true goes back to keeping
+ * the bets the goal made less likely to win (goalsHelp), and to leaving
+ * corners and cards bets to their own corner and card checks.
+ */
+export const LATE_KEEP_HURT = process.env.LATE_KEEP_HURT_BETS === "true";
+/**
+ * The late rule's version, kept with each decision: a bet decided under an
+ * older one is checked again. Voiding every bet after an unseen goal (not
+ * only those it helped) didn't move it: bets already decided stand as they
+ * were, and the stricter rule applies to bets decided from now on.
+ */
 export const LATE_RULE_VERSION = 5;
 
 export type Side = "home" | "away";
@@ -384,6 +397,11 @@ export function lateDecision(input: {
   const done = (decision: LateDecision): LateDecision => ({ ...decision, version: LATE_RULE_VERSION });
   const kept = (what: string) => done({ late: false, reason: null, detail: `not voided because ${what} didn't help ${pick}; ${showed}` });
 
+  // Every live bet placed after a goal it hadn't shown is void, corners and cards bets too (LATE_KEEP_HURT).
+  if (!LATE_KEEP_HURT && (isCardsMarket(marketKey) || isCornersMarket(marketKey))) {
+    const missed = missedGoal(state, timeline, seen, before);
+    if (missed) return done({ late: true, reason: "placed after a goal that hadn't shown yet", detail: `${missed}; ${showed}` });
+  }
   if (isCardsMarket(marketKey)) {
     if (state.cards === null || !timeline) return done({ late: false, reason: null, detail: `not voided because ${state.cards === null ? "no cards were recorded when it was placed" : "the feed's timeline hasn't come"}; ${showed}` });
     const cards = timeline.cards.map((card) => ({ card, ...before(card, null) })).filter((c) => c.yes);
@@ -435,7 +453,7 @@ export function lateDecision(input: {
     if (missedHome > 0 || missedAway > 0) {
       const culprit = missedHome > 0 ? counted.home[state.home] : counted.away[state.away];
       const sides: Side[] = [...Array(missedHome).fill("home"), ...Array(missedAway).fill("away")];
-      if (!goalsHelp(marketKey, selectionKey, state, sides)) return kept(`the goal(s) it hadn't shown (${culprit}${sides.length > 1 ? ` and ${sides.length - 1} more` : ""})`);
+      if (LATE_KEEP_HURT && !goalsHelp(marketKey, selectionKey, state, sides)) return kept(`the goal(s) it hadn't shown (${culprit}${sides.length > 1 ? ` and ${sides.length - 1} more` : ""})`);
       return done({ late: true, reason: "placed after a goal that hadn't shown yet", detail: `${culprit}; ${showed}` });
     }
     // A red card changes every other market's odds. Only bets that recorded the reds shown can be checked.
@@ -459,13 +477,13 @@ export function lateDecision(input: {
     const where = `score ${next.home}–${next.away} seen ${iso(next.seenAt.getTime())}, ${check.how}`;
     if (!check.yes) return done({ late: false, reason: null, detail: `not voided because the first score past the bet's, ${where}: after the bet (no timeline); ${showed}` });
     const sides: Side[] = [...Array(Math.max(0, next.home - state.home)).fill("home"), ...Array(Math.max(0, next.away - state.away)).fill("away")];
-    if (!goalsHelp(marketKey, selectionKey, state, sides)) return kept(`the ${where}`);
+    if (LATE_KEEP_HURT && !goalsHelp(marketKey, selectionKey, state, sides)) return kept(`the ${where}`);
     return done({ late: true, reason: "placed after a goal that hadn't shown yet", detail: `${where} (no timeline); ${showed}` });
   }
   const result = input.result ?? null;
   if (result && (result.home > state.home || result.away > state.away)) {
     // Which of the later goals came first can't be told: it's undecided if either could have helped.
-    const could = (["home", "away"] as Side[]).filter((side) => result[side] > state[side] && goalsHelp(marketKey, selectionKey, state, [side]));
+    const could = (["home", "away"] as Side[]).filter((side) => result[side] > state[side] && (!LATE_KEEP_HURT || goalsHelp(marketKey, selectionKey, state, [side])));
     if (could.length === 0) return kept(`no goal after its score (the match ended ${result.home}–${result.away})`);
     return done({ late: false, undecided: true, reason: UNTIMED_REASON, detail: `the match ended ${result.home}–${result.away}, but there's no timeline and the site never saw a score past the bet's; ${showed}` });
   }
@@ -473,6 +491,39 @@ export function lateDecision(input: {
 }
 
 const c = (moment: Moment) => `${moment.side} ${minuteText(moment)}`;
+
+/**
+ * The first goal a bet was placed after without showing it, as text, or
+ * null: from the timeline when there is one (`before` times each goal, from
+ * when we first knew of its score), otherwise from when we first saw a
+ * score past the bet's.
+ */
+function missedGoal(
+  state: LiveState,
+  timeline: LateTimeline | null,
+  seen: SeenScore[],
+  before: (moment: Moment, received: number | null) => { yes: boolean; how: string },
+): string | null {
+  if (timeline) {
+    const ordered = [...timeline.goals].sort((a, b) => a.minute - b.minute || (a.extra ?? 0) - (b.extra ?? 0));
+    let home = 0;
+    let away = 0;
+    for (const goal of ordered) {
+      if (goal.side === "home") home++;
+      else away++;
+      const shown = goal.side === "home" ? home <= state.home : away <= state.away;
+      if (shown) continue;
+      const row = seen.find((s) => s.home === home && s.away === away);
+      const check = before(goal, row ? row.seenAt.getTime() : null);
+      if (check.yes) return `goal ${home}–${away} at ${minuteText(goal)} (${check.how}, seen ${iso(row ? row.seenAt.getTime() : null)})`;
+    }
+    return null;
+  }
+  const next = seen.find((row) => row.home > state.home || row.away > state.away);
+  if (!next) return null;
+  const check = before({ minute: 0, extra: null, side: "home" }, next.seenAt.getTime());
+  return check.yes ? `score ${next.home}–${next.away} seen ${iso(next.seenAt.getTime())}, ${check.how} (no timeline)` : null;
+}
 
 /** Why a live bet is late, or null when it isn't (or can't be told): see lateDecision. */
 export function lateReason(state: LiveState, placedAt: Date, marketKey: string, timeline: LateTimeline | null, seen: SeenScore[] = [], selectionKey?: string): string | null {

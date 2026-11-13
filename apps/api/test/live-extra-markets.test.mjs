@@ -108,3 +108,16 @@ test("a held outcome can't be bet on; the others in its market can", () => {
   assert.equal(quote(true).suspended, true);
   assert.equal(quote(false).bettable, true);
 });
+
+test("SportScore's live scores are read from home_score/away_score or a score text, by match slug", () => {
+  const { parseScores } = require("../dist/odds/sportscore-scores.js");
+  const rows = parseScores({
+    matches: [
+      { url: "/football/match/real-madrid-barcelona/abc123/", home_score: 1, away_score: 0 },
+      { slug: "inter-milan", score: "2-2" },
+      { url: "/football/match/no-score/def456/" },
+      { url: "not a match", home_score: 1, away_score: 1 },
+    ],
+  });
+  assert.deepEqual(rows, [{ id: "real-madrid-barcelona", home: 1, away: 0 }, { id: "inter-milan", home: 2, away: 2 }]);
+});

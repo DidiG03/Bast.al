@@ -111,8 +111,8 @@ test("without a timeline, when the site saw each score decides: up to 2 minutes 
   assert.equal(lateDecision({ state: state(0, 0, 37), placedAt: firstHalf(37, 25), marketKey: "match_winner", timeline: null, seen: scoreSeen }).late, false);
   // The site was already showing it: fine.
   assert.equal(lateDecision({ state: state(1, 0, 41), placedAt: firstHalf(41), marketKey: "match_winner", timeline: null, seen: scoreSeen }).late, false);
-  // Corners aren't checked, whatever happened.
-  assert.equal(lateDecision({ state: state(0, 0, 38), placedAt: firstHalf(39), marketKey: "corners_9_5", timeline: null, seen: scoreSeen }).late, false);
+  // Placed after a goal it hadn't shown: void on any market, corners too (LATE_KEEP_HURT_BETS turns that back off).
+  assert.equal(lateDecision({ state: state(0, 0, 38), placedAt: firstHalf(39), marketKey: "corners_9_5", timeline: null, seen: scoreSeen }).late, true);
 });
 
 test("with a timeline, a score the site saw that the timeline doesn't have (a goal VAR took back) doesn't void anything", () => {
@@ -153,11 +153,14 @@ test("second-half goals and added time line up with the second half's kick-off",
   assert.equal(lateReason(state(0, 0), firstHalf(46, 10), "match_winner", timeline([goal(45, "home", 2)])), "placed after a goal that hadn't shown yet");
 });
 
-test("a goal doesn't make a corners or cards bet late; a card the site hadn't shown makes a cards bet late", () => {
+test("a goal the site hadn't shown makes a corners or cards bet late too; a card the site hadn't shown makes a cards bet late", () => {
   assert.ok(isCornersMarket("corners_9_5") && isCornersMarket("home_corners_4_5") && isCornersMarket("away_corners_3_5"));
   assert.ok(isCardsMarket("cards_4_5") && isCardsMarket("home_cards_1_5") && !isCardsMarket("match_winner"));
-  assert.equal(lateReason(state(0, 0), firstHalf(30), "corners_9_5", timeline([goal(20, "home")])), null);
-  assert.equal(lateReason(state(0, 0, null, 2), firstHalf(30), "cards_4_5", timeline([goal(20, "home")], [goal(10, "home"), goal(25, "away")])), null);
+  assert.equal(lateReason(state(0, 0), firstHalf(30), "corners_9_5", timeline([goal(20, "home")])), "placed after a goal that hadn't shown yet");
+  assert.equal(lateReason(state(0, 0, null, 2), firstHalf(30), "cards_4_5", timeline([goal(20, "home")], [goal(10, "home"), goal(25, "away")])), "placed after a goal that hadn't shown yet");
+  // A goal it was already showing doesn't, and the cards it showed were all there were.
+  assert.equal(lateReason(state(1, 0), firstHalf(30), "corners_9_5", timeline([goal(20, "home")])), null);
+  assert.equal(lateReason(state(1, 0, null, 2), firstHalf(30), "cards_4_5", timeline([goal(20, "home")], [goal(10, "home"), goal(25, "away")])), null);
   assert.equal(
     lateReason(state(0, 0, null, 2), firstHalf(30), "cards_4_5", timeline([], [goal(10, "home"), goal(25, "away"), goal(30, "home")])),
     "placed after a card that hadn't shown yet",
@@ -327,15 +330,16 @@ test("a goal only voids a bet it helped: the scoring side's win, Over, BTTS yes 
   assert.equal(goalsHelp("match_winner", undefined, s(0, 0), ["away"]), true);
 });
 
-test("Kristiansund: a Draw bet placed in the minute of a goal that broke the draw isn't voided; a bet on the side that scored is", () => {
+test("Kristiansund: every bet placed in the minute of a goal it hadn't shown is void, the Draw and the Under too", () => {
   // 0–0, Draw at 4.00, placed in the 67th minute; the home goal went in that same minute.
+  // The goal made the Draw and the Under less likely; they're void all the same: a bet placed after a goal is never paid.
   const line = { first: FIRST, second: SECOND, goals: [goal(67, "home")], cards: [] };
   const placed = secondHalf(21, 24);
   const draw = lateDecision({ state: state(0, 0, 66), placedAt: placed, marketKey: "match_winner", selectionKey: "draw", timeline: line, seen: [] });
-  assert.equal(draw.late, false);
-  assert.match(draw.detail, /not voided because the goal\(s\) it hadn't shown .* didn't help match_winner draw/);
+  assert.equal(draw.late, true);
+  assert.equal(draw.reason, "placed after a goal that hadn't shown yet");
   assert.equal(lateDecision({ state: state(0, 0, 66), placedAt: placed, marketKey: "match_winner", selectionKey: "home", timeline: line, seen: [] }).late, true);
-  assert.equal(lateDecision({ state: state(0, 0, 66), placedAt: placed, marketKey: "goals_2_5", selectionKey: "under", timeline: line, seen: [] }).late, false);
+  assert.equal(lateDecision({ state: state(0, 0, 66), placedAt: placed, marketKey: "goals_2_5", selectionKey: "under", timeline: line, seen: [] }).late, true);
 });
 
 test("the bet's own match clock comes before the feed's kick-off times: a bet a minute before the goal stands even when the feed's kick-off is a minute early (Como)", () => {
@@ -366,8 +370,9 @@ test("a red card only voids bets it helped (the other side's), a card only a car
   // Cards: the red is a card; it voids Over, not Under.
   assert.equal(lateDecision({ state: state(0, 0, 29, 1, 0), placedAt: firstHalf(29, 30), marketKey: "cards_1_5", selectionKey: "over", timeline: timeline([], cards) }).late, true);
   assert.equal(lateDecision({ state: state(0, 0, 29, 1, 0), placedAt: firstHalf(29, 30), marketKey: "cards_1_5", selectionKey: "under", timeline: timeline([], cards) }).late, false);
-  // No timeline, never seen, the match ended 1–0 from 0–0: a Draw bet couldn't have gained from that goal, an Over bet could.
-  assert.equal(lateDecision({ state: state(0, 0, 30), placedAt: firstHalf(30), marketKey: "match_winner", selectionKey: "draw", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, undefined);
+  // No timeline, never seen, the match ended 1–0 from 0–0: that goal can't be timed, so the bet waits (and is then void),
+  // whether it helped the bet (Over) or not (Draw).
+  assert.equal(lateDecision({ state: state(0, 0, 30), placedAt: firstHalf(30), marketKey: "match_winner", selectionKey: "draw", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, true);
   assert.equal(lateDecision({ state: state(0, 0, 30), placedAt: firstHalf(30), marketKey: "goals_0_5", selectionKey: "over", timeline: null, seen: [], result: { home: 1, away: 0 } }).undecided, true);
 });
 

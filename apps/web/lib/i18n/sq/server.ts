@@ -177,6 +177,10 @@ export const server: Record<string, string> = {
   "1st half rest of the half ({score})": "Pjesa 1rë - Fiton Pjesën E Mbetur ({score})",
   "Total corners range": "Totali Goditjeve Këndore - Intervali",
 
+  // Live slips refused while a goal SportScore showed first is confirmed
+  "Live betting on {match} is paused: a goal is being confirmed. Your stake was not taken.": "Basti live në {match} është pezulluar: po konfirmohet një gol. Shuma nuk u mor.",
+  "A goal is being confirmed in the match while your bet on {pick} was waiting. It was not placed, and your stake was not taken.": "Po konfirmohet një gol në ndeshje ndërkohë që basti yt për {pick} priste. Nuk u vendos dhe shuma nuk u mor.",
+
   // Bet descriptions and ledger reasons
   "{event} · {market}: {pick}": "{event} · {market}: {pick}",
   "Accumulator · {count} picks": "Kombinim · {count} zgjedhje",

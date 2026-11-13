@@ -3,7 +3,7 @@ import { BalanceTransactionType, BetKind, BetStatus, Prisma, Role } from "@prism
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { BettingLimitsService } from "../commissions/betting-limits.service";
-import { OddsSyncService } from "../odds/odds-sync.service";
+import { EARLY_GOAL_HOLD_MS, OddsSyncService } from "../odds/odds-sync.service";
 import { OddsService } from "../odds/odds.service";
 import { PrismaService } from "../prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
@@ -36,6 +36,17 @@ const LAG_DAYS = 3;
 const LAG_MIN_GOALS = 10;
 const LAG_MIN_GOALS_COMPETITION = 5;
 const LAG_REFRESH_MS = 5 * 60_000;
+
+/**
+ * Whether a match has a goal a faster source (SportScore) showed that our
+ * feed's score doesn't have yet, still within its hold (Event.liveEarlyScore,
+ * OddsSyncService.earlyGoal).
+ */
+function earlyGoalAhead(event: { homeScore: number | null; awayScore: number | null; liveEarlyScore: string | null; liveEarlyAt: Date | null }, now: Date): boolean {
+  const match = event.liveEarlyScore ? /^(\d+):(\d+)$/.exec(event.liveEarlyScore) : null;
+  if (!match || !event.liveEarlyAt || now.getTime() - event.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS) return false;
+  return Number(match[1]) + Number(match[2]) > (event.homeScore ?? 0) + (event.awayScore ?? 0);
+}
 
 /** Resolves as `work` does, or rejects with `late()` after `ms` (0: only if it's already settled). */
 function withDeadline<T>(work: Promise<T>, ms: number, late: () => unknown): Promise<T> {
@@ -628,8 +639,17 @@ export class BetsService {
     const markingAtSubmit = checking ? this.sync.readMarks(liveIds).catch(() => null) : Promise.resolve(null);
     // What the site had when the slip came in: to tell what changed during the wait, and for the record.
     const atSubmit = new Map(
-      (await this.prisma.event.findMany({ where: { id: { in: liveIds } }, select: { id: true, name: true, provider: true, league: true, liveOddsAt: true, liveCooldownUntil: true, matchCentre: true, liveVersion: true } })).map((event) => [event.id, event]),
+      (await this.prisma.event.findMany({
+        where: { id: { in: liveIds } },
+        select: { id: true, name: true, provider: true, league: true, liveOddsAt: true, liveCooldownUntil: true, matchCentre: true, liveVersion: true, homeScore: true, awayScore: true, liveEarlyScore: true, liveEarlyAt: true },
+      })).map((event) => [event.id, event]),
     );
+    // A goal a faster source (SportScore) shows and our feed doesn't have yet: no live bet on that match until it does.
+    const earlyAtSubmit = [...atSubmit.values()].find((event) => earlyGoalAhead(event, submittedAt));
+    if (earlyAtSubmit) {
+      this.logger.warn(`Live slip refused for player ${playerId}: ${earlyAtSubmit.name} has a goal (${earlyAtSubmit.liveEarlyScore}) our feed hasn't confirmed`);
+      throw new ConflictException(`Live betting on ${earlyAtSubmit.name} is paused: a goal is being confirmed. Your stake was not taken.`);
+    }
     const { delay, longerBecause, waits } = await this.waitFor(atSubmit, submittedAt);
     this.logger.log(
       `Live bet delay for player ${playerId}: ${delay} ms on ${[...atSubmit.values()].map((event) => event.league).join(", ") || "no competition"} ` +
@@ -684,7 +704,7 @@ export class BetsService {
       if (!now.bettable || now.live) throw refuse(`Bets on ${pick.label} closed while your slip was being confirmed. Remove it and try again.`);
     }
     // The minute and the cards shown so far, kept on each live pick with its score for the late check (bets/late.ts).
-    const events = await this.prisma.event.findMany({ where: { id: { in: liveIds } }, select: { id: true, elapsed: true, matchCentre: true, liveOddsAt: true, liveVersion: true } });
+    const events = await this.prisma.event.findMany({ where: { id: { in: liveIds } }, select: { id: true, elapsed: true, matchCentre: true, liveOddsAt: true, liveVersion: true, homeScore: true, awayScore: true, liveEarlyScore: true, liveEarlyAt: true } });
     const shown = new Map(events.map((event) => [event.id, event]));
     // Goals in the last minutes, with the match-result prices from just before each, for prices that haven't caught up.
     const recentGoals = await this.prisma.goalSeen.findMany({
@@ -717,6 +737,10 @@ export class BetsService {
         throw refuse(`${what} It was not placed, and your stake was not taken.`);
       }
       const event = shown.get(pick.eventId);
+      // A goal a faster source showed during the wait, that our feed hasn't confirmed.
+      if (event && earlyGoalAhead(event, new Date())) {
+        throw refuse(`A goal is being confirmed in the match while your bet on ${pick.label} was waiting. It was not placed, and your stake was not taken.`);
+      }
       // Anything the site saw change in the match during the wait (a score, a pause, the bookmaker blocking or reopening it).
       const versionAtSubmit = atSubmit.get(pick.eventId)?.liveVersion ?? null;
       if (event && versionAtSubmit !== null && event.liveVersion !== versionAtSubmit) {

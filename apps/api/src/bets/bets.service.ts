@@ -255,9 +255,9 @@ export class BetsService {
       if (!selection || !quote) throw new BadRequestException("One of the bets on your slip no longer exists. Remove it and try again.");
       const { odds, bettable, live, score, sp, marketKey, margin, closed } = quote;
       if (!bettable) {
-        throw new BadRequestException(
-          closed ?? (live ? `Live bets on ${selection.market.event.name} are paused right now. Try again in a moment.` : `Bets are closed on ${selection.market.event.name}. Remove it from your slip.`),
-        );
+        // A live pause is a 409 like the other pause refusals: the slip keeps the pick to try again when prices return.
+        if (live && !closed) throw new ConflictException(`Live bets on ${selection.market.event.name} are paused right now. Try again in a moment.`);
+        throw new BadRequestException(closed ?? `Bets are closed on ${selection.market.event.name}. Remove it from your slip.`);
       }
       // Before kick-off a tick is taken at the price just found, and a real move is refused unless the Player already chose the
       // new price. Live, the bet is only placed at the exact price on the slip.

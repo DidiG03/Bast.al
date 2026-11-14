@@ -1846,7 +1846,6 @@ function PauseBanner({ pause }: { pause: MarketPause }) {
     return () => window.clearInterval(timer);
   }, []);
   const seconds = now === null ? null : Math.max(0, Math.ceil((until - now) / 1000));
-  if (now !== null && now >= until) return null;
   // Every name when tapped open (or when there are only a few); otherwise the first few and "and N more" to tap.
   const shown = listed ? pause.markets : pause.markets.slice(0, BANNER_NAMED);
   const names = shown.map((name) => ts(name)).join(", ");
@@ -1872,10 +1871,22 @@ function PauseBanner({ pause }: { pause: MarketPause }) {
       ) : null}
       .{" "}
       {seconds === null ? null : (
-        <span className="bm-pause-time">{seconds === 0 ? t("Back any moment.") : pause.exact ? t("Back in {seconds} s.", { seconds }) : t("Back within {seconds} s.", { seconds })}</span>
+        <span className="bm-pause-time">{seconds === 0 ? t("Waiting for new prices…") : pause.exact ? t("Back in {seconds} s.", { seconds }) : t("Back within {seconds} s.", { seconds })}</span>
       )}
     </p>
   );
+}
+
+/**
+ * A 409 from placing a live slip that means the match or market is paused,
+ * and whether a goal did it. Other 409s (price moved, feed too far behind)
+ * keep their own message.
+ */
+function pauseRefusal(message: string): "goal" | "pause" | null {
+  if (/odds changed|too far behind/i.test(message)) return null;
+  if (/goal|score changed/i.test(message)) return "goal";
+  if (/paused|while your bet|caught up/i.test(message)) return "pause";
+  return null;
 }
 
 /**
@@ -1908,7 +1919,7 @@ function SlipPauseNote({ pause }: { pause: { reason: string; until: string | nul
     <p className="bet-slip-flag" role="status">
       {t("Paused")} · {why}
       {why.endsWith(".") ? " " : ". "}
-      {seconds === null ? t("It comes back on its own.") : seconds === 0 ? t("Back any moment.") : t("Back within {seconds} s.", { seconds })}
+      {seconds === null ? t("It comes back on its own.") : seconds === 0 ? t("Waiting for new prices…") : t("Back within {seconds} s.", { seconds })}
     </p>
   );
 }
@@ -1961,6 +1972,11 @@ function BetSlip({
   const placingRef = useRef(false);
   /** Set when a place was refused because the price moved, so the retry takes that new price. */
   const [takeNewPrice, setTakeNewPrice] = useState(false);
+  /** Set when a live slip was refused (409) because the match or market is paused; the picks stay for a retry. */
+  const [pausedRefusal, setPausedRefusal] = useState<"goal" | "pause" | null>(null);
+  const slipPicks = items.map((item) => item.selectionId).join(",");
+  // A different slip is a new try: the old refusal no longer applies.
+  useEffect(() => setPausedRefusal(null), [slipPicks]);
   const toast = useToast();
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
   const router = useRouter();
@@ -2149,6 +2165,7 @@ function BetSlip({
       setPlacing(false);
       return;
     }
+    setPausedRefusal(null);
     // The stake shows as pending under the balance at once; it's taken or given back when the API answers.
     showPending(totalStake);
     if (hasLive) {
@@ -2205,6 +2222,11 @@ function BetSlip({
       if (/odds changed/i.test(original)) {
         toast.info(message);
         setTakeNewPrice(true);
+        onOddsChanged();
+        if (builder) setRequote((n) => n + 1);
+      } else if (err instanceof ApiError && err.status === 409 && pauseRefusal(original)) {
+        // Paused after a goal or another event: said in the slip, in the Player's language, and the slip is kept to try again.
+        setPausedRefusal(pauseRefusal(original));
         onOddsChanged();
         if (builder) setRequote((n) => n + 1);
       } else {
@@ -2506,6 +2528,11 @@ function BetSlip({
                     />
                   ) : null}
                 </strong>
+                {pausedRefusal ? (
+                  <p className="bet-slip-flag" role="alert">
+                    {pausedRefusal === "goal" ? t("Match paused after a goal – try again when prices return.") : t("Match paused – try again when prices return.")}
+                  </p>
+                ) : null}
                 {summaryBlocker && needsMoney ? (
                   <button type="button" className="text-button bet-slip-flag" onClick={() => void topUp.request(shortfall)}>{summaryBlocker}</button>
                 ) : (

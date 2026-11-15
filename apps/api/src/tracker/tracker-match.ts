@@ -40,7 +40,57 @@ const SAME: Record<string, string> = { utd: "united", st: "saint", munchen: "mun
 /** Words that make it a different team of the same club: they must match on both sides. */
 const SIDE = /^(w|women|womens|fem|femenino|feminine|u\d{2}|ii|iii|b|reserves|youth)$/;
 
-export function nameTokens(name: string): { core: string[]; side: string[] } {
+/**
+ * Countries known by more than one name. Each spelling (normalised: no
+ * accents, lower case, words only) maps to one name; API-Football and
+ * SportScore don't always use the same one ("Czech Republic" / "Czechia").
+ */
+const COUNTRY_NAMES: Array<[string, string[]]> = [
+  ["czech republic", ["czechia", "czech rep", "czech"]],
+  ["turkey", ["turkiye", "tuerkiye"]],
+  ["south korea", ["korea republic", "republic of korea", "korea rep", "korea"]],
+  ["north korea", ["korea dpr", "dpr korea", "korea dpr north"]],
+  ["usa", ["united states", "united states of america", "us"]],
+  ["ivory coast", ["cote d ivoire", "cote divoire"]],
+  ["cape verde", ["cabo verde", "cape verde islands"]],
+  ["iran", ["ir iran", "iran ir"]],
+  ["china", ["china pr", "pr china"]],
+  ["bosnia and herzegovina", ["bosnia herzegovina", "bosnia", "bosnia hercegovina"]],
+  ["north macedonia", ["macedonia", "fyr macedonia"]],
+  ["republic of ireland", ["ireland", "rep of ireland", "eire"]],
+  ["dr congo", ["congo dr", "dr congo", "democratic republic of congo", "congo democratic republic"]],
+  ["eswatini", ["swaziland"]],
+  ["kyrgyzstan", ["kyrgyz republic"]],
+  ["netherlands", ["holland"]],
+  ["chinese taipei", ["taiwan"]],
+  ["timor leste", ["east timor"]],
+  ["gambia", ["the gambia"]],
+  ["brunei", ["brunei darussalam"]],
+  ["vietnam", ["viet nam"]],
+  ["laos", ["lao pdr", "lao"]],
+  ["saint kitts and nevis", ["st kitts and nevis", "saint kitts nevis", "st kitts nevis"]],
+  ["saint vincent and the grenadines", ["st vincent and the grenadines", "st vincent grenadines"]],
+  ["saint lucia", ["st lucia"]],
+  ["united arab emirates", ["uae"]],
+  ["russia", ["russian federation"]],
+  ["syria", ["syrian arab republic"]],
+  ["palestine", ["state of palestine"]],
+  ["sao tome and principe", ["sao tome e principe"]],
+  ["curacao", ["curacao"]],
+];
+const COUNTRY = new Map<string, string>();
+for (const [name, others] of COUNTRY_NAMES) for (const spelling of [name, ...others]) COUNTRY.set(spelling, name);
+
+/** The other names a team (a country) goes by, its own first: for asking SportScore by name. */
+export function otherNames(name: string): string[] {
+  const words = nameTokens(name, false).core.join(" ");
+  const country = COUNTRY.get(words);
+  if (!country) return [name];
+  const all = COUNTRY_NAMES.find(([key]) => key === country)!;
+  return [name, ...[all[0], ...all[1]].filter((spelling) => spelling !== words)];
+}
+
+export function nameTokens(name: string, countries = true): { core: string[]; side: string[] } {
   const words = name
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -52,8 +102,11 @@ export function nameTokens(name: string): { core: string[]; side: string[] } {
     .filter(Boolean)
     .map((word) => SAME[word] ?? word);
   const side = words.filter((word) => SIDE.test(word)).map((word) => (word.startsWith("w") || word.startsWith("fem") ? "women" : word)).sort();
-  const core = words.filter((word) => !SIDE.test(word) && !FILLER.has(word));
-  return { core: core.length > 0 ? core : words.filter((word) => !SIDE.test(word)), side };
+  let core = words.filter((word) => !SIDE.test(word) && !FILLER.has(word));
+  if (core.length === 0) core = words.filter((word) => !SIDE.test(word));
+  // One name for a country, whichever spelling ("Czechia" and "Czech Republic" are the same side).
+  const country = countries ? COUNTRY.get(core.join(" ")) : undefined;
+  return { core: country ? country.split(" ") : core, side };
 }
 
 function bigrams(text: string): Map<string, number> {

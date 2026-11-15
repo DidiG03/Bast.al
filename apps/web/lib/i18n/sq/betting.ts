@@ -578,6 +578,7 @@ export const betting: Record<string, string> = {
   "{count} pick was left out: it can't be bet on now.": "{count} zgjedhje u la jashtë: nuk mund të luhet tani.",
   "{count} picks were left out: they can't be bet on now.": "{count} zgjedhje u lanë jashtë: nuk mund të luhen tani.",
   "Live tracker": "Ndjekja live",
+  "Live tracker unavailable just now.": "Ndjekësi live nuk është i disponueshëm tani.",
   "Extra time & penalties": "Koha shtesë dhe penalltitë",
   "All countries": "Të gjitha shtetet",
   "Countries": "Shtetet",

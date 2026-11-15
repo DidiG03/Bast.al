@@ -16116,6 +16116,11 @@ button.is-blocked {
 
 /* SportScore's live tracker, above a live match's markets. The frame keeps a
    steady height (no jump when it loads) that suits a phone held either way. */
+.live-tracker-note {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+}
+
 .live-tracker-probe {
   height: 1px;
   margin-bottom: -1px;

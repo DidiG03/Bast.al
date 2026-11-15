@@ -325,6 +325,34 @@ test("bets placed at prices that counted a goal later disallowed are void at set
   assert.equal((await prisma.bet.findUniqueOrThrow({ where: { id: onRight.id } })).status, "WON");
 });
 
+test("SportScore's live list empty: linked live matches are read from their match page, so an early goal still pauses the match", async () => {
+  // Only this match live (each read takes a few match pages at most, the ones read longest ago first).
+  await prisma.event.updateMany({ where: { status: "LIVE" }, data: { status: "COMPLETED" } });
+  const match = await liveMatch("Empty live list", "home-v-away-empty");
+  const calls = [];
+  const reader = new EarlyGoalService(prisma, sync, async (url) => {
+    calls.push(url);
+    const { pathname, searchParams } = new URL(url);
+    if (pathname.endsWith("/fixtures/")) return { ok: true, json: async () => ({ count: 0, matches: [] }) };
+    const slug = searchParams.get("slug");
+    if (slug === "home-v-away-empty") return { ok: true, json: async () => ({ match: { home: "Home", away: "Away", home_score: "1", away_score: "0", status: "live", url: `/football/match/${slug}/x1/` } }) };
+    return { ok: false, status: 404 };
+  });
+  assert.ok((await reader.run(new Date())) >= 1);
+
+  assert.ok(calls.some((url) => new URL(url).searchParams.get("status") === "live"), "the live list is still asked first");
+  assert.ok(calls.some((url) => new URL(url).searchParams.get("slug") === "home-v-away-empty"), `then the match page: ${calls.join(" | ")}`);
+  const after = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  assert.equal(after.liveEarlyScore, "1:0");
+  for (const market of await prisma.market.findMany({ where: { eventId: match.id } })) assert.equal(market.livePauseReason, "ahead");
+  await assert.rejects(place(match), /paused|goal is being confirmed/);
+
+  // The live list failing outright: the match pages are still read, and nothing throws while one is read.
+  const failing = new EarlyGoalService(prisma, sync, async (url) => (new URL(url).pathname.endsWith("/fixtures/") ? { ok: false, status: 503 } : { ok: true, json: async () => ({ match: { home_score: "1", away_score: "0", url: "/football/match/home-v-away-empty/x1/" } }) }));
+  assert.ok((await failing.run(new Date())) >= 1);
+  await prisma.event.update({ where: { id: match.id }, data: { status: "COMPLETED" } });
+});
+
 test("teardown", async () => {
   await prisma.$disconnect();
 });

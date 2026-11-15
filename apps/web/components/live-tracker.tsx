@@ -46,8 +46,8 @@ export function LiveTracker({ eventId, name }: { eventId: string; name: string }
         const next = await apiFetch<TrackerView>(`/tracker/events/${encodeURIComponent(eventId)}?lang=${lang === "sq" ? "sq" : "en"}&theme=${theme === "dark" ? "dark" : "light"}`, token);
         if (!stop) setView((prev) => (prev?.show && next.show && prev.src === next.src ? prev : next));
       } catch {
-        // A failed check never shows the tracker; it never affects the rest of the page either.
-        if (!stop) setView({ show: false });
+        // A failed recheck keeps a tracker already showing; a first one that fails shows nothing. It never affects the rest of the page.
+        if (!stop) setView((prev) => (prev?.show ? prev : { show: false }));
       }
     };
     void load();
@@ -59,7 +59,9 @@ export function LiveTracker({ eventId, name }: { eventId: string; name: string }
   }, [near, eventId, lang, theme, getToken]);
 
   // Until the API answers there is only an invisible marker, so a match without a tracker never shifts its markets.
-  if (!view?.show) return view ? null : <div ref={box} className="live-tracker-probe" aria-hidden="true" />;
+  if (!view) return <div ref={box} className="live-tracker-probe" aria-hidden="true" />;
+  // The match should have one but none was found (yet): a short line, not a gap. It's asked again every 2 minutes.
+  if (!view.show) return view.reason === "unavailable" ? <p className="live-tracker-note muted">{t("Live tracker unavailable just now.")}</p> : null;
   return (
     <section className="live-tracker" aria-label={t("Live tracker")}>
       <div className={`live-tracker-frame${loaded ? " is-loaded" : ""}`}>

@@ -10,9 +10,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
-const { matchTrackerFixture, teamScore } = require("../dist/tracker/tracker-match.js");
+const { matchTrackerFixture, teamScore, otherNames } = require("../dist/tracker/tracker-match.js");
 const { trackerEmbedSrc, trackerEnabled } = require("../dist/tracker/tracker-embed.js");
-const { parseFixtures, slugFromUrl, fetchLiveFixtures } = require("../dist/tracker/sportscore-feed.js");
+const { parseFixtures, slugFromUrl, fetchLiveFixtures, fetchTeamFixtures, teamSlug } = require("../dist/tracker/sportscore-feed.js");
 
 const at = (iso) => new Date(iso);
 const fixture = (externalId, homeTeam, awayTeam, kickoff) => ({ externalId, homeTeam, awayTeam, kickoff: at(kickoff) });
@@ -28,6 +28,40 @@ test("team names: spelling, accents and filler words don't matter; women's and y
   assert.equal(teamScore("Spain U21", "Spain"), 0);
   assert.ok(teamScore("Arsenal", "Chelsea") < 0.5);
   assert.ok(teamScore("Manchester City", "Manchester United") < 0.85);
+});
+
+test("countries by their other names: Czech Republic is Czechia, Turkey is Türkiye, South Korea is Korea Republic", () => {
+  assert.equal(teamScore("Czech Republic", "Czechia"), 1);
+  assert.equal(teamScore("Turkey", "Türkiye"), 1);
+  assert.equal(teamScore("South Korea", "Korea Republic"), 1);
+  assert.equal(teamScore("USA", "United States"), 1);
+  assert.equal(teamScore("Ivory Coast", "Côte d'Ivoire"), 1);
+  assert.equal(teamScore("Bosnia & Herzegovina", "Bosnia and Herzegovina"), 1);
+  assert.equal(teamScore("Czech Republic W", "Czechia"), 0, "a women's side is still not the men's");
+  assert.equal(teamScore("Czech Republic U21", "Czechia U21"), 1);
+  assert.ok(teamScore("South Korea", "North Korea") < 0.85);
+  assert.ok(teamScore("Northern Ireland", "Republic of Ireland") < 0.85);
+  // The live match of 15 Nov 2026: SportScore's "Croatia v Czechia" is our "Croatia vs Czech Republic".
+  const kickoff = "2026-11-15T19:45:00Z";
+  assert.equal(matchTrackerFixture({ homeTeam: "Croatia", awayTeam: "Czech Republic", startsAt: at(kickoff) }, [fixture("czechia-vs-croatia", "Croatia", "Czechia", kickoff)])?.externalId, "czechia-vs-croatia");
+  assert.deepEqual(otherNames("Czech Republic").slice(0, 2), ["Czech Republic", "czechia"]);
+  assert.deepEqual(otherNames("Arsenal"), ["Arsenal"]);
+  assert.equal(teamSlug("Bosnia & Herzegovina"), "bosnia-and-herzegovina");
+  assert.equal(teamSlug("Türkiye"), "turkiye");
+});
+
+test("SportScore: the key goes with fixture reads, and a team is asked for by its slug", async () => {
+  const calls = [];
+  const fetcher = async (url, init) => (calls.push({ url, init }), { ok: true, json: async () => ({ matches: [] }) });
+  process.env.SPORTSCORE_API_KEY = "k123";
+  await fetchLiveFixtures("2026-11-15", fetcher);
+  await fetchTeamFixtures("czechia", "2026-11-15", fetcher);
+  delete process.env.SPORTSCORE_API_KEY;
+  await fetchLiveFixtures("2026-11-15", fetcher);
+  assert.equal(calls[0].init.headers["X-Api-Key"], "k123");
+  assert.equal(new URL(calls[1].url).searchParams.get("team"), "czechia");
+  assert.equal(new URL(calls[1].url).searchParams.get("status"), null, "by team, whatever the status filter says");
+  assert.equal(calls[2].init.headers["X-Api-Key"], undefined);
 });
 
 test("matching: picks the fixture with both names and the kickoff, within 15 minutes", () => {

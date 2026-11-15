@@ -25,6 +25,16 @@ const BACKOFF_MAX_MS = 2 * 60_000;
 const CHECK_TIMEOUT_MS = 2_000;
 /** Slips on the same match within this long share one check. */
 const CHECK_SHARE_MS = 1_000;
+/**
+ * Linked live matches missing from the day's live list (SportScore's
+ * status=live filter has come back empty while matches were live) are read
+ * one by one from their own page, this many in one timed read at most, the
+ * ones read longest ago first.
+ */
+const DETAILS_PER_READ_KEYED = 30;
+const DETAILS_PER_READ_ANONYMOUS = 6;
+/** The warning that the live list is missing linked matches is logged at most this often. */
+const WARN_EVERY_MS = 10 * 60_000;
 
 /**
  * Early goal signals. SportScore usually shows a goal some seconds before
@@ -60,6 +70,11 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
   private readonly dailyBudget = Number(process.env.EARLY_GOAL_DAILY_BUDGET) || (this.apiKey ? Infinity : ANONYMOUS_DAILY_BUDGET);
   private day = "";
   private used = 0;
+  /** Requests the last timed read made (the list and any match pages): the next one is paced for that many. */
+  private lastCost = 1;
+  /** When each linked match was last read from its own page. */
+  private readonly detailAt = new Map<string, number>();
+  private warnedAt = 0;
   /** Each match's last check for a slip: when, and the promise slips on it share. */
   private readonly checks = new Map<string, { at: number; done: Promise<SportScoreScore | null> }>();
   readonly enabled: boolean;
@@ -103,7 +118,7 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     if (!Number.isFinite(left)) return this.everyMs;
     if (left <= 0) return IDLE_MS;
     const msLeft = 86_400_000 - (Date.now() % 86_400_000);
-    return Math.max(this.everyMs, Math.ceil(msLeft / left));
+    return Math.max(this.everyMs, Math.ceil((msLeft / left) * this.lastCost));
   }
 
   private schedule(ms: number) {
@@ -136,24 +151,66 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * One timed read: the day's live list and, for each linked live match, its
-   * score there handed to sourceScore. Returns how many linked matches are
-   * live (0: nothing was fetched).
+   * score there handed to sourceScore. Linked live matches the list doesn't
+   * have (it has come back empty while matches were live) are read from
+   * their own match page instead. Returns how many linked matches are live
+   * (0: nothing was fetched).
    */
   async run(now: Date = new Date(), scores?: SportScoreScore[]): Promise<number> {
     await this.sync.settleEarlyScores(now);
     const live = await this.linked();
     if (live.length === 0) return 0;
     let read = scores;
+    let listError: unknown = null;
+    this.lastCost = 0;
     if (!read) {
       if (this.budget() <= 0) return live.length;
       this.budget(1);
-      read = await fetchLiveScores(now.toISOString().slice(0, 10), this.fetcher, this.apiKey, true);
+      this.lastCost = 1;
+      try {
+        read = await fetchLiveScores(now.toISOString().slice(0, 10), this.fetcher, this.apiKey, true);
+      } catch (error) {
+        listError = error;
+        read = [];
+      }
     }
     const bySlug = new Map(read.map((row) => [row.id, row]));
     for (const event of live) {
       const there = bySlug.get(event.trackerMapping!.externalId!);
       if (there) await this.apply(event.id, there, now);
     }
+    if (scores) return live.length;
+    const missing = live.filter((event) => !bySlug.has(event.trackerMapping!.externalId!));
+    if (missing.length === 0) return live.length;
+    if (Date.now() - this.warnedAt >= WARN_EVERY_MS) {
+      this.warnedAt = Date.now();
+      this.logger.warn(
+        `SportScore's live list ${listError ? `failed (${listError instanceof Error ? listError.message : String(listError)})` : read.length === 0 ? "is empty" : `has ${read.length} matches`} while ${missing.length} of ${live.length} linked live matches aren't in it: reading their match pages`,
+      );
+    }
+    const batch: typeof missing = [];
+    for (const event of missing.sort((a, b) => (this.detailAt.get(a.id) ?? 0) - (this.detailAt.get(b.id) ?? 0))) {
+      if (batch.length >= (this.apiKey ? DETAILS_PER_READ_KEYED : DETAILS_PER_READ_ANONYMOUS) || this.budget() <= 0) break;
+      this.budget(1);
+      this.lastCost += 1;
+      batch.push(event);
+    }
+    let readOne = false;
+    await Promise.all(
+      batch.map(async (event) => {
+        this.detailAt.set(event.id, Date.now());
+        const score = await fetchMatchScore(event.trackerMapping!.externalId!, this.fetcher, this.apiKey, true, CHECK_TIMEOUT_MS * 2).catch((error) => {
+          this.logger.warn(`SportScore match page for event ${event.id} not read: ${error instanceof Error ? error.message : String(error)}`);
+          return null;
+        });
+        if (!score) return;
+        readOne = true;
+        await this.apply(event.id, score, now);
+      }),
+    );
+    if (this.detailAt.size > 500) for (const [id, at] of this.detailAt) if (Date.now() - at > 3_600_000) this.detailAt.delete(id);
+    // Nothing read at all: a failure, so the next try backs off.
+    if (listError && !readOne) throw listError;
     return live.length;
   }
 

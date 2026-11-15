@@ -58,7 +58,7 @@ test("a live football match with a confident mapping gets the embed and the attr
 });
 
 test("hidden otherwise", async () => {
-  assert.deepEqual(await tracker.forEvent(player, women.id, "en", "light"), { show: false }, "no confident match");
+  assert.deepEqual(await tracker.forEvent(player, women.id, "en", "light"), { show: false, reason: "unavailable" }, "no confident match: the page says the tracker isn't available");
   assert.deepEqual(await tracker.forEvent(player, tennis.id, "en", "light"), { show: false }, "not football");
   assert.equal((await tracker.forEvent(player, upcoming.id, "en", "light")).show, true, "not started yet, within a day: SportScore's kick-off card");
   assert.deepEqual(await tracker.forEvent(player, later.id, "en", "light"), { show: false }, "days away");
@@ -89,17 +89,22 @@ test("sync: reads SportScore's live list only when a live football match still n
   const calls = [];
   const body = { matches: [{ home: "Manchester Utd", away: "Wolverhampton", status: "live", time: kickoff.toISOString(), url: "/football/match/manchester-united-vs-wolverhampton/u1x/" }] };
   const feed = new TrackerService(prisma, async (url) => (calls.push(url), { ok: true, json: async () => body }));
+  // Off only when both the widget and the early goal signals (which also use the links) are off.
   process.env.LIVE_TRACKER_ENABLED = "false";
+  process.env.EARLY_GOALS = "off";
   assert.equal(await feed.sync(), null, "switched off: no call");
   assert.equal(calls.length, 0);
   process.env.LIVE_TRACKER_ENABLED = "true";
+  delete process.env.EARLY_GOALS;
   const result = await feed.sync(new Date("2026-11-02T18:00:00Z"));
-  assert.equal(calls.length, 1);
+  // The live list once; the women's match it doesn't have is then looked up by team.
+  const listed = () => calls.filter((url) => new URL(url).searchParams.get("status") === "live");
+  assert.equal(listed().length, 1);
   assert.equal(result.fetched, 1);
   assert.equal((await prisma.trackerMapping.findUnique({ where: { eventId: united.id } })).externalId, "manchester-united-vs-wolverhampton");
   // Just after midnight UTC it also reads yesterday's list.
   await feed.sync(new Date("2026-11-03T00:30:00Z"));
-  assert.deepEqual(calls.slice(1).map((url) => new URL(url).searchParams.get("date")), ["2026-11-03", "2026-11-02"]);
+  assert.deepEqual(listed().slice(1).map((url) => new URL(url).searchParams.get("date")), ["2026-11-03", "2026-11-02"]);
   // Every live football match settled (mapped, or kept without one by hand): no more calls.
   await tracker.setManual(women.id, null);
   calls.length = 0;
@@ -107,8 +112,9 @@ test("sync: reads SportScore's live list only when a live football match still n
   assert.equal(calls.length, 0);
   // SportScore failing is only logged.
   await tracker.clearManual(women.id);
+  // A failed live list no longer ends the sync: the matches are looked up by team, which fail too here. Nothing throws.
   const down = new TrackerService(prisma, async () => ({ ok: false, status: 503 }));
-  assert.equal(await down.sync(), null);
+  assert.deepEqual(await down.sync(), { fetched: 0, matched: 0 });
 });
 
 test("a match page before kick-off reads that day's not-started fixtures, once in a while", async () => {
@@ -123,8 +129,51 @@ test("a match page before kick-off reads that day's not-started fixtures, once i
   assert.equal(new URL(calls[0]).searchParams.get("date"), kick.toISOString().slice(0, 10));
   // Another unpaired match the same day within 10 minutes: no second read.
   const other = await event({ status: "UPCOMING", name: "Genoa vs Torino", homeTeam: "Genoa", awayTeam: "Torino", startsAt: kick });
-  assert.deepEqual(await feed.forEvent(player, other.id, "en", "dark"), { show: false });
-  assert.equal(calls.length, 1);
+  assert.deepEqual(await feed.forEvent(player, other.id, "en", "dark"), { show: false, reason: "unavailable" }, "not found: the page says so");
+  assert.equal(calls.filter((url) => new URL(url).searchParams.get("status") === "upcoming").length, 1, "the day's list isn't read again (only the teams are looked up)");
+});
+
+test("SportScore's live list empty while matches are live: the match is found by team, the tracker shows, links already made stay", async () => {
+  await prisma.trackerMapping.deleteMany();
+  await prisma.trackerFixture.deleteMany();
+  const start = new Date(Date.now() - 80 * 60_000);
+  const croatia = await event({ name: "Croatia vs Czech Republic", league: "UEFA Nations League", homeTeam: "Croatia", awayTeam: "Czech Republic", startsAt: start });
+  const kept = await event({ name: "Spain vs England", league: "UEFA Nations League", homeTeam: "Spain", awayTeam: "England", startsAt: start });
+  await prisma.trackerMapping.create({ data: { eventId: kept.id, externalId: "spain-vs-england", confidence: 1, method: "auto" } });
+  const calls = [];
+  const live = { home: "Croatia", away: "Czechia", home_score: "2", away_score: "1", status: "live", time: start.toISOString(), url: "/football/match/czechia-vs-croatia/23xmvkh6y1e2qg8/" };
+  const feed = new TrackerService(prisma, async (url) => {
+    calls.push(url);
+    const query = new URL(url).searchParams;
+    // status=live: empty, as on 15 Nov 2026. By team, Croatia's game is there (Czech Republic is "czechia" there).
+    const team = query.get("team");
+    const matches = query.get("status") === "live" ? [] : team === "croatia" ? [live] : [];
+    return { ok: true, json: async () => ({ count: matches.length, matches }) };
+  });
+  // Other live matches in the test database are left to manual "none" so only these two count.
+  for (const other of [united, women]) await tracker.setManual(other.id, null);
+  const result = await feed.sync();
+  assert.equal(result.fetched, 0, "the live list was empty");
+  assert.ok(calls.some((url) => new URL(url).searchParams.get("team") === "croatia"), "looked up by team");
+  assert.equal((await prisma.trackerMapping.findUnique({ where: { eventId: croatia.id } })).externalId, "czechia-vs-croatia");
+  assert.equal((await prisma.trackerMapping.findUnique({ where: { eventId: kept.id } })).externalId, "spain-vs-england", "an empty live list unlinks nothing");
+  const view = await feed.forEvent(player, croatia.id, "en", "dark");
+  assert.equal(view.show, true);
+  assert.equal(view.src, "https://sportscore.com/embed/czechia-vs-croatia?lang=en&theme=dark");
+  assert.equal((await feed.forEvent(player, kept.id, "sq", "light")).show, true);
+});
+
+test("no fixture anywhere: the page is told the tracker is unavailable, and SportScore isn't asked again for 10 minutes", async () => {
+  const lonely = await event({ name: "Nowhere vs Nobody", homeTeam: "Nowhere", awayTeam: "Nobody", startsAt: new Date(Date.now() - 20 * 60_000) });
+  const calls = [];
+  const feed = new TrackerService(prisma, async (url) => (calls.push(url), { ok: true, json: async () => ({ matches: [], teams: [] }) }));
+  assert.deepEqual(await feed.forEvent(player, lonely.id, "en", "light"), { show: false, reason: "unavailable" });
+  const asked = calls.length;
+  assert.ok(asked > 0);
+  await feed.forEvent(player, lonely.id, "en", "light");
+  assert.equal(calls.length, asked, "the lookup isn't repeated on every view");
+  const down = new TrackerService(prisma, async () => ({ ok: false, status: 503 }));
+  assert.deepEqual(await down.forEvent(player, lonely.id, "en", "light"), { show: false, reason: "unavailable" }, "SportScore down: the same note");
 });
 
 test("teardown", async () => {

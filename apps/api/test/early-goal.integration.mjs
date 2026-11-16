@@ -96,7 +96,7 @@ async function place(event, market = "match_winner", key = "home") {
 const balance = async () => Number((await prisma.user.findUniqueOrThrow({ where: { id: player.id } })).balance);
 
 test("setup", async () => {
-  for (const table of ["early_goals", "goals_seen", "tracker_mappings", "settlement_entries", "commission_payouts", "balance_transactions", "bet_legs", "bets", "odds_snapshots", "odds_overrides", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
+  for (const table of ["early_goals", "goals_seen", "tracker_mappings", "settlement_entries", "commission_payouts", "balance_transactions", "casino_spins", "casino_free_spins", "casino_gambles", "blackjack_hands", "mines_rounds", "penalty_rounds", "dice_seeds", "betting_limits", "idempotency_keys", "bet_legs", "bets", "odds_snapshots", "odds_overrides", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
   const sa = await user("SUPER_ADMIN", null);

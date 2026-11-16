@@ -274,10 +274,12 @@ test("placing a live bet records the score, the minute, the cards and red cards 
   // The score, minute, cards and red cards shown; how it was confirmed is kept beside them (live-confirm.integration.mjs).
   const shown = ({ audit, ...rest }) => (assert.ok(audit?.confirmedAt), rest);
   const single = await reload(placed.bets.find((bet) => bet.kind === "SINGLE"));
-  assert.deepEqual(shown(single.live), { home: 1, away: 0, minute: 34, cards: 2, reds: 1 });
+  // Corners are recorded too, null when the match centre has no count yet.
+  const noCorners = { corners: null, cornersHome: null, cornersAway: null };
+  assert.deepEqual(shown(single.live), { home: 1, away: 0, minute: 34, cards: 2, reds: 1, ...noCorners });
   const combined = await reload(placed.bets.find((bet) => bet.kind === "ACCUMULATOR"));
   const legOf = (selection) => combined.legs.find((leg) => leg.selectionId === selection.id);
-  assert.deepEqual(shown(legOf(home).live), { home: 1, away: 0, minute: 34, cards: 2, reds: 1 });
+  assert.deepEqual(shown(legOf(home).live), { home: 1, away: 0, minute: 34, cards: 2, reds: 1, ...noCorners });
   assert.equal(legOf(preMatchPick).live, null);
 });
 
@@ -295,7 +297,8 @@ test("a Player's open live corners bets on a match are capped, accumulators at t
         awayTeam: name.split(" v ")[1],
         startsAt: new Date(Date.now() + (live ? -30 : 120) * 60_000),
         status: live ? "LIVE" : "UPCOMING",
-        ...(live ? { period: "1H", elapsed: 30, homeScore: 0, awayScore: 0, liveOddsAt: new Date() } : {}),
+        // A fresh corners count: live corners markets are held without one.
+        ...(live ? { period: "1H", elapsed: 30, homeScore: 0, awayScore: 0, liveOddsAt: new Date(), matchCentre: { corners: [2, 1] }, matchCentreAt: new Date() } : {}),
         markets: {
           create: [
             { key: "corners_9_5", name: "Total corners 9.5", selections: { create: [{ key: "over", name: "Over 9.5", feedOdds: 1.9, liveOdds: live ? 1.9 : null }, { key: "under", name: "Under 9.5", feedOdds: 1.9, liveOdds: live ? 1.9 : null }] } },

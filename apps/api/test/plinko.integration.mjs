@@ -61,7 +61,7 @@ test("setup", async () => {
   for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "casino_spins", "casino_free_spins", "casino_gambles", "blackjack_hands", "mines_rounds", "penalty_rounds", "betting_limits", "bet_legs", "bets", "notifications", "audit_logs", "idempotency_keys", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
-  await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false } });
+  await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false, casinoGamesOff: [] } });
   sa = await user("SUPER_ADMIN", null);
   owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 500000 });
   manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 90000 });
@@ -79,7 +79,8 @@ test("closed with the Casino's switches, like the other games", async () => {
   assert.equal(state.tableMax, 2500);
   assert.deepEqual(state.game.rows, [8, 12, 16]);
   assert.equal(state.game.pays[16].HIGH.length, 17);
-  assert.equal(state.game.payoutRates[16].LOW, 85.04);
+  // Retuned under the 85% cap (no game pays back more than it should).
+  assert.equal(state.game.payoutRates[16].LOW, 84.97);
   assert.equal(await balanceOf(pia), 10000);
 });
 

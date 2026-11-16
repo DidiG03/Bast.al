@@ -68,7 +68,7 @@ test("setup", async () => {
   for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "casino_spins", "casino_free_spins", "casino_gambles", "blackjack_hands", "mines_rounds", "penalty_rounds", "dice_seeds", "betting_limits", "bet_legs", "bets", "notifications", "audit_logs", "idempotency_keys", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
-  await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false } });
+  await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false, casinoGamesOff: [] } });
   sa = await user("SUPER_ADMIN", null);
   owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 500000 });
   manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 90000 });
@@ -245,7 +245,7 @@ test("single games switch off: Super Admin's for the whole site (hidden from Own
   await assert.rejects(casino.setGame({ id: dan.id, role: "PLAYER", parentId: dan.parentId }, "keno", false), /Only Super Admin and Owners/);
 
   // Every game off: the Casino tab goes away.
-  for (const game of ["book", "roulette", "blackjack", "penalty", "mines", "plinko", "keno", "coinflip", "scratch", "crash", "baccarat", "hilo", "wheel", "tower"]) await casino.setGame(ownerActor, game, false);
+  for (const game of ["book", "candy", "roulette", "blackjack", "penalty", "mines", "plinko", "keno", "coinflip", "scratch", "crash", "baccarat", "hilo", "wheel", "tower"]) await casino.setGame(ownerActor, game, false);
   assert.deepEqual((await casino.state(actor)).games, []);
   assert.equal((await users.me(actor, false)).casinoOpen, false);
 

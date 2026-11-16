@@ -61,7 +61,7 @@ const board = (winner, goals, cards) => ({ match_winner: winner, goals_2_5: goal
 
 async function liveMatch(name, league = "League") {
   n += 1;
-  return prisma.event.create({ data: { sport: "football", provider: "api-football", externalId: `lm-${n}`, name, league, homeTeam: "A", awayTeam: "B", startsAt: new Date(Date.now() - 30 * 60_000), status: "LIVE", period: "1H", elapsed: 30, homeScore: 0, awayScore: 0 } });
+  return prisma.event.create({ data: { sport: "football", provider: "api-football", externalId: `lm-${n}`, name, league, homeTeam: "A", awayTeam: "B", startsAt: new Date(Date.now() - 30 * 60_000), status: "LIVE", period: "1H", elapsed: 30, homeScore: 0, awayScore: 0, matchCentre: { corners: [1, 1], yellow: [0, 1], red: [0, 0] }, matchCentreAt: new Date() } });
 }
 /** Whether a Player can bet on this market's first outcome right now. */
 async function open(match, key) {
@@ -79,46 +79,46 @@ test("setup", async () => {
   player = await prisma.user.create({ data: { clerkId: "clerk_lm3", username: "lm_player", emailCipher: "x", emailHash: "hlm3", role: "PLAYER", parentId: owner.id } });
 });
 
-test("(a) fresh prices after a goal reopen its markets at the minimum, not the fallback; (c) cards pause with them", async () => {
+test("(a) a goal pauses every market; the bookmaker's new prices for it reopen them at the minimum, not the fallback; (c) cards pause with them", async () => {
   const match = await liveMatch("Fresh after a goal");
   await sync.applyLiveOdds(match.id, reading(0, 0, board({ home: 2.1, draw: 3.2, away: 3.6 }, { over: 1.8, under: 2 }, { over: 2, under: 1.8 })));
   assert.equal(await open(match, "match_winner"), true);
   const goalAt = Date.now();
-  // The goal comes with the bookmaker's prices for it; cards are still priced.
-  await sync.applyLiveOdds(match.id, reading(1, 0, board({ home: 1.4, draw: 4.5, away: 8 }, { over: 1.5, under: 2.5 }, { over: 2, under: 1.8 })));
+  // The goal comes with the bookmaker's prices for it (moved since before the goal): those count as fresh.
+  await sync.applyLiveOdds(match.id, reading(1, 0, board({ home: 1.4, draw: 4.5, away: 8 }, { over: 1.5, under: 2.5 }, { over: 2.1, under: 1.7 })));
   assert.equal(await open(match, "match_winner"), false, "the goal pauses the match result");
   assert.equal(await open(match, "goals_2_5"), false, "and the totals");
   assert.equal(await open(match, "cards_3_5"), false, "(c) and cards: a goal changes them too");
   const paused = await marketOf(match, "match_winner");
-  assert.ok(paused.livePausedUntil.getTime() - goalAt >= 8_500, "the fallback, until fresh prices come");
-  // (a) Fresh prices a second in (a tenth of 10 s): made after the goal, moved since it.
+  assert.ok(paused.livePausedUntil.getTime() - goalAt < 2_500, "fresh prices: the minimum (a tenth of 15 s), not the 9 s fallback");
+  assert.equal(paused.livePausedUntil.getTime(), paused.liveReopenFrom.getTime());
   await sleep(1_000);
-  await sync.applyLiveOdds(match.id, reading(1, 0, board({ home: 1.38, draw: 4.6, away: 8.5 }, { over: 1.48, under: 2.55 }, { over: 2, under: 1.8 }), { madeMsAgo: 200 }));
-  const reopening = await marketOf(match, "match_winner");
-  assert.equal(reopening.livePausedUntil.getTime(), reopening.liveReopenFrom.getTime(), "it reopens at the minimum (a tenth of 15 s)");
-  assert.equal(await open(match, "match_winner"), false, "not before it");
-  await sleep(reopening.livePausedUntil.getTime() - Date.now() + 50);
+  assert.equal(await open(match, "match_winner"), false, "never before the minimum");
+  await sleep(paused.livePausedUntil.getTime() - Date.now() + 50);
   assert.equal(await open(match, "match_winner"), true, "open again at about 1.5 s, not 9");
   assert.equal(await open(match, "goals_2_5"), true);
   const pause = await prisma.livePause.findFirstOrThrow({ where: { eventId: match.id } });
   assert.equal(pause.reason, "goal");
   assert.equal(pause.fresh, true);
-  assert.ok(pause.endsAt.getTime() - pause.startedAt.getTime() < 2_000);
+  assert.ok(pause.endsAt.getTime() - pause.startedAt.getTime() < 2_500);
 });
 
-test("(b) without fresh prices the fallback applies", async () => {
+test("(b) a goal whose prices haven't moved and were made before it: the fallback stands until the bookmaker prices it", async () => {
   const match = await liveMatch("No fresh prices");
-  await sync.applyLiveOdds(match.id, reading(0, 0, board({ home: 2.1, draw: 3.2, away: 3.6 }, { over: 1.8, under: 2 }, { over: 2, under: 1.8 })));
-  await sync.applyLiveOdds(match.id, reading(0, 1, board({ home: 4, draw: 3.4, away: 1.9 }, { over: 1.5, under: 2.5 }, { over: 2, under: 1.8 })));
+  const before = board({ home: 2.1, draw: 3.2, away: 3.6 }, { over: 1.8, under: 2 }, { over: 2, under: 1.8 });
+  await sync.applyLiveOdds(match.id, reading(0, 0, before));
+  // The score changes, but the bookmaker's prices are still the pre-goal ones, made before the goal.
+  await sync.applyLiveOdds(match.id, reading(0, 1, before, { madeMsAgo: 5_000 }));
   const fallback = (await marketOf(match, "match_winner")).livePausedUntil.getTime();
   await sleep(1_700);
-  // Past the minimum, but the bookmaker made these before the goal, and the prices haven't moved: no reopening.
-  await sync.applyLiveOdds(match.id, reading(0, 1, board({ home: 4, draw: 3.4, away: 1.9 }, { over: 1.5, under: 2.5 }, { over: 2, under: 1.8 }), { madeMsAgo: 5_000 }));
-  await sync.applyLiveOdds(match.id, reading(0, 1, board({ home: 4, draw: 3.4, away: 1.9 }, { over: 1.5, under: 2.5 }, { over: 2, under: 1.8 }), { madeMsAgo: 100 }));
-  assert.equal((await marketOf(match, "match_winner")).livePausedUntil.getTime(), fallback, "the fallback stands");
+  await sync.applyLiveOdds(match.id, reading(0, 1, before, { madeMsAgo: 5_000 }));
+  assert.equal((await marketOf(match, "match_winner")).livePausedUntil.getTime(), fallback, "past the minimum, the same old prices don't reopen it");
   assert.equal(await open(match, "match_winner"), false);
+  // Prices the bookmaker made after the goal: reopened.
+  await sync.applyLiveOdds(match.id, reading(0, 1, board({ home: 4, draw: 3.4, away: 1.9 }, { over: 1.5, under: 2.5 }, { over: 2, under: 1.8 }), { madeMsAgo: 100 }));
+  assert.equal(await open(match, "match_winner"), true, "fresh prices past the minimum reopen it");
   const pause = await prisma.livePause.findFirstOrThrow({ where: { eventId: match.id } });
-  assert.equal(pause.fresh, false);
+  assert.ok(pause.endsAt.getTime() < fallback, "it ended before the fallback");
 });
 
 test("(d) a market the feed suspends pauses alone; the match-wide flag pauses the match", async () => {
@@ -130,7 +130,7 @@ test("(d) a market the feed suspends pauses alone; the match-wide flag pauses th
   await sync.applyLiveOdds(match.id, reading(0, 0, board({ home: 2.1, draw: 3.2, away: 3.6 }, { over: 1.8, under: 2 }, { over: 2, under: 1.8 }), { stopped: true }));
   assert.equal(await open(match, "match_winner"), false, "the match-wide flag");
   const listed = (await odds.events({ id: player.id, role: "PLAYER", parentId: player.parentId }, "live")).find((event) => event.id === match.id);
-  assert.equal(listed.livePause, "feed");
+  assert.equal(listed.livePause, "bookmaker", "the bookmaker blocking the match");
 });
 
 test("(e) a market the feed hasn't priced live for a while is off the board; so are cards in a competition never priced live", async () => {

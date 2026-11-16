@@ -287,37 +287,33 @@ async function placeWhile(event, afterMs, change, stake = 100) {
   return placing;
 }
 
-test("a small live price rise is taken; a drop, a large rise, or 'never' is shown first", async () => {
+test("live, only the exact price on the slip is taken: a rise or a drop is shown first, whatever the price setting", async () => {
   const match = await liveMatch("Better than shown");
   const home = homeOf(match);
   const shown = (await odds.priceForPlayer(player.id, home.id)).odds;
   await prisma.selection.update({ where: { id: home.id }, data: { liveOdds: 2.05 } });
   const now = (await odds.priceForPlayer(player.id, home.id)).odds;
   assert.ok(now > shown);
-  // 2.00 to 2.05 is a small move up: taken at the new price.
-  const placed = await bets.place(actor, { bets: [{ selectionId: home.id, stake: 100, odds: shown }], priceChanges: "higher" });
+  // Even a small rise with "take higher" set: live bets go in only at the price the Player saw.
+  await assert.rejects(bets.place(actor, { bets: [{ selectionId: home.id, stake: 100, odds: shown }], priceChanges: "higher" }), /odds changed.*exact price/);
+  // Placed again at the new price it shows, it goes in.
+  const placed = await bets.place(actor, { bets: [{ selectionId: home.id, stake: 100, odds: now }], priceChanges: "higher" });
   assert.equal(placed.bets[0].odds, now);
-  assert.equal(placed.adjusted, true);
-  // The same small rise is refused when the slip is set to take no change.
-  await prisma.selection.update({ where: { id: home.id }, data: { liveOdds: 2.08 } });
-  await assert.rejects(bets.place(actor, { bets: [{ selectionId: home.id, stake: 100, odds: now }], priceChanges: "never" }), /odds changed/);
-  // A drop is never taken on its own.
+  assert.notEqual(placed.adjusted, true);
+  // A drop is refused too.
   await prisma.selection.update({ where: { id: home.id }, data: { liveOdds: 1.7 } });
   await assert.rejects(bets.place(actor, { bets: [{ selectionId: home.id, stake: 100, odds: now }], priceChanges: "higher" }), /odds changed/);
 });
 
-test("a small rise during the wait is taken; a drop, or any change to the match, refuses the slip", async () => {
-  const match = await liveMatch("Up during the wait");
-  const shown = (await odds.priceForPlayer(player.id, homeOf(match).id)).odds;
-  const placed = await placeWhile(match, 200, () => prisma.selection.update({ where: { id: homeOf(match).id }, data: { liveOdds: 2.02 } }));
-  assert.equal(placed.bets[0].odds, 2.02);
-  assert.ok(placed.bets[0].odds > shown);
+test("any price move or change to the match during the wait refuses the slip; no money moves", async () => {
+  const up = await liveMatch("Up during the wait");
+  await assert.rejects(placeWhile(up, 200, () => prisma.selection.update({ where: { id: homeOf(up).id }, data: { liveOdds: 2.02 } })), /odds changed.*not placed/);
   const down = await liveMatch("Down during the wait");
   await assert.rejects(placeWhile(down, 200, () => prisma.selection.update({ where: { id: homeOf(down).id }, data: { liveOdds: 1.8 } })), /odds changed/);
   // A pause that began and ended within the wait still changed the match (Event.liveVersion).
   const other = await liveMatch("Changed during the wait");
   await assert.rejects(placeWhile(other, 200, () => prisma.event.update({ where: { id: other.id }, data: { liveVersion: { increment: 1 } } })), /Something happened in the match/);
-  assert.equal(await prisma.bet.count({ where: { selectionId: { in: [homeOf(down).id, homeOf(other).id] } } }), 0);
+  assert.equal(await prisma.bet.count({ where: { selectionId: { in: [homeOf(up).id, homeOf(down).id, homeOf(other).id] } } }), 0);
 });
 
 test("a settlement run on a match with a late-arriving goal pays no stale winning bet; a bet from before the goal is paid", async () => {

@@ -73,7 +73,9 @@ async function liveMatch(name) {
       homeScore: 0,
       awayScore: 0,
       liveOddsAt: new Date(),
-      matchCentre: { moments: [{ kind: "yellow" }] },
+      // The live count too (fresh): corners and cards markets are held without one.
+      matchCentre: { moments: [{ kind: "yellow" }], yellow: [1, 0], red: [0, 0], corners: [2, 1] },
+      matchCentreAt: new Date(),
       markets: {
         create: [
           { key: "match_winner", name: "Match winner", selections: { create: [{ key: "home", name: "Home", feedOdds: 2, liveOdds: 2 }, { key: "draw", name: "Draw", feedOdds: 3.2, liveOdds: 3.2 }, { key: "away", name: "Away", feedOdds: 4, liveOdds: 4 }] } },

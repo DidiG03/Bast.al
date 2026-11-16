@@ -1817,8 +1817,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       if (pausedAt && until) await this.prisma.livePause.create({ data: { eventId, reason: event!.reason, startedAt: pausedAt, endsAt: until, markets: paused } }).catch(() => undefined);
     }
     if (reopened > 0) this.logger.log(`Live markets reopening on event ${eventId}: ${reopened} had fresh prices after the ${main?.livePauseReason ?? "event"}${mainReopen ? `; the match result at ${(mainReopen as Date).toISOString()}` : ""}`);
-    if (mainReopen && main?.livePausedAt) {
-      await this.prisma.livePause.updateMany({ where: { eventId, startedAt: main.livePausedAt }, data: { endsAt: mainReopen, fresh: true } }).catch(() => undefined);
+    // The pause this reopens: one this reading started (its own prices were the fresh ones), or the one already on.
+    const reopenedFrom = (mainStarted as MarketPause | null)?.pausedAt ?? main?.livePausedAt ?? null;
+    if (mainReopen && reopenedFrom) {
+      await this.prisma.livePause.updateMany({ where: { eventId, startedAt: reopenedFrom }, data: { endsAt: mainReopen, fresh: true } }).catch(() => undefined);
     }
     return { started, mainReopen, latestUntil, ...counts };
   }

@@ -79,7 +79,7 @@ test("setup", async () => {
   for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "casino_spins", "casino_free_spins", "casino_gambles", "betting_limits", "bet_legs", "bets", "notifications", "audit_logs", "idempotency_keys", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
-  await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false } });
+  await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false, casinoGamesOff: [] } });
   sa = await user("SUPER_ADMIN", null);
   owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 500000 });
   otherOwner = await user("OWNER", sa.id);
@@ -108,7 +108,7 @@ test("a losing spin takes the stake, and shows in the ledger and the journal wit
   assert.deepEqual([result.win, result.spin.stake, result.balance], [0, 100, 9900]);
   assert.equal(await balanceOf(cara), 9900);
   const line = await todaysLine(cara);
-  assert.deepEqual([line.type, Number(line.amount), line.reason], ["CASINO", -100, "Casino: 1 spin"]);
+  assert.deepEqual([line.type, Number(line.amount), line.reason], ["CASINO", -100, "Sizzling Hot: 1 spin"]);
   const journal = await prisma.settlementEntry.findFirstOrThrow({ where: { casinoSpinId: result.spin.id } });
   assert.deepEqual(
     [journal.betId, journal.bets, Number(journal.stake), Number(journal.payout), journal.ownerId, journal.managerId, Number(journal.ownerRate), Number(journal.managerRate)],
@@ -128,7 +128,7 @@ test("a win adds to the balance, and the day's line keeps adding up", async () =
   assert.equal(result.win, Math.round(paid * 100) / 100);
   assert.equal(await balanceOf(cara), 9900 - 250 + result.win);
   const line = await todaysLine(cara);
-  assert.deepEqual([Number(line.amount), line.reason], [-100 - 250 + result.win, "Casino: 2 spins"]);
+  assert.deepEqual([Number(line.amount), line.reason], [-100 - 250 + result.win, "Sizzling Hot: 2 spins"]);
   assert.equal(await ledgerTotal(cara), await balanceOf(cara));
   assert.ok((await prisma.auditLog.findMany({ where: { action: "casino.big_win" } })).length >= 1, "a win of 100 times the bet is in the audit log");
 });
@@ -156,7 +156,7 @@ test("double or nothing: a right guess doubles the win, a wrong one loses it, an
   assert.deepEqual(guesses.map((row) => [Number(row.stake), Number(row.win), row.gamble.pick, row.gamble.suit]), [[200, 400, "RED", "HEARTS"], [400, 0, "RED", "SPADES"]]);
   const journal = await prisma.settlementEntry.findMany({ where: { casinoSpinId: { in: guesses.map((row) => row.id) } } });
   assert.equal(journal.length, 2, "both guesses count in Commissions");
-  assert.match((await todaysLine(cara)).reason, /^Casino: 3 spins, 2 double or nothing$/);
+  assert.match((await todaysLine(cara)).reason, /^Sizzling Hot: 3 spins, 2 double or nothing$/);
   assert.equal(await ledgerTotal(cara), await balanceOf(cara));
 });
 

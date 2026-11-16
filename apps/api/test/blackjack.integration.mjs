@@ -62,7 +62,7 @@ test("setup", async () => {
   for (const table of ["settlement_entries", "commission_payouts", "balance_transactions", "blackjack_hands", "casino_spins", "casino_free_spins", "casino_gambles", "betting_limits", "bet_legs", "bets", "notifications", "audit_logs", "idempotency_keys", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
-  await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false } });
+  await prisma.platformSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: { casinoEnabled: false, casinoGamesOff: [] } });
   sa = await user("SUPER_ADMIN", null);
   owner = await user("OWNER", sa.id, { commissionRate: 10, balance: 500000 });
   manager = await user("MANAGER", owner.id, { commissionRate: 20, balance: 90000 });

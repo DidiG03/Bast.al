@@ -39,6 +39,9 @@ test("countries by their other names: Czech Republic is Czechia, Turkey is Türk
   assert.equal(teamScore("Bosnia & Herzegovina", "Bosnia and Herzegovina"), 1);
   assert.equal(teamScore("Czech Republic W", "Czechia"), 0, "a women's side is still not the men's");
   assert.equal(teamScore("Czech Republic U21", "Czechia U21"), 1);
+  // 17 Nov 2026: our "Croatia U21 vs Germany U21" is SportScore's germany-u21-vs-croatia-u21.
+  const u21 = "2026-11-17T17:00:00Z";
+  assert.equal(matchTrackerFixture({ homeTeam: "Croatia U21", awayTeam: "Germany U21", startsAt: at(u21) }, [fixture("germany-u21-vs-croatia-u21", "Croatia U21", "Germany U21", u21), fixture("croatia-vs-germany", "Croatia", "Germany", u21)])?.externalId, "germany-u21-vs-croatia-u21");
   assert.ok(teamScore("South Korea", "North Korea") < 0.85);
   assert.ok(teamScore("Northern Ireland", "Republic of Ireland") < 0.85);
   // The live match of 15 Nov 2026: SportScore's "Croatia v Czechia" is our "Croatia vs Czech Republic".

@@ -353,6 +353,97 @@ test("SportScore's live list empty: linked live matches are read from their matc
   await prisma.event.update({ where: { id: match.id }, data: { status: "COMPLETED" } });
 });
 
+test("Croatia U21 v Germany U21, 17 Nov 2026: a goal only SportScore has (2–2) while the odds feed still shows 1–2; a draw slip at the old 5.50 is refused, and one placed before SportScore had it is void at settlement", async () => {
+  await prisma.event.updateMany({ where: { status: "LIVE" }, data: { status: "COMPLETED" } });
+  const match = await liveMatch("Croatia U21 vs Germany U21", "germany-u21-vs-croatia-u21");
+  // The feed (API-Football) still has 1–2, priced for it: the draw at 5.50, open.
+  await prisma.event.update({ where: { id: match.id }, data: { homeScore: 1, awayScore: 2, elapsed: 66, period: "2H" } });
+  await prisma.selection.update({ where: { id: pick(match, "match_winner", "draw").id }, data: { liveOdds: 5.5, feedOdds: 5.5 } });
+  const draw = pick(match, "match_winner", "draw");
+  assert.equal((await odds.priceForPlayer(player.id, draw.id)).bettable, true, "nothing has paused the match yet");
+
+  // (1) SportScore already shows 2–2; no timed read has happened. The slip reads SportScore itself and is refused.
+  sportScore.set("germany-u21-vs-croatia-u21", [2, 2]);
+  const start = await balance();
+  await assert.rejects(placeChecked(match, "match_winner", "draw"), /goal is being confirmed/);
+  assert.equal(await balance(), start, "no stake taken");
+  assert.equal(await prisma.bet.count({ where: { selectionId: draw.id } }), 0);
+  const paused = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  assert.equal(paused.liveEarlyScore, "2:2");
+  for (const market of await prisma.market.findMany({ where: { eventId: match.id } })) assert.equal(market.livePauseReason, "ahead", `${market.key} paused for everyone`);
+
+  // (2) A draw bet that went in before SportScore had the goal (its check still saw 1–2): void at settlement, never paid.
+  await prisma.event.update({ where: { id: match.id }, data: { liveEarlyScore: null, liveEarlyAt: null } });
+  await prisma.market.updateMany({ where: { eventId: match.id }, data: { livePausedUntil: null, livePausedAt: null, liveReopenFrom: null, livePauseReason: null } });
+  await prisma.earlyGoal.deleteMany({ where: { eventId: match.id } });
+  sportScore.set("germany-u21-vs-croatia-u21", [1, 2]);
+  await sleep(1_100); // past the second in which slips on one match share a read
+  const placed = await placeChecked(match, "match_winner", "draw");
+  const bet = await prisma.bet.findUniqueOrThrow({ where: { id: placed.bets[0].id } });
+  assert.deepEqual([bet.live.home, bet.live.away], [1, 2], "placed on 1–2");
+  // The goal was scored 20 s before the bet; SportScore and the feed showed it after.
+  await sync.earlyGoal(match.id, { home: 2, away: 2 }, "sportscore", new Date(bet.placedAt.getTime() + 5_000));
+  const first = Math.floor(match.startsAt.getTime() / 1000);
+  const goalMinute = Math.floor(((bet.placedAt.getTime() - 20_000) / 1000 - first) / 60) + 1;
+  await prisma.event.update({
+    where: { id: match.id },
+    data: {
+      status: "COMPLETED",
+      period: "FT",
+      homeScore: 2,
+      awayScore: 2,
+      resultHome: 2,
+      resultAway: 2,
+      resultHalfHome: 1,
+      resultHalfAway: 0,
+      finishedAt: new Date(),
+      lateCheck: {
+        first,
+        second: first,
+        goals: [
+          { minute: 1, extra: null, side: "home" },
+          { minute: 2, extra: null, side: "away" },
+          { minute: 3, extra: null, side: "away" },
+          { minute: goalMinute, extra: null, side: "home" },
+        ],
+        cards: [],
+      },
+      lateCheckedAt: new Date(),
+    },
+  });
+  await settlement.settleEvent(match.id);
+  const settled = await prisma.bet.findUniqueOrThrow({ where: { id: bet.id } });
+  assert.equal(settled.status, "VOID", "the draw would have won at 5.50: it is void instead");
+  assert.equal(settled.voidReason, "placed after a goal that hadn't shown yet");
+  assert.equal(Number(settled.payout), 10, "only the stake back");
+});
+
+test("pace: linked matches missing from the live list are read from their pages at their own pace, and never slow the list's reads", async () => {
+  await prisma.event.updateMany({ where: { status: "LIVE" }, data: { status: "COMPLETED" } });
+  const listed = await liveMatch("Listed match", "listed-1");
+  for (let i = 0; i < 8; i++) await liveMatch(`Missing ${i}`, `missing-${i}`);
+  const calls = [];
+  const reader = new EarlyGoalService(prisma, sync, async (url) => {
+    calls.push(url);
+    const { pathname, searchParams } = new URL(url);
+    if (pathname.endsWith("/fixtures/")) return new Response(JSON.stringify({ matches: [{ home_score: "0", away_score: "0", url: "/football/match/listed-1/a1/" }] }), { status: 200 });
+    return new Response(JSON.stringify({ match: { home_score: "0", away_score: "0", url: `/football/match/${searchParams.get("slug")}/a1/` } }), { status: 200 });
+  });
+  const pages = () => calls.filter((url) => new URL(url).pathname.endsWith("/match/")).length;
+  const lists = () => calls.filter((url) => new URL(url).pathname.endsWith("/fixtures/")).length;
+  await reader.run(new Date());
+  assert.equal(lists(), 1);
+  assert.equal(pages(), 6, "a batch of match pages (6 without a key)");
+  const paced = reader.nextDelay();
+  await reader.run(new Date());
+  await reader.run(new Date());
+  assert.equal(lists(), 3, "the list is read every time");
+  assert.equal(pages(), 6, "the pages wait their 30 s");
+  assert.equal(reader.nextDelay(), paced, "the pages don't stretch the list's pace");
+  assert.ok(paced < 20_000, `about one list read every 13 s without a key (${paced} ms)`);
+  await prisma.event.update({ where: { id: listed.id }, data: { status: "COMPLETED" } });
+});
+
 test("teardown", async () => {
   await prisma.$disconnect();
 });

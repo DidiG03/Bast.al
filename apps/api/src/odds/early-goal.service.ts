@@ -33,6 +33,19 @@ const CHECK_SHARE_MS = 1_000;
  */
 const DETAILS_PER_READ_KEYED = 30;
 const DETAILS_PER_READ_ANONYMOUS = 6;
+/** Match pages are read at most this often (they never slow the live list's own reads). */
+const DETAILS_EVERY_KEYED_MS = 4_000;
+const DETAILS_EVERY_ANONYMOUS_MS = 30_000;
+/**
+ * Each kind of read has its share of the day's requests, so none starves
+ * another: the live list (one request for every match, the one that catches
+ * most goals first), the match pages of linked matches the list is missing,
+ * and the live slips' own checks, which may also use anything left.
+ */
+const LIST_SHARE = 0.65;
+const PAGES_SHARE = 0.1;
+/** How often the pace is logged. */
+const PACE_LOG_MS = 60 * 60_000;
 /** The warning that the live list is missing linked matches is logged at most this often. */
 const WARN_EVERY_MS = 10 * 60_000;
 
@@ -69,9 +82,11 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
   /** Requests a UTC day; none without a key means the anonymous default, a key means no daily cap of ours. */
   private readonly dailyBudget = Number(process.env.EARLY_GOAL_DAILY_BUDGET) || (this.apiKey ? Infinity : ANONYMOUS_DAILY_BUDGET);
   private day = "";
+  /** Requests made today (UTC), all kinds together and by kind. */
   private used = 0;
-  /** Requests the last timed read made (the list and any match pages): the next one is paced for that many. */
-  private lastCost = 1;
+  private readonly usedBy = { list: 0, pages: 0, slip: 0 };
+  private pagesAt = 0;
+  private pacedAt = 0;
   /** When each linked match was last read from its own page. */
   private readonly detailAt = new Map<string, number>();
   private warnedAt = 0;
@@ -101,24 +116,39 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearTimeout(this.timer);
   }
 
-  /** Requests left today (UTC), counting `cost` more as used when given. */
-  private budget(cost = 0): number {
+  /**
+   * Requests of this kind left today (UTC), counting `cost` more as used
+   * when given. The live list and the match pages keep to their shares; a
+   * slip's check may use whatever is left of the day.
+   */
+  private budget(kind: "list" | "pages" | "slip" = "slip", cost = 0): number {
     const today = new Date().toISOString().slice(0, 10);
     if (today !== this.day) {
       this.day = today;
       this.used = 0;
+      this.usedBy.list = this.usedBy.pages = this.usedBy.slip = 0;
     }
     this.used += cost;
-    return this.dailyBudget - this.used;
+    this.usedBy[kind] += cost;
+    const total = this.dailyBudget - this.used;
+    if (kind === "slip") return total;
+    return Math.min(total, this.dailyBudget * (kind === "list" ? LIST_SHARE : PAGES_SHARE) - this.usedBy[kind]);
   }
 
-  /** The wait before the next timed read: the interval, spread out so the day's budget lasts (a quarter is kept for slips). */
+  /** The wait before the next read of the live list: the interval, spread out so its share of the day lasts. */
   private nextDelay(): number {
-    const left = this.budget() * 0.75;
+    const left = this.budget("list");
     if (!Number.isFinite(left)) return this.everyMs;
     if (left <= 0) return IDLE_MS;
     const msLeft = 86_400_000 - (Date.now() % 86_400_000);
-    return Math.max(this.everyMs, Math.ceil((msLeft / left) * this.lastCost));
+    const delay = Math.max(this.everyMs, Math.ceil(msLeft / left));
+    if (Date.now() - this.pacedAt >= PACE_LOG_MS) {
+      this.pacedAt = Date.now();
+      this.logger.log(
+        `SportScore pace: the live list every ${(delay / 1000).toFixed(1)} s; today ${this.usedBy.list} list, ${this.usedBy.pages} match-page and ${this.usedBy.slip} slip reads of ${this.dailyBudget}${this.apiKey ? "" : " (no SPORTSCORE_API_KEY: a key allows a read every 2 s)"}`,
+      );
+    }
+    return delay;
   }
 
   private schedule(ms: number) {
@@ -162,11 +192,9 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     if (live.length === 0) return 0;
     let read = scores;
     let listError: unknown = null;
-    this.lastCost = 0;
     if (!read) {
-      if (this.budget() <= 0) return live.length;
-      this.budget(1);
-      this.lastCost = 1;
+      if (this.budget("list") <= 0) return live.length;
+      this.budget("list", 1);
       try {
         read = await fetchLiveScores(now.toISOString().slice(0, 10), this.fetcher, this.apiKey, true);
       } catch (error) {
@@ -181,7 +209,10 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     }
     if (scores) return live.length;
     const missing = live.filter((event) => !bySlug.has(event.trackerMapping!.externalId!));
-    if (missing.length === 0) return live.length;
+    // Match pages at their own pace (every 30 s without a key), never slowing the list's reads; at once when the list failed or came back empty.
+    const listDown = Boolean(listError) || read.length === 0;
+    if (missing.length === 0 || (!listDown && Date.now() - this.pagesAt < (this.apiKey ? DETAILS_EVERY_KEYED_MS : DETAILS_EVERY_ANONYMOUS_MS))) return live.length;
+    this.pagesAt = Date.now();
     if (Date.now() - this.warnedAt >= WARN_EVERY_MS) {
       this.warnedAt = Date.now();
       this.logger.warn(
@@ -190,9 +221,8 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     }
     const batch: typeof missing = [];
     for (const event of missing.sort((a, b) => (this.detailAt.get(a.id) ?? 0) - (this.detailAt.get(b.id) ?? 0))) {
-      if (batch.length >= (this.apiKey ? DETAILS_PER_READ_KEYED : DETAILS_PER_READ_ANONYMOUS) || this.budget() <= 0) break;
-      this.budget(1);
-      this.lastCost += 1;
+      if (batch.length >= (this.apiKey ? DETAILS_PER_READ_KEYED : DETAILS_PER_READ_ANONYMOUS) || this.budget("pages") <= 0) break;
+      this.budget("pages", 1);
       batch.push(event);
     }
     let readOne = false;
@@ -241,8 +271,11 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
         const shared = this.checks.get(slug);
         let done = shared && Date.now() - shared.at < shareMs ? shared.done : null;
         if (!done) {
-          if (this.budget() <= 0) return;
-          this.budget(1);
+          if (this.budget("slip") <= 0) {
+            this.logger.warn(`SportScore check for event ${event.id} skipped: today's ${this.dailyBudget} requests are used (the late check still voids a bet placed after a goal)`);
+            return;
+          }
+          this.budget("slip", 1);
           done = fetchMatchScore(slug, this.fetcher, this.apiKey, true, CHECK_TIMEOUT_MS).catch((error) => {
             this.logger.warn(`SportScore check for event ${event.id} failed: ${error instanceof Error ? error.message : String(error)}`);
             return null;

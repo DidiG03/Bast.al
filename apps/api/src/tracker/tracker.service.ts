@@ -32,6 +32,8 @@ const LOOKUPS_PER_SYNC_ANONYMOUS = 4;
 const LOOKUPS_PER_SYNC_KEYED = 40;
 /** A team's SportScore slug found by search is kept this long. */
 const SLUG_KEEP_MS = 6 * 3_600_000;
+/** A match's embed is checked for a 5xx at most this often. */
+const EMBED_CHECK_MS = 2 * 60_000;
 /** A warning that repeats (the live list empty) is logged at most this often. */
 const WARN_EVERY_MS = 10 * 60_000;
 
@@ -72,6 +74,8 @@ export class TrackerService implements OnModuleInit, OnModuleDestroy {
   /** Team slugs SportScore's search gave for a name (null: none found), and when. */
   private readonly slugs = new Map<string, { slug: string | null; at: number }>();
   private readonly warnedAt = new Map<string, number>();
+  /** Whether each match's embed answered (a 5xx means the page would show SportScore's error), and when it was asked. */
+  private readonly embedUp = new Map<string, { up: boolean; at: number }>();
   private readonly fetcher: typeof fetch;
 
   constructor(
@@ -251,10 +255,33 @@ export class TrackerService implements OnModuleInit, OnModuleDestroy {
     }
     // A confident or manual link always shows: nothing else (the live list, the early goal reads' budget) hides it.
     const src = mapping?.externalId ? trackerEmbedSrc(mapping.externalId, lang, theme) : null;
+    // SportScore's embed itself failing (a 503 the frame would show): the page says the tracker is unavailable instead.
+    if (src && !(await this.embedAnswers(mapping!.externalId!, src))) return { show: false, reason: "unavailable" };
     if (src) return { show: true, provider: TRACKER_PROVIDER, src, attributionUrl: TRACKER_ATTRIBUTION_URL };
     // Chosen by hand to have none: nothing to say. Otherwise the page says the tracker isn't available just now.
     // (A link with no usable embed address is a setup matter, not this match's: nothing either.)
     return mapping?.method === "manual" || mapping?.externalId ? { show: false } : { show: false, reason: "unavailable" };
+  }
+
+  /**
+   * Whether SportScore's embed for a match answers, asked at most every 2
+   * minutes per match. Only a 5xx counts as down: a network error or a
+   * timeout here says nothing about the viewer's browser, so it shows.
+   */
+  private async embedAnswers(id: string, src: string): Promise<boolean> {
+    const kept = this.embedUp.get(id);
+    if (kept && Date.now() - kept.at < EMBED_CHECK_MS) return kept.up;
+    let up = true;
+    try {
+      const response = await this.fetcher(src, { method: "GET", headers: { accept: "text/html" }, signal: AbortSignal.timeout(4_000) });
+      up = !(response.status >= 500);
+      if (!up) this.logger.warn(`Tracker: SportScore's embed for ${id} answered HTTP ${response.status}; the page shows "unavailable"`);
+    } catch {
+      up = true;
+    }
+    this.embedUp.set(id, { up, at: Date.now() });
+    if (this.embedUp.size > 1000) for (const [key, row] of this.embedUp) if (Date.now() - row.at > EMBED_CHECK_MS) this.embedUp.delete(key);
+    return up;
   }
 
   /** SportScore's not-started fixtures for one UTC day, imported and matched. Failures are only logged. */

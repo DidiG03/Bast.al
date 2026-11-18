@@ -34,6 +34,8 @@ const MAX_BACKOFF_MS = 30_000;
  * networks, an HTTP/2 connection the browser gave up on) without saying so: it's dropped and opened again at once.
  */
 const STALL_MS = 25_000;
+/** A tab hidden this long closes its stream; it reopens (and refetches) when shown again. */
+const HIDDEN_CLOSE_MS = 60_000;
 
 /**
  * Holds one live stream per tab for the signed-in account and hands its
@@ -144,8 +146,27 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       failures = 0;
       connect();
     };
-    const onVisible = () =>
-      document.visibilityState === "visible" && failures > 0 && reconnectNow();
+    // A tab left in the background closes its stream after a while (the browser otherwise logs the stale HTTP/2 stream as
+    // ERR_HTTP2_PING_FAILED), and opens it again, with a refetch, when it's back.
+    let hiddenTimer: number | undefined;
+    let parked = false;
+    const onVisible = () => {
+      window.clearTimeout(hiddenTimer);
+      if (document.visibilityState === "hidden") {
+        hiddenTimer = window.setTimeout(() => {
+          parked = true;
+          window.clearTimeout(retryTimer);
+          const current = controller;
+          controller = undefined;
+          current?.abort();
+        }, HIDDEN_CLOSE_MS);
+        return;
+      }
+      if (parked || failures > 0) {
+        parked = false;
+        reconnectNow();
+      }
+    };
     window.addEventListener("online", reconnectNow);
     document.addEventListener("visibilitychange", onVisible);
     connect();
@@ -153,6 +174,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     return () => {
       stopped = true;
       window.clearTimeout(retryTimer);
+      window.clearTimeout(hiddenTimer);
       controller?.abort();
       window.removeEventListener("online", reconnectNow);
       document.removeEventListener("visibilitychange", onVisible);

@@ -26,8 +26,13 @@ type T = (text: string, vars?: Record<string, string | number>) => string;
 /** Short codes for the match row. The full sentence stays in the banner under the row. */
 const CLOCK: Record<string, string> = { HT: "HT", FT: "FT", BT: "BT", SUSP: "INT", INT: "INT", ET: "ET", P: "PEN" };
 
-/** Minutes to add to the feed's last minute while play is going, and no more than this: a stuck update must not run the clock on. */
-const CLOCK_CATCHUP_MIN = 1;
+/**
+ * Minutes the clock may run on from the feed's last minute while play is
+ * going. The feed's minute can sit still for a couple of minutes while the
+ * game goes on (the clock froze at 52'), so the clock keeps time on its own
+ * for up to 5 minutes, never stepping back (stableMinute); a break stops it.
+ */
+const CLOCK_CATCHUP_MIN = 5;
 const TICKING = new Set(["1H", "2H", "ET"]);
 
 /** A match clock. `elapsed` may be missing on a bet, where the feed never sent a minute. */
@@ -67,6 +72,12 @@ export function livePill(event: ClockEvent, t: T): string {
   if (pause) return t(pause);
   const minute = stableMinute(event, liveMinute(event));
   return minute === null ? t("Live") : t("Live {minute}'", { minute });
+}
+
+/** The full words for a short clock code ("BT" → "Break before extra time"), for its tooltip; null when there's none. */
+export function clockTitle(event: ClockEvent, t: T): string | undefined {
+  const words = event.period ? BREAKS[event.period] ?? (event.period === "ET" ? msg("Extra time") : event.period === "P" ? msg("Penalty shootout") : undefined) : undefined;
+  return words ? t(words) : undefined;
 }
 
 /** The pause message for a break, or null when the match isn't in one. */

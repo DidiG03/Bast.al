@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { OddsEvent, OddsSelection, Sport } from "../lib/api";
 import { serverNow } from "../lib/clock";
-import { liveClock } from "../lib/live";
+import { clockTitle, liveClock } from "../lib/live";
 import { pickLabel } from "../lib/picks";
 import { MAX_SLIP, addToSlip, readSlip } from "../lib/slip";
 import { dayKey, isDaysFromToday } from "../lib/time";
@@ -33,7 +33,7 @@ function shortPick(selection: OddsSelection, i18n: { t: (text: string, vars?: Re
 
 /** A home match: the teams open the board, and the main prices go straight onto the slip. */
 export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; sport: Sport; showSport: boolean }) {
-  const { t, ts, date } = useI18n();
+  const { t, ts, date, tl } = useI18n();
   const { userId } = useAuth();
   const router = useRouter();
   const toast = useToast();
@@ -98,14 +98,14 @@ export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; s
           {event.countryFlag ? <img className="country-flag" src={event.countryFlag} alt={event.country ?? ""} /> : null}
           <span className="player-top-event-league">
             {showSport ? <SportIcon sport={sport} /> : null}
-            {event.league}
+            {tl(event.league)}
           </span>
         </div>
         <div className="player-top-event-main">
           <div className={`player-top-when${playing ? " is-live" : ""}`}>
             {playing ? <span className="live-dot" aria-hidden="true" /> : null}
             {playing ? (
-              <span>{liveClock(event, t)}</span>
+              <span title={clockTitle(event, t)}>{liveClock(event, t)}</span>
             ) : (
               <time dateTime={event.startsAt}>
                 {dayLabel(event.startsAt, t)}
@@ -124,6 +124,7 @@ export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; s
                 <TeamCrest name={event.awayTeam} logo={event.awayLogo} />
                 <span>{event.awayTeam}</span>
                 {scored ? <strong className={`player-top-score${pending ? " is-pending" : ""}`} title={pending ? t("Score not confirmed yet") : undefined}>{pending ? pending.away : event.awayScore}</strong> : null}
+                {scored && event.shootout ? <small className="player-top-shootout">{t("({home}–{away} pen)", { home: event.shootout.home, away: event.shootout.away })}</small> : null}
               </span>
             ) : null}
           </div>

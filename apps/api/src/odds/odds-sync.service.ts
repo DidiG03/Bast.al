@@ -927,8 +927,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         where: { provider_externalId: { provider, externalId: fixture.externalId } },
         data: {
           status: fixture.status,
-          elapsed: fixture.elapsed,
-          ...(saved.elapsed !== fixture.elapsed ? { elapsedAt: new Date() } : {}),
+          // The minute never steps back within a period (the live prices may already have a later one): a step back made
+          // "closed for the last minutes" flicker on and off.
+          ...(laterMinute(saved.elapsed, fixture.elapsed, saved.period === period) ? { elapsed: fixture.elapsed, ...(saved.elapsed !== fixture.elapsed ? { elapsedAt: new Date() } : {}) } : {}),
           // The live odds can say full time before the fixtures list catches up; don't flip it back to "2H".
           period,
           ...(fixture.status === EventStatus.COMPLETED && !saved.finishedAt ? { finishedAt: new Date() } : {}),
@@ -1056,7 +1057,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         if (kinds(centre, "red") > kinds(was.matchCentre, "red") || rose(centre.red, prevCentre?.red)) reasons.push("red");
         if (!reasons.includes("red") && (kinds(centre, "yellow") > kinds(was.matchCentre, "yellow") || rose(centre.yellow, prevCentre?.yellow))) reasons.push("yellow");
         if (rose(centre.corners, prevCentre?.corners)) reasons.push("corner");
-        if (reasons.length === 0 && kinds(centre, "var", "missed_penalty", "penalty") > kinds(was.matchCentre, "var", "missed_penalty", "penalty")) reasons.push("var");
+        // A penalty (scored or missed) pauses every market; a VAR check the goals and cards ones.
+        if (kinds(centre, "missed_penalty", "penalty") > kinds(was.matchCentre, "missed_penalty", "penalty")) reasons.push("penalty");
+        else if (reasons.length === 0 && kinds(centre, "var") > kinds(was.matchCentre, "var")) reasons.push("var");
       }
       const now = new Date();
       const scoreKey = mark.home !== null && mark.away !== null ? `${mark.home}:${mark.away}` : null;
@@ -1583,18 +1586,22 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const board = (event.homeScore ?? 0) + (event.awayScore ?? 0);
     const theirs = score.home + score.away;
     const key = `${score.home}:${score.away}`;
-    if (theirs === board) {
+    // The same score, side by side: nothing to say.
+    if (score.home === (event.homeScore ?? 0) && score.away === (event.awayScore ?? 0)) {
       if (event.liveEarlyScore) await this.prisma.event.update({ where: { id: eventId }, data: { liveEarlyScore: null, liveEarlyAt: null } });
       return false;
     }
     const ahead = theirs > board;
+    // As many goals but not for the same sides (ours 1–0, theirs 0–1): the two disagree on who scored. The prices may be for
+    // the wrong team, so the match stays paused for as long as they disagree; that hold doesn't run out.
+    const sidesDisagree = theirs === board;
     let since = event.liveEarlyScore === key && event.liveEarlyAt ? event.liveEarlyAt : now;
     if (ahead) {
       await this.prisma.earlyGoal.createMany({ data: [{ eventId, homeScore: score.home, awayScore: score.away, source, seenAt: now }], skipDuplicates: true });
       const first = await this.prisma.earlyGoal.findUnique({ where: { eventId_homeScore_awayScore_source: { eventId, homeScore: score.home, awayScore: score.away, source } }, select: { seenAt: true } });
       if (first && first.seenAt < since) since = first.seenAt;
     }
-    if (now.getTime() - since.getTime() > EARLY_GOAL_HOLD_MS) {
+    if (!sidesDisagree && now.getTime() - since.getTime() > EARLY_GOAL_HOLD_MS) {
       // Held long enough: our own feed decides from here. Logged once, when the hold ends.
       if (event.liveEarlyScore) {
         this.logger.warn(`${source} has shown ${score.home}–${score.away} on ${event.name} for over ${Math.round(EARLY_GOAL_HOLD_MS / 1000)} s and our feed still has ${event.homeScore}–${event.awayScore}: the hold ends`);
@@ -1618,7 +1625,7 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     });
     if (fresh) {
       this.logger.log(
-        `Live betting paused on ${event.name}: ${source} shows ${score.home}–${score.away}, our feed ${event.homeScore ?? "?"}–${event.awayScore ?? "?"} (${ahead ? "a goal our feed doesn't have yet" : "a goal taken back"})`,
+        `Live betting paused on ${event.name}: ${source} shows ${score.home}–${score.away}, our feed ${event.homeScore ?? "?"}–${event.awayScore ?? "?"} (${ahead ? "a goal our feed doesn't have yet" : sidesDisagree ? "they disagree on who scored: closed until they agree" : "a goal taken back"})`,
       );
       await this.announceLive([eventId]);
     }
@@ -1636,7 +1643,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const done = rows.filter((row) => {
       const early = scoreOf(row.liveEarlyScore);
       const board = (row.homeScore ?? 0) + (row.awayScore ?? 0);
-      return !early || row.status !== EventStatus.LIVE || board === early.home + early.away || !row.liveEarlyAt || now.getTime() - row.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS;
+      const same = early && early.home === (row.homeScore ?? 0) && early.away === (row.awayScore ?? 0);
+      // A disagreement on who scored (same total) has no time limit: it lasts until the two agree.
+      const expired = early && board !== early.home + early.away && (!row.liveEarlyAt || now.getTime() - row.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS);
+      return !early || row.status !== EventStatus.LIVE || same || expired;
     });
     if (done.length > 0) await this.prisma.event.updateMany({ where: { id: { in: done.map((row) => row.id) } }, data: { liveEarlyScore: null, liveEarlyAt: null } });
     return done.length;
@@ -1661,6 +1671,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     });
     // A league whose goal events and statistics the feed doesn't send: only markets that settle from the score.
     if (before.scoreOnly) odds = { ...odds, markets: odds.markets.filter((market) => settlesFromScore(market.key)) };
+    // In a shootout the live prices' score may count its kicks: the score stays the one the fixture gives (90 minutes plus extra time).
+    if (before.period === "P" || before.period === "PEN") odds = { ...odds, homeScore: null, awayScore: null };
     const scored = odds.homeScore !== null && odds.awayScore !== null;
     // Half-time: the feed stops the clock but keeps its prices up, so the match stays open (readingStopped).
     const stopped = readingStopped(odds, before.period);
@@ -1683,9 +1695,12 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     const readingTotal = scored ? odds.homeScore! + odds.awayScore! : (before.homeScore ?? 0) + (before.awayScore ?? 0);
     const earlyAhead = early && total(early) > readingTotal ? early : null;
     // A faster source has a goal taken back that this reading still counts: its prices are for the wrong score.
+    const readingHome = scored ? odds.homeScore! : before.homeScore ?? 0;
     const takenBack = Boolean(early && total(early) < readingTotal);
+    // As many goals as this reading, but not for the same sides: the two disagree on who scored. No reopening on these prices.
+    const sidesDisagree = Boolean(early && total(early) === readingTotal && early.home !== readingHome);
     const ahead = total(earlyAhead) > total(timelineAhead) ? earlyAhead : timelineAhead;
-    const caughtUp = (!ahead || (scored && readingTotal >= ahead.home + ahead.away)) && !takenBack;
+    const caughtUp = (!ahead || (scored && readingTotal >= ahead.home + ahead.away)) && !takenBack && !sidesDisagree;
     const goal = scoreChanged(saved, after);
     const elapsed = odds.elapsed ?? null;
     const matchOpen = !stopped && !before.liveSlowFeed && !liveCutoffReached(elapsed, before.period);
@@ -1712,10 +1727,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         ...(stateMoved ? { liveVersion: { increment: 1 } } : {}),
         ...(odds.finished ? { period: "FT" } : {}),
         ...(scored ? { homeScore: odds.homeScore, awayScore: odds.awayScore } : {}),
-        ...(odds.elapsed !== null ? { elapsed: odds.elapsed, ...(odds.elapsed !== before.elapsed ? { elapsedAt: new Date() } : {}) } : {}),
+        ...(odds.elapsed !== null && laterMinute(before.elapsed, odds.elapsed, true) ? { elapsed: odds.elapsed, ...(odds.elapsed !== before.elapsed ? { elapsedAt: new Date() } : {}) } : {}),
         ...(ahead && caughtUp ? { liveScoreAhead: null } : {}),
         // Our feed now has the faster source's score: that difference is over.
-        ...(early && scored && total(early) === readingTotal ? { liveEarlyScore: null, liveEarlyAt: null } : {}),
+        ...(early && scored && early.home === odds.homeScore && early.away === odds.awayScore ? { liveEarlyScore: null, liveEarlyAt: null } : {}),
         liveCooldownUntil: pause.until,
         liveCooldownReason: pause.reason,
         // Prices just arrived. "Until this match's prices come back" is over.
@@ -1848,6 +1863,8 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       period: fixture.period,
       homeScore: fixture.homeScore,
       awayScore: fixture.awayScore,
+      shootoutHome: fixture.shootout?.home ?? null,
+      shootoutAway: fixture.shootout?.away ?? null,
       scoreOnly: this.scoreOnly(fixture),
       syncedAt: new Date(),
     };
@@ -2123,4 +2140,10 @@ function listEnv(name: string): string[] | null {
   const raw = process.env[name]?.trim();
   if (!raw) return null;
   return raw.split(",").map((part) => part.trim()).filter(Boolean);
+}
+
+/** Whether a new minute may be saved: any minute in a new period, otherwise only one that isn't earlier than the saved one. */
+function laterMinute(saved: number | null | undefined, next: number | null, samePeriod: boolean): boolean {
+  if (next === null) return false;
+  return !samePeriod || saved === null || saved === undefined || next >= saved;
 }

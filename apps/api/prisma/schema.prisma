@@ -376,6 +376,9 @@ model Event {
   resultEtHome       Int?             @map("result_et_home")
   resultEtAway       Int?             @map("result_et_away")
   /// The penalty shootout's score, for To qualify and the shootout winner. Null when there was none.
+  /// The penalty shootout's kicks so far (live, status P) and after it: shown beside the score as "(3–4 pen)", never part of it.
+  shootoutHome       Int?             @map("shootout_home")
+  shootoutAway       Int?             @map("shootout_away")
   resultPenHome      Int?             @map("result_pen_home")
   resultPenAway      Int?             @map("result_pen_away")
   /// Corners and cards (every yellow and red counts as one) the corner and card markets settle on.

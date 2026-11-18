@@ -58,12 +58,22 @@ const LIST_SELECT = {
  * that differs from ours and is still within its hold: shown as pending, the
  * same as the pause banner says, until our feed agrees. Null otherwise.
  */
-function pendingScore(event: { status: string; homeScore: number | null; awayScore: number | null; liveEarlyScore?: string | null; liveEarlyAt?: Date | null }, now: Date): { home: number; away: number } | null {
-  if (event.status !== EventStatus.LIVE || !event.liveEarlyScore || !event.liveEarlyAt || now.getTime() - event.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS) return null;
+function pendingScore(event: { status: string; homeScore: number | null; awayScore: number | null; liveEarlyScore?: string | null; liveEarlyAt?: Date | null; liveScoreAhead?: string | null }, now: Date): { home: number; away: number } | null {
+  if (event.status !== EventStatus.LIVE) return null;
+  // No faster source: the feed's own timeline ahead of its prices (Event.liveScoreAhead) is the score the "not confirmed yet" banner is about.
+  if (!event.liveEarlyScore || !event.liveEarlyAt) {
+    const ahead = event.liveScoreAhead ? /^(\d+):(\d+)$/.exec(event.liveScoreAhead) : null;
+    if (!ahead) return null;
+    const score = { home: Number(ahead[1]), away: Number(ahead[2]) };
+    return score.home === event.homeScore && score.away === event.awayScore ? null : score;
+  }
   const match = /^(\d+):(\d+)$/.exec(event.liveEarlyScore);
   if (!match) return null;
   const score = { home: Number(match[1]), away: Number(match[2]) };
-  return score.home === event.homeScore && score.away === event.awayScore ? null : score;
+  if (score.home === event.homeScore && score.away === event.awayScore) return null;
+  // A disagreement on who scored (same total) is shown for as long as it lasts; a goal ahead or taken back within its hold.
+  const sameTotal = score.home + score.away === (event.homeScore ?? 0) + (event.awayScore ?? 0);
+  return sameTotal || now.getTime() - event.liveEarlyAt.getTime() <= EARLY_GOAL_HOLD_MS ? score : null;
 }
 
 /** A row read with LIST_SELECT, with the left-out records as empty. */
@@ -296,6 +306,7 @@ export class OddsService {
           homeScore: event.homeScore,
           awayScore: event.awayScore,
           pendingScore: pendingScore(event, now),
+          shootout: event.shootoutHome !== null && event.shootoutAway !== null ? { home: event.shootoutHome, away: event.shootoutAway } : null,
           bettable: eventOpen(event, now),
           livePause: livePause(event, now),
           allMarketsSuspended: live && event.markets.length > 0 && event.markets.every((market) => market.liveSuspended),
@@ -812,6 +823,8 @@ export class OddsService {
       awayScore: event.awayScore,
       /** Live: a score a faster source (SportScore) shows that our feed hasn't confirmed (a goal, or one taken back); the board shows it as pending. */
       pendingScore: pendingScore(event, now),
+      /** A penalty shootout's kicks (live and after it), shown as "1–1 (3–4 pen)": never part of the score. */
+      shootout: event.shootoutHome !== null && event.shootoutAway !== null ? { home: event.shootoutHome, away: event.shootoutAway } : null,
       hidden: event.hidden,
       suspended: event.suspended,
       provider: event.provider,

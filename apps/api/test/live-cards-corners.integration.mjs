@@ -18,6 +18,8 @@ delete process.env.API_FOOTBALL_KEY;
 delete process.env.ODDS_FEED_MOCK;
 // Short waits: 300 ms usually, 1.5 s with a corners pick; at most 150 ALL on one match's live corners. Read when the code loads.
 process.env.LIVE_BET_DELAY_MS = "300";
+// No SportScore link in these tests: keep the wait theirs (early-goal.integration.mjs covers the longer one).
+process.env.LIVE_UNCOVERED_DELAY_MS ??= "0";
 process.env.LIVE_BET_EVENTFUL_DELAY_MS = "600";
 process.env.LIVE_CORNERS_DELAY_MS = "1500";
 process.env.LIVE_CORNERS_MAX_STAKE = "150";

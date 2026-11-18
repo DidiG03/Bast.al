@@ -794,7 +794,7 @@ export const casino: Record<string, string> = {
   "Tie": "Barazim",
   "Bet on Player, Banker or Tie. The hand closer to 9 wins.": "Vë bast te Lojtari, Bankieri ose Barazimi. Fiton dora më afër 9-ës.",
   "{side} wins": "Fiton {side}",
-  "Your stake comes back": "Shuma të kthehet",
+  "Your stake comes back": "Shumat të kthehen",
   "Pick a side, then deal.": "Zgjidh anën, pastaj shpërndaj.",
   "Your bet": "Basti yt",
   "bet on {side}": "bast te {side}",

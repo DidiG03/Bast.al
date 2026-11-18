@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { formatMoney } from "../lib/format";
 import { formatDate, LANG_COOKIE, setBrowserLang, translate, translatePlural, translateServer, type Lang, type Vars } from "../lib/i18n/core";
+import { translateLeague } from "../lib/i18n/league";
 
 export type I18n = {
   lang: Lang;
@@ -12,6 +13,8 @@ export type I18n = {
   tn: (count: number, one: string, other: string, vars?: Vars) => string;
   /** Text that came from the API: errors, notifications, market and pick names. */
   ts: (text: string | null | undefined) => string;
+  /** A competition's name from the feed ("Premier League" → "Premier Liga"). */
+  tl: (name: string | null | undefined) => string;
   /** A date or time in the reader's language. */
   date: (value: Date | string | number, options: Intl.DateTimeFormatOptions) => string;
   /** Switches language and reloads, so every page (server-rendered parts included) follows. */
@@ -29,6 +32,7 @@ function make(lang: Lang): I18n {
     t: (text, vars) => translate(lang, text, vars),
     tn: (count, one, other, vars) => translatePlural(lang, count, one, other, vars),
     ts: (text) => readableAmounts(translateServer(lang, text)),
+    tl: (name) => translateLeague(lang, name),
     date: (value, options) => formatDate(lang, value, options),
     setLang: (next) => {
       document.cookie = `${LANG_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;

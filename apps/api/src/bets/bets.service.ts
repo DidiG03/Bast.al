@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
-import { BalanceTransactionType, BetKind, BetStatus, Prisma, Role } from "@prisma/client";
+import { BalanceTransactionType, BetKind, BetStatus, EventStatus, Prisma, Role } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { Actor } from "../auth/permissions";
 import { BettingLimitsService } from "../commissions/betting-limits.service";
@@ -46,8 +46,12 @@ const LAG_REFRESH_MS = 5 * 60_000;
  */
 function scoreInDoubt(event: { homeScore: number | null; awayScore: number | null; liveEarlyScore: string | null; liveEarlyAt: Date | null }, now: Date): boolean {
   const match = event.liveEarlyScore ? /^(\d+):(\d+)$/.exec(event.liveEarlyScore) : null;
-  if (!match || !event.liveEarlyAt || now.getTime() - event.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS) return false;
-  return Number(match[1]) + Number(match[2]) !== (event.homeScore ?? 0) + (event.awayScore ?? 0);
+  if (!match || !event.liveEarlyAt) return false;
+  const [home, away] = [Number(match[1]), Number(match[2])];
+  if (home === (event.homeScore ?? 0) && away === (event.awayScore ?? 0)) return false;
+  // As many goals but for other sides: a disagreement on who scored, with no time limit. Otherwise within the hold.
+  if (home + away === (event.homeScore ?? 0) + (event.awayScore ?? 0)) return true;
+  return now.getTime() - event.liveEarlyAt.getTime() <= EARLY_GOAL_HOLD_MS;
 }
 
 /** Resolves as `work` does, or rejects with `late()` after `ms` (0: only if it's already settled). */
@@ -91,9 +95,11 @@ export const betSelect = {
   voidReason: true,
   kind: true,
   system: true,
+  live: true,
   legs: {
     orderBy: { sortOrder: "asc" },
     select: {
+      live: true,
       odds: true,
       result: true,
       description: true,
@@ -176,6 +182,8 @@ export function betView(bet: BetRow) {
     status: bet.status,
     placedAt: bet.placedAt,
     settledAt: bet.settledAt,
+    /** Placed while the match (or, for an accumulator, any of its matches) was live. */
+    inPlay: bet.live !== null || bet.legs.some((leg) => leg.live !== null),
     voidReason: bet.voidReason,
     selection: bet.selection ? { name: bet.selection.name, market: bet.selection.market.name } : null,
     event: event ? eventView(event) : null,
@@ -346,6 +354,7 @@ export class BetsService {
       ...(pricedSystem ? [{ stake: pricedSystem.stake, picks: pricedSystem.legs }] : []),
     ];
     await this.assertLiveCornersRoom(actor.id, cornerBets(), this.prisma);
+    await this.assertUncoveredRoom(actor.id, cornerBets(), this.prisma);
     // The wait, then the checks. A change during it refuses the slip before anything is stored.
     if (await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id)) adjusted = true;
 
@@ -380,6 +389,7 @@ export class BetsService {
       // cap is checked last (below).
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;
       await this.assertLiveCornersRoom(actor.id, cornerBets(), tx);
+      await this.assertUncoveredRoom(actor.id, cornerBets(), tx);
       let alsoStaking = 0;
       for (const stake of stakes) {
         await this.limits.assertCanPlace(actor.id, Number(stake), alsoStaking, tx);
@@ -840,9 +850,19 @@ export class BetsService {
     events: Map<string, { id: string; provider: string; league: string; liveOddsAt: Date | null; liveCooldownUntil: Date | null }>,
     now: Date,
   ) {
-    const longerBecause = await this.eventfulReason([...events.keys()], events, now);
+    let longerBecause = await this.eventfulReason([...events.keys()], events, now);
     const waits = await this.liveWait([...events.values()]);
-    return { delay: waits.usualMs, longerBecause, waits };
+    let delay = waits.usualMs;
+    // No early goal source for a match: wait longer (LIVE_UNCOVERED_DELAY_MS, 15 s by default, never over the longest wait).
+    const uncovered = await uncoveredMatches(this.prisma, [...events.keys()]);
+    if (uncovered.size > 0) {
+      const longer = Math.min(waits.mostMs, Math.max(delay, uncoveredDelayMs()));
+      if (longer > delay) {
+        delay = longer;
+        longerBecause = longerBecause ?? "no live tracker on the match, so goals reach us later";
+      }
+    }
+    return { delay, longerBecause, waits };
   }
 
   /**
@@ -987,6 +1007,37 @@ export class BetsService {
     }
   }
 
+  /**
+   * Live football matches with no second, faster score source (no SportScore
+   * link, so no early goal pause): our only warning of a goal is the odds
+   * feed itself. A Player's open live stake on such a match is capped at
+   * LIVE_UNCOVERED_MAX_STAKE (500 ALL by default; 0 turns live betting on
+   * them off), every market and accumulator leg counted at its bet's whole
+   * stake, checked before the wait and again inside the slip's transaction.
+   */
+  private async assertUncoveredRoom(playerId: string, bets: Array<{ stake: Prisma.Decimal; picks: Array<{ live: boolean; eventId: string; eventName: string }> }>, tx: Prisma.TransactionClient) {
+    const cap = uncoveredMaxStake();
+    if (cap === null) return;
+    const adding = new Map<string, { stake: number; match: string }>();
+    for (const bet of bets) for (const pick of new Map(bet.picks.filter((p) => p.live).map((p) => [p.eventId, p])).values()) adding.set(pick.eventId, { stake: (adding.get(pick.eventId)?.stake ?? 0) + Number(bet.stake), match: pick.eventName });
+    if (adding.size === 0) return;
+    const uncovered = await uncoveredMatches(tx, [...adding.keys()]);
+    for (const [eventId, { stake, match }] of adding) {
+      if (!uncovered.has(eventId)) continue;
+      if (cap === 0) throw new ConflictException(`Live betting on ${match} is closed: we have no second live score source for it. Try a match marked with the live tracker.`);
+      const onMatch = { market: { eventId } } satisfies Prisma.SelectionWhereInput;
+      const open = await tx.bet.aggregate({
+        where: { playerId, status: BetStatus.OPEN, OR: [{ live: { not: Prisma.DbNull }, selection: onMatch }, { legs: { some: { live: { not: Prisma.DbNull }, selection: onMatch } } }] },
+        _sum: { stake: true },
+      });
+      const already = Number(open._sum.stake ?? 0);
+      if (already + stake > cap + 0.001) {
+        const left = Math.max(0, cap - already);
+        throw new BadRequestException(`Live bets on ${match} are limited to ${cap} ALL: it has no live tracker, so goals reach us later. You can stake ${formatAll(left)} more on it.`);
+      }
+    }
+  }
+
   /** The Player's own bets: open ones, or settled ones newest first. */
   async mine(actor: Actor, status: "open" | "settled" = "open", before?: string, limit = PAGE) {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players have bets");
@@ -1090,4 +1141,27 @@ export class BetsService {
   private assertOnTeam(actor: Actor): Promise<TeamSnapshot & { ownerId: string }> {
     return assertOnTeam(this.prisma, actor);
   }
+}
+
+/** LIVE_UNCOVERED_MAX_STAKE: a Player's open live stake on a match with no early goal source; null when early goals are off (nothing to compare with). */
+export function uncoveredMaxStake(): number | null {
+  if (process.env.EARLY_GOALS === "off") return null;
+  const raw = Number(process.env.LIVE_UNCOVERED_MAX_STAKE);
+  return process.env.LIVE_UNCOVERED_MAX_STAKE !== undefined && process.env.LIVE_UNCOVERED_MAX_STAKE !== "" && Number.isFinite(raw) && raw >= 0 ? raw : 500;
+}
+
+/** LIVE_UNCOVERED_DELAY_MS: the least a live slip on such a match waits. */
+export function uncoveredDelayMs(): number {
+  const raw = Number(process.env.LIVE_UNCOVERED_DELAY_MS);
+  return process.env.LIVE_UNCOVERED_DELAY_MS !== undefined && process.env.LIVE_UNCOVERED_DELAY_MS !== "" && Number.isFinite(raw) && raw >= 0 ? raw : 15_000;
+}
+
+/** Of these matches, the live football ones with no SportScore link (no early goal pause), unless early goals are off. */
+export async function uncoveredMatches(db: Pick<Prisma.TransactionClient, "event">, eventIds: string[]): Promise<Set<string>> {
+  if (process.env.EARLY_GOALS === "off" || eventIds.length === 0) return new Set();
+  const rows = await db.event.findMany({
+    where: { id: { in: eventIds }, sport: "football", status: EventStatus.LIVE, OR: [{ trackerMapping: null }, { trackerMapping: { externalId: null } }] },
+    select: { id: true },
+  });
+  return new Set(rows.map((row) => row.id));
 }

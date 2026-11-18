@@ -45,7 +45,7 @@ export type LivePause = "late" | "feed" | "competition" | "bookmaker";
  */
 export type CooldownReason = MarketPauseReason;
 /** Pauses for something that happened in the match: they last until the prices are made again after it (eventPauseOver). */
-export const EVENT_PAUSES: ReadonlySet<string> = new Set(["goal", "red", "var", "ahead"]);
+export const EVENT_PAUSES: ReadonlySet<string> = new Set(["goal", "red", "var", "ahead", "penalty"]);
 
 export type LiveReading = { homeScore: number | null; awayScore: number | null; stopped: boolean };
 
@@ -145,7 +145,7 @@ export function sameLivePrice(slip: number, offered: number): boolean {
  * reopen) when fresh prices don't come.
  */
 export type MarketGroup = "goals" | "cards" | "corners";
-export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen" | "ahead" | "corner" | "yellow";
+export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen" | "ahead" | "corner" | "yellow" | "penalty";
 
 export function marketGroup(key: string): MarketGroup {
   if (/^(home_|away_)?corners_/.test(key)) return "corners";
@@ -165,6 +165,8 @@ export const EVENT_HITS: Record<MarketPauseReason, readonly MarketGroup[]> = {
   /** A yellow card. Cards markets only. */
   yellow: ["cards"],
   var: ["goals", "cards"],
+  /** A penalty in the timeline (scored or missed): like a goal, every market, the match result first among them. */
+  penalty: ["goals", "cards", "corners"],
   swing: ["goals", "cards"],
   reopen: ["goals", "cards", "corners"],
 };

@@ -38,7 +38,10 @@ const FILLER = new Set(["fc", "cf", "sc", "afc", "ac", "as", "cd", "ss", "sk", "
 /** Same word, other spelling. */
 const SAME: Record<string, string> = { utd: "united", st: "saint", munchen: "munich", internazionale: "inter" };
 /** Words that make it a different team of the same club: they must match on both sides. */
-const SIDE = /^(w|women|womens|fem|femenino|feminine|u\d{2}|ii|iii|b|reserves|youth)$/;
+const SIDE = /^(w|women|womens|ladies|frauen|dames|fem|femenino|feminine|feminin|femminile|u\d{2}|ii|iii|b|reserves|reserve|res|youth)$/;
+/** Each kind of side under one word, so "B", "II" and "Reserves" are the same side. */
+const sideWord = (word: string) =>
+  /^(w|women|womens|ladies|frauen|dames|fem|femenino|feminine|feminin|femminile)$/.test(word) ? "women" : /^(ii|b|reserves|reserve|res)$/.test(word) ? "ii" : word;
 
 /**
  * Countries known by more than one name. Each spelling (normalised: no
@@ -95,13 +98,17 @@ export function nameTokens(name: string, countries = true): { core: string[]; si
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
+    // "U-21", "U 21" and "Sub-21" are "u21".
+    .replace(/\b(?:u|sub)[\s-]?(\d{2})\b/g, "u$1")
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean)
-    .map((word) => SAME[word] ?? word);
-  const side = words.filter((word) => SIDE.test(word)).map((word) => (word.startsWith("w") || word.startsWith("fem") ? "women" : word)).sort();
+    .map((word) => SAME[word] ?? word)
+    // Turkish clubs: "Aksarayspor" is "Aksaray" (and "Belediyespor" stays a word of its own).
+    .map((word) => (word.length > 6 && word.endsWith("spor") && word !== "belediyespor" ? word.slice(0, -4) : word));
+  const side = words.filter((word) => SIDE.test(word)).map(sideWord).sort();
   let core = words.filter((word) => !SIDE.test(word) && !FILLER.has(word));
   if (core.length === 0) core = words.filter((word) => !SIDE.test(word));
   // One name for a country, whichever spelling ("Czechia" and "Czech Republic" are the same side).

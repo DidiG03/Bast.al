@@ -30,6 +30,7 @@ delete process.env.API_FOOTBALL_KEY;
 delete process.env.ODDS_FEED_MOCK;
 delete process.env.LATE_KEEP_HURT_BETS;
 process.env.LIVE_BET_DELAY_MS = "600";
+process.env.LIVE_UNCOVERED_DELAY_MS ??= "0";
 process.env.LIVE_VERIFY = "off";
 
 const prisma = new PrismaClient();
@@ -442,6 +443,96 @@ test("pace: linked matches missing from the live list are read from their pages 
   assert.equal(reader.nextDelay(), paced, "the pages don't stretch the list's pace");
   assert.ok(paced < 20_000, `about one list read every 13 s without a key (${paced} ms)`);
   await prisma.event.update({ where: { id: listed.id }, data: { status: "COMPLETED" } });
+});
+
+test("no SportScore for a match (Arnavutköy v Aksaray, 18 Nov 2026): a longer wait, a live stake cap, and a bet placed after a goal nobody had seen yet is void, never paid at 1.09", async () => {
+  await prisma.event.updateMany({ where: { status: "LIVE" }, data: { status: "COMPLETED" } });
+  const covered = await liveMatch("Covered match", "covered-1");
+  const bare = await liveMatch("Arnavutköy vs Aksaray", "no-link");
+  await prisma.trackerMapping.update({ where: { eventId: bare.id }, data: { externalId: null, method: "none" } });
+  await prisma.event.update({ where: { id: bare.id }, data: { homeScore: 0, awayScore: 1, elapsed: 70, period: "2H" } });
+  await prisma.selection.update({ where: { id: pick(bare, "match_winner", "away").id }, data: { liveOdds: 1.09, feedOdds: 1.09 } });
+  process.env.LIVE_UNCOVERED_DELAY_MS = "1500";
+  process.env.LIVE_UNCOVERED_MAX_STAKE = "25";
+  try {
+    // (b) The wait: longer on the match without a second score source.
+    const plan = async (event) => (await bets.plannedWait(actor, [pick(event, "match_winner", "home").id])).waitMs;
+    assert.equal(await plan(covered), 600);
+    assert.equal(await plan(bare), 1500);
+    // (b) The cap: 25 ALL of open live stakes on it, every market together.
+    const started = Date.now();
+    const placed = await place(bare, "match_winner", "away");
+    assert.ok(Date.now() - started >= 1_400, "it waited the longer wait");
+    await place(bare, "goals_2_5", "over");
+    await assert.rejects(place(bare, "match_winner", "draw"), /limited to 25 ALL: it has no live tracker.*5\.00 ALL more/);
+    await place(covered, "match_winner", "home");
+    await place(covered, "match_winner", "draw");
+    await place(covered, "match_winner", "away");
+    // 0 turns live betting on such matches off.
+    process.env.LIVE_UNCOVERED_MAX_STAKE = "0";
+    await assert.rejects(place(bare, "goals_2_5", "under"), /closed: we have no second live score source/);
+
+    // (e) Aksaray's 0–2 went in 20 s before the bet; the feed showed it only after. At settlement the bet is void, not paid at 1.09.
+    const bet = await prisma.bet.findUniqueOrThrow({ where: { id: placed.bets[0].id } });
+    assert.deepEqual([bet.live.home, bet.live.away], [0, 1]);
+    await prisma.goalSeen.create({ data: { eventId: bare.id, homeScore: 0, awayScore: 2, source: "odds", seenAt: new Date(bet.placedAt.getTime() + 25_000) } });
+    const first = Math.floor(bare.startsAt.getTime() / 1000);
+    const goalMinute = Math.floor(((bet.placedAt.getTime() - 20_000) / 1000 - first) / 60) + 1;
+    await prisma.event.update({
+      where: { id: bare.id },
+      data: {
+        status: "COMPLETED", period: "FT", homeScore: 0, awayScore: 2, resultHome: 0, resultAway: 2, resultHalfHome: 0, resultHalfAway: 1, finishedAt: new Date(),
+        lateCheck: { first, second: first, goals: [{ minute: 1, extra: null, side: "away" }, { minute: goalMinute, extra: null, side: "away" }], cards: [] },
+        lateCheckedAt: new Date(),
+      },
+    });
+    await settlement.settleEvent(bare.id);
+    const settled = await prisma.bet.findUniqueOrThrow({ where: { id: bet.id } });
+    assert.equal(settled.status, "VOID", "Aksaray won, but the bet came after the goal: void");
+    assert.equal(Number(settled.payout), 10, "the stake back, never 10.90");
+  } finally {
+    process.env.LIVE_UNCOVERED_DELAY_MS = "0";
+    delete process.env.LIVE_UNCOVERED_MAX_STAKE;
+  }
+});
+
+test("Kyrgyzstan v Vietnam, 17 Nov 2026: our feed credits the goal to the home side (1–0), SportScore to the away side (0–1). Every market pauses, slips are refused past the usual hold, and the feed's prices can't reopen it until both agree", async () => {
+  await prisma.event.updateMany({ where: { status: "LIVE" }, data: { status: "COMPLETED" } });
+  const match = await liveMatch("Kyrgyzstan vs Vietnam", "kyrgyzstan-vs-vietnam");
+  await prisma.event.update({ where: { id: match.id }, data: { homeScore: 1, awayScore: 0, elapsed: 20 } });
+  const t0 = new Date();
+  await early.run(t0, [{ id: "kyrgyzstan-vs-vietnam", home: 0, away: 1 }]);
+  let event = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  assert.equal(event.liveEarlyScore, "0:1", "the disagreement is kept: same total, other side");
+  for (const market of await prisma.market.findMany({ where: { eventId: match.id } })) assert.equal(market.livePauseReason, "ahead", `${market.key} paused`);
+  assert.equal(await prisma.earlyGoal.count({ where: { eventId: match.id } }), 0, "no new goal is recorded: it's who scored, not whether");
+  await assert.rejects(place(match), /paused|goal is being confirmed/);
+
+  // Ten minutes on (past the 4-minute hold for an unconfirmed goal) they still disagree: still closed.
+  const later = new Date(t0.getTime() + 10 * 60_000);
+  await early.run(later, [{ id: "kyrgyzstan-vs-vietnam", home: 0, away: 1 }]);
+  event = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  assert.equal(event.liveEarlyScore, "0:1", "no time limit on a disagreement about who scored");
+  await prisma.market.updateMany({ where: { eventId: match.id }, data: { livePausedUntil: null, livePausedAt: null, liveReopenFrom: null, livePauseReason: null } });
+  await assert.rejects(place(match), /goal is being confirmed/, "even with the market pauses gone, the slip is refused");
+
+  // A fresh reading from the odds feed, still 1–0: its prices are for the wrong team, so nothing reopens on them.
+  const readingOf = (home, away) => ({
+    externalId: "x", stopped: false, finished: false, homeScore: home, awayScore: away, elapsed: 30, bookmakerUpdate: new Date().toISOString(),
+    markets: [{ key: "match_winner", name: "Match winner", sortOrder: 0, suspended: false, selections: [{ key: "home", name: "Home", odds: 1.5, sortOrder: 0 }, { key: "draw", name: "Draw", odds: 4, sortOrder: 1 }, { key: "away", name: "Away", odds: 6, sortOrder: 2 }] }],
+  });
+  await sync.sourceScore(match.id, { home: 0, away: 1 }, "sportscore", new Date());
+  await sync.applyLiveOdds(match.id, readingOf(1, 0));
+  event = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  assert.equal(event.liveEarlyScore, "0:1", "the feed's 1–0 doesn't end it");
+  assert.equal((await odds.priceForPlayer(player.id, pick(match, "match_winner", "home").id)).bettable, false, "1X2 stays closed");
+
+  // The feed corrects itself to 0–1: they agree, and the hold is over.
+  await sync.applyLiveOdds(match.id, readingOf(0, 1));
+  event = await prisma.event.findUniqueOrThrow({ where: { id: match.id } });
+  assert.equal(event.liveEarlyScore, null, "agreed: 0–1");
+  assert.deepEqual([event.homeScore, event.awayScore], [0, 1]);
+  await prisma.event.update({ where: { id: match.id }, data: { status: "COMPLETED" } });
 });
 
 test("teardown", async () => {

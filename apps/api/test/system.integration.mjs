@@ -10,6 +10,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createRequire } from "node:module";
 
+// No SportScore link in these tests: keep their own live wait (early-goal.integration.mjs covers the longer one).
+process.env.LIVE_UNCOVERED_DELAY_MS ??= "0";
 const require = createRequire(import.meta.url);
 require("reflect-metadata");
 const { PrismaClient } = require("@prisma/client");

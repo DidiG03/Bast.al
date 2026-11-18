@@ -33,6 +33,8 @@ delete process.env.API_FOOTBALL_KEY;
 delete process.env.ODDS_FEED_MOCK;
 // Short waits, so the test is quick: 600 ms usually, 1.2 s on a busy match. No calls to the real feed.
 process.env.LIVE_BET_DELAY_MS = "600";
+// No SportScore link in these tests: keep the wait theirs (early-goal.integration.mjs covers the longer one).
+process.env.LIVE_UNCOVERED_DELAY_MS ??= "0";
 process.env.LIVE_BET_EVENTFUL_DELAY_MS = "1200";
 process.env.LIVE_BET_ADAPTIVE_DELAY = "off";
 process.env.LIVE_VERIFY = "off";

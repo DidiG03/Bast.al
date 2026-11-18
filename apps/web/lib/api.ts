@@ -547,6 +547,8 @@ export type OddsEvent = {
   awayScore: number | null;
   /** Live: a score a faster source shows that our feed hasn't confirmed yet (a goal, or one taken back). Shown as pending. */
   pendingScore?: { home: number; away: number } | null;
+  /** A penalty shootout's kicks, shown as "(3–4 pen)" beside the score; never part of it. */
+  shootout?: { home: number; away: number } | null;
   hidden: boolean;
   suspended: boolean;
   provider: string;
@@ -728,6 +730,8 @@ export type Bet = {
   status: BetStatus;
   placedAt: string;
   settledAt: string | null;
+  /** Placed while the match (any of an accumulator's matches) was live. */
+  inPlay?: boolean;
   voidReason: string | null;
   selection: { name: string; market: string } | null;
   event: BetEvent | null;

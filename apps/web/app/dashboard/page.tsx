@@ -739,7 +739,7 @@ async function loadHomeEvents(sport: Sport, token: string, count: number): Promi
 }
 
 async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
-  const { t, tn, ts, date } = getT();
+  const { t, tn, ts, tl, date } = getT();
   // Live first, then the most important upcoming matches in the next week: picked by the API, for each sport.
   const [bySport, nextRaces, slip, bets] = me.parent
     ? await Promise.all([
@@ -833,7 +833,7 @@ async function PlayerHome({ me, token }: { me: MeResponse; token: string }) {
               const meta = [race.race?.distance ? `${race.race.distance} m` : null, race.race?.grade, race.race?.field ? tn(race.race.field, "{count} dog", "{count} dogs") : null].filter(Boolean).join(" · ");
               return (
                 <Link key={race.id} href="/dashboard/bet?sport=greyhounds" className="card player-next-race">
-                  <span className="player-top-event-league">{race.league}</span>
+                  <span className="player-top-event-league">{tl(race.league)}</span>
                   <strong>{t("Race {number}", { number: race.race?.raceNumber ?? "" })}</strong>
                   {meta ? <span className="muted player-next-race-meta">{meta}</span> : null}
                   <span className="status-pill">{date(race.startsAt, MATCH_TIME)}</span>

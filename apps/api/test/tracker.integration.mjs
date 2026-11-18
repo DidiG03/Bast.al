@@ -176,6 +176,15 @@ test("no fixture anywhere: the page is told the tracker is unavailable, and Spor
   assert.deepEqual(await down.forEvent(player, lonely.id, "en", "light"), { show: false, reason: "unavailable" }, "SportScore down: the same note");
 });
 
+test("SportScore's embed failing (503): the page is told the tracker is unavailable, not given a frame that shows an error", async () => {
+  const live = await event({ name: "Embed down vs Somebody", homeTeam: "Embed down", awayTeam: "Somebody", startsAt: new Date(Date.now() - 10 * 60_000) });
+  await tracker.setManual(live.id, "embed-down-vs-somebody");
+  const down = new TrackerService(prisma, async () => ({ ok: false, status: 503 }));
+  assert.deepEqual(await down.forEvent(player, live.id, "en", "light"), { show: false, reason: "unavailable" });
+  const up = new TrackerService(prisma, async () => ({ ok: true, status: 200, json: async () => ({ matches: [] }) }));
+  assert.equal((await up.forEvent(player, live.id, "en", "light")).show, true);
+});
+
 test("teardown", async () => {
   await prisma.$disconnect();
 });

@@ -44,6 +44,8 @@ const DETAILS_EVERY_ANONYMOUS_MS = 30_000;
  */
 const LIST_SHARE = 0.65;
 const PAGES_SHARE = 0.1;
+/** How often the live matches without SportScore are listed in the log. */
+const UNCOVERED_LOG_MS = 10 * 60_000;
 /** How often the pace is logged. */
 const PACE_LOG_MS = 60 * 60_000;
 /** The warning that the live list is missing linked matches is logged at most this often. */
@@ -87,6 +89,7 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
   private readonly usedBy = { list: 0, pages: 0, slip: 0 };
   private pagesAt = 0;
   private pacedAt = 0;
+  private uncoveredAt = 0;
   /** When each linked match was last read from its own page. */
   private readonly detailAt = new Map<string, number>();
   private warnedAt = 0;
@@ -157,8 +160,27 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
     this.timer.unref();
   }
 
+  /**
+   * Every 10 minutes: the live football matches on offer with no SportScore
+   * link, so no early goal pause. They take smaller live stakes and wait
+   * longer (bets.service.ts, uncoveredMatches); this names them in the log.
+   */
+  private async logUncovered() {
+    if (Date.now() - this.uncoveredAt < UNCOVERED_LOG_MS) return;
+    this.uncoveredAt = Date.now();
+    const rows = await this.prisma.event.findMany({
+      where: { sport: "football", status: EventStatus.LIVE, hidden: false, OR: [{ trackerMapping: null }, { trackerMapping: { externalId: null } }] },
+      select: { name: true, league: true },
+      orderBy: { startsAt: "asc" },
+      take: 200,
+    });
+    if (rows.length === 0) return;
+    this.logger.warn(`Live football on offer without SportScore (no early goal pause; smaller live stakes, longer wait): ${rows.length}: ${rows.slice(0, 40).map((row) => `${row.name} (${row.league})`).join("; ")}${rows.length > 40 ? "; …" : ""}`);
+  }
+
   private async tick() {
     let next = IDLE_MS;
+    await this.logUncovered().catch(() => undefined);
     try {
       const linked = await this.run();
       this.failures = 0;
@@ -286,7 +308,8 @@ export class EarlyGoalService implements OnModuleInit, OnModuleDestroy {
         const score = await done;
         if (!score) return;
         await this.apply(event.id, score, now);
-        if (score.home + score.away !== (event.homeScore ?? 0) + (event.awayScore ?? 0)) differing.push({ eventId: event.id, score: `${score.home}:${score.away}` });
+        // Not the same score side by side (a goal more or less, or the same goals credited to the other team).
+        if (score.home !== (event.homeScore ?? 0) || score.away !== (event.awayScore ?? 0)) differing.push({ eventId: event.id, score: `${score.home}:${score.away}` });
       }),
     );
     return differing;

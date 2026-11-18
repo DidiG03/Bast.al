@@ -122,6 +122,8 @@ export type FeedFixture = {
   extraTimeScore: { home: number; away: number } | null;
   /** The penalty shootout's score, once a match decided on penalties has finished. */
   penalties: { home: number; away: number } | null;
+  /** The shootout's kicks so far, while it is on (status P) and after it (PEN): never part of the score. */
+  shootout: { home: number; away: number } | null;
 };
 
 export type FeedMarket = {
@@ -166,6 +168,12 @@ export function parseFixture(raw: RawFixture): FeedFixture {
   const fulltime = raw.score?.fulltime;
   const home = fulltime?.home ?? (raw.fixture.status.short === "FT" ? raw.goals.home : null);
   const away = fulltime?.away ?? (raw.fixture.status.short === "FT" ? raw.goals.away : null);
+  // In and after a shootout, the score is the 90 minutes plus extra time; the kicks are kept apart (`goals` can count them).
+  const short = raw.fixture.status.short;
+  const inShootout = short === "P" || short === "PEN";
+  const pen = raw.score?.penalty;
+  const extra = raw.score?.extratime;
+  const played = inShootout && fulltime?.home != null && fulltime.away != null ? { home: fulltime.home + (extra?.home ?? 0), away: fulltime.away + (extra?.away ?? 0) } : { home: raw.goals.home, away: raw.goals.away };
   return {
     externalId: String(raw.fixture.id),
     leagueId: raw.league.id,
@@ -182,8 +190,9 @@ export function parseFixture(raw: RawFixture): FeedFixture {
     status,
     elapsed: raw.fixture.status.elapsed,
     period: raw.fixture.status.short,
-    homeScore: raw.goals.home,
-    awayScore: raw.goals.away,
+    homeScore: played.home,
+    awayScore: played.away,
+    shootout: inShootout && pen?.home != null && pen.away != null ? { home: pen.home, away: pen.away } : null,
     result: status === EventStatus.COMPLETED && home !== null && away !== null ? { home, away } : null,
     extraTime: raw.fixture.status.short === "AET" || raw.fixture.status.short === "PEN",
     ...extraTimeOf(raw, status, home, away),
@@ -204,7 +213,9 @@ function extraTimeOf(raw: RawFixture, status: EventStatus, home: number | null, 
   if (status !== EventStatus.COMPLETED || (short !== "AET" && short !== "PEN") || home === null || away === null) return { extraTimeScore: null, penalties: null };
   const sent = raw.score?.extratime;
   const fromGoals = raw.goals.home !== null && raw.goals.away !== null ? { home: raw.goals.home - home, away: raw.goals.away - away } : null;
-  const extraTimeScore = fromGoals && fromGoals.home >= 0 && fromGoals.away >= 0 ? fromGoals : sent?.home != null && sent.away != null ? { home: sent.home, away: sent.away } : null;
+  // After a shootout `goals` may count its kicks: extra time's own score is then the one the feed sends for it.
+  const sentScore = sent?.home != null && sent.away != null ? { home: sent.home, away: sent.away } : null;
+  const extraTimeScore = short === "PEN" && sentScore ? sentScore : fromGoals && fromGoals.home >= 0 && fromGoals.away >= 0 ? fromGoals : sentScore;
   const pen = raw.score?.penalty;
   const penalties = short === "PEN" && pen?.home != null && pen.away != null && pen.home !== pen.away ? { home: pen.home, away: pen.away } : null;
   return { extraTimeScore, penalties };

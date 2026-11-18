@@ -21113,3 +21113,61 @@ button.candy-chip:disabled {
     animation-duration: 1ms;
   }
 }
+
+/* A penalty shootout's kicks beside the score: "(3–4 pen)", never part of it. */
+.bm-shootout,
+.player-top-shootout {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* The tracker loading, and what shows if it doesn't. */
+.live-tracker-frame { position: relative; }
+.live-tracker-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.live-tracker-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+.live-tracker-frame.is-failed { animation: none; }
+.live-tracker-reload { font-size: 0.8rem; margin-top: 4px; }
+
+/* A paused price: greyed, with a lock, and a short message when tapped. */
+.bm-pick.is-locked,
+.odds-button.is-locked { opacity: 0.55; cursor: not-allowed; }
+.odds-lock { width: 0.8em; height: 0.8em; margin-right: 3px; vertical-align: -0.05em; fill: none; stroke: currentColor; stroke-width: 2; }
+/* A row without prices takes no room for them. */
+.bm-odds.is-empty { display: none; }
+/* The team names open the match too. */
+.bm-teams.is-openable { cursor: pointer; }
+/* Dark mode: the grey pause lines read better. */
+:root[data-theme="dark"] .bm-note,
+:root[data-theme="dark"] .bet-paused,
+:root[data-theme="dark"] .bm-pause { color: color-mix(in srgb, var(--text) 82%, transparent); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bm-note,
+  :root:not([data-theme="light"]) .bet-paused,
+  :root:not([data-theme="light"]) .bm-pause { color: color-mix(in srgb, var(--text) 82%, transparent); }
+}
+/* Phones on their side: team names wrap rather than clip. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .bm-team-name { white-space: normal; overflow-wrap: anywhere; }
+}
+
+.bet-card-placed { display: block; font-size: 0.8rem; }
+.bet-card-kind.is-live { color: var(--danger, #d33); font-weight: 600; }
+
+.bm-pause-credit { margin-left: 6px; font-size: 0.75rem; color: inherit; opacity: 0.8; }

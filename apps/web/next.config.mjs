@@ -17,6 +17,9 @@ const nextConfig = {
       { source: "/casino", destination: "/dashboard/casino", permanent: false },
       // Game pages only (/casino/mines): the casino's pictures live under /casino/ in public/ and must not be redirected.
       { source: "/casino/:game([a-z-]+)", destination: "/dashboard/casino/:game", permanent: false },
+      // The live list: /live and /dashboard/live (asked for by old links and prefetches) open it.
+      { source: "/live", destination: "/dashboard/bet?day=live", permanent: false },
+      { source: "/dashboard/live", destination: "/dashboard/bet?day=live", permanent: false },
       { source: "/dashboard/prices", destination: "/dashboard/odds", permanent: false },
       { source: "/dashboard/prices/:path*", destination: "/dashboard/odds", permanent: false },
     ];

@@ -82,6 +82,21 @@ test("feed: a finished match's extra-time goals and shootout", () => {
   assert.equal(ft.penalties, null);
 });
 
+test("feed: shootout kicks never join the score (Virtus Francavilla v Turris: 1–1, 3–4 on penalties, not 4–5)", () => {
+  const fixture = (short, goals, score) => parseFixture({ fixture: { id: 1, date: "2026-11-02T20:00:00Z", status: { short, elapsed: 120 } }, league: { id: 2, name: "Cup", country: "World", season: 2026 }, teams: { home: { name: "A" }, away: { name: "B" } }, goals, score });
+  // `goals` counting the kicks, as the feed sent it: 1–1 after extra time, 3–4 in the shootout.
+  const score = { fulltime: { home: 1, away: 1 }, extratime: { home: 0, away: 0 }, penalty: { home: 3, away: 4 } };
+  const during = fixture("P", { home: 4, away: 5 }, score);
+  assert.deepEqual([during.homeScore, during.awayScore], [1, 1], "live: the score shown is 1–1");
+  assert.deepEqual(during.shootout, { home: 3, away: 4 }, "the kicks kept apart");
+  const after = fixture("PEN", { home: 4, away: 5 }, score);
+  assert.deepEqual([after.homeScore, after.awayScore], [1, 1]);
+  assert.deepEqual(after.result, { home: 1, away: 1 }, "90-minute markets settle on 1–1");
+  assert.deepEqual(after.extraTimeScore, { home: 0, away: 0 }, "extra-time markets on extra time's own 0–0, not the kicks");
+  assert.deepEqual(after.penalties, { home: 3, away: 4 }, "only the shootout markets on the kicks");
+  assert.equal(fixture("2H", { home: 1, away: 0 }, { fulltime: { home: null, away: null } }).shootout, null);
+});
+
 test("settling: on extra time's own goals, then the shootout", () => {
   const pens = { extraTime: true, extraTimeScore: { home: 1, away: 1 }, penalties: { home: 4, away: 3 } };
   const aet = { extraTime: true, extraTimeScore: { home: 0, away: 1 }, penalties: null };

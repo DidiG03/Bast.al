@@ -48,6 +48,8 @@ const odds = new OddsService(prisma, audit, sync);
 const bets = new BetsService(prisma, odds, new BettingLimitsService(prisma, hierarchy), realtime, users, audit, new RiskService(prisma, audit), sync);
 // Live bets confirm at once here, without asking the feed.
 process.env.LIVE_BET_DELAY_MS = "0";
+// No SportScore link in these tests: keep the wait theirs (early-goal.integration.mjs covers the longer one).
+process.env.LIVE_UNCOVERED_DELAY_MS ??= "0";
 process.env.LIVE_VERIFY = "off";
 
 // The first half kicked off at 18:00 UTC yesterday, the second at 19:00. The home side scored in the 22nd minute.

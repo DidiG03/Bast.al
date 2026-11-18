@@ -28,7 +28,7 @@ import { HelpTip } from "../../../components/help-tip";
 import { useConfirm } from "../../../components/confirm-dialog";
 import { showBalance, showPending } from "../../../components/balance-chip";
 import { useTopUpRequest } from "../../../components/top-up-request";
-import { breakPause, liveClock } from "../../../lib/live";
+import { breakPause, clockTitle, liveClock } from "../../../lib/live";
 import { applyDelta, applyToList, applyToSlip, byMatch, hasUnknownSelections } from "../../../lib/live-push";
 import { usePolling } from "../../../lib/use-polling";
 import { pickLabel } from "../../../lib/picks";
@@ -127,6 +127,7 @@ export default function BetPageRoute() {
 function BetPage() {
   const { getToken, userId } = useAuth();
   const i18n = useI18n();
+  const { tl } = i18n;
   const { t, tn, ts } = i18n;
   const router = useRouter();
   const params = useSearchParams();
@@ -288,12 +289,13 @@ function BetPage() {
     const quotes = await apiFetch<SelectionQuote[]>(`/odds/selections?ids=${ids.map(encodeURIComponent).join(",")}`, token);
     const byId = new Map(quotes.map((quote) => [quote.id, quote]));
     // Picks that are over for good (the match finished, the market settled, the pick withdrawn, or gone): off the slip.
-    const gone = slipRef.current.filter((item) => ids.includes(item.selectionId) && (!byId.has(item.selectionId) || byId.get(item.selectionId)!.final));
+    // A market that has closed (not just paused) is taken off too, rather than left on the slip blocking it.
+    const gone = slipRef.current.filter((item) => ids.includes(item.selectionId) && (!byId.has(item.selectionId) || byId.get(item.selectionId)!.final || (!byId.get(item.selectionId)!.open && !byId.get(item.selectionId)!.sp)));
     if (gone.length > 0) {
       toast.info(
         gone.length === 1
-          ? t("{pick} was taken off your slip: that market has closed for good.", { pick: `${gone[0].name} (${gone[0].eventName})` })
-          : t("{count} picks were taken off your slip: their markets have closed for good.", { count: gone.length }),
+          ? t("{pick} was taken off your slip: that market has closed.", { pick: `${gone[0].name} (${gone[0].eventName})` })
+          : t("{count} picks were taken off your slip: their markets have closed.", { count: gone.length }),
       );
     }
     const goneIds = new Set(gone.map((item) => item.selectionId));
@@ -1037,14 +1039,14 @@ function BetPage() {
                           <optgroup label={t("Top leagues")}>
                             {leagueGroups.top.map((name) => (
                               <option key={name} value={name}>
-                                {name}
+                                {tl(name)}
                               </option>
                             ))}
                           </optgroup>
                           <optgroup label={t("Other leagues")}>
                             {leagueGroups.rest.map((name) => (
                               <option key={name} value={name}>
-                                {name}
+                                {tl(name)}
                               </option>
                             ))}
                           </optgroup>
@@ -1141,7 +1143,7 @@ function BetPage() {
                           <span className="bm-league-title">
                             {group.leagueLogo ? <img className="league-crest" src={group.leagueLogo} alt="" /> : null}
                             {group.countryFlag ? <img className="country-flag" src={group.countryFlag} alt={group.country ?? ""} /> : null}
-                            <span className="bm-league-name">{group.league}</span>
+                            <span className="bm-league-name">{tl(group.league)}</span>
                             {visibleCountry(group.country, group.countryFlag) ? <span className="bm-league-country">{group.country}</span> : null}
                           </span>
                           <span className="bm-odds-legend" aria-hidden="true">
@@ -1276,7 +1278,7 @@ const STATS_BEFORE_MS = 90 * 60_000;
  * with every market (MatchCard). Picks go on the same slip as the list's.
  */
 function MatchPage({ event, loaded, loading, onBack, card }: { event: OddsEvent | null; loaded: boolean; loading: boolean; onBack: () => void; card: (event: OddsEvent) => React.ReactNode }) {
-  const { t } = useI18n();
+  const { t, tl } = useI18n();
   return (
     <section className="match-page" aria-label={event?.name ?? t("Match")}>
       <div className="match-page-bar">
@@ -1292,16 +1294,22 @@ function MatchPage({ event, loaded, loading, onBack, card }: { event: OddsEvent 
             {event.leagueLogo ? <img className="league-crest" src={event.leagueLogo} alt="" /> : null}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {event.countryFlag ? <img className="country-flag" src={event.countryFlag} alt={event.country ?? ""} /> : null}
-            <span className="match-page-league-name">{event.league}</span>
+            <span className="match-page-league-name">{tl(event.league)}</span>
           </span>
         ) : null}
       </div>
       {event ? (
         card(event)
       ) : loaded ? (
-        <p className="muted" style={{ margin: 0 }}>
-          {t("That match isn't open for bets any more.")}
-        </p>
+        <div className="match-page-gone">
+          <p className="muted" style={{ margin: 0 }}>
+            {t("That match isn't open for bets any more.")}
+          </p>
+          {/* A way on from an expired match page: the live list. */}
+          <Link href="/dashboard/bet?day=live" className="button secondary">
+            {t("See live matches")}
+          </Link>
+        </div>
       ) : (
         <div className="loading-state">
           <LoadingSpinner label="Loading matches" />
@@ -1354,6 +1362,7 @@ const MatchCard = memo(function MatchCard({
 }) {
   const i18n = useI18n();
   const { t, tn, ts, date } = i18n;
+  const toast = useToast();
   /** Goalscorer markets showing every player. */
   const [allPlayers, setAllPlayers] = useState<Set<string>>(new Set());
   const [statsOpen, setStatsOpen] = useState(false);
@@ -1421,7 +1430,7 @@ const MatchCard = memo(function MatchCard({
       ? {
           text:
             event.livePause === "bookmaker" && event.marketPause
-              ? msg("The bookmaker has blocked this match during the pause. They reopen on their own. Our pause still ends on the line below.")
+              ? msg("The bookmaker has paused this match. Betting reopens on its own.")
               : event.livePause === "late" || event.livePause === "competition"
                 ? PAUSE_TEXT[event.livePause]
                 : breakPause(event) ?? PAUSE_TEXT[event.livePause ?? "feed"] ?? PAUSE_TEXT.feed,
@@ -1433,7 +1442,8 @@ const MatchCard = memo(function MatchCard({
           ? { text: msg("The bookmaker has paused the match winner. The other markets are still open."), tone: "" }
           : null;
   // The main market paused with nothing of it on the slip: another match to bet on in its place, rather than locked prices.
-  const suggest = suggestion && mainHeld && !over && !(inRow && hasPick([inRow])) ? suggestion : undefined;
+  // Locked, greyed prices show instead (a lock on each): players found the "Meanwhile" rows repetitive.
+  void suggestion;
 
   const pick = (market: OddsEvent["markets"][number], selection: OddsSelection, label: string, className: string) => {
     const isSelected = selected.has(selection.id);
@@ -1445,14 +1455,20 @@ const MatchCard = memo(function MatchCard({
       <button
         key={selection.id}
         type="button"
-        className={`${className}${isSelected ? " is-selected" : ""}${offBoard ? " is-held" : ""}`}
-        onClick={() => onPick(event, market.name, selection)}
+        className={`${className}${isSelected ? " is-selected" : ""}${offBoard ? " is-held" : ""}${locked && !isSelected ? " is-locked" : ""}`}
+        // A paused price says so when tapped rather than doing nothing.
+        onClick={() => (locked && !isSelected ? toast.info(t("Paused for a moment: this price returns when the bookmaker reopens it.")) : onPick(event, market.name, selection))}
         aria-pressed={isSelected}
-        disabled={locked && !isSelected}
+        aria-disabled={locked && !isSelected}
         aria-label={t(locked ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", { pick: pickLabel(selection.name, i18n), odds: selection.price.toFixed(2), market: ts(market.name), match: event.name })}
       >
         <span className="odds-selection-name">{label}</span>
         <strong className={`odds-price${offBoard ? " is-held" : ""}`}>
+          {locked && !isSelected ? (
+            <svg className="odds-lock" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z" />
+            </svg>
+          ) : null}
           {offBoard && selection.price <= 1 ? "–" : selection.price.toFixed(2)}
           {offBoard ? null : <PriceArrow move={moves.get(selection.id)} />}
         </strong>
@@ -1526,13 +1542,18 @@ const MatchCard = memo(function MatchCard({
           {playing || over ? (
             <>
               {playing ? <span className="live-dot" aria-hidden="true" /> : null}
-              <span>{liveClock(event, t)}</span>
+              <span title={clockTitle(event, t)}>{liveClock(event, t)}</span>
             </>
           ) : (
             <time dateTime={event.startsAt}>{date(event.startsAt, TIME)}</time>
           )}
         </div>
-        <div className="bm-teams">
+        <div
+          className={`bm-teams${!page && more > 0 ? " is-openable" : ""}`}
+          // The whole row opens the match, not only the arrow.
+          onClick={!page && more > 0 ? () => onToggle(event.id) : undefined}
+          onPointerEnter={!page && !expanded ? () => onPrefetch(event.id) : undefined}
+        >
           <div className="bm-team-block">
             <span className="bm-team">
               <span className="bm-side">
@@ -1568,6 +1589,11 @@ const MatchCard = memo(function MatchCard({
                 {scored && event.awayTeam ? <span className="bm-score">{event.awayScore}</span> : null}
               </>
             )}
+            {event.shootout ? (
+              <span className="bm-shootout" title={t("Penalty shootout")}>
+                {t("({home}–{away} pen)", { home: event.shootout.home, away: event.shootout.away })}
+              </span>
+            ) : null}
           </div>
           <div className="bm-tools">
             {hasStats ? (
@@ -1579,15 +1605,9 @@ const MatchCard = memo(function MatchCard({
             ) : null}
           </div>
         </div>
-        <div className={`bm-odds${inRow ? ` has-${inRow.selections.length}` : ""}${more > 0 && !page ? " has-more" : ""}`}>
+        <div className={`bm-odds${inRow ? ` has-${inRow.selections.length}` : ""}${more > 0 && !page ? " has-more" : ""}${!over && !inRow && !(more > 0 && !page) ? " is-empty" : ""}`}>
           {over ? (
             <span className="bm-settled">{t("Settling")}</span>
-          ) : suggest ? (
-            <button type="button" className="bm-suggest" onClick={() => onGoTo(suggest.id)} title={suggest.name}>
-              <span className="bm-suggest-label">{suggest.live ? t("Meanwhile, live") : t("Meanwhile")}</span>
-              <span className="bm-suggest-name">{suggest.name}</span>
-              <span aria-hidden="true">›</span>
-            </button>
           ) : inRow ? (
             inRow.selections.map((selection) => pick(inRow, selection, rowLabel(selection, i18n), "bm-pick"))
           ) : null}
@@ -1796,6 +1816,7 @@ const PAUSE_REASON: Record<string, string> = {
   corner: msg("Corner just taken"),
   yellow: msg("Card just shown"),
   var: msg("VAR check"),
+  penalty: msg("Penalty"),
   swing: msg("Big moment in the match"),
   reopen: msg("Betting reopening"),
 };
@@ -1837,7 +1858,7 @@ const lineMovedText = (reason: string | undefined) => LINE_MOVED[(reason ?? "").
 function PauseBanner({ pause }: { pause: MarketPause }) {
   const { t, tn, ts } = useI18n();
   const [listed, setListed] = useState(false);
-  const until = new Date(pause.until).getTime();
+  const until = useOnlyEarlier(new Date(pause.until).getTime(), pause.reason) ?? 0;
   // Read on the device after it's drawn (never on the server), then every second.
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -1873,8 +1894,31 @@ function PauseBanner({ pause }: { pause: MarketPause }) {
       {seconds === null ? null : (
         <span className="bm-pause-time">{seconds === 0 ? t("Waiting for new prices…") : pause.exact ? t("Back in {seconds} s.", { seconds }) : t("Back within {seconds} s.", { seconds })}</span>
       )}
+          {pause.reason === "ahead" ? (
+        // The unconfirmed score is SportScore's (when we have it): their terms ask for the credit wherever their data shows.
+        <a className="bm-pause-credit" href="https://sportscore.com/" rel="dofollow noopener" target="_blank" title="Sports data by SportScore">
+          Powered by SportScore
+        </a>
+      ) : null}
     </p>
   );
+}
+
+/**
+ * A countdown's end that only ever moves earlier while the same pause is on
+ * (`key`), so the seconds shown only count down: when the server gives the
+ * pause longer, the countdown still reaches zero and says it's waiting for
+ * the new prices. A new pause (another key) starts afresh.
+ */
+function useOnlyEarlier(until: number | null, key: string): number | null {
+  const kept = useRef<{ key: string; until: number } | null>(null);
+  if (until === null) {
+    kept.current = null;
+    return null;
+  }
+  if (!kept.current || kept.current.key !== key || kept.current.until < Date.now() - 60_000) kept.current = { key, until };
+  else if (until < kept.current.until) kept.current = { key, until };
+  return kept.current.until;
 }
 
 /**
@@ -1896,7 +1940,7 @@ function pauseRefusal(message: string): "goal" | "pause" | null {
  */
 function SlipPauseNote({ pause }: { pause: { reason: string; until: string | null } | null }) {
   const { t } = useI18n();
-  const until = pause?.until ? Date.parse(pause.until) : null;
+  const until = useOnlyEarlier(pause?.until ? Date.parse(pause.until) : null, pause?.reason ?? "");
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     if (until === null) return;
@@ -2800,6 +2844,18 @@ function AgainButton({ bet, onAgain }: { bet: Bet; onAgain: (bet: Bet) => Promis
   );
 }
 
+/** When a bet was placed, and whether live or before kick-off: "Placed 18 Nov, 12:24 · Live". */
+function PlacedLine({ bet }: { bet: Bet }) {
+  const { t, date } = useI18n();
+  return (
+    <span className="muted bet-card-placed">
+      {t("Placed {when}", { when: date(bet.placedAt, DATE_TIME) })}
+      {" · "}
+      <span className={`bet-card-kind${bet.inPlay ? " is-live" : ""}`}>{bet.inPlay ? t("Live") : t("Pre-match")}</span>
+    </span>
+  );
+}
+
 function AccumulatorCard({ bet, onAgain }: { bet: Bet; onAgain?: (bet: Bet) => Promise<void> }) {
   const { t, tn, ts, date } = useI18n();
   const decided = bet.legs.filter((leg) => leg.result !== null).length;
@@ -2820,6 +2876,7 @@ function AccumulatorCard({ bet, onAgain }: { bet: Bet; onAgain?: (bet: Bet) => P
             {tn(bet.legs.length, "{count} pick", "{count} picks")}
             {bet.system ? ` · ${tn(bet.system.lines, "{count} bet of {stake}", "{count} bets of {stake}", { stake: formatMoney(bet.system.lineStake) })}` : ""}
           </span>
+          <PlacedLine bet={bet} />
         </div>
         <StatusPill status={bet.status} />
       </div>
@@ -2870,6 +2927,7 @@ function BetCard({ bet, onAgain }: { bet: Bet; onAgain?: (bet: Bet) => Promise<v
         <div className="bet-card-name">
           <strong>{bet.selection ? pickLabel(bet.selection.name, i18n) : ts(bet.description)}</strong>
           <span className="muted">{t("Ref {id}", { id: bet.id.slice(-8) })}{bet.selection ? ` · ${ts(bet.selection.market)}` : ""}</span>
+          <PlacedLine bet={bet} />
         </div>
         <StatusPill status={bet.status} />
       </div>

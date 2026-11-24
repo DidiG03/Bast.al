@@ -105,6 +105,16 @@ function SpecialStars({ count, gold = false }: { count: number; gold?: boolean }
 }
 
 /** Candy Cascade for a Player: 8 or more of a candy anywhere pay, winners burst and new candies tumble in. */
+/**
+ * Where a lollipop grows from: its middle, or the board's edge it sits on, so the bigger candy grows inward and is never
+ * cut off by the board's edge (the board clips what's outside it, for the candies falling in from above).
+ */
+function scatterOrigin(column: number, row: number): string {
+  const x = column <= 0 ? "0%" : column >= 5 ? "100%" : "50%";
+  const y = row <= 0 ? "0%" : row >= 4 ? "100%" : "50%";
+  return `${x} ${y}`;
+}
+
 export function CandyGame() {
   useCasinoSession("candy", "Candy Cascade");
   const { t, tn } = useI18n();
@@ -559,8 +569,8 @@ export function CandyGame() {
                         if (node) nodes.current.set(piece.id, node);
                         else nodes.current.delete(piece.id);
                       }}
-                      className={`candy-piece${piece.win ? " is-win" : ""}`}
-                      style={{ transform: place(piece.column, piece.row) }}
+                      className={`candy-piece${piece.win ? " is-win" : ""}${piece.cell === "LOLLIPOP" ? " is-scatter" : ""}`}
+                      style={{ transform: place(piece.column, piece.row), ...(piece.cell === "LOLLIPOP" ? { "--scatter-origin": scatterOrigin(piece.column, piece.row) } : {}) } as CSSProperties}
                     >
                       <CandyIcon cell={piece.cell} />
                     </span>

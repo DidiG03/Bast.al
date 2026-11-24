@@ -20761,6 +20761,18 @@ button.candy-chip:disabled {
   font-weight: 900;
 }
 
+/* The lollipop (free spins) stands out: bigger than its cell, over the candies around it. `scale` rather than
+   `transform`, so a win's glow (which scales by transform) still adds on top. */
+.candy-piece.is-scatter {
+  z-index: 1;
+}
+
+.candy-piece.is-scatter .candy-icon {
+  scale: 1.45;
+  transform-origin: var(--scatter-origin, 50% 50%);
+  filter: drop-shadow(0 4px 6px rgba(90, 10, 60, 0.35));
+}
+
 .candy-piece.is-win .candy-icon {
   animation: candy-glow 650ms ease-in-out infinite alternate;
   filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 12px #ffe14a);

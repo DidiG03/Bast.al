@@ -20646,21 +20646,27 @@ button.candy-chip:disabled {
 /* The board in a candy-cane frame: as wide as the cabinet allows, and no taller than the game's height leaves for it. */
 .candy-board {
   --candy-rest: 13.5rem;
+  /* Board width over height: wide on a wide cabinet, taller on a phone (below). */
+  --candy-ratio: 1.5;
   position: relative;
   display: block;
-  width: min(100%, 44rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * 1.2));
+  width: min(100%, 62rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * var(--candy-ratio)));
   padding: 0.4rem;
   border: 7px solid transparent;
   border-radius: 22px;
+  /* See-through, so the candy land shows behind the candies; a faint line between the columns. */
   background:
-    linear-gradient(180deg, #eef8ff, #ffe6f5) padding-box,
+    repeating-linear-gradient(90deg, transparent 0 calc(100% / 6 - 1px), rgba(255, 255, 255, 0.35) calc(100% / 6 - 1px) calc(100% / 6)) padding-box,
+    linear-gradient(180deg, rgba(238, 248, 255, 0.38), rgba(255, 230, 245, 0.32)) padding-box,
     repeating-linear-gradient(45deg, #ff5fa8 0 10px, #fff 10px 20px) border-box;
-  box-shadow: 0 12px 28px rgba(60, 10, 100, 0.35), inset 0 0 22px rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(1.5px);
+  box-shadow: 0 12px 28px rgba(60, 10, 100, 0.3), inset 0 0 18px rgba(255, 255, 255, 0.35);
 }
 
 .candy-board.is-free {
   background:
-    linear-gradient(180deg, #fff8dc, #ffe2be) padding-box,
+    repeating-linear-gradient(90deg, transparent 0 calc(100% / 6 - 1px), rgba(255, 255, 255, 0.35) calc(100% / 6 - 1px) calc(100% / 6)) padding-box,
+    linear-gradient(180deg, rgba(255, 248, 220, 0.42), rgba(255, 226, 190, 0.36)) padding-box,
     repeating-linear-gradient(45deg, #ffb01f 0 10px, #fff 10px 20px) border-box;
 }
 
@@ -20672,7 +20678,7 @@ button.candy-chip:disabled {
  */
 .candy-grid {
   position: relative;
-  aspect-ratio: 6 / 5;
+  aspect-ratio: var(--candy-ratio, 1.2);
   overflow: hidden;
   border-radius: 10px;
   contain: layout paint;
@@ -20994,6 +21000,8 @@ button.candy-chip:disabled {
 
   .candy-board {
     --candy-rest: 20rem;
+    /* A phone held upright: the taller 6 × 5 board fits it better. */
+    --candy-ratio: 1.2;
     border-width: 5px;
     padding: 0.3rem;
   }

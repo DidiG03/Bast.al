@@ -21346,3 +21346,26 @@ button.candy-chip:disabled {
     transition: none;
   }
 }
+
+/* Special Bets as a picture: the button only holds it (no background, border or padding of its own). */
+.candy-special-image {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.candy-special-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.candy-special-image:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

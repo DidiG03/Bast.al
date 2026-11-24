@@ -117,7 +117,7 @@ function scatterOrigin(column: number, row: number): string {
 
 export function CandyGame() {
   useCasinoSession("candy", "Candy Cascade");
-  const { t, tn } = useI18n();
+  const { t, tn, lang } = useI18n();
   const g = useHouseGame<CandyState>("/casino/candy");
   const { ref: cabinet, mode: fullScreen, toggle: toggleFullScreen } = useFullScreen<HTMLElement>();
   const [pieces, setPieces] = useState<Piece[]>(() => piecesOf(quietBoard(), 0));
@@ -528,18 +528,15 @@ export function CandyGame() {
           <div className="candy-middle">
             {/* Beside the board on a wide screen: Special Bet and the win or the free spins. */}
             <aside className="candy-side">
-              <button type="button" className={`candy-box is-ante${ante ? " is-on" : ""}`} onClick={openSpecial} disabled={!canSpecial} title={buyNote ?? undefined}>
-                <strong>{t("Special Bets")}</strong>
-                <small>{tn(3, "{count} option", "{count} options")}</small>
-                {/* On or off: the Special Bet (ante). The knob slides across when it's on; the menu has all three options. */}
-                <span className={`candy-switch${ante ? " is-on" : ""}`} aria-hidden="true">
-                  <span className="candy-switch-knob">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M4 10h9V5.5L21 12l-8 6.5V14H4z" />
-                    </svg>
-                  </span>
-                </span>
-                <span className="sr-only">{ante ? t("Special Bet on") : t("Special Bet off")}</span>
+              {/* Special Bets: a picture (public/casino/candy/special-bets-{lang}-{on|off}.png), no styling of its own. Replace
+                  those files to change it. Its alt text says whether the Special Bet is on. */}
+              <button type="button" className={`candy-special-image${ante ? " is-on" : ""}`} onClick={openSpecial} disabled={!canSpecial} title={buyNote ?? undefined}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/casino/candy/special-bets-${lang === "sq" ? "sq" : "en"}-${ante ? "on" : "off"}.png`}
+                  alt={`${t("Special Bets")}: ${ante ? t("Special Bet on") : t("Special Bet off")}`}
+                  draggable={false}
+                />
               </button>
               <div className={`candy-box is-info${free ? " is-free" : ""}`} aria-live="polite">
                 {free ? (

@@ -511,9 +511,15 @@ export function CandyGame() {
           <div className="candy-middle">
             {/* Beside the board on a wide screen: Special Bet and the win or the free spins. */}
             <aside className="candy-side">
-              <button type="button" className={`candy-box is-ante${ante ? " is-on" : ""}`} onClick={openSpecial} disabled={!canSpecial} title={buyNote ?? undefined}>
-                <strong>{t("Special Bet")}</strong>
-                <small>{ante ? t("Double chance · +25%") : t("Ante, free spins & more")}</small>
+              <button
+                type="button"
+                className={`candy-special-art${ante ? " is-on" : ""}`}
+                onClick={openSpecial}
+                disabled={!canSpecial}
+                title={buyNote ?? (ante ? t("Double chance · +25%") : undefined)}
+                aria-label={t("Special Bet")}
+              >
+                <img src="/casino/candy/special-bets.webp" alt="" width={600} height={546} draggable={false} />
               </button>
               <div className={`candy-box is-info${free ? " is-free" : ""}`} aria-live="polite">
                 {free ? (

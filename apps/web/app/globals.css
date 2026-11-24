@@ -20210,6 +20210,45 @@ button.candy-box:disabled {
   box-shadow: 0 0 0 3px #ffd23f, 0 0 22px rgba(255, 210, 63, 0.7), 0 10px 22px rgba(90, 20, 120, 0.35);
 }
 
+/* The Special Bet on a wide screen: the drawn candy panel, glowing gold while it's on. */
+.candy-special-art {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.candy-special-art img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 10px 14px rgba(90, 20, 120, 0.35));
+  user-select: none;
+}
+
+.candy-special-art:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.05);
+}
+
+.candy-special-art:disabled {
+  cursor: default;
+  filter: grayscale(0.45) brightness(0.92);
+}
+
+.candy-special-art.is-on img {
+  filter: drop-shadow(0 0 3px #ffd23f) drop-shadow(0 0 14px rgba(255, 210, 63, 0.75));
+}
+
+.candy-special-art:focus-visible {
+  outline: 3px solid #ffd23f;
+  outline-offset: 3px;
+  border-radius: 22px;
+}
+
 .candy-box.is-info {
   min-height: 8.2rem;
   border-color: #b98af0;

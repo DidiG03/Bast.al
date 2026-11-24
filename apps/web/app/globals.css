@@ -20127,11 +20127,11 @@ button.cab-field-box:disabled {
 .candy-middle {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
+  grid-template-columns: minmax(8rem, 10rem) minmax(0, 1fr);
   align-items: center;
-  gap: 1rem;
+  gap: 0.7rem;
   min-height: 0;
-  padding: 0.35rem 1.1rem;
+  padding: 0.35rem 0.8rem;
 }
 
 /* The side column: Special Bet blue and the win violet, in striped candy frames. */
@@ -20650,24 +20650,40 @@ button.candy-chip:disabled {
   --candy-ratio: 1.5;
   position: relative;
   display: block;
-  width: min(100%, 62rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * var(--candy-ratio)));
+  width: min(100%, 64rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * var(--candy-ratio)));
+  --candy-frame: 7px;
+  --candy-stripe: #ff5fa8;
   padding: 0.4rem;
-  border: 7px solid transparent;
+  border: var(--candy-frame) solid transparent;
   border-radius: 22px;
-  /* See-through, so the candy land shows behind the candies; a faint line between the columns. */
+  /* See-through, so the candy land shows behind the candies; a faint line between the columns. Only the padding box:
+     the candy-cane stripes are their own frame (::before), so they never show through the board. */
   background:
-    repeating-linear-gradient(90deg, transparent 0 calc(100% / 6 - 1px), rgba(255, 255, 255, 0.35) calc(100% / 6 - 1px) calc(100% / 6)) padding-box,
-    linear-gradient(180deg, rgba(238, 248, 255, 0.38), rgba(255, 230, 245, 0.32)) padding-box,
-    repeating-linear-gradient(45deg, #ff5fa8 0 10px, #fff 10px 20px) border-box;
-  backdrop-filter: blur(1.5px);
+    repeating-linear-gradient(90deg, transparent 0 calc(100% / 6 - 1px), rgba(255, 255, 255, 0.4) calc(100% / 6 - 1px) calc(100% / 6)) padding-box,
+    linear-gradient(180deg, rgba(238, 248, 255, 0.4), rgba(255, 230, 245, 0.34)) padding-box;
+  backdrop-filter: blur(2px);
   box-shadow: 0 12px 28px rgba(60, 10, 100, 0.3), inset 0 0 18px rgba(255, 255, 255, 0.35);
 }
 
+/* The candy-cane frame: the stripes, masked to the border's ring only. */
+.candy-board::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--candy-frame));
+  padding: var(--candy-frame);
+  border-radius: inherit;
+  background: repeating-linear-gradient(45deg, var(--candy-stripe) 0 10px, #fff 10px 20px);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
 .candy-board.is-free {
+  --candy-stripe: #ffb01f;
   background:
-    repeating-linear-gradient(90deg, transparent 0 calc(100% / 6 - 1px), rgba(255, 255, 255, 0.35) calc(100% / 6 - 1px) calc(100% / 6)) padding-box,
-    linear-gradient(180deg, rgba(255, 248, 220, 0.42), rgba(255, 226, 190, 0.36)) padding-box,
-    repeating-linear-gradient(45deg, #ffb01f 0 10px, #fff 10px 20px) border-box;
+    repeating-linear-gradient(90deg, transparent 0 calc(100% / 6 - 1px), rgba(255, 255, 255, 0.4) calc(100% / 6 - 1px) calc(100% / 6)) padding-box,
+    linear-gradient(180deg, rgba(255, 248, 220, 0.44), rgba(255, 226, 190, 0.38)) padding-box;
 }
 
 /*
@@ -21002,7 +21018,7 @@ button.candy-chip:disabled {
     --candy-rest: 20rem;
     /* A phone held upright: the taller 6 × 5 board fits it better. */
     --candy-ratio: 1.2;
-    border-width: 5px;
+    --candy-frame: 5px;
     padding: 0.3rem;
   }
 

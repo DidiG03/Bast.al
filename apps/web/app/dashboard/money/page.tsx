@@ -419,6 +419,9 @@ function describe(entry: BalanceEntry, t: (text: string, vars?: Record<string, s
       return entry.amount >= 0 ? { icon: "🏆", title: t("Money from a bet") } : { icon: "↺", title: t("Bet corrected") };
     case "CASINO":
       return { icon: "🎰", title: t(entry.reason.split(":")[0] || "Casino") };
+    case "BET_REFUSED":
+      // A live slip refused during its wait: no money moved; the line says why.
+      return { icon: "⊘", title: t("Live bet refused, stake not taken") };
     default:
       return { icon: "✎", title: t("Correction") };
   }

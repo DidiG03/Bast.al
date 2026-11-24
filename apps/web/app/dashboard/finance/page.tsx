@@ -48,6 +48,7 @@ const MOVE_NAMES: Record<BalanceEntry["type"], string> = {
   BET_STAKE: msg("Bet placed"),
   BET_SETTLEMENT: msg("Bet settled"),
   CASINO: msg("Casino"),
+  BET_REFUSED: msg("Live bet refused"),
 };
 
 const STATUS_NAMES: Record<string, string> = { APPROVED: msg("Done"), PENDING: msg("Waiting for approval"), REJECTED: msg("Rejected") };

@@ -35,7 +35,7 @@ export const LIVE_CUTOFF_MINUTE = ms("LIVE_CUTOFF_MINUTE", 89);
  * slow for live betting. A goal or a card pauses single markets instead
  * (Market.livePauseReason).
  */
-export type LivePause = "late" | "feed" | "competition" | "bookmaker";
+export type LivePause = "late" | "feed" | "competition" | "bookmaker" | "score" | "slow";
 /**
  * The latest pause on a match (Event.liveCooldownReason, until its end):
  * a goal, a jump in the prices, the bookmaker reopening it, or a red card, a
@@ -45,7 +45,7 @@ export type LivePause = "late" | "feed" | "competition" | "bookmaker";
  */
 export type CooldownReason = MarketPauseReason;
 /** Pauses for something that happened in the match: they last until the prices are made again after it (eventPauseOver). */
-export const EVENT_PAUSES: ReadonlySet<string> = new Set(["goal", "red", "var", "ahead", "penalty"]);
+export const EVENT_PAUSES: ReadonlySet<string> = new Set(["goal", "red", "var", "ahead", "penalty", "withdrawn"]);
 
 export type LiveReading = { homeScore: number | null; awayScore: number | null; stopped: boolean };
 
@@ -145,7 +145,7 @@ export function sameLivePrice(slip: number, offered: number): boolean {
  * reopen) when fresh prices don't come.
  */
 export type MarketGroup = "goals" | "cards" | "corners";
-export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen" | "ahead" | "corner" | "yellow" | "penalty";
+export type MarketPauseReason = "goal" | "red" | "var" | "swing" | "reopen" | "ahead" | "corner" | "yellow" | "penalty" | "withdrawn";
 
 export function marketGroup(key: string): MarketGroup {
   if (/^(home_|away_)?corners_/.test(key)) return "corners";
@@ -167,6 +167,8 @@ export const EVENT_HITS: Record<MarketPauseReason, readonly MarketGroup[]> = {
   var: ["goals", "cards"],
   /** A penalty in the timeline (scored or missed): like a goal, every market, the match result first among them. */
   penalty: ["goals", "cards", "corners"],
+  /** A goal a faster source showed and then took back (a VAR call): every market, until the bookmaker's prices move after it. */
+  withdrawn: ["goals", "cards", "corners"],
   swing: ["goals", "cards"],
   reopen: ["goals", "cards", "corners"],
 };
@@ -272,6 +274,9 @@ export function freshBlocker(
   const madeAfter = Boolean(reading.bookmakerUpdate && reading.bookmakerUpdate.getTime() > pausedAt);
   const pricesMoved = Boolean(reading.movedAt && reading.movedAt.getTime() >= pausedAt);
   const changedByEvent = pause.reopenFrom !== null && pause.reopenFrom.getTime() > pausedAt;
+  // After a goal taken back, the prices must have moved since: the same pre-goal prices with a later time are the ones from
+  // before the VAR call (Shabab Al Ahli v Al-Qadisiyah reopened at them two minutes before the goal stood).
+  if (pause.reason === "withdrawn" && !pricesMoved) return "a goal was taken back: waiting for the bookmaker's prices to move after it";
   if (changedByEvent || !reading.bookmakerUpdate) {
     if (!pricesMoved && !madeAfter) return changedByEvent ? "prices haven't moved since the event, and the bookmaker time isn't later" : "no bookmaker time and prices haven't moved";
   }

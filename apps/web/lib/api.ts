@@ -65,7 +65,7 @@ export type CreateUserRequest = {
 export type BalanceEntry = {
   id: string;
   /** CASINO: one line per day for all of the day's spins, net. */
-  type: "DELEGATION" | "RECLAIM" | "ADJUSTMENT" | "BET_STAKE" | "BET_SETTLEMENT" | "CASINO";
+  type: "DELEGATION" | "RECLAIM" | "ADJUSTMENT" | "BET_STAKE" | "BET_SETTLEMENT" | "CASINO" | "BET_REFUSED";
   status?: "PENDING" | "APPROVED" | "REJECTED";
   approvedAt?: string | null;
   /** Signed from the viewed account's perspective: received = positive, given away = negative. */
@@ -214,6 +214,7 @@ const TRANSACTION_LABELS: Record<BalanceEntry["type"], string> = {
   BET_STAKE: msg("Bet placed"),
   BET_SETTLEMENT: msg("Bet settled"),
   CASINO: msg("Casino"),
+  BET_REFUSED: msg("Live bet refused"),
 };
 
 export function transactionLabel(type: BalanceEntry["type"]): string {

@@ -104,6 +104,9 @@ export function LiveTracker({ eventId, name }: { eventId: string; name: string }
             <button type="button" className="secondary" onClick={() => setAttempt((n) => n + 1)}>
               {t("Try again")}
             </button>
+            <a href={view.src} target="_blank" rel="noopener" className="text-button">
+              {t("Open the tracker in a new tab")}
+            </a>
           </div>
         ) : laidOut ? (
           <iframe
@@ -119,9 +122,16 @@ export function LiveTracker({ eventId, name }: { eventId: string; name: string }
         ) : null}
       </div>
       {loaded ? (
-        <button type="button" className="text-button live-tracker-reload" onClick={() => setAttempt((n) => n + 1)}>
-          {t("Reload tracker")}
-        </button>
+        // A frame that loaded but stays black (SportScore's own check can block a framed page): reload it, or open it on its own.
+        <p className="live-tracker-tools">
+          <button type="button" className="text-button live-tracker-reload" onClick={() => setAttempt((n) => n + 1)}>
+            {t("Reload tracker")}
+          </button>
+          {" · "}
+          <a href={view.src} target="_blank" rel="noopener" className="text-button">
+            {t("Open the tracker in a new tab")}
+          </a>
+        </p>
       ) : null}
       {/* Required by SportScore's terms (sportscore.com/developers/terms/), since we use their data to pair the
           matches: a visible, crawlable, dofollow link on every page showing their widget. Never hide it. */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useSession } from "@clerk/nextjs";
 import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
@@ -46,6 +46,9 @@ const HIDDEN_CLOSE_MS = 60_000;
  */
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { getToken } = useAuth();
+  const { session } = useSession();
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const listenersRef = useRef(new Set<Listener>());
 
   useEffect(() => {
@@ -164,7 +167,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       }
       if (parked || failures > 0) {
         parked = false;
-        reconnectNow();
+        // Back after a long while: the sign-in session is refreshed first (a long-hidden tab's can lapse), then the stream
+        // reopens with a fresh token. A failure here only means the stream's own retries carry on.
+        void Promise.resolve(sessionRef.current?.touch())
+          .catch(() => undefined)
+          .then(() => getToken({ skipCache: true }).catch(() => null))
+          .finally(reconnectNow);
       }
     };
     window.addEventListener("online", reconnectNow);

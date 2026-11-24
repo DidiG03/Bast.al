@@ -440,7 +440,10 @@ function BetPage() {
     if (slipLoaded && userId) {
       // Picks taken off (removed, cleared, placed, or dropped as over) stay off, even if another tab still holds them.
       const kept = new Set(slip.map((item) => item.selectionId));
-      forgetPicks(userId, slipRef.current.filter((item) => !kept.has(item.selectionId)).map((item) => item.selectionId));
+      // An empty slip (Clear) also forgets any pick only another tab or the home page had saved: none comes back later to
+      // join the next pick as an accumulator.
+      const stored = slip.length === 0 ? readSlip(userId) : [];
+      forgetPicks(userId, [...slipRef.current, ...stored].filter((item) => !kept.has(item.selectionId)).map((item) => item.selectionId));
       saveSlip(userId, slip);
     }
     slipRef.current = slip;
@@ -1785,6 +1788,9 @@ const PAUSE_TEXT: Record<string, string> = {
   competition: msg("Pre-match only: our feed for this competition is too slow for live betting."),
   feed: msg("Live betting is paused until this match's prices come back."),
   bookmaker: msg("The bookmaker has paused bets on this match. They reopen on their own."),
+  // Not timed pauses: closed until something changes, so they say so rather than show a countdown.
+  score: msg("Live betting is closed until the bookmaker prices the latest score."),
+  slow: msg("Live betting is closed for the rest of this match: our score feed for it is running too far behind."),
 };
 
 /** Another match to bet on while one's main market is paused. */
@@ -1817,6 +1823,7 @@ const PAUSE_REASON: Record<string, string> = {
   yellow: msg("Card just shown"),
   var: msg("VAR check"),
   penalty: msg("Penalty"),
+  withdrawn: msg("Goal under VAR review"),
   swing: msg("Big moment in the match"),
   reopen: msg("Betting reopening"),
 };
@@ -2018,9 +2025,14 @@ function BetSlip({
   const [takeNewPrice, setTakeNewPrice] = useState(false);
   /** Set when a live slip was refused (409) because the match or market is paused; the picks stay for a retry. */
   const [pausedRefusal, setPausedRefusal] = useState<"goal" | "pause" | null>(null);
+  /** Any other refusal, in the API's words: shown in the slip as well as a toast, so a stake that showed as pending never just vanishes. */
+  const [refusal, setRefusal] = useState<string | null>(null);
   const slipPicks = items.map((item) => item.selectionId).join(",");
   // A different slip is a new try: the old refusal no longer applies.
-  useEffect(() => setPausedRefusal(null), [slipPicks]);
+  useEffect(() => {
+    setPausedRefusal(null);
+    setRefusal(null);
+  }, [slipPicks]);
   const toast = useToast();
   const [receipt, setReceipt] = useState<PlaceBetsResponse | null>(null);
   const router = useRouter();
@@ -2210,6 +2222,7 @@ function BetSlip({
       return;
     }
     setPausedRefusal(null);
+    setRefusal(null);
     // The stake shows as pending under the balance at once; it's taken or given back when the API answers.
     showPending(totalStake);
     if (hasLive) {
@@ -2275,6 +2288,7 @@ function BetSlip({
         if (builder) setRequote((n) => n + 1);
       } else {
         toast.error(message);
+        setRefusal(message);
         if (/closed|no longer exists|paused|score changed|while your bet|caught up/i.test(original)) {
           onOddsChanged();
           if (builder) setRequote((n) => n + 1);
@@ -2572,6 +2586,11 @@ function BetSlip({
                     />
                   ) : null}
                 </strong>
+                {refusal && !pausedRefusal ? (
+                  <p className="bet-slip-flag" role="alert">
+                    {t("Not placed, your stake was not taken: {why}", { why: refusal })}
+                  </p>
+                ) : null}
                 {pausedRefusal ? (
                   <p className="bet-slip-flag" role="alert">
                     {pausedRefusal === "goal" ? t("Match paused after a goal – try again when prices return.") : t("Match paused – try again when prices return.")}

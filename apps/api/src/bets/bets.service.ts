@@ -49,8 +49,8 @@ function scoreInDoubt(event: { homeScore: number | null; awayScore: number | nul
   if (!match || !event.liveEarlyAt) return false;
   const [home, away] = [Number(match[1]), Number(match[2])];
   if (home === (event.homeScore ?? 0) && away === (event.awayScore ?? 0)) return false;
-  // As many goals but for other sides: a disagreement on who scored, with no time limit. Otherwise within the hold.
-  if (home + away === (event.homeScore ?? 0) + (event.awayScore ?? 0)) return true;
+  // Within the hold: a goal ahead, one taken back, or the same goals credited to the other team (after the hold that last
+  // one closes the match, OddsSyncService.sourceScore).
   return now.getTime() - event.liveEarlyAt.getTime() <= EARLY_GOAL_HOLD_MS;
 }
 
@@ -355,11 +355,16 @@ export class BetsService {
     ];
     await this.assertLiveCornersRoom(actor.id, cornerBets(), this.prisma);
     await this.assertUncoveredRoom(actor.id, cornerBets(), this.prisma);
-    // The wait, then the checks. A change during it refuses the slip before anything is stored.
-    if (await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id)) adjusted = true;
-
     const stakes = [...pricedSingles.map((bet) => bet.stake), ...(pricedAcca ? [pricedAcca.stake] : []), ...(pricedBuilder ? [pricedBuilder.stake] : []), ...(pricedSystem ? [pricedSystem.stake] : [])];
     const total = stakes.reduce((sum, stake) => sum.add(stake), new Prisma.Decimal(0));
+    // The wait, then the checks. A change during it refuses the slip before anything is stored; the refusal is kept in the
+    // Player's money history (no money moved), so a stake that showed as pending never just disappears.
+    try {
+      if (await this.confirmLive([...pricedSingles, ...(pricedAcca?.legs ?? []), ...(pricedSystem?.legs ?? [])], actor.id)) adjusted = true;
+    } catch (error) {
+      if (error instanceof ConflictException) await this.noteRefused(actor.id, total, error.message);
+      throw error;
+    }
 
     // What each outcome would add to the team's open payouts, for the Owner's cap.
     const adding = new Map<string, { payout: number; label: string }>();
@@ -743,6 +748,7 @@ export class BetsService {
       const markAfter = (marksAtConfirm as Map<string, FeedMark> | null)?.get(pick.eventId) ?? null;
       // The feed's fixture can have a goal its prices don't yet.
       if (markAfter && markAfter.home !== null && markAfter.away !== null && (markAfter.home > home || markAfter.away > away)) {
+        await this.lock(pick.eventId, "goal", { home: markAfter.home, away: markAfter.away });
         throw refuse(`The score changed while your bet on ${pick.label} was being confirmed. It was not placed, and your stake was not taken.`);
       }
       const happened = markBefore && markAfter ? newInFeed(markBefore, markAfter, true) : null;
@@ -754,6 +760,8 @@ export class BetsService {
           "a penalty": `There was a penalty while your bet on ${pick.label} was being confirmed.`,
           "a card": `A card was shown while your bet on ${pick.label} was being confirmed.`,
         }[happened];
+        const why = ({ "a goal": "goal", "a red card": "red", "a VAR check": "var", "a penalty": "penalty", "a card": "card" } as const)[happened];
+        await this.lock(pick.eventId, why, markAfter && markAfter.home !== null && markAfter.away !== null ? { home: markAfter.home, away: markAfter.away } : null);
         throw refuse(`${what} It was not placed, and your stake was not taken.`);
       }
       const event = shown.get(pick.eventId);
@@ -770,6 +778,7 @@ export class BetsService {
       const redsBefore = momentsOf(atSubmit.get(pick.eventId)?.matchCentre)?.filter((moment) => moment.kind === "red").length;
       const reds = moments ? moments.filter((moment) => moment.kind === "red").length : null;
       // A red card during the wait changes the match as much as a goal.
+      if (reds !== null && redsBefore !== undefined && reds > redsBefore) await this.lock(pick.eventId, "red");
       if (reds !== null && redsBefore !== undefined && reds > redsBefore) throw refuse(`A red card was shown while your bet on ${pick.label} was being confirmed. Check the new odds and try again.`);
       const countOf = (centre: unknown) => countsFromCentre(centre, null);
       const total = (pair: [number, number] | null) => (pair ? pair[0] + pair[1] : null);
@@ -855,14 +864,21 @@ export class BetsService {
     let delay = waits.usualMs;
     // No early goal source for a match: wait longer (LIVE_UNCOVERED_DELAY_MS, 15 s by default, never over the longest wait).
     const uncovered = await uncoveredMatches(this.prisma, [...events.keys()]);
+    let tooSlow = waits.tooSlow;
     if (uncovered.size > 0) {
-      const longer = Math.min(waits.mostMs, Math.max(delay, uncoveredDelayMs()));
+      // The match's own goals so far: how late each reached us (GoalSeen.lagMs, from the middle of its minute).
+      const own = await this.prisma.goalSeen.aggregate({ where: { eventId: { in: [...uncovered] }, lagMs: { not: null } }, _max: { lagMs: true } });
+      const ownLag = own._max.lagMs ?? null;
+      const needed = Math.max(uncoveredDelayMs(), ownLag === null ? 0 : ownLag + waits.marginMs);
+      // A wait can't cover it: no live bets on that match (the feed is our only warning there).
+      if (ownLag !== null && needed > waits.mostMs) tooSlow = tooSlow ?? [...events.values()].find((event) => uncovered.has(event.id))?.league ?? null;
+      const longer = Math.min(waits.mostMs, Math.max(delay, needed));
       if (longer > delay) {
         delay = longer;
         longerBecause = longerBecause ?? "no live tracker on the match, so goals reach us later";
       }
     }
-    return { delay, longerBecause, waits };
+    return { delay, longerBecause, waits: { ...waits, tooSlow } };
   }
 
   /**
@@ -1005,6 +1021,18 @@ export class BetsService {
         throw new BadRequestException(`Live bets on corners are limited to ${LIVE_CORNERS_MAX_STAKE} ALL a match. You can stake ${formatAll(left)} more on ${match}.`);
       }
     }
+  }
+
+  /** A refused live slip in the Player's money history: status REJECTED, so it moves no money and no total counts it. */
+  private async noteRefused(playerId: string, stake: Prisma.Decimal, why: string) {
+    await this.prisma.balanceTransaction
+      .create({ data: { type: BalanceTransactionType.BET_REFUSED, status: "REJECTED", amount: stake, toUserId: playerId, reason: `Live bet refused, stake not taken: ${why}`.slice(0, 480) } })
+      .catch((error) => this.logger.warn(`Refused slip not noted for ${playerId}: ${error instanceof Error ? error.message : String(error)}`));
+  }
+
+  /** Pauses the whole match for everyone after a slip was refused for something in it (OddsSyncService.lockMatch); a failure there never hides the refusal. */
+  private async lock(eventId: string, why: "goal" | "red" | "var" | "penalty" | "card", score?: { home: number; away: number } | null) {
+    await this.sync.lockMatch(eventId, why, score ?? null).catch((error) => this.logger.warn(`Match ${eventId} not locked after a refused slip: ${error instanceof Error ? error.message : String(error)}`));
   }
 
   /**

@@ -139,9 +139,10 @@ export function HomeEventCard({ event, sport, showSport }: { event: OddsEvent; s
               <button
                 key={selection.id}
                 type="button"
-                className={`player-top-pick${picked.has(selection.id) ? " is-selected" : ""}`}
-                disabled={off}
-                onClick={() => choose(selection)}
+                className={`player-top-pick${picked.has(selection.id) ? " is-selected" : ""}${off ? " is-locked" : ""}`}
+                // A paused price says so when tapped rather than doing nothing.
+                aria-disabled={off}
+                onClick={() => (off ? toast.info(t("Paused for a moment: this price returns when the bookmaker reopens it.")) : choose(selection))}
                 aria-label={t(off ? "{pick} at {odds}, {market}, {match}, suspended" : "{pick} at {odds}, {market}, {match}", {
                   pick: label,
                   odds: selection.price.toFixed(2),

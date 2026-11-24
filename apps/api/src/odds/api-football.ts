@@ -918,6 +918,17 @@ function liveSpecFor(name: string): LiveSpec | undefined {
 }
 
 /**
+ * A market of three or more outcomes all at the same price (2.75 / 2.75 /
+ * 2.75) is the bookmaker's placeholder, not a price: it comes back held, so
+ * it never reopens a paused match or takes a bet.
+ */
+export function placeholderHeld(market: FeedLiveMarket): FeedLiveMarket {
+  const priced = market.selections.filter((selection) => selection.odds > 1);
+  if (priced.length < 3 || priced.length !== market.selections.length || !priced.every((selection) => Math.abs(selection.odds - priced[0].odds) < 0.001)) return market;
+  return { ...market, suspended: true, selections: market.selections.map((selection) => ({ ...selection, held: true })) };
+}
+
+/**
  * The in-play prices for one match. Markets the feed suspends, or two- and
  * three-way markets missing an outcome, come back suspended with the prices
  * they do have; a market the feed doesn't send at all is left out, which
@@ -944,7 +955,7 @@ export function parseLiveOdds(raw: RawLiveOdds, homeTeam: string, awayTeam: stri
     elapsed: goals(raw.fixture.status?.elapsed),
     bookmakerUpdate: typeof raw.update === "string" ? raw.update : null,
     clock: typeof raw.fixture.status?.seconds === "string" ? raw.fixture.status.seconds : null,
-    markets: [...markets.values()].sort((a, b) => a.sortOrder - b.sortOrder),
+    markets: [...markets.values()].map(placeholderHeld).sort((a, b) => a.sortOrder - b.sortOrder),
   };
 }
 

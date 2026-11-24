@@ -78,6 +78,8 @@ type LiveEventState = {
   liveSlowFeed?: boolean;
   /** Its competition's feed is too slow for live betting (OddsService.liveLimits): pre-match only. */
   liveSlowCompetition?: boolean;
+  /** A score the feed's own timeline (or fixture) has that its prices don't yet (Event.liveScoreAhead). */
+  liveScoreAhead?: string | null;
 };
 
 /** A market's live state: the feed's suspension, a pause after something in the match, and when the feed last priced it. */
@@ -182,7 +184,11 @@ export function livePause(event: LiveEventState, now: Date = new Date()): LivePa
   if (event.liveSlowCompetition) return "competition";
   // The bookmaker blocking the match, or not having priced it in the opening minutes. Not "a moment".
   if (event.liveStopped) return "bookmaker";
-  if (event.liveSlowFeed) return "feed";
+  // Closed for the rest of the match (a goal reached us too late, or the sources kept disagreeing): not a pause.
+  if (event.liveSlowFeed) return "slow";
+  // The score shown is older than the one the feed has confirmed elsewhere: no bets until its prices carry it,
+  // however long the pause before it lasted (prices still for the old score must never take a bet).
+  if (scoreBehind(event)) return "score";
   // Minute 89 in the 90 minutes, near the end of extra time, and the whole shootout (extra-time.ts).
   if (liveCutoffReached(event.elapsed, event.period)) return "late";
   if (event.liveOddsAt === null) {
@@ -192,6 +198,13 @@ export function livePause(event: LiveEventState, now: Date = new Date()): LivePa
   }
   if (now.getTime() - event.liveOddsAt.getTime() > LIVE_ODDS_STALE_MS) return "feed";
   return null;
+}
+
+/** The confirmed score (Event.liveScoreAhead) has more goals than the score on the board. */
+export function scoreBehind(event: Pick<LiveEventState, "liveScoreAhead" | "homeScore" | "awayScore">): boolean {
+  const ahead = event.liveScoreAhead ? /^(\d+):(\d+)$/.exec(event.liveScoreAhead) : null;
+  if (!ahead) return false;
+  return Number(ahead[1]) + Number(ahead[2]) > (event.homeScore ?? 0) + (event.awayScore ?? 0);
 }
 
 /**

@@ -160,8 +160,9 @@ export function MarketHead({
   quiet?: boolean;
   children?: ReactNode;
 }) {
-  const { t, lang } = useI18n();
-  const code = lang === "sq" ? marketCode(marketKey) : null;
+  const { t } = useI18n();
+  // The short market codes ([DSh], [TG_L/P]) read as raw codes to players: not shown. marketKey stays for callers.
+  void marketKey;
   return (
     <div className="odds-market-head">
       <button type="button" className="text-button odds-market-toggle" aria-expanded={open} onClick={onToggle}>
@@ -173,7 +174,6 @@ export function MarketHead({
           {suspended && !quiet ? <span className="muted"> · {paused ? t("Paused") : after ? t("New prices coming") : t("Suspended")}</span> : null}
         </span>
         {picked && !open ? <span className="odds-market-picked" role="img" aria-label={t("On your slip")} title={t("On your slip")} /> : null}
-        {code ? <span className="odds-market-code muted">[{code}]</span> : null}
       </button>
       {open ? children : null}
       <button

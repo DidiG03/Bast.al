@@ -255,7 +255,10 @@ test("a goal in the feed's fixture during the wait, before its prices have it: t
 test("a VAR check or a red card in the feed's timeline during the wait refuses the slip too", async () => {
   const match = await liveMatch("VAR in the feed");
   await assert.rejects(withFeed(match.id, [mark(), mark({ vars: 1, events: 1 })], () => place(match)), /VAR check while your bet/);
-  await assert.rejects(withFeed(match.id, [mark(), mark({ cards: 1, reds: 1, events: 1 })], () => place(match)), /red card was shown while your bet/);
+  // The refusal locks the whole match for everyone (OddsSyncService.lockMatch): the next slip on it is refused straight away.
+  await assert.rejects(place(match), /paused/);
+  const red = await liveMatch("Red in the feed");
+  await assert.rejects(withFeed(red.id, [mark(), mark({ cards: 1, reds: 1, events: 1 })], () => place(red)), /red card was shown while your bet/);
 });
 
 test("nothing new in the feed: the bet goes in, and keeps both readings of the feed, the score from each source and how long the checks took", async () => {

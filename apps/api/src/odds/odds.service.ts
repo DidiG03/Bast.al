@@ -71,9 +71,7 @@ function pendingScore(event: { status: string; homeScore: number | null; awaySco
   if (!match) return null;
   const score = { home: Number(match[1]), away: Number(match[2]) };
   if (score.home === event.homeScore && score.away === event.awayScore) return null;
-  // A disagreement on who scored (same total) is shown for as long as it lasts; a goal ahead or taken back within its hold.
-  const sameTotal = score.home + score.away === (event.homeScore ?? 0) + (event.awayScore ?? 0);
-  return sameTotal || now.getTime() - event.liveEarlyAt.getTime() <= EARLY_GOAL_HOLD_MS ? score : null;
+  return now.getTime() - event.liveEarlyAt.getTime() <= EARLY_GOAL_HOLD_MS ? score : null;
 }
 
 /** A row read with LIST_SELECT, with the left-out records as empty. */

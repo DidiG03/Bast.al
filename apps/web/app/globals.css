@@ -52,7 +52,7 @@
   --player-glow: rgb(160 210 0 / 12%);
   --player-scheme: light;
   --player-detail: #f5f6f2;
-  --player-pick: #ffffff;
+  --player-pick: #edf0e8;
   --player-pick-hover: #f3f6ec;
   --player-pick-border: #d8ddd1;
   --player-on-accent: #0b1300;
@@ -97,7 +97,7 @@
     --player-glow: rgb(160 210 0 / 12%);
     --player-scheme: light;
     --player-detail: #f5f6f2;
-    --player-pick: #ffffff;
+    --player-pick: #edf0e8;
     --player-pick-hover: #f3f6ec;
     --player-pick-border: #d8ddd1;
     --player-on-accent: #0b1300;
@@ -21171,3 +21171,17 @@ button.candy-chip:disabled {
 .bet-card-kind.is-live { color: var(--danger, #d33); font-weight: 600; }
 
 .bm-pause-credit { margin-left: 6px; font-size: 0.75rem; color: inherit; opacity: 0.8; }
+
+.live-tracker-tools { margin: 4px 0 0; font-size: 0.8rem; }
+
+/* Light theme: price buttons stand out from the white card (a tint and a thin line). */
+:root[data-theme="light"] .role-player button.bm-pick,
+:root[data-theme="light"] .role-player .player-top-pick {
+  box-shadow: inset 0 0 0 1px var(--player-pick-border, #d8ddd1);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .role-player button.bm-pick,
+  :root:not([data-theme="dark"]) .role-player .player-top-pick {
+    box-shadow: inset 0 0 0 1px var(--player-pick-border, #d8ddd1);
+  }
+}

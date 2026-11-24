@@ -147,6 +147,8 @@ const ALL_PRICED_MAX_PAGES = Number(process.env.API_FOOTBALL_ALL_PRICED_MAX_PAGE
  * would sit through covers that feed. LIVE_SLOW_MATCH_MS=0 turns it off.
  */
 const LIVE_SLOW_MATCH_MS = process.env.LIVE_SLOW_MATCH_MS === "0" ? Infinity : Number(process.env.LIVE_SLOW_MATCH_MS) || 20_000;
+/** A goal the feed's timeline didn't have yet is timed again this much later. */
+const LAG_RETRY_MS = 45_000;
 /**
  * How long a goal a faster source showed first (SportScore) keeps a match's
  * markets paused and its live slips refused while our own feed hasn't caught
@@ -1308,15 +1310,77 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
           if (lag) {
             await this.saveLag(eventId, score, lag);
             this.logger.log(`Feed lag on ${event.name} (${event.provider}, ${event.league}): ${score.home}–${score.away} (${goal!.minute}${goal!.extra ? `+${goal!.extra}` : ""}') reached the site about ${Math.round(lag.lagMs / 1000)} s after it went in, at least ${Math.max(0, Math.round(lag.lagMinMs / 1000))} s (${source} feed)`);
-            if (lag.lagMinMs > LIVE_SLOW_MATCH_MS) await this.stopSlowMatch(eventId, event.name, lag.lagMinMs);
+            await this.stopIfSlow(eventId, event.name, lag);
           } else {
-            this.logger.log(`Feed lag on ${event.name}: ${score.home}–${score.away} not timed yet (${timeline ? "the feed's timeline doesn't have it" : "no timeline from the feed"})`);
+            this.logger.log(`Feed lag on ${event.name}: ${score.home}–${score.away} not timed yet (${timeline ? "the feed's timeline doesn't have it" : "no timeline from the feed"}); asked again in ${LAG_RETRY_MS / 1000} s`);
+            this.retryLag(eventId, score, seenAt);
           }
         }
       }
     } finally {
       await this.onGoalSeen?.(eventId, timeline);
     }
+  }
+
+  /**
+   * Stops live betting on a match whose goal reached the site too late for
+   * any wait to cover. With a SportScore link the earliest the goal can have
+   * gone in counts (lagMinMs: an early goal pause covers the rest). Without
+   * one, the feed is our only warning, so the likely delay (lagMs, from the
+   * middle of the goal's minute) counts: a feed 40–75 s behind on Wolves v
+   * Derby measured only ~15 s by its least delay and stayed open.
+   */
+  private async stopIfSlow(eventId: string, name: string, lag: { lagMs: number; lagMinMs: number }) {
+    if (!Number.isFinite(LIVE_SLOW_MATCH_MS)) return;
+    const linked = await this.prisma.trackerMapping.findUnique({ where: { eventId }, select: { externalId: true } });
+    const measured = linked?.externalId ? lag.lagMinMs : lag.lagMs;
+    if (measured > LIVE_SLOW_MATCH_MS) await this.stopSlowMatch(eventId, name, measured);
+  }
+
+  /** A goal the feed's timeline didn't have yet when it reached the site: timed again a little later, twice at most. */
+  private retryLag(eventId: string, score: { home: number; away: number }, seenAt: Date, tries = 2) {
+    if (tries <= 0 || process.env.NODE_ENV === "test") return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        if (!this.client || !this.centreQuotaOk(Date.now())) return;
+        const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { name: true, externalId: true, status: true } });
+        if (!event?.externalId || event.status !== EventStatus.LIVE) return;
+        const [raw] = await this.client.fixtureDetails([event.externalId]).catch(() => []);
+        const timeline = raw ? parseLiveTimeline(raw) : null;
+        const goal = timeline ? goalForScore(timeline, score.home, score.away) : null;
+        const lag = goal && timeline ? goalLag(goal, timeline, seenAt) : null;
+        if (!lag) return this.retryLag(eventId, score, seenAt, tries - 1);
+        await this.saveLag(eventId, score, lag);
+        this.logger.log(`Feed lag on ${event.name}: ${score.home}–${score.away} timed on a second look: about ${Math.round(lag.lagMs / 1000)} s`);
+        await this.stopIfSlow(eventId, event.name, lag);
+      })().catch(() => undefined);
+    }, LAG_RETRY_MS);
+    timer.unref?.();
+  }
+
+  /**
+   * After a live slip was refused for something that happened in the match
+   * during its wait (a goal, a card, a VAR check, a penalty the feed's
+   * timeline had first): the whole match is paused for everyone, the list
+   * and slips told at once, until prices made after it come in (and, for a
+   * goal, carry its score). A refusal no longer leaves the match open for
+   * the next slip (Wolves v Derby: the 2–0 refused one slip, a later one
+   * went in after the unseen 3–0).
+   */
+  async lockMatch(eventId: string, why: "goal" | "red" | "var" | "penalty" | "card", score?: { home: number; away: number } | null, now: Date = new Date()) {
+    const reason: MarketPauseReason = why === "goal" ? "ahead" : why === "card" ? "yellow" : why;
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { name: true, status: true, homeScore: true, awayScore: true, liveCooldownUntil: true, liveCooldownReason: true, liveScoreAhead: true } });
+    if (!event || event.status !== EventStatus.LIVE) return;
+    // A card pauses the cards markets; anything else the whole match.
+    await this.pauseMarkets(eventId, { reason: why === "card" ? "yellow" : reason === "ahead" ? "ahead" : reason, pricedSinceEvent: new Set() }, null, now);
+    const pause = laterCooldown({ until: event.liveCooldownUntil, reason: event.liveCooldownReason }, { until: new Date(now.getTime() + GOAL_COOLDOWN_MS), reason });
+    const ahead = score && score.home + score.away > (event.homeScore ?? 0) + (event.awayScore ?? 0) ? `${score.home}:${score.away}` : null;
+    await this.prisma.event.update({
+      where: { id: eventId },
+      data: { liveCooldownUntil: pause.until, liveCooldownReason: pause.reason, liveVersion: { increment: 1 }, ...(ahead ? { liveScoreAhead: ahead } : {}) },
+    });
+    this.logger.warn(`Live betting paused on ${event.name} after a refused slip (${why}${ahead ? `, the feed's timeline has ${ahead}` : ""}): until prices made after it come in`);
+    await this.announceLive([eventId]);
   }
 
   /** Keeps a goal's delay with it (feed-delay.ts goalLag). */
@@ -1430,7 +1494,10 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
     for (const row of rows.filter((r) => r.lagMs === null)) {
       const goal = goalForScore(timeline, row.homeScore, row.awayScore);
       const lag = goal ? goalLag(goal, timeline, row.seenAt) : null;
-      if (lag) await this.saveLag(eventId, { home: row.homeScore, away: row.awayScore }, lag);
+      if (lag) {
+        await this.saveLag(eventId, { home: row.homeScore, away: row.awayScore }, lag);
+        await this.stopIfSlow(eventId, name, lag);
+      }
     }
     const delay = feedDelay(rows.map((row) => ({ eventName: name, ...row, timeline })));
     if (delay.goals === 0) return;
@@ -1580,15 +1647,29 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   async sourceScore(eventId: string, score: { home: number; away: number }, source: string, now: Date = new Date()): Promise<boolean> {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { name: true, sport: true, status: true, homeScore: true, awayScore: true, liveCooldownUntil: true, liveCooldownReason: true, liveEarlyScore: true, liveEarlyAt: true },
+      select: { name: true, sport: true, status: true, homeScore: true, awayScore: true, liveCooldownUntil: true, liveCooldownReason: true, liveEarlyScore: true, liveEarlyAt: true, liveSlowFeed: true },
     });
-    if (!event || event.sport !== "football" || event.status !== EventStatus.LIVE) return false;
+    // Live betting already closed on the match for good: nothing to pause.
+    if (!event || event.sport !== "football" || event.status !== EventStatus.LIVE || event.liveSlowFeed) return false;
     const board = (event.homeScore ?? 0) + (event.awayScore ?? 0);
     const theirs = score.home + score.away;
     const key = `${score.home}:${score.away}`;
-    // The same score, side by side: nothing to say.
+    // The same score, side by side: nothing to say, unless it just took back a goal of its own (a VAR call). Then the match
+    // stays paused until the bookmaker's prices move after it, never back at the pre-goal ones.
     if (score.home === (event.homeScore ?? 0) && score.away === (event.awayScore ?? 0)) {
-      if (event.liveEarlyScore) await this.prisma.event.update({ where: { id: eventId }, data: { liveEarlyScore: null, liveEarlyAt: null } });
+      if (event.liveEarlyScore) {
+        const was = scoreOf(event.liveEarlyScore);
+        const withdrew = Boolean(was && was.home + was.away > board);
+        if (withdrew) await this.pauseMarkets(eventId, { reason: "withdrawn", pricedSinceEvent: new Set() }, null, now);
+        await this.prisma.event.update({
+          where: { id: eventId },
+          data: { liveEarlyScore: null, liveEarlyAt: null, ...(withdrew ? { liveVersion: { increment: 1 }, liveCooldownUntil: new Date(now.getTime() + GOAL_COOLDOWN_MS), liveCooldownReason: "withdrawn" } : {}) },
+        });
+        if (withdrew) {
+          this.logger.warn(`${source} took back ${event.liveEarlyScore} on ${event.name} (back to ${score.home}–${score.away}): paused until the bookmaker's prices move after it`);
+          await this.announceLive([eventId]);
+        }
+      }
       return false;
     }
     const ahead = theirs > board;
@@ -1600,6 +1681,14 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
       await this.prisma.earlyGoal.createMany({ data: [{ eventId, homeScore: score.home, awayScore: score.away, source, seenAt: now }], skipDuplicates: true });
       const first = await this.prisma.earlyGoal.findUnique({ where: { eventId_homeScore_awayScore_source: { eventId, homeScore: score.home, awayScore: score.away, source } }, select: { seenAt: true } });
       if (first && first.seenAt < since) since = first.seenAt;
+    }
+    // Still disagreeing on who scored after the hold: the match closes to live bets for good (said as closed, not a pause
+    // with no end), rather than reopening on prices that may be for the wrong team.
+    if (sidesDisagree && now.getTime() - since.getTime() > EARLY_GOAL_HOLD_MS) {
+      await this.prisma.event.update({ where: { id: eventId }, data: { liveEarlyScore: null, liveEarlyAt: null, liveSlowFeed: true, liveVersion: { increment: 1 } } });
+      this.logger.warn(`Live betting closed on ${event.name}: ${source} (${score.home}–${score.away}) and our feed (${event.homeScore}–${event.awayScore}) still disagree on who scored after ${Math.round(EARLY_GOAL_HOLD_MS / 1000)} s`);
+      await this.announceLive([eventId]);
+      return false;
     }
     if (!sidesDisagree && now.getTime() - since.getTime() > EARLY_GOAL_HOLD_MS) {
       // Held long enough: our own feed decides from here. Logged once, when the hold ends.
@@ -1640,14 +1729,17 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
   /** Clears early scores our own feed now agrees with (or that are held past EARLY_GOAL_HOLD_MS). Returns how many. */
   async settleEarlyScores(now: Date = new Date()): Promise<number> {
     const rows = await this.prisma.event.findMany({ where: { liveEarlyScore: { not: null } }, select: { id: true, status: true, homeScore: true, awayScore: true, liveEarlyScore: true, liveEarlyAt: true } });
+    const closing: string[] = [];
     const done = rows.filter((row) => {
       const early = scoreOf(row.liveEarlyScore);
       const board = (row.homeScore ?? 0) + (row.awayScore ?? 0);
       const same = early && early.home === (row.homeScore ?? 0) && early.away === (row.awayScore ?? 0);
-      // A disagreement on who scored (same total) has no time limit: it lasts until the two agree.
-      const expired = early && board !== early.home + early.away && (!row.liveEarlyAt || now.getTime() - row.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS);
+      const expired = early && (!row.liveEarlyAt || now.getTime() - row.liveEarlyAt.getTime() > EARLY_GOAL_HOLD_MS);
+      // A disagreement on who scored that outlasted the hold closes the match (sourceScore) rather than just ending.
+      if (expired && early && board === early.home + early.away && row.status === EventStatus.LIVE && (early.home !== (row.homeScore ?? 0))) closing.push(row.id);
       return !early || row.status !== EventStatus.LIVE || same || expired;
     });
+    if (closing.length > 0) await this.prisma.event.updateMany({ where: { id: { in: closing } }, data: { liveSlowFeed: true, liveVersion: { increment: 1 } } });
     if (done.length > 0) await this.prisma.event.updateMany({ where: { id: { in: done.map((row) => row.id) } }, data: { liveEarlyScore: null, liveEarlyAt: null } });
     return done.length;
   }
@@ -1727,7 +1819,9 @@ export class OddsSyncService implements OnModuleInit, OnModuleDestroy {
         ...(stateMoved ? { liveVersion: { increment: 1 } } : {}),
         ...(odds.finished ? { period: "FT" } : {}),
         ...(scored ? { homeScore: odds.homeScore, awayScore: odds.awayScore } : {}),
-        ...(odds.elapsed !== null && laterMinute(before.elapsed, odds.elapsed, true) ? { elapsed: odds.elapsed, ...(odds.elapsed !== before.elapsed ? { elapsedAt: new Date() } : {}) } : {}),
+        // The bookmaker's clock to the second ("61:57") when the feed sends it: the minute and when it began, so the page's clock
+        // moves on exactly with the match's; otherwise the feed's minute, from when it changed. Never a step back.
+        ...minuteFrom(odds.clock ?? null, odds.elapsed, before.elapsed, now),
         ...(ahead && caughtUp ? { liveScoreAhead: null } : {}),
         // Our feed now has the faster source's score: that difference is over.
         ...(early && scored && early.home === odds.homeScore && early.away === odds.awayScore ? { liveEarlyScore: null, liveEarlyAt: null } : {}),
@@ -2146,4 +2240,25 @@ function listEnv(name: string): string[] | null {
 function laterMinute(saved: number | null | undefined, next: number | null, samePeriod: boolean): boolean {
   if (next === null) return false;
   return !samePeriod || saved === null || saved === undefined || next >= saved;
+}
+
+/**
+ * The minute to save from a live reading, and when it began: from the
+ * bookmaker's clock ("61:57": the 61st minute, 57 s in) when there is one,
+ * else the feed's minute as it changed. Nothing when it would step back.
+ */
+export function minuteFrom(clock: string | null, elapsed: number | null, saved: number | null | undefined, now: Date): { elapsed?: number; elapsedAt?: Date } {
+  const match = clock ? /^(\d{1,3}):([0-5]\d)$/.exec(clock.trim()) : null;
+  if (match) {
+    // 61:57 played is the 62nd minute, as score sites show it; never more than one past the feed's own minute.
+    const played = Number(match[1]);
+    const minute = elapsed === null ? played + 1 : Math.min(played + 1, elapsed + 1);
+    // Agree with the feed's own minute to within one, or the clock is for something else (a break, extra time numbering).
+    if (elapsed === null || Math.abs(played - elapsed) <= 1) {
+      if (!laterMinute(saved, minute, true)) return {};
+      return { elapsed: minute, elapsedAt: new Date(now.getTime() - Number(match[2]) * 1000) };
+    }
+  }
+  if (elapsed === null || !laterMinute(saved, elapsed, true)) return {};
+  return elapsed !== saved ? { elapsed, elapsedAt: now } : { elapsed };
 }

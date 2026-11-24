@@ -70,7 +70,7 @@ const MONEY_KIND_TYPES: Record<Exclude<MoneyKind, "all">, BalanceTransactionType
   given: [BalanceTransactionType.DELEGATION],
   taken: [BalanceTransactionType.RECLAIM],
   corrections: [BalanceTransactionType.ADJUSTMENT],
-  bets: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT],
+  bets: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT, BalanceTransactionType.BET_REFUSED],
   casino: [BalanceTransactionType.CASINO],
 };
 
@@ -575,9 +575,9 @@ export class UsersService {
     const to = day(filter.to, "To");
     if (from) parts.push({ createdAt: { gte: midnight(from.year, from.month, from.day) } });
     if (to) parts.push({ createdAt: { lt: midnight(to.year, to.month, to.day + 1) } });
-    if (filter.kind === "bets") parts.push({ type: { in: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT] } });
+    if (filter.kind === "bets") parts.push({ type: { in: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT, BalanceTransactionType.BET_REFUSED] } });
     else if (filter.kind === "casino") parts.push({ type: BalanceTransactionType.CASINO });
-    else if (filter.kind === "topups") parts.push({ type: { notIn: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT, BalanceTransactionType.CASINO] } });
+    else if (filter.kind === "topups") parts.push({ type: { notIn: [BalanceTransactionType.BET_STAKE, BalanceTransactionType.BET_SETTLEMENT, BalanceTransactionType.BET_REFUSED, BalanceTransactionType.CASINO] } });
     else if (filter.kind && filter.kind !== "all") throw new BadRequestException("Kind must be all, topups, bets or casino");
     // Money in: received, or a line on this account that adds to it (a win, a top-up); out: given away, or one that takes from it (a stake, a loss).
     if (filter.direction === "in") parts.push({ OR: [{ toUserId: id, amount: { gt: 0 } }, { fromUserId: id, amount: { lt: 0 } }] });
@@ -2034,7 +2034,7 @@ function moveBlocker(username: string, balance: Prisma.Decimal, openBets: number
 /** Who a ledger entry with no other account came from: a bet, the Casino, or a Super Admin adjustment. */
 function noCounterparty(type: BalanceTransactionType): string {
   if (type === BalanceTransactionType.CASINO) return "Casino";
-  return type === BalanceTransactionType.BET_STAKE || type === BalanceTransactionType.BET_SETTLEMENT ? "Betting" : "Platform";
+  return type === BalanceTransactionType.BET_STAKE || type === BalanceTransactionType.BET_SETTLEMENT || type === BalanceTransactionType.BET_REFUSED ? "Betting" : "Platform";
 }
 
 /**

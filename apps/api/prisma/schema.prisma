@@ -43,6 +43,11 @@ enum BalanceTransactionType {
   /// balance. amount is the day's net (wins minus stakes). The spins
   /// themselves are in casino_spins.
   CASINO
+  /// A live slip refused during its wait (a goal, a pause, a price move): no
+  /// money moved. Kept so the Player's money history says what happened to
+  /// the stake that showed as pending. Always status REJECTED, amount the
+  /// slip's total stake, toUserId the Player; nothing sums these.
+  BET_REFUSED
 }
 
 enum NotificationType {

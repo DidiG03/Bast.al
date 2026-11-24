@@ -188,26 +188,31 @@ test("it pays back about 84.7% over many rounds", () => {
 });
 
 test("the Special Bet and bought free spins: what they cost, and how they play", () => {
-  assert.deepEqual(Candy.COST, { NORMAL: 1, ANTE: 1.25, BUY: 100, SUPER: 240 });
+  assert.deepEqual(Candy.COST, { NORMAL: 1, ANTE: 1.25, BUY: 100, SUPER1: 500, SUPER2: 1000 });
   assert.equal(Candy.costCents(5000, "ANTE"), 6250);
   assert.equal(Candy.costCents(5000, "BUY"), 500000);
-  assert.equal(Candy.costCents(5000, "SUPER"), 1200000);
+  assert.equal(Candy.costCents(5000, "SUPER1"), 2500000);
+  assert.equal(Candy.costCents(5000, "SUPER2"), 5000000);
   const draw = seeded(9);
   for (let i = 0; i < 300; i++) {
     const bought = Candy.play(draw, "BUY");
     assert.equal(bought.bought, 10);
     assert.ok(bought.spins.length >= 10 && bought.spins.every((spin) => spin.free));
-    const superRound = Candy.play(draw, "SUPER");
-    // Super free spins' multiplier candies are never below 5x.
-    for (const spin of superRound.spins) for (const step of spin.steps) for (const cell of step.board) if (cell.startsWith("X")) assert.ok(Number(cell.slice(1)) >= 5);
+    // Super free spins 1's multiplier candies are never below 20x, super free spins 2's never below 10x.
+    for (const [mode, min] of [["SUPER1", 20], ["SUPER2", 10]]) {
+      const superRound = Candy.play(draw, mode);
+      assert.equal(superRound.bought, 10);
+      for (const spin of superRound.spins) for (const step of spin.steps) for (const cell of step.board) if (cell.startsWith("X")) assert.ok(Number(cell.slice(1)) >= min);
+    }
     const ante = Candy.play(draw, "ANTE");
+    assert.equal(ante.spins.some((spin) => spin.total !== undefined), false);
     assert.equal(ante.bought, 0);
     assert.equal(ante.spins[0].free, false);
   }
 });
 
 test("every way to play pays back about the same, near 85% of what it costs", () => {
-  for (const [mode, rounds, seed] of [["ANTE", 300_000, 11], ["BUY", 30_000, 12], ["SUPER", 25_000, 13]]) {
+  for (const [mode, rounds, seed] of [["ANTE", 300_000, 11], ["BUY", 30_000, 12], ["SUPER1", 25_000, 13], ["SUPER2", 25_000, 14]]) {
     const draw = seeded(seed);
     let paid = 0;
     let squares = 0;
@@ -223,3 +228,24 @@ test("every way to play pays back about the same, near 85% of what it costs", ()
   }
 });
 
+
+test("super free spins 2: a winning spin's multipliers join a total that stays and multiplies every win after", () => {
+  const draw = seeded(31);
+  let grew = 0;
+  for (let i = 0; i < 400; i++) {
+    const round = Candy.play(draw, "SUPER2");
+    let total = 0;
+    for (const spin of round.spins) {
+      const own = spin.steps[spin.steps.length - 1].board.reduce((sum, cell) => sum + (cell.startsWith("X") ? Number(cell.slice(1)) : 0), 0);
+      const expected = total + (spin.tumbleWin > 0 ? own : 0);
+      assert.equal(spin.total, expected);
+      if (spin.tumbleWin > 0 && expected > 0) assert.equal(spin.multiplier, expected);
+      else assert.equal(spin.multiplier, 1);
+      assert.equal(spin.win, spin.tumbleWin * spin.multiplier + spin.scatterPay);
+      if (expected > total && total > 0) grew++;
+      total = expected;
+    }
+  }
+  // The total does carry over and grow.
+  assert.ok(grew > 0);
+});

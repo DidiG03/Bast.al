@@ -221,7 +221,7 @@ async function main() {
   await run("Money Wheel", ["WHEEL"], ROUNDS, () => games.wheelSpin(player, pick(STAKES), pick(["LOW", "MEDIUM", "HIGH"])));
   await run("Candy Cascade", ["CANDY"], ROUNDS, () => games.candySpin(player, pick(STAKES)));
   // The Special Bet, and free spins bought (at bets up to 500): a tenth as many rounds, they cost more.
-  await run("Candy Cascade (special bet and bought)", ["CANDY"], Math.ceil(ROUNDS / 10), () => games.candySpin(player, pick([50, 100, 250, 500]), pick(["ANTE", "ANTE", "BUY", "SUPER"])));
+  await run("Candy Cascade (special bet and bought)", ["CANDY"], Math.ceil(ROUNDS / 10), () => games.candySpin(player, pick([50, 100, 250, 500]), pick(["ANTE", "ANTE", "BUY", "SUPER1", "SUPER2"])));
   await run("Baccarat", ["BACCARAT"], ROUNDS, () => games.baccaratDeal(player, pick(STAKES), pick(["PLAYER", "BANKER", "TIE"])));
 
   await run("Hi-Lo", ["HILO"], ROUNDS, async () => {

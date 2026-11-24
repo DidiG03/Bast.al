@@ -4576,7 +4576,7 @@ button.odds-selection:hover,
    same low specificity can end up deciding the color instead — including on a
    page that isn't even admin-themed. This simply always wins here. */
 /* Not on a game table: it's dark in both themes, and its text stays light (below). */
-.role-player :is(h1, h2, h3, strong):not(:where(.slot-cabinet, .roulette-cabinet, .blackjack-cabinet, .mines-cabinet, .penalty-cabinet, .plinko-cabinet, .dice-cabinet, .keno-cabinet, .coin-cabinet, .scratch-cabinet) *),
+.role-player :is(h1, h2, h3, strong):not(:where(.slot-cabinet, .roulette-cabinet, .blackjack-cabinet, .mines-cabinet, .penalty-cabinet, .plinko-cabinet, .dice-cabinet, .keno-cabinet, .coin-cabinet, .scratch-cabinet, .candy-cabinet) *),
 .role-player .odds-team {
   color: var(--text);
 }
@@ -20224,6 +20224,8 @@ button.candy-box:disabled {
 .candy-special-art img {
   display: block;
   width: 100%;
+  max-width: 11rem;
+  margin-inline: auto;
   height: auto;
   filter: drop-shadow(0 10px 14px rgba(90, 20, 120, 0.35));
   user-select: none;
@@ -20241,6 +20243,10 @@ button.candy-box:disabled {
 
 .candy-special-art.is-on img {
   filter: drop-shadow(0 0 3px #ffd23f) drop-shadow(0 0 14px rgba(255, 210, 63, 0.75));
+}
+
+.candy-special-art.is-buy img {
+  filter: drop-shadow(0 10px 14px rgba(140, 20, 90, 0.35));
 }
 
 .candy-special-art:focus-visible {
@@ -20608,6 +20614,116 @@ button.candy-chip:disabled {
 .candy-special-step:disabled {
   cursor: default;
   opacity: 0.45;
+}
+
+/* Buy Feature: the same menu in pink candy, its three options side by side on a wide screen. */
+.candy-special.is-features {
+  width: min(100%, 58rem);
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.22), transparent 42%),
+    repeating-radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.08) 0 22px, transparent 22px 44px),
+    linear-gradient(180deg, #ff8fc8 0%, #f05aa6 50%, #d63a8c 100%) padding-box,
+    repeating-linear-gradient(135deg, #ff9ad0 0 9px, #fff 9px 18px) border-box;
+  box-shadow: 0 22px 44px rgba(110, 10, 70, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.candy-special.is-features h2 {
+  color: #b9a8ff;
+  text-shadow:
+    -2px -2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px 2px 0 #fff,
+    0 3px 0 #5a2aa8,
+    0 5px 0 #3a1080;
+}
+
+.candy-special.is-features .candy-special-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.candy-special.is-features .candy-special-option {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "name"
+    "price"
+    "blurb";
+  justify-items: center;
+  align-content: start;
+  gap: 0.3rem;
+  padding: 0.85rem 0.7rem 0.9rem;
+  border-color: #ffc2e2;
+  background: linear-gradient(180deg, #ffb3d9 0%, #ff7ab8 40%, #f0559e 100%);
+  text-align: center;
+  box-shadow: 0 5px 0 rgba(130, 10, 70, 0.4), inset 0 3px 0 rgba(255, 255, 255, 0.45);
+}
+
+.candy-special.is-features .candy-special-option.is-super1 {
+  border-color: #fff;
+  background: linear-gradient(180deg, #ff8fca 0%, #ec4f9c 45%, #d0307f 100%);
+}
+
+.candy-special.is-features .candy-special-option.is-super2 {
+  border-color: #ffe14a;
+  background: linear-gradient(180deg, #ff86c4 0%, #e8418f 45%, #c42272 100%);
+  box-shadow: 0 5px 0 rgba(130, 10, 70, 0.4), 0 0 0 2px rgba(255, 225, 74, 0.6), 0 0 16px rgba(255, 210, 40, 0.45), inset 0 3px 0 rgba(255, 255, 255, 0.4);
+}
+
+.candy-special.is-features .candy-special-option .candy-special-stars {
+  color: #ffc6e4;
+  text-shadow: 0 1px 0 #a0205e;
+}
+
+.candy-special.is-features .candy-special-option .candy-special-stars.is-gold {
+  color: #ffe14a;
+  text-shadow: 0 1px 0 #8a5a00, 0 0 6px rgba(255, 200, 40, 0.7);
+}
+
+.candy-special.is-features .candy-special-name {
+  color: #e4dcff;
+  text-shadow:
+    -1.5px -1.5px 0 #5a2aa8,
+    1.5px -1.5px 0 #5a2aa8,
+    -1.5px 1.5px 0 #5a2aa8,
+    1.5px 1.5px 0 #5a2aa8,
+    0 3px 0 #3a1080;
+}
+
+.candy-special.is-features .candy-special-price {
+  justify-self: center;
+  font-size: 1.6rem;
+}
+
+.candy-special.is-features .candy-special-blurb {
+  color: #d8ccff;
+  font-family: "Arial Black", Arial, sans-serif;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-shadow: 0 1px 0 #4a1a80, 0 0 2px #4a1a80;
+}
+
+.candy-special.is-features .candy-special-base > span {
+  color: #e4dcff;
+  text-shadow: -1px -1px 0 #5a2aa8, 1px -1px 0 #5a2aa8, -1px 1px 0 #5a2aa8, 1px 1px 0 #5a2aa8, 0 2px 0 #3a1080;
+}
+
+.candy-special.is-features .candy-special-base-row strong {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: linear-gradient(180deg, #8a1450, #5e0a36);
+}
+
+.candy-special.is-features .candy-special-step {
+  border-color: #ffd6ea;
+  background: linear-gradient(180deg, #a8236a, #6a0c40);
+  box-shadow: 0 4px 0 #3a0420;
+}
+
+/* Super free spins 2's total multiplier, in the free spins panel. */
+.candy-box .candy-side-total {
+  color: #ffe14a;
+  font-size: 1.6rem;
+  line-height: 1;
 }
 
 .candy-buy-confirm p {
@@ -21061,9 +21177,15 @@ button.candy-chip:disabled {
     display: flex;
   }
 
-  .candy-special {
+  .candy-special,
+  .candy-special.is-features {
     width: min(100%, 28rem);
     padding: 1rem 0.75rem 0.85rem;
+  }
+
+  .candy-special.is-features .candy-special-options {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
   }
 
   .candy-special-price {

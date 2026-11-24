@@ -153,7 +153,8 @@ test("Candy Cascade: the Special Bet costs 25% more, and free spins are bought o
   assert.equal(await balanceOf(ana), Math.round((before - 5000 + bought.win) * 100) / 100);
   // More than the balance: refused, nothing moves.
   before = await balanceOf(ana);
-  if (before < 12000) await assert.rejects(games.candySpin(ana, 50, "SUPER"), /balance is too low/);
+  // Super free spins 2 at a bet of 50 cost 50,000.
+  if (before < 50000) await assert.rejects(games.candySpin(ana, 50, "SUPER2"), /balance is too low/);
   assert.equal(await balanceOf(ana), before);
   assert.equal(await ledgerTotal(ana), await balanceOf(ana));
 });

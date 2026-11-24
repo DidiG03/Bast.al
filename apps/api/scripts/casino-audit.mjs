@@ -563,7 +563,7 @@ section("Candy Cascade (simulated: cascades and free spins have no closed form)"
 }
 {
   // The Special Bet and bought free spins: each against what it costs.
-  for (const [mode, n, seed] of [["ANTE", 2_000_000, 61], ["BUY", 200_000, 62], ["SUPER", 150_000, 63]]) {
+  for (const [mode, n, seed] of [["ANTE", 2_000_000, 61], ["BUY", 200_000, 62], ["SUPER1", 150_000, 63], ["SUPER2", 150_000, 64]]) {
     const draw = seeded(seed);
     const rounds = N(n);
     let paid = 0;

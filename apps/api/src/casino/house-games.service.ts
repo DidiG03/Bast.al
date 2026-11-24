@@ -73,7 +73,8 @@ export class HouseGamesService {
         scattersForFree: Candy.SCATTERS_FOR_FREE,
         scattersForMore: Candy.SCATTERS_FOR_MORE,
         multipliers: Candy.MULTIPLIERS.map(([value]) => value),
-        superMultipliers: Candy.SUPER_MULTIPLIERS.map(([value]) => value),
+        super1Multipliers: Candy.SUPER1_MULTIPLIERS.map(([value]) => value),
+        super2Multipliers: Candy.SUPER2_MULTIPLIERS.map(([value]) => value),
         maxWin: Candy.MAX_WIN,
         /** What each way to play costs, in times the bet. */
         cost: Candy.COST,
@@ -86,12 +87,12 @@ export class HouseGamesService {
   /**
    * A paid spin with every free spin it gives, settled at once; the page plays them back from what this returns.
    * `mode`: a normal spin, the Special Bet (ANTE: 25% more, more lollipops), or free spins bought outright (BUY,
-   * SUPER), which only bets up to Candy.MAX_BUY_BET can do.
+   * SUPER1, SUPER2), which only bets up to Candy.MAX_BUY_BET can do.
    */
   async candySpin(actor: Actor, bet: number, mode: string = "NORMAL") {
     if (!(Candy.MODES as readonly string[]).includes(mode)) throw new BadRequestException("Pick a normal spin, the Special Bet, or free spins to buy.");
     const how = mode as Candy.Mode;
-    if ((how === "BUY" || how === "SUPER") && bet > Candy.MAX_BUY_BET) {
+    if (Candy.isBoughtMode(how) && bet > Candy.MAX_BUY_BET) {
       throw new BadRequestException(`Free spins can be bought at a bet of up to ${Candy.MAX_BUY_BET.toFixed(2)} ALL.`);
     }
     let round: Candy.Round | null = null;

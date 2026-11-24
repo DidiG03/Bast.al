@@ -6,6 +6,11 @@
 //   Mines → Minat · Penalty → Penallti
 //   Kept as they are: Sizzling Hot, Book of Ra, Blackjack, Plinko, Keno
 export const casino: Record<string, string> = {
+  "Special Bets": "Baste speciale",
+  "{count} option": "{count} opsion",
+  "{count} options": "{count} opsione",
+  "Special Bet on": "Basti special i ndezur",
+  "Special Bet off": "Basti special i fikur",
   "Full screen": "Ekran i plotë",
   "Exit full screen": "Dil nga ekrani i plotë",
   "Sound on. Tap to turn it off.": "Zëri është ndezur. Prek për ta fikur.",

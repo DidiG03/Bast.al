@@ -21275,3 +21275,74 @@ button.candy-chip:disabled {
     animation: none;
   }
 }
+
+/* Special Bets: a glossy blue box with a light sheen and bubbles, and an on/off switch for the Special Bet (ante). */
+.candy-box.is-ante {
+  overflow: hidden;
+  gap: 0.15rem;
+  background:
+    radial-gradient(circle at 18% 70%, rgba(255, 255, 255, 0.28) 0 3px, transparent 4px) padding-box,
+    radial-gradient(circle at 82% 30%, rgba(255, 255, 255, 0.22) 0 4px, transparent 5px) padding-box,
+    radial-gradient(circle at 70% 82%, rgba(255, 255, 255, 0.2) 0 2.5px, transparent 3.5px) padding-box,
+    radial-gradient(120% 70% at 50% -10%, rgba(255, 255, 255, 0.45), transparent 55%) padding-box,
+    radial-gradient(circle at 50% 35%, #8fdcff, #3aa8ee 55%, #1d6fc4) padding-box,
+    repeating-linear-gradient(45deg, #7fd2ff 0 10px, #fff 10px 20px) border-box;
+}
+
+.candy-box.is-ante strong {
+  font-size: clamp(1.05rem, 2.4cqi, 1.6rem);
+}
+
+.candy-box.is-ante small {
+  font-size: clamp(0.85rem, 1.7cqi, 1.15rem);
+}
+
+.candy-switch {
+  position: relative;
+  display: block;
+  width: 86%;
+  height: clamp(1.8rem, 3.6cqi, 2.5rem);
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #0b2f6e, #133f8c);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.candy-switch-knob {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 52%;
+  height: 100%;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 22% 28%, rgba(255, 255, 255, 0.75) 0 2px, transparent 3px),
+    radial-gradient(60% 50% at 50% 15%, rgba(255, 255, 255, 0.55), transparent 70%),
+    linear-gradient(180deg, #ff9cc2, #f0558c);
+  box-shadow: 0 2px 0 #b8336a, 0 3px 6px rgba(80, 10, 50, 0.35);
+  transition: left 220ms cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.candy-switch-knob svg {
+  width: 56%;
+  height: 82%;
+  fill: #fff;
+  filter: drop-shadow(0 1px 0 rgba(150, 30, 80, 0.5));
+}
+
+/* On: the knob over on the right, the track lit. */
+.candy-switch.is-on {
+  background: linear-gradient(180deg, #2a8f2a, #39b54a);
+}
+
+.candy-switch.is-on .candy-switch-knob {
+  left: 48%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .candy-switch-knob {
+    transition: none;
+  }
+}

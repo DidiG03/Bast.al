@@ -20127,7 +20127,7 @@ button.cab-field-box:disabled {
 .candy-middle {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(8rem, 10rem) minmax(0, 1fr);
+  grid-template-columns: minmax(8.5rem, 11.5rem) minmax(0, 1fr);
   align-items: center;
   gap: 0.7rem;
   min-height: 0;
@@ -21219,5 +21219,59 @@ button.candy-chip:disabled {
   :root:not([data-theme="dark"]) .role-player button.bm-pick,
   :root:not([data-theme="dark"]) .role-player .player-top-pick {
     box-shadow: inset 0 0 0 1px var(--player-pick-border, #d8ddd1);
+  }
+}
+
+/* Each win of the spin in the purple panel, as it lands: a pink pill with how many, the candy, and what it paid. */
+.candy-win-list {
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candy-win-row {
+  display: grid;
+  grid-template-columns: auto 1.8em minmax(0, 1fr);
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem 0.2rem 0.65rem;
+  border: 2.5px solid #ffc6e6;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ff8fcf, #e34fa6);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), 0 2px 5px rgba(90, 10, 70, 0.35);
+  color: #fff;
+  font-family: "Arial Black", "Arial Rounded MT Bold", Arial, sans-serif;
+  font-size: clamp(0.85rem, 1.75cqi, 1.2rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 #a01866;
+  animation: candy-win-row 260ms ease-out both;
+}
+
+.candy-win-icon {
+  width: 1.8em;
+  height: 1.8em;
+}
+
+/* A little smaller than the count, so even "500.00 ALL" fits beside the candy. */
+.candy-win-amount {
+  justify-self: end;
+  font-size: 0.86em;
+  white-space: nowrap;
+}
+
+@keyframes candy-win-row {
+  from {
+    transform: translateY(6px) scale(0.96);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .candy-win-row {
+    animation: none;
   }
 }

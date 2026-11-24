@@ -125,6 +125,9 @@ export function CandyGame() {
   const [pays, setPays] = useState<{ id: number; x: number; y: number; text: string }[]>([]);
   const [message, setMessage] = useState<{ text: string; tone?: "win" | "big" | "free" } | null>(null);
   const [roundWin, setRoundWin] = useState(0);
+  /** This spin's wins one by one, as the side panel lists them: "8 🍌 50.00 ALL". The newest last. */
+  const winSeq = useRef(0);
+  const [winList, setWinList] = useState<{ id: number; count: number; symbol: CandyPaying | "LOLLIPOP"; amount: number }[]>([]);
   const [free, setFree] = useState<{ left: number; won: number } | null>(null);
   const [multiplier, setMultiplier] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -316,6 +319,7 @@ export function CandyGame() {
         }
         setMultiplier(null);
         setMessage(null);
+        setWinList([]);
         slotSound.spinStart();
         await dropIn(spin.steps[0].board);
         let spinWin = 0;
@@ -333,6 +337,7 @@ export function CandyGame() {
               return { id: nextId.current + index, x: ((mean(columns) + 0.5) / COLUMNS) * 100, y: ((mean(rows) + 0.5) / ROWS) * 100, text: formatMoney(win.pay * bet) };
             }),
           );
+          setWinList((list) => [...list, ...step.wins.map((win, index) => ({ id: ++winSeq.current, count: win.count, symbol: win.symbol, amount: Math.round(win.pay * bet * 100) / 100 }))]);
           const stepPay = step.wins.reduce((sum, win) => sum + win.pay, 0);
           spinWin += stepPay;
           setMessage({ text: step.wins.map((win) => `${win.count} × ${t(CANDY_NAMES[win.symbol])}: ${formatMoney(win.pay * bet)}`).join(" · "), tone: "win" });
@@ -349,6 +354,7 @@ export function CandyGame() {
           await wait(MULTIPLIER_MS);
         }
         if (spin.scatterPay > 0) {
+          setWinList((list) => [...list, { id: ++winSeq.current, count: spin.scatters, symbol: "LOLLIPOP", amount: Math.round(spin.scatterPay * bet * 100) / 100 }]);
           setMessage({ text: t("{count} lollipops: {amount}", { count: spin.scatters, amount: formatMoney(spin.scatterPay * bet) }), tone: "win" });
           await wait(GLOW_MS);
         }
@@ -397,6 +403,7 @@ export function CandyGame() {
     slotSound.unlock();
     setMessage(null);
     setRoundWin(0);
+    setWinList([]);
     const bet = g.stake;
     const cost = costOf(mode);
     const response = await g.send<CandySpinResult>("spin", { bet, mode });
@@ -539,6 +546,18 @@ export function CandyGame() {
                     <strong className="candy-side-big is-money">{formatMoney(roundWin)}</strong>
                   </>
                 )}
+                {winList.length > 0 ? (
+                  // Each win of this spin as it lands, newest at the bottom: how many, which candy, what it paid.
+                  <ul className="candy-win-list">
+                    {winList.slice(-4).map((win) => (
+                      <li key={win.id} className="candy-win-row">
+                        <span className="candy-win-count">{win.count}</span>
+                        <CandyIcon cell={win.symbol} className="candy-win-icon" />
+                        <span className="candy-win-amount">{formatMoney(win.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             </aside>
 

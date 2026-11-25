@@ -20140,7 +20140,7 @@ button.cab-field-box:disabled {
   flex: 1;
   grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
   align-items: center;
-  gap: 1rem;
+  gap: 0.7rem;
   min-height: 0;
   padding: 0.35rem 1.1rem;
 }
@@ -20777,7 +20777,8 @@ button.candy-chip:disabled {
 .candy-board-wrap {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* Up against the side column, as in the reference; a phone centres it again. */
+  align-items: flex-start;
   gap: 0.35rem;
   min-height: 0;
 }
@@ -20815,10 +20816,10 @@ button.candy-chip:disabled {
   --candy-rim: repeating-linear-gradient(45deg, #ff5fa8 0 10px, #fff 10px 20px);
   --candy-rim-w: 7px;
   /* The board's width over its height: wide, so the cells are wider than tall. */
-  --candy-shape: 1.5;
+  --candy-shape: 1.6;
   position: relative;
   display: block;
-  width: min(100%, 56rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * var(--candy-shape)));
+  width: min(100%, 66rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * var(--candy-shape)));
   padding: 0.4rem;
   border: var(--candy-rim-w) solid transparent;
   border-radius: 22px;
@@ -21209,6 +21210,10 @@ button.candy-chip:disabled {
   .candy-middle {
     grid-template-columns: minmax(0, 1fr);
     padding: 0.3rem 0.55rem;
+  }
+
+  .candy-board-wrap {
+    align-items: center;
   }
 
   .candy-side {

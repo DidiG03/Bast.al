@@ -20814,9 +20814,11 @@ button.candy-chip:disabled {
   --candy-rest: 13.5rem;
   --candy-rim: repeating-linear-gradient(45deg, #ff5fa8 0 10px, #fff 10px 20px);
   --candy-rim-w: 7px;
+  /* The board's width over its height: wide, so the cells are wider than tall. */
+  --candy-shape: 1.5;
   position: relative;
   display: block;
-  width: min(100%, 44rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * 1.2));
+  width: min(100%, 56rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * var(--candy-shape)));
   padding: 0.4rem;
   border: var(--candy-rim-w) solid transparent;
   border-radius: 22px;
@@ -20855,7 +20857,7 @@ button.candy-chip:disabled {
  */
 .candy-grid {
   position: relative;
-  aspect-ratio: 6 / 5;
+  aspect-ratio: var(--candy-shape);
   overflow: hidden;
   border-radius: 10px;
   /* A faint line between the columns. */
@@ -21216,6 +21218,8 @@ button.candy-chip:disabled {
   .candy-board {
     --candy-rest: 20rem;
     --candy-rim-w: 5px;
+    /* A phone is narrow, so square-ish cells keep the candies big. */
+    --candy-shape: 1.2;
     padding: 0.3rem;
   }
 

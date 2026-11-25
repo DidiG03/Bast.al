@@ -7,13 +7,13 @@ import type { CandyCell } from "../lib/api";
 const ART: Record<string, string> = {
   HEART: "/casino/candy/heart.webp",
   STAR: "/casino/candy/star.webp",
-  MOON: "/casino/candy/moon.webp",
-  GEM: "/casino/candy/gem.webp",
+  MOON: "/casino/candy/moon.webp?v=2",
+  GEM: "/casino/candy/gem.webp?v=2",
   ORANGE: "/casino/candy/orange.webp",
-  LEMON: "/casino/candy/lemon.webp",
-  MINT: "/casino/candy/mint.webp",
+  LEMON: "/casino/candy/lemon.webp?v=2",
+  MINT: "/casino/candy/mint.webp?v=2",
   GRAPE: "/casino/candy/grape.webp",
-  PEACH: "/casino/candy/peach.webp",
+  PEACH: "/casino/candy/peach.webp?v=2",
   LOLLIPOP: "/casino/candy/lollipop.webp",
 };
 

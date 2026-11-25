@@ -126,7 +126,7 @@ function CasinoLobby() {
           {has("candy") ? (
             <Link className="casino-tile is-candy has-cover" href="/dashboard/casino/candy">
               <span className="casino-tile-art" aria-hidden="true">
-                <CoverArt src="/casino/candy-cascade.svg" fit="cover" />
+                <CoverArt src="/casino/candy-cascade.webp" fit="cover" />
               </span>
               <span className="casino-tile-body">
                 <strong>Candy Cascade</strong>

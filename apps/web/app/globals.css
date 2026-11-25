@@ -20812,22 +20812,39 @@ button.candy-chip:disabled {
 /* The board in a candy-cane frame: as wide as the cabinet allows, and no taller than the game's height leaves for it. */
 .candy-board {
   --candy-rest: 13.5rem;
+  --candy-rim: repeating-linear-gradient(45deg, #ff5fa8 0 10px, #fff 10px 20px);
+  --candy-rim-w: 7px;
   position: relative;
   display: block;
   width: min(100%, 44rem, max(15rem, (var(--game-h, 100dvh) - var(--candy-rest)) * 1.2));
   padding: 0.4rem;
-  border: 7px solid transparent;
+  border: var(--candy-rim-w) solid transparent;
   border-radius: 22px;
-  background:
-    linear-gradient(180deg, #eef8ff, #ffe6f5) padding-box,
-    repeating-linear-gradient(45deg, #ff5fa8 0 10px, #fff 10px 20px) border-box;
-  box-shadow: 0 12px 28px rgba(60, 10, 100, 0.35), inset 0 0 22px rgba(255, 255, 255, 0.6);
+  /* See-through glass, so the candy land shows behind the candies, softened a little. */
+  background: linear-gradient(180deg, rgba(225, 245, 255, 0.28), rgba(255, 225, 245, 0.32)) padding-box;
+  -webkit-backdrop-filter: blur(3px) saturate(1.1);
+  backdrop-filter: blur(3px) saturate(1.1);
+  box-shadow: 0 12px 28px rgba(60, 10, 100, 0.3), inset 0 0 22px rgba(255, 255, 255, 0.35);
+}
+
+/* The striped rim, cut to the border's ring only so it doesn't show through the glass. */
+.candy-board::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--candy-rim-w));
+  z-index: 0;
+  padding: var(--candy-rim-w);
+  border-radius: inherit;
+  background: var(--candy-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
 }
 
 .candy-board.is-free {
-  background:
-    linear-gradient(180deg, #fff8dc, #ffe2be) padding-box,
-    repeating-linear-gradient(45deg, #ffb01f 0 10px, #fff 10px 20px) border-box;
+  --candy-rim: repeating-linear-gradient(45deg, #ffb01f 0 10px, #fff 10px 20px);
+  background: linear-gradient(180deg, rgba(255, 245, 210, 0.3), rgba(255, 220, 180, 0.34)) padding-box;
 }
 
 /*
@@ -20841,6 +20858,8 @@ button.candy-chip:disabled {
   aspect-ratio: 6 / 5;
   overflow: hidden;
   border-radius: 10px;
+  /* A faint line between the columns. */
+  background: linear-gradient(90deg, transparent calc(100% - 1px), rgba(255, 255, 255, 0.4) 0) 0 0 / calc(100% / 6) 100%;
   contain: layout paint;
 }
 
@@ -21196,7 +21215,7 @@ button.candy-chip:disabled {
 
   .candy-board {
     --candy-rest: 20rem;
-    border-width: 5px;
+    --candy-rim-w: 5px;
     padding: 0.3rem;
   }
 

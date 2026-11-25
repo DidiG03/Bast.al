@@ -75,10 +75,14 @@ export class HouseGamesService {
         multipliers: Candy.MULTIPLIERS.map(([value]) => value),
         super1Multipliers: Candy.SUPER1_MULTIPLIERS.map(([value]) => value),
         super2Multipliers: Candy.SUPER2_MULTIPLIERS.map(([value]) => value),
+        spins1Multipliers: Candy.SPINS1_MULTIPLIERS.map(([value]) => value),
+        spins2Multipliers: Candy.SPINS2_MULTIPLIERS.map(([value]) => value),
+        /** How many times as often the ante bets give free spins. */
+        anteChance: Candy.ANTE_CHANCE,
         maxWin: Candy.MAX_WIN,
         /** What each way to play costs, in times the bet. */
         cost: Candy.COST,
-        /** Free spins can be bought only at a bet up to this. */
+        /** Free spins can be bought, and the special bets that cost 10 times the bet or more played, only at a bet up to this. */
         maxBuyBet: Candy.MAX_BUY_BET,
       },
     };
@@ -86,14 +90,19 @@ export class HouseGamesService {
 
   /**
    * A paid spin with every free spin it gives, settled at once; the page plays them back from what this returns.
-   * `mode`: a normal spin, the Special Bet (ANTE: 25% more, more lollipops), or free spins bought outright (BUY,
-   * SUPER1, SUPER2), which only bets up to Candy.MAX_BUY_BET can do.
+   * `mode`: a normal spin, a special bet (ANTE1, ANTE2, SPINS1, SPINS2), or free spins bought outright (BUY,
+   * SUPER1, SUPER2). Purchases and the special bets that cost 10 times the bet or more take bets up to
+   * Candy.MAX_BUY_BET only.
    */
   async candySpin(actor: Actor, bet: number, mode: string = "NORMAL") {
-    if (!(Candy.MODES as readonly string[]).includes(mode)) throw new BadRequestException("Pick a normal spin, the Special Bet, or free spins to buy.");
+    if (!(Candy.MODES as readonly string[]).includes(mode)) throw new BadRequestException("Pick a normal spin, a special bet, or free spins to buy.");
     const how = mode as Candy.Mode;
-    if (Candy.isBoughtMode(how) && bet > Candy.MAX_BUY_BET) {
-      throw new BadRequestException(`Free spins can be bought at a bet of up to ${Candy.MAX_BUY_BET.toFixed(2)} ALL.`);
+    if (Candy.isLimitedMode(how) && bet > Candy.MAX_BUY_BET) {
+      throw new BadRequestException(
+        Candy.isBoughtMode(how)
+          ? `Free spins can be bought at a bet of up to ${Candy.MAX_BUY_BET.toFixed(2)} ALL.`
+          : `This special bet can be played at a bet of up to ${Candy.MAX_BUY_BET.toFixed(2)} ALL.`,
+      );
     }
     let round: Candy.Round | null = null;
     const result = await this.house.instant(

@@ -1513,12 +1513,12 @@ export type CandyStep = { board: CandyCell[]; wins: CandyWin[] };
 /** `total`: super free spins 2 only, the total multiplier after this spin (it carries on to the next). */
 export type CandySpinPlay = { free: boolean; steps: CandyStep[]; scatters: number; scatterPay: number; tumbleWin: number; multiplier: number; total?: number; win: number; freeSpinsWon: number };
 /** A normal spin, the Special Bet (25% more, more lollipops), or free spins bought outright (normal, super 1 or super 2). */
-export type CandyMode = "NORMAL" | "ANTE" | "BUY" | "SUPER1" | "SUPER2";
+export type CandyMode = "NORMAL" | "ANTE1" | "ANTE2" | "SPINS1" | "SPINS2" | "BUY" | "SUPER1" | "SUPER2";
 /** `bought`: the free spins bought outright (10), before any won again; 0 for a paid spin, whose spins[0] is the paid one. */
-export type CandyRound = { mode: CandyMode | "SUPER"; bought: number; win: number; capped: boolean; freeSpins: number; spins: CandySpinPlay[] };
+export type CandyRound = { mode: CandyMode | "SUPER" | "ANTE"; bought: number; win: number; capped: boolean; freeSpins: number; spins: CandySpinPlay[] };
 /** A round as the history keeps it: what it paid, in times the bet, how many free spins it had, and how it was played. */
-/** `mode` "SUPER": super free spins (never below 5×) from before super free spins 1 and 2. */
-export type CandyRecord = { game: "candy"; win: number; freeSpins: number; capped: boolean; mode?: CandyMode | "SUPER"; bet?: number };
+/** `mode` "SUPER": super free spins (never below 5×) from before super free spins 1 and 2; "ANTE": the old Special Bet (25% more). */
+export type CandyRecord = { game: "candy"; win: number; freeSpins: number; capped: boolean; mode?: CandyMode | "SUPER" | "ANTE"; bet?: number };
 export type CandyState = HouseBasics<CandyRecord> & {
   game: {
     name: string;
@@ -1537,6 +1537,9 @@ export type CandyState = HouseBasics<CandyRecord> & {
     multipliers: number[];
     super1Multipliers?: number[];
     super2Multipliers?: number[];
+    spins1Multipliers?: number[];
+    spins2Multipliers?: number[];
+    anteChance?: { ANTE1: number; ANTE2: number };
     maxWin: number;
     /** What each way to play costs, in times the bet. Missing from an API older than the website. */
     cost?: Record<CandyMode, number>;

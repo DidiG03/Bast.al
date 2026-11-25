@@ -20659,12 +20659,12 @@ button.candy-chip:disabled {
     0 5px 0 #3a1080;
 }
 
-.candy-special.is-features .candy-special-options {
+.candy-special:is(.is-features, .is-specials) .candy-special-options {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.8rem;
 }
 
-.candy-special.is-features .candy-special-option {
+.candy-special:is(.is-features, .is-specials) .candy-special-option {
   grid-template-columns: 1fr;
   grid-template-areas:
     "name"
@@ -20691,17 +20691,17 @@ button.candy-chip:disabled {
   box-shadow: 0 5px 0 rgba(130, 10, 70, 0.4), 0 0 0 2px rgba(255, 225, 74, 0.6), 0 0 16px rgba(255, 210, 40, 0.45), inset 0 3px 0 rgba(255, 255, 255, 0.4);
 }
 
-.candy-special.is-features .candy-special-option .candy-special-stars {
+.candy-special:is(.is-features, .is-specials) .candy-special-option .candy-special-stars {
   color: #ffc6e4;
   text-shadow: 0 1px 0 #a0205e;
 }
 
-.candy-special.is-features .candy-special-option .candy-special-stars.is-gold {
+.candy-special:is(.is-features, .is-specials) .candy-special-option .candy-special-stars.is-gold {
   color: #ffe14a;
   text-shadow: 0 1px 0 #8a5a00, 0 0 6px rgba(255, 200, 40, 0.7);
 }
 
-.candy-special.is-features .candy-special-name {
+.candy-special:is(.is-features, .is-specials) .candy-special-name {
   color: #e4dcff;
   text-shadow:
     -1.5px -1.5px 0 #5a2aa8,
@@ -20711,12 +20711,12 @@ button.candy-chip:disabled {
     0 3px 0 #3a1080;
 }
 
-.candy-special.is-features .candy-special-price {
+.candy-special:is(.is-features, .is-specials) .candy-special-price {
   justify-self: center;
   font-size: 1.6rem;
 }
 
-.candy-special.is-features .candy-special-blurb {
+.candy-special:is(.is-features, .is-specials) .candy-special-blurb {
   color: #d8ccff;
   font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: 0.72rem;
@@ -20724,7 +20724,7 @@ button.candy-chip:disabled {
   text-shadow: 0 1px 0 #4a1a80, 0 0 2px #4a1a80;
 }
 
-.candy-special.is-features .candy-special-base > span {
+.candy-special:is(.is-features, .is-specials) .candy-special-base > span {
   color: #e4dcff;
   text-shadow: -1px -1px 0 #5a2aa8, 1px -1px 0 #5a2aa8, -1px 1px 0 #5a2aa8, 1px 1px 0 #5a2aa8, 0 2px 0 #3a1080;
 }
@@ -20738,6 +20738,66 @@ button.candy-chip:disabled {
   border-color: #ffd6ea;
   background: linear-gradient(180deg, #a8236a, #6a0c40);
   box-shadow: 0 4px 0 #3a0420;
+}
+
+/* The Special Bets menu: the same cards as Buy Feature, four of them, in blue. */
+.candy-special.is-specials {
+  width: min(100%, 66rem);
+}
+
+.candy-special.is-specials .candy-special-options {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.candy-special.is-specials .candy-special-option {
+  border-color: #c8f0ff;
+  background: linear-gradient(180deg, #a6ecff 0%, #5fcdf5 45%, #33aee6 100%);
+  box-shadow: 0 5px 0 rgba(10, 60, 130, 0.4), inset 0 3px 0 rgba(255, 255, 255, 0.5);
+}
+
+.candy-special.is-specials .candy-special-option.is-ante2 {
+  background: linear-gradient(180deg, #8fe2ff 0%, #45bff0 45%, #2499d8 100%);
+}
+
+.candy-special.is-specials .candy-special-option.is-spins1 {
+  background: linear-gradient(180deg, #7cc4ff 0%, #3f8cf5 45%, #2563d8 100%);
+}
+
+.candy-special.is-specials .candy-special-option.is-spins2 {
+  border-color: #ffe14a;
+  background: linear-gradient(180deg, #6fb2ff 0%, #3474ee 45%, #1f4fc8 100%);
+  box-shadow: 0 5px 0 rgba(10, 40, 120, 0.4), 0 0 0 2px rgba(255, 225, 74, 0.6), 0 0 16px rgba(255, 210, 40, 0.45), inset 0 3px 0 rgba(255, 255, 255, 0.4);
+}
+
+.candy-special.is-specials .candy-special-option.is-picked {
+  outline: 4px solid #ffe14a;
+  outline-offset: 2px;
+}
+
+.candy-special.is-specials .candy-special-option .candy-special-stars {
+  color: #c8f0ff;
+  text-shadow: 0 1px 0 #1a5aa8;
+}
+
+.candy-special.is-specials .candy-special-option .candy-special-stars.is-gold {
+  color: #ffe14a;
+  text-shadow: 0 1px 0 #8a5a00, 0 0 6px rgba(255, 200, 40, 0.7);
+}
+
+.candy-special.is-specials .candy-special-blurb {
+  color: #f2f6ff;
+  text-shadow: 0 1px 0 #3a2a9a, 0 0 2px #3a2a9a;
+}
+
+/* "On" under the special bet that's on. */
+.candy-special-on {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: #ffe14a;
+  color: #3a1a6a;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-size: 0.7rem;
+  text-transform: uppercase;
 }
 
 /* Super free spins 2's total multiplier, in the free spins panel. */
@@ -21292,7 +21352,12 @@ button.candy-chip:disabled {
     padding: 1rem 0.75rem 0.85rem;
   }
 
-  .candy-special.is-features .candy-special-options {
+  .candy-special.is-specials {
+    width: min(100%, 28rem);
+    padding: 1rem 0.75rem 0.85rem;
+  }
+
+  .candy-special:is(.is-features, .is-specials) .candy-special-options {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
   }

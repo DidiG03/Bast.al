@@ -562,8 +562,8 @@ section("Candy Cascade (simulated: cascades and free spins have no closed form)"
   checkSim("Candy Cascade", "the stated payout rate", paid, rounds, sq, rounds, Candy.PAYOUT_RATE / 100);
 }
 {
-  // The Special Bet and bought free spins: each against what it costs.
-  for (const [mode, n, seed] of [["ANTE", 2_000_000, 61], ["BUY", 200_000, 62], ["SUPER1", 150_000, 63], ["SUPER2", 150_000, 64]]) {
+  // The special bets and bought free spins: each against what it costs.
+  for (const [mode, n, seed] of [["ANTE1", 2_000_000, 61], ["ANTE2", 2_000_000, 65], ["SPINS1", 400_000, 66], ["SPINS2", 300_000, 67], ["BUY", 200_000, 62], ["SUPER1", 150_000, 63], ["SUPER2", 150_000, 64]]) {
     const draw = seeded(seed);
     const rounds = N(n);
     let paid = 0;

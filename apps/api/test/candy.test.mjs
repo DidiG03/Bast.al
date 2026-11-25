@@ -187,9 +187,12 @@ test("it pays back about 84.7% over many rounds", () => {
   assert.ok(Math.abs(mean - Candy.PAYOUT_RATE / 100) < 4 * se, `measured ${(mean * 100).toFixed(2)}% ± ${(se * 100).toFixed(2)}%`);
 });
 
-test("the Special Bet and bought free spins: what they cost, and how they play", () => {
-  assert.deepEqual(Candy.COST, { NORMAL: 1, ANTE: 1.25, BUY: 100, SUPER1: 500, SUPER2: 1000 });
-  assert.equal(Candy.costCents(5000, "ANTE"), 6250);
+test("the special bets and bought free spins: what they cost, and how they play", () => {
+  assert.deepEqual(Candy.COST, { NORMAL: 1, ANTE1: 2.5, ANTE2: 12, SPINS1: 20, SPINS2: 250, BUY: 100, SUPER1: 500, SUPER2: 1000 });
+  assert.equal(Candy.costCents(5000, "ANTE1"), 12500);
+  assert.equal(Candy.costCents(5000, "SPINS2"), 1250000);
+  // The purchases and the special bets that cost 10 times the bet or more are held to MAX_BUY_BET.
+  assert.deepEqual(Candy.MODES.filter(Candy.isLimitedMode), ["ANTE2", "SPINS1", "SPINS2", "BUY", "SUPER1", "SUPER2"]);
   assert.equal(Candy.costCents(5000, "BUY"), 500000);
   assert.equal(Candy.costCents(5000, "SUPER1"), 2500000);
   assert.equal(Candy.costCents(5000, "SUPER2"), 5000000);
@@ -204,15 +207,45 @@ test("the Special Bet and bought free spins: what they cost, and how they play",
       assert.equal(superRound.bought, 10);
       for (const spin of superRound.spins) for (const step of spin.steps) for (const cell of step.board) if (cell.startsWith("X")) assert.ok(Number(cell.slice(1)) >= min);
     }
-    const ante = Candy.play(draw, "ANTE");
-    assert.equal(ante.spins.some((spin) => spin.total !== undefined), false);
-    assert.equal(ante.bought, 0);
-    assert.equal(ante.spins[0].free, false);
+    for (const mode of ["ANTE1", "ANTE2"]) {
+      const ante = Candy.play(draw, mode);
+      assert.equal(ante.spins.some((spin) => spin.total !== undefined), false);
+      assert.equal(ante.bought, 0);
+      assert.equal(ante.spins[0].free, false);
+      assert.equal(ante.spins[0].multiplier, 1, "a paid ante spin isn't multiplied");
+      // Ante bet 2's free spins are super free spins 1: no multiplier candy below 20x.
+      if (mode === "ANTE2") for (const spin of ante.spins.slice(1)) for (const step of spin.steps) for (const cell of step.board) if (cell.startsWith("X")) assert.ok(Number(cell.slice(1)) >= 20);
+    }
   }
 });
 
+test("super spins: no lollipops, a multiplier candy every spin (25x or more in super spins 2), and a win is multiplied", () => {
+  const draw = seeded(21);
+  let multiplied = 0;
+  for (const [mode, min] of [["SPINS1", 5], ["SPINS2", 25]]) {
+    for (let i = 0; i < 1500; i++) {
+      const round = Candy.play(draw, mode);
+      assert.equal(round.spins.length, 1, "no free spins");
+      const [spin] = round.spins;
+      assert.equal(spin.free, false);
+      assert.equal(spin.scatters, 0);
+      assert.ok(spin.steps[0].board.some((cell) => cell.startsWith("X")), "the first board has a multiplier candy");
+      for (const step of spin.steps) for (const cell of step.board) {
+        assert.notEqual(cell, "LOLLIPOP");
+        if (cell.startsWith("X")) assert.ok(Number(cell.slice(1)) >= min);
+      }
+      const sum = spin.steps[spin.steps.length - 1].board.reduce((total, cell) => total + (cell.startsWith("X") ? Number(cell.slice(1)) : 0), 0);
+      assert.ok(sum > 0, "multiplier candies don't burst, so one is still there at the end");
+      assert.equal(spin.multiplier, spin.tumbleWin > 0 ? sum : 1);
+      assert.equal(spin.win, spin.tumbleWin * spin.multiplier);
+      if (spin.multiplier > 1) multiplied++;
+    }
+  }
+  assert.ok(multiplied > 1000);
+});
+
 test("every way to play pays back about the same, near 85% of what it costs", () => {
-  for (const [mode, rounds, seed] of [["ANTE", 300_000, 11], ["BUY", 30_000, 12], ["SUPER1", 25_000, 13], ["SUPER2", 25_000, 14]]) {
+  for (const [mode, rounds, seed] of [["ANTE1", 300_000, 11], ["ANTE2", 300_000, 15], ["SPINS1", 60_000, 16], ["SPINS2", 40_000, 17], ["BUY", 30_000, 12], ["SUPER1", 25_000, 13], ["SUPER2", 25_000, 14]]) {
     const draw = seeded(seed);
     let paid = 0;
     let squares = 0;

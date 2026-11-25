@@ -38,7 +38,13 @@ const BETWEEN_FREE_MS = 450;
 const TURBO = 0.35;
 const AUTO_COUNTS = [10, 25, 50, 100] as const;
 /** What each way to play costs, in times the bet, if the API doesn't say. */
-const COST: Record<CandyMode, number> = { NORMAL: 1, ANTE: 1.25, BUY: 100, SUPER1: 500, SUPER2: 1000 };
+const COST: Record<CandyMode, number> = { NORMAL: 1, ANTE1: 2.5, ANTE2: 12, SPINS1: 20, SPINS2: 250, BUY: 100, SUPER1: 500, SUPER2: 1000 };
+/** The Special Bets menu's options, in order: while one is on, every spin is played that way. */
+type SpecialMode = "ANTE1" | "ANTE2" | "SPINS1" | "SPINS2";
+const SPECIAL: SpecialMode[] = ["ANTE1", "ANTE2", "SPINS1", "SPINS2"];
+/** How many times as often the ante bets give free spins, and the smallest super spins 2 multiplier, if the API doesn't say. */
+const ANTE_CHANCE = { ANTE1: 6, ANTE2: 8 } as const;
+const SPINS2_MIN = 25;
 /** The Buy Feature menu's options, in order. */
 type BoughtMode = "BUY" | "SUPER1" | "SUPER2";
 const BOUGHT: BoughtMode[] = ["BUY", "SUPER1", "SUPER2"];
@@ -139,8 +145,8 @@ export function CandyGame() {
   const [autoMenu, setAutoMenu] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [turbo, setTurbo] = useState(false);
-  /** The Special Bet: on, every spin costs 25% more and lands lollipops more often. */
-  const [ante, setAnte] = useState(false);
+  /** The special bet that's on, if any: every spin is played (and costs) that way. */
+  const [special, setSpecial] = useState<SpecialMode | null>(null);
   /** The menus: closed, the Special Bet's, Buy Feature's, or a purchase to confirm. */
   const [buying, setBuying] = useState<null | "special" | "features" | BoughtMode>(null);
   const skip = useRef(false);
@@ -354,8 +360,8 @@ export function CandyGame() {
           const total = spin.total;
           setFree((current) => (current ? { ...current, total } : current));
         }
-        // A free spin that won: the multipliers on the board add up (or, in super free spins 2, the total does).
-        if (spin.free && spin.multiplier > 1 && spin.tumbleWin > 0) {
+        // A free spin or a super spin that won: the multipliers on the board add up (or, in super free spins 2, the total does).
+        if (spin.multiplier > 1 && spin.tumbleWin > 0) {
           setMultiplier(spin.multiplier);
           setMessage({ text: t("{win} × {multiplier} = {total}", { win: formatMoney(spin.tumbleWin * bet), multiplier: spin.multiplier, total: formatMoney(spin.tumbleWin * spin.multiplier * bet) }), tone: "big" });
           slotSound.win(true);
@@ -370,7 +376,14 @@ export function CandyGame() {
         if (spin.freeSpinsWon > 0) {
           freeLeft += spin.freeSpinsWon;
           setFree((current) => ({ ...current, left: freeLeft, won: current?.won ?? 0 }));
-          setMessage({ text: spin.free ? t("+{count} free spins!", { count: spin.freeSpinsWon }) : t("{count} free spins!", { count: spin.freeSpinsWon }), tone: "free" });
+          setMessage({
+            text: spin.free
+              ? t("+{count} free spins!", { count: spin.freeSpinsWon })
+              : mode === "ANTE2"
+                ? t("{count} super free spins!", { count: spin.freeSpinsWon })
+                : t("{count} free spins!", { count: spin.freeSpinsWon }),
+            tone: "free",
+          });
           slotSound.win(true);
           await wait(1400);
         }
@@ -390,9 +403,18 @@ export function CandyGame() {
 
   const costTable = g.state?.game.cost ?? COST;
   const costOf = useCallback((mode: CandyMode) => Math.round(g.stake * 100 * costTable[mode]) / 100, [g.stake, costTable]);
-  const spinMode: CandyMode = ante ? "ANTE" : "NORMAL";
-  /** Why a spin can't be played now: the bet over the max, or (with the Special Bet's 25%) over the balance. */
-  const problem = g.stakeProblem ?? (g.state && costOf(spinMode) > g.balance + 1e-9 ? t("Your balance is too low for this stake.") : null);
+  const spinMode: CandyMode = special ?? "NORMAL";
+  const maxBuyBet = g.state?.game.maxBuyBet ?? MAX_BUY_BET;
+  /** The purchases and the special bets that cost 10 times the bet or more: only at bets up to maxBuyBet. */
+  const limited = (mode: CandyMode) => costTable[mode] >= 10;
+  /** Why a spin can't be played now: the bet over the max, a costly special bet over its bet limit, or the cost over the balance. */
+  const problem =
+    g.stakeProblem ??
+    (special && limited(special) && g.stake > maxBuyBet
+      ? t("This special bet can be played at a bet of up to {amount}.", { amount: formatMoney(maxBuyBet) })
+      : g.state && costOf(spinMode) > g.balance + 1e-9
+        ? t("Your balance is too low for this stake.")
+        : null);
 
   const play = useCallback(async (mode: CandyMode) => {
     if (!g.state) return;
@@ -504,7 +526,6 @@ export function CandyGame() {
     slotSound.click();
   };
   const hint = turbo ? t("Turbo spin") : t("Hold Space for turbo spin");
-  const maxBuyBet = state.game.maxBuyBet ?? MAX_BUY_BET;
   const buyNote = g.stake > maxBuyBet ? t("Bets up to {amount}", { amount: formatMoney(maxBuyBet) }) : null;
   const canSpecial = !playing && autoLeft === 0 && !free;
   const openSpecial = () => {
@@ -517,6 +538,14 @@ export function CandyGame() {
     setBuying("features");
     slotSound.click();
   };
+  const overLimit = g.stake > maxBuyBet;
+  const anteChance = state.game.anteChance ?? ANTE_CHANCE;
+  const specials = {
+    ANTE1: { stars: 0, name: t("Ante bet 1"), blurb: t("About {times}× the chance of free spins", { times: anteChance.ANTE1 }) },
+    ANTE2: { stars: 2, name: t("Ante bet 2"), blurb: t("About {times}× the chance of super free spins with minimum {min}× multiplier", { times: anteChance.ANTE2, min: state.game.super1Multipliers?.[0] ?? SUPER_MIN.SUPER1 }) },
+    SPINS1: { stars: 3, name: t("Super spins 1"), blurb: t("1 multiplier guaranteed to hit every spin") },
+    SPINS2: { stars: 4, name: t("Super spins 2"), blurb: t("1 multiplier guaranteed to hit every spin with minimum {min}×", { min: state.game.spins2Multipliers?.[0] ?? SPINS2_MIN }) },
+  } satisfies Record<SpecialMode, { stars: number; name: string; blurb: string }>;
   const superMin = (mode: "SUPER1" | "SUPER2") => (mode === "SUPER1" ? state.game.super1Multipliers : state.game.super2Multipliers)?.[0] ?? SUPER_MIN[mode];
   const bought = {
     BUY: { stars: 0, name: t("Free spins"), blurb: t("Standard free spins") },
@@ -571,10 +600,10 @@ export function CandyGame() {
               </button>
               <button
                 type="button"
-                className={`candy-special-art${ante ? " is-on" : ""}`}
+                className={`candy-special-art${special ? " is-on" : ""}`}
                 onClick={openSpecial}
                 disabled={!canSpecial}
-                title={buyNote ?? (ante ? t("Double chance · +25%") : undefined)}
+                title={special ? specials[special].name : undefined}
                 aria-label={t("Special Bet")}
               >
                 <img src="/casino/candy/special-bets.webp" alt="" width={600} height={546} draggable={false} />
@@ -608,8 +637,8 @@ export function CandyGame() {
                 <button type="button" className="candy-chip is-buy" onClick={openFeatures} disabled={!canSpecial}>
                   {t("Buy feature")}
                 </button>
-                <button type="button" className={`candy-chip is-ante${ante ? " is-on" : ""}`} onClick={openSpecial} disabled={!canSpecial}>
-                  {t("Special Bet")}
+                <button type="button" className={`candy-chip is-ante${special ? " is-on" : ""}`} onClick={openSpecial} disabled={!canSpecial}>
+                  {special ? specials[special].name : t("Special Bet")}
                 </button>
               </div>
               {!free ? (
@@ -739,7 +768,7 @@ export function CandyGame() {
           {buying ? (
             <div className="candy-buy-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setBuying(null)}>
               <div
-                className={`candy-special${buying === "special" ? "" : " is-features"}`}
+                className={`candy-special${buying === "special" ? " is-specials" : " is-features"}`}
                 role="dialog"
                 aria-modal="true"
                 aria-label={buying === "special" ? t("Select a special bet") : t("Buy feature")}
@@ -750,22 +779,33 @@ export function CandyGame() {
                 <h2>{buying === "special" ? t("Select a special bet") : t("Buy feature")}</h2>
                 {buying === "special" ? (
                   <>
-                    <div className="candy-special-options is-single">
-                      <button
-                        type="button"
-                        className={`candy-special-option is-ante${ante ? " is-picked" : ""}`}
-                        onClick={() => {
-                          setAnte((on) => !on);
-                          slotSound.click();
-                          setBuying(null);
-                        }}
-                        disabled={costOf("ANTE") > g.balance + 1e-9 && !ante}
-                      >
-                        <SpecialStars count={1} />
-                        <span className="candy-special-name">{t("Special Bet")}</span>
-                        <strong className="candy-special-price">{formatMoney(costOf("ANTE"))}</strong>
-                        <span className="candy-special-blurb">{t("About 2× chance of free spins")}</span>
-                      </button>
+                    <div className="candy-special-options">
+                      {SPECIAL.map((mode) => {
+                        const picked = special === mode;
+                        const capped = limited(mode) && overLimit;
+                        return (
+                          <button
+                            key={mode}
+                            type="button"
+                            className={`candy-special-option is-${mode.toLowerCase()}${picked ? " is-picked" : ""}`}
+                            aria-pressed={picked}
+                            onClick={() => {
+                              // A second press turns it off again.
+                              setSpecial(picked ? null : mode);
+                              slotSound.click();
+                              setBuying(null);
+                            }}
+                            disabled={!picked && (capped || costOf(mode) > g.balance + 1e-9)}
+                            title={capped ? t("Bets up to {amount}", { amount: formatMoney(maxBuyBet) }) : undefined}
+                          >
+                            <SpecialStars count={specials[mode].stars} gold={mode === "SPINS2"} />
+                            <span className="candy-special-name">{specials[mode].name}</span>
+                            <strong className="candy-special-price">{formatMoney(costOf(mode))}</strong>
+                            <span className="candy-special-blurb">{specials[mode].blurb}</span>
+                            {picked ? <span className="candy-special-on">{t("On · tap to turn off")}</span> : null}
+                          </button>
+                        );
+                      })}
                     </div>
                     {baseBet}
                   </>
@@ -805,7 +845,6 @@ export function CandyGame() {
                         className="candy-buy-go"
                         onClick={() => {
                           const mode = buying;
-                          setAnte(false);
                           setBuying(null);
                           void play(mode);
                         }}
@@ -839,7 +878,9 @@ export function CandyGame() {
                       ? t("Bought super free spins")
                       : round?.mode === "ANTE"
                         ? t("Special Bet")
-                        : t("Spin"),
+                        : round?.mode === "ANTE1" || round?.mode === "ANTE2" || round?.mode === "SPINS1" || round?.mode === "SPINS2"
+                          ? specials[round.mode].name
+                          : t("Spin"),
               ...(round && round.freeSpins > 0 && (round.mode ?? "NORMAL") !== "BUY" && !round.mode?.startsWith("SUPER") ? [tn(round.freeSpins, "{count} free spin", "{count} free spins")] : []),
             ].join(" · "),
           })}
@@ -892,8 +933,18 @@ export function CandyGame() {
               </span>
             </p>
             <p>
-              <strong>{t("Special Bet")}:</strong>{" "}
-              {t("turned on, each spin costs 25% more ({amount} at your bet) and lands lollipops more often: free spins come about twice as often. Wins are counted from your bet, as usual.", { amount: formatMoney(costOf("ANTE")) })}
+              <strong>{t("Special bets")}:</strong>{" "}
+              {t("pick one and every spin is played that way, at a higher cost, until you turn it off; wins are counted from your bet, as usual. Ante bet 1, {ante1}× your bet: about {chance1}× the chance of free spins. Ante bet 2, {ante2}×: about {chance2}× the chance of free spins, and they're super free spins 1 (every multiplier candy {min1}× or more). Super spins 1, {spins1}×: no lollipops, but every spin lands at least one multiplier candy, and a spin that wins is multiplied by every multiplier on the board. Super spins 2, {spins2}×: the same, with every multiplier candy {min2}× or more. Ante bet 2 and the super spins can be played at bets up to {max}.", {
+                ante1: costTable.ANTE1,
+                ante2: costTable.ANTE2,
+                spins1: costTable.SPINS1,
+                spins2: costTable.SPINS2,
+                chance1: anteChance.ANTE1,
+                chance2: anteChance.ANTE2,
+                min1: superMin("SUPER1"),
+                min2: state.game.spins2Multipliers?.[0] ?? SPINS2_MIN,
+                max: formatMoney(maxBuyBet),
+              })}
             </p>
             <p>
               <strong>{t("Buy feature")}:</strong>{" "}

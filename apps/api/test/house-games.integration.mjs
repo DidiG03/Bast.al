@@ -127,16 +127,24 @@ test("Candy Cascade: a spin and every free spin it gives are paid in one go, wit
   assert.equal(await ledgerTotal(ana), await balanceOf(ana));
 });
 
-test("Candy Cascade: the Special Bet costs 25% more, and free spins are bought outright at bets up to 500", async () => {
-  // The Special Bet: 62.50 for a 50 bet, wins counted from the 50.
+test("Candy Cascade: special bets cost more per spin, and free spins are bought outright at bets up to 500", async () => {
+  // Ante bet 1: 125 for a 50 bet, wins counted from the 50.
   let before = await balanceOf(ana);
-  const ante = await games.candySpin(ana, 50, "ANTE");
-  assert.equal(ante.cost, 62.5);
-  assert.equal(ante.round.mode, "ANTE");
+  const ante = await games.candySpin(ana, 50, "ANTE1");
+  assert.equal(ante.cost, 125);
+  assert.equal(ante.round.mode, "ANTE1");
   assert.equal(ante.win, Math.floor(50 * 100 * ante.round.win) / 100);
-  assert.equal(await balanceOf(ana), Math.round((before - 62.5 + ante.win) * 100) / 100);
+  assert.equal(await balanceOf(ana), Math.round((before - 125 + ante.win) * 100) / 100);
   const anteRow = await prisma.casinoSpin.findFirstOrThrow({ where: { kind: "CANDY" }, orderBy: { createdAt: "desc" } });
-  assert.equal(Number(anteRow.stake), 62.5, "the stake on record is what it cost");
+  assert.equal(Number(anteRow.stake), 125, "the stake on record is what it cost");
+  // Ante bet 1 is fine at any bet; super spins 1 (20 times the bet) only up to 500.
+  await assert.rejects(games.candySpin(ana, 1000, "SPINS1"), /special bet can be played at a bet of up to 500.00 ALL/);
+  // Super spins 1: 1,000 for a 50 bet, one spin, no free spins.
+  before = await balanceOf(ana);
+  const spins = await games.candySpin(ana, 50, "SPINS1");
+  assert.equal(spins.cost, 1000);
+  assert.equal(spins.round.spins.length, 1);
+  assert.equal(await balanceOf(ana), Math.round((before - 1000 + spins.win) * 100) / 100);
   // Buying is for bets up to 500, and the full price counts against the max stake.
   await assert.rejects(games.candySpin(ana, 1000, "BUY"), /bought at a bet of up to 500.00 ALL/);
   await assert.rejects(games.candySpin(ana, 50, "WHATEVER"), /Pick a normal spin/);
@@ -254,8 +262,9 @@ test("the Casino stats count each new game as itself, not as the slot", async ()
   assert.equal(stats.games.slot.spins, 0);
   assert.equal(stats.games.slot.staked, 0);
   assert.equal(stats.games.wheel.spins, 1);
-  assert.equal(stats.games.candy.spins, 42);
-  assert.equal(stats.games.candy.staked, 2000 + 62.5 + 5000);
+  // 40 normal spins, then ante bet 1, super spins 1 and bought free spins (at a bet of 50).
+  assert.equal(stats.games.candy.spins, 43);
+  assert.equal(stats.games.candy.staked, 2000 + 125 + 1000 + 5000);
   assert.equal(stats.games.baccarat.spins, 1);
   assert.equal(stats.games.hilo.spins, 1);
   assert.equal(stats.games.tower.spins, 1);

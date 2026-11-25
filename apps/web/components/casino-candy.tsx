@@ -11,6 +11,7 @@ import { useCasinoSession } from "./use-casino-session";
 import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import type { CandyCell, CandyMode, CandyPaying, CandyRecord, CandySpinResult, CandyState, CandyStep } from "../lib/api";
 import { formatMoney } from "../lib/format";
+import "@fontsource/lilita-one/400.css";
 
 const COLUMNS = 6;
 const ROWS = 5;
@@ -85,14 +86,23 @@ function fall(column: number, from: number, to: number) {
 
 const quietBoard = (): CandyCell[] => Array.from({ length: COLUMNS * ROWS }, (_, i) => (["PEACH", "GRAPE", "MINT", "LEMON", "ORANGE", "GEM", "MOON", "STAR", "HEART"] as CandyCell[])[(i * 7) % 9]);
 
-/** The round arrows on the spin button. */
+/** The two curved arrows on the spin button, with broad arrow heads. */
 function SpinArrows() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className="candy-spin-arrows">
-      <path d="M38 20a15 15 0 0 0-27-6" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-      <path d="M8 7v9h9" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M10 28a15 15 0 0 0 27 6" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-      <path d="M40 41v-9h-9" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8.5 21A16 16 0 0 1 35 12.5" fill="none" stroke="currentColor" strokeWidth="5.5" />
+      <path d="M31 4.5 43 15.5 27.5 19.5Z" fill="currentColor" />
+      <path d="M39.5 27A16 16 0 0 1 13 35.5" fill="none" stroke="currentColor" strokeWidth="5.5" />
+      <path d="M17 43.5 5 32.5 20.5 28.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** A thin minus or plus for the bet keys. */
+function StepGlyph({ plus }: { plus?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="candy-step-glyph">
+      <path d={plus ? "M4 12h16M12 4v16" : "M4 12h16"} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -685,7 +695,7 @@ export function CandyGame() {
 
             <div className="candy-spin-group">
               <button type="button" className="candy-step" onClick={() => stepStake(-1)} disabled={playing || autoLeft > 0 || stakeIndex <= 0} aria-label={t("Lower the bet")}>
-                −
+                <StepGlyph />
               </button>
               <div className="candy-spin-stack">
                 <button type="button" className={`candy-spin${playing ? " is-spinning" : ""}`} disabled={!!problem && !playing} onClick={() => void spin()} aria-label={playing ? t("Skip") : t("Spin {amount}", { amount: formatMoney(g.stake) })}>
@@ -697,6 +707,7 @@ export function CandyGame() {
                   </button>
                 ) : (
                   <button type="button" className="candy-auto-pill" disabled={playing || !!problem} aria-expanded={autoMenu} onClick={() => setAutoMenu((open) => !open)}>
+                    <span className="candy-auto-chevrons" aria-hidden="true">›››</span>
                     {t("Autoplay")}
                   </button>
                 )}
@@ -719,7 +730,7 @@ export function CandyGame() {
                 ) : null}
               </div>
               <button type="button" className="candy-step" onClick={() => stepStake(1)} disabled={playing || autoLeft > 0 || stakeIndex >= allowed.length - 1} aria-label={t("Raise the bet")}>
-                +
+                <StepGlyph plus />
               </button>
             </div>
           </footer>

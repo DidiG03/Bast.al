@@ -20036,6 +20036,8 @@ button.cab-field-box:disabled {
     linear-gradient(180deg, #8fd3ff 0%, #c8a8ff 45%, #ff9fd2 100%);
   box-shadow: 0 0 0 4px #2a0b4a, 0 18px 40px rgba(0, 0, 0, 0.45);
   color: #fff;
+  /* Lilita One has a single weight; don't let the browser smear a fake bold (a slanted italic is fine). */
+  font-synthesis: style;
 }
 
 .candy-cabinet.is-full {
@@ -20059,8 +20061,8 @@ button.cab-field-box:disabled {
 .candy-side small,
 .candy-side strong,
 .candy-auto-pill {
-  font-family: "Arial Black", "Arial Rounded MT Bold", Arial, sans-serif;
-  font-weight: 900;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-weight: 400;
   text-transform: uppercase;
   text-shadow:
     -2px -2px 0 #5a17a8, 2px -2px 0 #5a17a8, -2px 2px 0 #5a17a8, 2px 2px 0 #5a17a8,
@@ -20071,6 +20073,15 @@ button.cab-field-box:disabled {
   position: relative;
   padding: 0.55rem 3.4rem 0.15rem;
   text-align: center;
+}
+
+/* The bar's lettering has a soft dark drop shadow instead of the outline. */
+.candy-money dt,
+.candy-money dd,
+.candy-say,
+.candy-auto-pill {
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 0 rgba(60, 10, 70, 0.55), 0 3px 6px rgba(40, 6, 60, 0.45);
 }
 
 .candy-headline {
@@ -20097,9 +20108,9 @@ button.cab-field-box:disabled {
   min-width: 0;
   min-height: 0;
   padding: 0;
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  background: rgba(58, 14, 100, 0.6);
+  background: rgba(40, 10, 60, 0.35);
   color: #fff;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.15rem;
@@ -20176,7 +20187,7 @@ button.candy-box:disabled {
 
 .candy-box strong,
 .candy-box small {
-  font-family: "Arial Black", "Arial Rounded MT Bold", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -20343,7 +20354,7 @@ button.candy-box:disabled {
   border: 3px solid #fff;
   border-radius: 999px;
   color: #fff;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: 0.78rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -20420,7 +20431,7 @@ button.candy-chip:disabled {
 .candy-special h2 {
   margin: 0.15rem 1.8rem 0.85rem;
   color: #c4a0ff;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: clamp(1.15rem, 4.2cqi, 1.75rem);
   letter-spacing: 0.02em;
   line-height: 1.15;
@@ -20445,7 +20456,7 @@ button.candy-chip:disabled {
   border-radius: 999px;
   background: linear-gradient(180deg, #ff6b6b, #d01828);
   color: #fff;
-  font: 900 1.25rem/1 "Arial Black", Arial, sans-serif;
+  font: 400 1.25rem/1 "Lilita One", "Arial Black", Arial, sans-serif;
   cursor: pointer;
   box-shadow: 0 4px 0 #7a0a18;
 }
@@ -20530,7 +20541,7 @@ button.candy-chip:disabled {
 .candy-special-name {
   grid-area: name;
   color: #d8c4ff;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: 0.95rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -20541,7 +20552,7 @@ button.candy-chip:disabled {
   grid-area: price;
   justify-self: end;
   color: #ffe14a;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: 1.35rem;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -20567,7 +20578,7 @@ button.candy-chip:disabled {
 
 .candy-special-base > span {
   color: #dcc8ff;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -20587,7 +20598,7 @@ button.candy-chip:disabled {
   border-radius: 12px;
   background: linear-gradient(180deg, #1a3a9a, #0c226e);
   color: #ffe14a;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
   text-shadow: 0 2px 0 #8a4a00;
@@ -20602,7 +20613,7 @@ button.candy-chip:disabled {
   border-radius: 999px;
   background: linear-gradient(180deg, #3a6fe0, #1a3a9a);
   color: #fff;
-  font: 900 1.4rem/1 "Arial Black", Arial, sans-serif;
+  font: 400 1.4rem/1 "Lilita One", "Arial Black", Arial, sans-serif;
   cursor: pointer;
   box-shadow: 0 4px 0 #0a2260;
 }
@@ -20697,7 +20708,7 @@ button.candy-chip:disabled {
 
 .candy-special.is-features .candy-special-blurb {
   color: #d8ccff;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: 0.72rem;
   line-height: 1.25;
   text-shadow: 0 1px 0 #4a1a80, 0 0 2px #4a1a80;
@@ -20778,7 +20789,7 @@ button.candy-chip:disabled {
   border-radius: 999px;
   background: linear-gradient(90deg, #ff6fb5, #b24fe6);
   color: #fff;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-weight: 900;
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
@@ -20852,7 +20863,7 @@ button.candy-chip:disabled {
   translate: -50% -50%;
   padding: 0.05rem 0.5rem;
   color: #fff;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: clamp(0.95rem, 4.2cqi, 1.6rem);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -20890,7 +20901,7 @@ button.candy-chip:disabled {
   stroke: #7a1406;
   stroke-width: 5px;
   paint-order: stroke;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-weight: 900;
 }
 
@@ -20914,7 +20925,7 @@ button.candy-chip:disabled {
   display: grid;
   place-items: center;
   color: #ffe14a;
-  font-family: "Arial Black", Arial, sans-serif;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-size: clamp(2.6rem, 10cqi, 5.5rem);
   font-weight: 900;
   text-shadow: -3px -3px 0 #b0126b, 3px -3px 0 #b0126b, -3px 3px 0 #b0126b, 3px 3px 0 #b0126b, 0 0 24px rgba(255, 210, 63, 0.9);
@@ -20972,15 +20983,23 @@ button.candy-chip:disabled {
 
 .candy-money dt {
   min-width: 4.6rem;
-  color: #ffd23f;
-  font-size: 1.05rem;
+  /* Orange to gold, like the labels in the reference. */
+  background: linear-gradient(180deg, #ffe066 0%, #ffb52e 55%, #ff9414 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 1.45rem;
+  line-height: 1.05;
   text-align: right;
+  text-shadow: none;
+  filter: drop-shadow(0 2px 0 rgba(60, 10, 70, 0.55)) drop-shadow(0 2px 4px rgba(40, 6, 60, 0.4));
 }
 
 .candy-money dd {
   margin: 0;
   color: #fff;
-  font-size: 1.1rem;
+  font-size: 1.45rem;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -20990,8 +21009,8 @@ button.candy-chip:disabled {
   min-width: 0;
   margin: 0;
   color: #fff;
-  font-size: clamp(0.8rem, 1.7cqi, 1.3rem);
-  line-height: 1.15;
+  font-size: clamp(1rem, 2.3cqi, 1.75rem);
+  line-height: 1.1;
   text-align: center;
   text-wrap: balance;
 }
@@ -21003,7 +21022,7 @@ button.candy-chip:disabled {
 .candy-say.is-big,
 .candy-say.is-free {
   color: #ffe14a;
-  font-size: clamp(1rem, 2.6cqi, 1.8rem);
+  font-size: clamp(1.15rem, 2.9cqi, 2.1rem);
 }
 
 .candy-spin-group {
@@ -21020,14 +21039,21 @@ button.candy-chip:disabled {
   height: 3.1rem;
   min-width: 0;
   padding: 0;
-  border: 3px solid #fff;
+  border: 3px solid rgba(255, 255, 255, 0.95);
   border-radius: 50%;
-  background: rgba(58, 14, 100, 0.55);
+  background: rgba(40, 10, 60, 0.32);
   color: #fff;
-  font-size: 1.9rem;
-  font-weight: 900;
   line-height: 1;
-  box-shadow: 0 3px 8px rgba(40, 8, 70, 0.4);
+  box-shadow: 0 2px 8px rgba(40, 8, 70, 0.35);
+}
+
+.candy-step-glyph {
+  width: 55%;
+  height: 55%;
+}
+
+.candy-step:hover:not(:disabled) {
+  background: rgba(40, 10, 60, 0.5);
 }
 
 .candy-step:disabled {
@@ -21047,16 +21073,20 @@ button.candy-chip:disabled {
   height: 5.8rem;
   min-width: 0;
   padding: 0;
-  border: 5px solid #fff;
+  /* A see-through dark disc in a soft white ring. */
+  border: 4px solid rgba(255, 255, 255, 0.55);
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, #7a4ad6, #3a1580 65%, #24094f);
+  background: rgba(30, 8, 45, 0.42);
   color: #fff;
-  box-shadow: 0 0 0 3px rgba(90, 23, 168, 0.6), 0 8px 18px rgba(40, 8, 70, 0.5), inset 0 -6px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: 0 6px 16px rgba(40, 8, 70, 0.35);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
   touch-action: manipulation;
 }
 
 .candy-spin:hover:not(:disabled) {
-  background: radial-gradient(circle at 50% 35%, #8f5df0, #4a1ea0 65%, #2c0b60);
+  background: rgba(30, 8, 45, 0.58);
+  border-color: rgba(255, 255, 255, 0.8);
 }
 
 .candy-spin:disabled {
@@ -21064,8 +21094,9 @@ button.candy-chip:disabled {
 }
 
 .candy-spin-arrows {
-  width: 58%;
-  height: 58%;
+  width: 66%;
+  height: 66%;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
 }
 
 .candy-spin.is-spinning .candy-spin-arrows {
@@ -21081,17 +21112,33 @@ button.candy-chip:disabled {
 .candy-auto-pill {
   position: relative;
   z-index: 1;
-  margin-top: -0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: -0.85rem;
   min-height: 0;
-  padding: 0.2rem 0.95rem;
+  padding: 0.12rem 0.9rem 0.12rem 0.2rem;
   border: 2px solid #fff;
   border-radius: 999px;
-  background: #2a0b4a;
+  background: #0d0610;
   color: #fff;
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
+  font-size: 1.05rem;
+  font-style: italic;
   white-space: nowrap;
   text-shadow: none;
+}
+
+/* The chevrons sit in a white-rimmed cap at the pill's left end. */
+.candy-auto-chevrons {
+  display: grid;
+  place-items: center;
+  height: 1.35rem;
+  padding: 0 0.45rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  font-size: 1rem;
+  letter-spacing: -0.12em;
+  line-height: 1;
 }
 
 .candy-auto-pill.is-on {
@@ -21194,17 +21241,17 @@ button.candy-chip:disabled {
 
   .candy-say {
     min-height: 1.4rem;
-    font-size: clamp(0.85rem, 4.2cqi, 1.2rem);
+    font-size: clamp(1rem, 4.8cqi, 1.35rem);
   }
 
   .candy-money dt {
     min-width: 0;
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     text-align: left;
   }
 
   .candy-money dd {
-    font-size: 0.95rem;
+    font-size: 1.15rem;
   }
 
   .candy-keys .candy-round-key {

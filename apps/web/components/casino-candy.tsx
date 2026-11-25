@@ -624,6 +624,7 @@ export function CandyGame() {
                 </div>
               ) : null}
               <div className={`candy-board${free ? " is-free" : ""}`} role="img" aria-label={t("The board")}>
+                <img className="candy-cream" src="/casino/candy/cream.webp" alt="" aria-hidden="true" draggable={false} />
                 {/* The pieces sit in one layer clipped to the board: what's above or below it doesn't show. */}
                 <div className="candy-grid" style={{ "--speed": turbo ? TURBO : 1 } as CSSProperties}>
                   {pieces.map((piece) => (

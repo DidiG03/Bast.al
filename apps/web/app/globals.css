@@ -20071,6 +20071,8 @@ button.cab-field-box:disabled {
 
 .candy-top {
   position: relative;
+  /* In front of the cream along the board's top, as on the reference. */
+  z-index: 3;
   padding: 0.55rem 3.4rem 0.15rem;
   text-align: center;
 }
@@ -20845,6 +20847,20 @@ button.candy-chip:disabled {
   pointer-events: none;
 }
 
+/* Pink cream with sprinkles along the board's top edge. Its striped base sits on the board's rim. */
+.candy-cream {
+  position: absolute;
+  top: 0;
+  left: -1.6%;
+  z-index: 2;
+  width: 103.2%;
+  max-width: none;
+  height: auto;
+  transform: translateY(-62%);
+  pointer-events: none;
+  user-select: none;
+}
+
 .candy-board.is-free {
   --candy-rim: repeating-linear-gradient(45deg, #ffb01f 0 10px, #fff 10px 20px);
   background: linear-gradient(180deg, rgba(255, 245, 210, 0.3), rgba(255, 220, 180, 0.34)) padding-box;
@@ -21214,6 +21230,13 @@ button.candy-chip:disabled {
 
   .candy-board-wrap {
     align-items: center;
+  }
+
+  /* The win pill sits on the cream, in front of it. */
+  .candy-phone-win {
+    position: relative;
+    z-index: 3;
+    margin-bottom: 0.5rem;
   }
 
   .candy-side {

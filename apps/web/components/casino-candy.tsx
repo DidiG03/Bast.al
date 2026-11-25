@@ -7,6 +7,9 @@ import { HouseHistory, HousePage, RulesSheet, useHouseGame } from "./house-game"
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
 import { slotSound } from "./slot-sounds";
+
+/** Candy Cascade's background music, looped while the game is open. */
+const MUSIC = "/casino/candy/music.m4a";
 import { useCasinoSession } from "./use-casino-session";
 import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import type { CandyCell, CandyMode, CandyPaying, CandyRecord, CandySpinResult, CandyState, CandyStep } from "../lib/api";
@@ -169,9 +172,12 @@ export function CandyGame() {
   useEffect(() => {
     alive.current = true;
     setSoundOn(slotSound.on);
+    // The game's music: it starts with the Player's first tap on the game, and stops when they leave.
+    slotSound.startMusic(MUSIC);
     reducedMotion.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     return () => {
       alive.current = false;
+      slotSound.stopMusic();
     };
   }, []);
 
@@ -574,7 +580,7 @@ export function CandyGame() {
       closed={state.closed}
       onRules={() => setRules(true)}
       cabinet={
-        <section ref={cabinet} className={`candy-cabinet${fullScreen !== "off" ? " is-full" : ""}${free ? " is-free" : ""}`} aria-label="Candy Cascade">
+        <section ref={cabinet} className={`candy-cabinet${fullScreen !== "off" ? " is-full" : ""}${free ? " is-free" : ""}`} aria-label="Candy Cascade" onPointerDown={() => slotSound.unlock()}>
           <CandyDefs />
           <header className="candy-top">
             <Link className="candy-round-key candy-exit" href="/dashboard/casino" aria-label={t("Leave the game")}>

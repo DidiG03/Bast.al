@@ -1,6 +1,7 @@
 /**
  * The casino's sounds (the slot's and the roulette wheel's), made in the browser with Web Audio: no sound
- * files, so there's nothing to license or download. They play at the
+ * files, so there's nothing to license or download. The one exception is a game's background music
+ * (Candy Cascade's), a track loaded once and looped with `startMusic()`. They play at the
  * phone's own volume (a page can't read or change it), and on an iPhone with
  * the silent switch on, the browser keeps them silent. Players can also turn
  * them off in the game; that's remembered on this device.
@@ -110,6 +111,80 @@ function release() {
   keepAlive = null;
 }
 
+/** Background music: the track a game asked for, its decoded audio, and what's playing it now. */
+const MUSIC_VOLUME = 0.55;
+let musicUrl: string | null = null;
+let musicSource: AudioBufferSourceNode | null = null;
+let musicGain: GainNode | null = null;
+const musicBuffers = new Map<string, Promise<AudioBuffer | null>>();
+
+function loadMusic(ctx: AudioContext, url: string): Promise<AudioBuffer | null> {
+  let pending = musicBuffers.get(url);
+  if (!pending) {
+    pending = fetch(url)
+      .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
+      .then((data) => new Promise<AudioBuffer>((resolve, reject) => ctx.decodeAudioData(data, resolve, reject)))
+      .catch(() => {
+        // A track that won't load is skipped (and tried again next time); the game plays on without it.
+        musicBuffers.delete(url);
+        return null;
+      });
+    musicBuffers.set(url, pending);
+  }
+  return pending;
+}
+
+function stopMusicNow() {
+  const source = musicSource;
+  const gain = musicGain;
+  musicSource = null;
+  musicGain = null;
+  if (!source || !gain || !audio) return;
+  try {
+    // A short fade, so it doesn't stop with a click.
+    const now = audio.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(gain.gain.value, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.25);
+    source.stop(now + 0.3);
+  } catch {
+    // Already stopped.
+  }
+}
+
+/** Plays the wanted track on a seamless loop, if sound is on and the page is showing. */
+async function playMusic() {
+  const url = musicUrl;
+  const sound = ready();
+  if (!url || !sound || musicSource || (typeof document !== "undefined" && document.hidden)) return;
+  const buffer = await loadMusic(sound.ctx, url);
+  // Things may have changed while it loaded: another track, sound off, or it's already started.
+  if (!buffer || musicUrl !== url || musicSource || !ready() || document.hidden) return;
+  try {
+    const { ctx, out } = sound;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(MUSIC_VOLUME, ctx.currentTime + 1.2);
+    source.connect(gain).connect(out);
+    source.start();
+    musicSource = source;
+    musicGain = gain;
+  } catch {
+    // The browser wouldn't start it; the next tap tries again.
+  }
+}
+
+if (typeof document !== "undefined") {
+  // Quiet while the tab is in the background; back when it's showing again.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopMusicNow();
+    else void playMusic();
+  });
+}
+
 export const slotSound = {
   get on() {
     return on;
@@ -125,6 +200,7 @@ export const slotSound = {
     }
     if (!next) {
       this.stopTicking();
+      stopMusicNow();
       release();
     } else this.unlock();
   },
@@ -169,6 +245,23 @@ export const slotSound = {
     } catch {
       // The context is still there. The coin or the blast plays when the round answers.
     }
+    void playMusic();
+  },
+
+  /**
+   * A game's background music, looped while the game is open. It starts on the Player's first tap
+   * (browsers allow sound only after one), follows the sound switch, and goes quiet in a background tab.
+   */
+  startMusic(url: string) {
+    if (musicUrl !== url) stopMusicNow();
+    musicUrl = url;
+    void playMusic();
+  },
+
+  /** Stops the background music: the game is closing. */
+  stopMusic() {
+    musicUrl = null;
+    stopMusicNow();
   },
 
   /** A small button press. */

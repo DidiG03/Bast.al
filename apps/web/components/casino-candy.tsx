@@ -22,19 +22,19 @@ const ROWS = 5;
  * How the candies move, ms. A fall of one row takes FALL_MS, of n rows FALL_MS × √n; landing takes LAND_MS more.
  * Columns start STAGGER_MS apart, and on a new spin each row up a little later than the one under it.
  */
-const FALL_MS = 165;
-const LAND_MS = 130;
-const COLUMN_STAGGER_MS = 38;
-const ROW_STAGGER_MS = 22;
-const CASCADE_STAGGER_MS = 18;
+const FALL_MS = 260;
+const LAND_MS = 170;
+const COLUMN_STAGGER_MS = 90;
+const ROW_STAGGER_MS = 35;
+const CASCADE_STAGGER_MS = 28;
 /** On a new spin, how long after the old candies start to fall out the new ones follow them. */
-const FOLLOW_MS = 90;
+const FOLLOW_MS = 160;
 /** In a tumble, how far behind the candies above that fall the new ones drop in. */
-const REFILL_LAG_MS = 50;
+const REFILL_LAG_MS = 80;
 /** The winners glowing with their pay shown, then bursting, then a beat after everything lands. */
-const GLOW_MS = 700;
-const BURST_MS = 230;
-const AFTER_LANDING_MS = 90;
+const GLOW_MS = 900;
+const BURST_MS = 320;
+const AFTER_LANDING_MS = 160;
 const MULTIPLIER_MS = 1100;
 const BETWEEN_FREE_MS = 450;
 /** Turbo (Space held): every pause this much shorter. */
@@ -172,7 +172,7 @@ export function CandyGame() {
   useEffect(() => {
     alive.current = true;
     setSoundOn(slotSound.on);
-    // The game's music: it starts with the Player's first tap on the game, and stops when they leave.
+    // The game's music: it starts as the game opens (or on the first tap, if the browser holds it back) and stops when they leave.
     slotSound.startMusic(MUSIC);
     reducedMotion.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     return () => {
@@ -580,7 +580,7 @@ export function CandyGame() {
       closed={state.closed}
       onRules={() => setRules(true)}
       cabinet={
-        <section ref={cabinet} className={`candy-cabinet${fullScreen !== "off" ? " is-full" : ""}${free ? " is-free" : ""}`} aria-label="Candy Cascade" onPointerDown={() => slotSound.unlock()}>
+        <section ref={cabinet} className={`candy-cabinet${fullScreen !== "off" ? " is-full" : ""}${free ? " is-free" : ""}`} aria-label="Candy Cascade">
           <CandyDefs />
           <header className="candy-top">
             <Link className="candy-round-key candy-exit" href="/dashboard/casino" aria-label={t("Leave the game")}>

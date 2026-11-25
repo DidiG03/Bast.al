@@ -177,6 +177,21 @@ async function playMusic() {
   }
 }
 
+/** Taps and keys that wake the audio, if the browser held it back until the Player touched the page. */
+const WAKE_EVENTS = ["pointerdown", "touchend", "keydown"] as const;
+let wakeListening = false;
+
+function stopWaking() {
+  if (!wakeListening || typeof document === "undefined") return;
+  wakeListening = false;
+  for (const type of WAKE_EVENTS) document.removeEventListener(type, wake, { capture: true });
+}
+
+function wake() {
+  slotSound.unlock();
+  if (audio?.state === "running") stopWaking();
+}
+
 if (typeof document !== "undefined") {
   // Quiet while the tab is in the background; back when it's showing again.
   document.addEventListener("visibilitychange", () => {
@@ -249,19 +264,27 @@ export const slotSound = {
   },
 
   /**
-   * A game's background music, looped while the game is open. It starts on the Player's first tap
-   * (browsers allow sound only after one), follows the sound switch, and goes quiet in a background tab.
+   * A game's background music, looped while the game is open. It starts as the game opens, follows the
+   * sound switch, and goes quiet in a background tab.
    */
   startMusic(url: string) {
     if (musicUrl !== url) stopMusicNow();
     musicUrl = url;
-    void playMusic();
+    // Straight away: the browser allows it once the Player has used the site (opening the game from the
+    // lobby counts). If it doesn't (the game's address opened directly), the audio waits, suspended, and
+    // the first tap or key press anywhere on the page wakes it.
+    this.unlock();
+    if (typeof document !== "undefined" && !wakeListening) {
+      wakeListening = true;
+      for (const type of WAKE_EVENTS) document.addEventListener(type, wake, { capture: true, passive: true });
+    }
   },
 
   /** Stops the background music: the game is closing. */
   stopMusic() {
     musicUrl = null;
     stopMusicNow();
+    stopWaking();
   },
 
   /** A small button press. */

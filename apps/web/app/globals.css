@@ -20823,7 +20823,8 @@ button.candy-chip:disabled {
 /* The board in a candy-cane frame: as wide as the cabinet allows, and no taller than the game's height leaves for it. */
 .candy-board {
   --candy-rest: 13.5rem;
-  --candy-rim: repeating-linear-gradient(45deg, #ff5fa8 0 10px, #fff 10px 20px);
+  /* Orange and cream candy-cane stripes, a soft gold where they meet. */
+  --candy-rim: repeating-linear-gradient(-55deg, #e67c42 0 5px, #efc97e 6px, #faf2c3 7.5px 12px, #efc97e 13.5px, #e67c42 14.5px 16px);
   --candy-rim-w: 7px;
   /* The board's width over its height: wide, so the cells are wider than tall. */
   --candy-shape: 1.6;
@@ -20849,6 +20850,8 @@ button.candy-chip:disabled {
   padding: var(--candy-rim-w);
   border-radius: inherit;
   background: var(--candy-rim);
+  /* A darker outer edge, so the rim reads as a rounded candy stick. */
+  box-shadow: inset 0 0 0 1.5px rgba(170, 80, 40, 0.45);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
@@ -20870,7 +20873,7 @@ button.candy-chip:disabled {
 }
 
 .candy-board.is-free {
-  --candy-rim: repeating-linear-gradient(45deg, #ffb01f 0 10px, #fff 10px 20px);
+  --candy-rim: repeating-linear-gradient(-55deg, #e0453a 0 5px, #f2a35a 6px, #fff3c8 7.5px 12px, #f2a35a 13.5px, #e0453a 14.5px 16px);
   background: linear-gradient(180deg, rgba(255, 245, 210, 0.3), rgba(255, 220, 180, 0.34)) padding-box;
 }
 

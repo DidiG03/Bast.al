@@ -20268,16 +20268,24 @@ button.candy-box:disabled {
   border-radius: 22px;
 }
 
+/* The win card: the drawn purple tray with blue tabs top and bottom; the text sits inside its frame. */
 .candy-box.is-info {
-  min-height: 8.2rem;
-  border-color: #b98af0;
-  background: linear-gradient(180deg, #a35cf0, #7a2fd6 60%, #6420bf);
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.35), inset 0 -6px 0 rgba(40, 0, 90, 0.35), 0 10px 22px rgba(90, 20, 120, 0.35);
+  width: 100%;
+  max-width: 11.5rem;
+  min-height: 0;
+  aspect-ratio: 480 / 547;
+  justify-self: center;
+  padding: 14% 12% 13%;
+  border: 0;
+  border-radius: 0;
+  background: url("/casino/candy/win-box.webp") center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 14px rgba(90, 20, 120, 0.35));
 }
 
+/* Free spins: the same tray, glowing gold. */
 .candy-box.is-info.is-free {
-  border-color: #ffd23f;
-  background: linear-gradient(180deg, #ffb01f, #f0602f 70%);
+  filter: drop-shadow(0 0 10px rgba(255, 210, 63, 0.85)) drop-shadow(0 10px 14px rgba(90, 20, 120, 0.35));
 }
 
 .candy-box.is-info small {

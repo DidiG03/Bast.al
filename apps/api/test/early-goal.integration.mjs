@@ -440,7 +440,8 @@ test("pace: linked matches missing from the live list are read from their pages 
   await reader.run(new Date());
   assert.equal(lists(), 3, "the list is read every time");
   assert.equal(pages(), 6, "the pages wait their 30 s");
-  assert.equal(reader.nextDelay(), paced, "the pages don't stretch the list's pace");
+  // The pace is spread over what's left of the day, so it moves by a few ms between reads; the pages mustn't stretch it.
+  assert.ok(Math.abs(reader.nextDelay() - paced) <= paced * 0.01, "the pages don't stretch the list's pace");
   assert.ok(paced < 20_000, `about one list read every 13 s without a key (${paced} ms)`);
   await prisma.event.update({ where: { id: listed.id }, data: { status: "COMPLETED" } });
 });

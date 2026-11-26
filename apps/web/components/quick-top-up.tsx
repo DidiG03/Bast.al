@@ -13,7 +13,9 @@ import { useDismiss } from "./use-dismiss";
 
 const PRESETS = [10, 20, 50, 100, 200, 500];
 /** Super Admin tops up Owners, who hand it on to their whole team: bigger steps. */
-const OWNER_PRESETS = [1000, 5000, 10000, 20000, 50000, 100000];
+const OWNER_PRESETS = [10000, 50000, 100000, 500000, 1000000, 5000000];
+/** The most a balance can hold (the database's limit): Super Admin's credit has no other cap. */
+const MAX_BALANCE = 9_999_999_999.99;
 
 type Props = {
   player: UserRow;
@@ -40,7 +42,8 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone, 
   useDismiss(onClose);
   const [sending, setSending] = useState<number | null>(null);
   const toast = useToast();
-  const headroom = Math.max(0, Number(player.balanceLimit) - Number(player.balance));
+  // Super Admin's credit isn't held to the recipient's balance limit, only to what a balance can hold.
+  const headroom = Math.max(0, (newMoney ? MAX_BALANCE : Number(player.balanceLimit)) - Number(player.balance));
   const presets = newMoney ? OWNER_PRESETS : PRESETS;
   const spendable = newMoney ? Number.POSITIVE_INFINITY : available;
   const typed = Number(custom);
@@ -130,7 +133,7 @@ export function QuickTopUp({ player, available, approvalLimit, onClose, onDone, 
         <form className="top-up-custom" onSubmit={sendCustom}>
           <label>
             {t("Other amount")}
-            <input type="number" min="0.01" max="1000000" step="0.01" inputMode="decimal" placeholder="0.00" value={custom} onChange={(event) => setCustom(event.target.value)} />
+            <input type="number" min="0.01" max={newMoney ? MAX_BALANCE : 1000000} step="0.01" inputMode="decimal" placeholder="0.00" value={custom} onChange={(event) => setCustom(event.target.value)} />
           </label>
           <button type="submit" disabled={sending !== null || typedAmount === null || typedAmount > spendable || typedAmount > headroom}>{t("Send")}</button>
         </form>

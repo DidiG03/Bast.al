@@ -54,6 +54,12 @@ function holdsDirectReports(role: Role): boolean {
  * is nobody above it to approve.
  */
 const APPROVAL_THRESHOLD = 10000;
+/** An Owner's transfers wait for Super Admin's approval only above this. */
+const OWNER_APPROVAL_THRESHOLD = 1_000_000;
+/** The most a Manager can move in one transfer (an Owner's larger ones wait for Super Admin's approval instead). */
+const MAX_TRANSFER = 1_000_000;
+/** The most a balance can hold (numeric(12, 2)). */
+const MAX_BALANCE = 9_999_999_999.99;
 
 const HAS_HISTORY = "This account has bets or money history, so it can't be deleted without changing past reports. Suspend it instead.";
 
@@ -115,6 +121,7 @@ export class UsersService {
    * Managers, else the platform default. Everyone else uses the default.
    */
   private async approvalThreshold(actor: Pick<Actor, "role" | "approvalLimit" | "parentId">): Promise<number> {
+    if (actor.role === Role.OWNER) return OWNER_APPROVAL_THRESHOLD;
     if (actor.role !== Role.MANAGER) return APPROVAL_THRESHOLD;
     if (actor.approvalLimit !== null) return Number(actor.approvalLimit);
     const owner = actor.parentId
@@ -740,6 +747,9 @@ export class UsersService {
     }
 
     const isPrint = actor.role === Role.SUPER_ADMIN;
+    // Super Admin's credit is new money with no cap of its own. An Owner's transfer over OWNER_APPROVAL_THRESHOLD waits for
+    // Super Admin's approval; a Manager moves at most MAX_TRANSFER at a time.
+    if (actor.role === Role.MANAGER && dto.amount > MAX_TRANSFER) throw new BadRequestException(`You can send at most ${formatAll(MAX_TRANSFER)} at a time`);
     const requiresApproval = !isPrint && dto.amount > (await this.approvalThreshold(actor));
 
     if (requiresApproval) {
@@ -793,13 +803,22 @@ export class UsersService {
         }
       }
 
-      const receiverRows = await tx.$queryRaw<{ id: string }[]>`
-        UPDATE users
-        SET balance = balance + ${dto.amount}::numeric
-        WHERE id = ${id} AND balance + ${dto.amount}::numeric <= balance_limit
-        RETURNING id
-      `;
+      // Super Admin's credit isn't held to the recipient's balance limit (only to what a balance can hold at all).
+      const receiverRows = isPrint
+        ? await tx.$queryRaw<{ id: string }[]>`
+            UPDATE users
+            SET balance = balance + ${dto.amount}::numeric
+            WHERE id = ${id} AND balance + ${dto.amount}::numeric <= ${MAX_BALANCE}::numeric
+            RETURNING id
+          `
+        : await tx.$queryRaw<{ id: string }[]>`
+            UPDATE users
+            SET balance = balance + ${dto.amount}::numeric
+            WHERE id = ${id} AND balance + ${dto.amount}::numeric <= balance_limit
+            RETURNING id
+          `;
       if (receiverRows.length === 0) {
+        if (isPrint) throw new BadRequestException(`A balance can hold at most ${formatAll(MAX_BALANCE)}`);
         // Throwing here rolls back the giver's decrement above too — the whole
         // transfer is all-or-nothing.
         throw new BadRequestException("This would exceed the recipient's balance limit");
@@ -857,7 +876,8 @@ export class UsersService {
           -- Adding is always allowed, even when it leaves a balance that was
           -- below zero (after a corrected result) still below zero.
           AND (${dto.amount}::numeric >= 0 OR balance + ${dto.amount}::numeric >= 0)
-          AND balance + ${dto.amount}::numeric <= balance_limit
+          -- Super Admin only: not held to the balance limit, only to what a balance can hold.
+          AND balance + ${dto.amount}::numeric <= ${MAX_BALANCE}::numeric
         RETURNING id
       `;
       if (rows.length === 0) {

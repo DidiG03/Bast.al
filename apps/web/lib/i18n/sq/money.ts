@@ -1,5 +1,13 @@
 /** Albanian for commissions, finance, the overview, risk and reports. */
 export const money: Record<string, string> = {
+  "{match} is back to the normal odds.": "{match} u kthye te kuotat normale.",
+  "{match}: odds {percent} for your team.": "{match}: kuotat {percent} për skuadrën tënde.",
+  "Your change to this match's odds": "Ndryshimi yt në kuotat e kësaj ndeshjeje",
+  "Odds on this match": "Kuotat e kësaj ndeshjeje",
+  "% up or down, for your team": "% lart ose poshtë, për skuadrën tënde",
+  "Odds on this match, % up or down": "Kuotat e kësaj ndeshjeje, % lart ose poshtë",
+  "For example 5 makes every price 5% higher, -10 makes them 10% lower. Never more than 10% above the feed; a price you set on one outcome still wins.": "Për shembull 5 i bën të gjitha kuotat 5% më të larta, -10 i bën 10% më të ulëta. Asnjëherë më shumë se 10% mbi burimin; një kuotë që vendos te një rezultat i vetëm mbetet ajo.",
+  "Reset": "Rivendos",
   "Leave Casino blank to use the same rate as on matches. New rates apply to bets and rounds from now on.": "Lëre bosh Kazinonë për të përdorur të njëjtën përqindje si te ndeshjet. Përqindjet e reja vlejnë për bastet dhe raundet nga tani e tutje.",
   // Commissions
   "{from} to {to}": "{from} deri {to}",

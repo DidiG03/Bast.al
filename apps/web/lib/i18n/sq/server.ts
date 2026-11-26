@@ -195,6 +195,8 @@ export const server: Record<string, string> = {
   "Live bet refused, stake not taken: {reason}": "Bast live i refuzuar, shuma nuk u mor: {reason}",
   "You can send at most {amount} at a time": "Mund të dërgosh deri në {amount} në një herë",
   "A balance can hold at most {amount}": "Një bilanc mund të mbajë deri në {amount}",
+  "The change must be between -{min}% and +{max}%": "Ndryshimi duhet të jetë nga -{min}% deri në +{max}%",
+  "This match is over": "Kjo ndeshje ka mbaruar",
   "Bet voided: {bet} ({reason}). Stake returned and {amount} winnings taken back": "Bast i anuluar: {bet} ({reason}). Shuma e vënë u kthye dhe fitimi prej {amount} u mor mbrapsht",
   "Bet voided: {bet} ({reason}). Stake returned": "Bast i anuluar: {bet} ({reason}). Shuma e vënë u kthye",
   "Bet voided: {bet}. Stake returned and {amount} winnings taken back": "Bast i anuluar: {bet}. Shuma e vënë u kthye dhe fitimi prej {amount} u mor mbrapsht",

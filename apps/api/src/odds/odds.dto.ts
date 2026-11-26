@@ -76,6 +76,15 @@ export class OverrideDto {
   odds!: number;
 }
 
+/** An Owner's percentage on one match's odds: from -50 (50% lower) to +50 (capped at 10% over the feed price). */
+export class EventAdjustmentDto {
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(-50)
+  @Max(50)
+  percent!: number;
+}
+
 export class UpdateEventDto {
   @IsOptional()
   @IsBoolean()

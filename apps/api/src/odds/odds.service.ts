@@ -14,7 +14,7 @@ import { liveConfirmConfig } from "../bets/live-delay";
 import { countAvailability, countSelectionDead, countStatsStale, isCountFamily } from "./count-guard";
 import { pauseDeadline } from "./live-guard";
 import { homeImportance } from "./home-importance";
-import { MAX_ABOVE_FEED, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseJustEnded, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
+import { MAX_ABOVE_FEED, MAX_EVENT_ADJUST, MAX_MARGIN, MAX_ODDS, MIN_ODDS, RACE_CLOSE_MS, applyMargin, eventOpen, livePause, liveSideUnpriced, marketPause, marketStale, pauseJustEnded, pauseSummary, priceCeiling, selectionQuote, teamMargin } from "./pricing";
 
 const num = (value: Prisma.Decimal | number | null | undefined) => (value === null || value === undefined ? null : Number(value));
 
@@ -281,7 +281,10 @@ export class OddsService {
     ]);
     const limits = await this.liveLimits();
     const baseMargin = Number(platform.baseOddsMargin);
-    const teams = [{ topic: teamTopic(null), margin: 0 }, ...owners.map((owner) => ({ topic: teamTopic(owner.id), margin: num(owner.oddsMargin) ?? 0 }))];
+    // Each Owner's percentage on these matches (OddsEventAdjustment), by owner and match.
+    const adjustRows = owners.length > 0 ? await this.prisma.oddsEventAdjustment.findMany({ where: { eventId: { in: events.map((event) => event.id) } }, select: { ownerId: true, eventId: true, percent: true } }) : [];
+    const adjustBy = new Map(adjustRows.map((row) => [`${row.ownerId}:${row.eventId}`, Number(row.percent)]));
+    const teams = [{ topic: teamTopic(null), margin: 0, ownerId: null as string | null }, ...owners.map((owner) => ({ topic: teamTopic(owner.id), margin: num(owner.oddsMargin) ?? 0, ownerId: owner.id as string | null }))];
 
     for (const team of teams) {
       let sent = this.liveSent.get(team.topic);
@@ -331,6 +334,7 @@ export class OddsService {
               baseMargin,
               ownerMargin: team.margin,
               override: null,
+              adjust: team.ownerId ? adjustBy.get(`${team.ownerId}:${event.id}`) ?? 0 : 0,
               now,
             });
             const held = quote.suspended || countHeld || countSelectionDead(event.matchCentre, event.matchCentreAt, market.key, selection.key, now);
@@ -650,9 +654,10 @@ export class OddsService {
     const rows = await this.prisma.selection.findMany({ where: { id: { in: ids.slice(0, 20) } }, include: { market: { include: { event: true } } } });
     const overrides = ownerId && rows.length > 0 ? await this.prisma.oddsOverride.findMany({ where: { ownerId, selectionId: { in: rows.map((r) => r.id) } }, select: { selectionId: true, odds: true } }) : [];
     const overrideBy = new Map(overrides.map((o) => [o.selectionId, Number(o.odds)]));
+    const adjustBy = await this.adjustmentsFor(ownerId, rows.map((row) => row.market.eventId));
     const now = new Date();
     const limits = rows.some((row) => row.market.event.status === EventStatus.LIVE) ? await this.liveLimits() : null;
-    const lineReplacement = await this.lineReplacements(rows, baseMargin, ownerMargin, now);
+    const lineReplacement = await this.lineReplacements(rows, baseMargin, ownerMargin, now, adjustBy);
     return rows
       .filter((row) => !row.market.event.hidden || actor.role === Role.SUPER_ADMIN)
       .map((row) => {
@@ -665,6 +670,7 @@ export class OddsService {
           baseMargin,
           ownerMargin,
           override: live ? null : overrideBy.get(row.id) ?? null,
+          adjust: adjustBy.get(row.market.eventId) ?? 0,
           now,
         });
         const open = eventOpen(event, now) || live;
@@ -703,7 +709,7 @@ export class OddsService {
    * corners 11.5 after it moved to 12.5): the same side of the line it
    * offers now in that market, if one is open. By the pick's id.
    */
-  private async lineReplacements(rows: Array<{ id: string; key: string; market: { key: string; eventId: string; liveSuspended: boolean; event: { status: EventStatus } } }>, baseMargin: number, ownerMargin: number, now: Date) {
+  private async lineReplacements(rows: Array<{ id: string; key: string; market: { key: string; eventId: string; liveSuspended: boolean; event: { status: EventStatus } } }>, baseMargin: number, ownerMargin: number, now: Date, adjustBy: Map<string, number> = new Map()) {
     const found = new Map<string, { id: string; market: string; name: string; price: number }>();
     const wanted = rows.filter((row) => row.market.event.status === EventStatus.LIVE && lineFamily(row.market.key) !== null);
     if (wanted.length === 0) return found;
@@ -721,7 +727,7 @@ export class OddsService {
         .map((market) => {
           const selection = market.selections.find((candidate) => candidate.key === row.key);
           if (!selection) return null;
-          const quote = selectionQuote({ event: market.event, market, selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn, liveHeld: selection.liveHeld }, baseMargin, ownerMargin, override: null, now });
+          const quote = selectionQuote({ event: market.event, market, selection: { feedOdds: Number(selection.feedOdds), liveOdds: num(selection.liveOdds), result: selection.result, withdrawn: selection.withdrawn, liveHeld: selection.liveHeld }, baseMargin, ownerMargin, override: null, adjust: adjustBy.get(market.eventId) ?? 0, now });
           if (!quote.bettable || countAvailability(market.event, market.key, now) !== "ok" || countSelectionDead(market.event.matchCentre, market.event.matchCentreAt, market.key, selection.key, now)) return null;
           return { id: selection.id, market: market.name, name: selection.name, price: quote.price, distance: Math.abs(lineOf(market.key)! - line) };
         })
@@ -742,6 +748,7 @@ export class OddsService {
       ? await this.prisma.oddsOverride.findMany({ where: { ownerId, selectionId: { in: selectionIds } }, select: { selectionId: true, odds: true } })
       : [];
     const overrideBy = new Map(overrides.map((o) => [o.selectionId, Number(o.odds)]));
+    const adjustBy = await this.adjustmentsFor(ownerId, events.map((event) => event.id));
     const showFeed = actor.role !== Role.PLAYER;
 
     // Someone is watching live matches: the live prices are fetched more often for a while.
@@ -819,6 +826,8 @@ export class OddsService {
       period: event.status === EventStatus.LIVE ? event.period : event.status === EventStatus.COMPLETED ? "FT" : null,
       homeScore: event.homeScore,
       awayScore: event.awayScore,
+      /** Staff only: the Owner's percentage on this match's odds for their team (OddsEventAdjustment); 0 for none. */
+      oddsAdjust: showFeed ? adjustBy.get(event.id) ?? 0 : undefined,
       /** Live: a score a faster source (SportScore) shows that our feed hasn't confirmed (a goal, or one taken back); the board shows it as pending. */
       pendingScore: pendingScore(event, now),
       /** A penalty shootout's kicks (live and after it), shown as "1–1 (3–4 pen)": never part of the score. */
@@ -851,7 +860,7 @@ export class OddsService {
           const feedOdds = Number(selection.feedOdds);
           const liveOdds = num(selection.liveOdds);
           const override = live ? null : overrideBy.get(selection.id) ?? null;
-          const quote = selectionQuote({ event, market, selection: { feedOdds, liveOdds, result: selection.result, withdrawn: selection.withdrawn, liveHeld: selection.liveHeld }, baseMargin, ownerMargin, override, now });
+          const quote = selectionQuote({ event, market, selection: { feedOdds, liveOdds, result: selection.result, withdrawn: selection.withdrawn, liveHeld: selection.liveHeld }, baseMargin, ownerMargin, override, adjust: adjustBy.get(event.id) ?? 0, now });
           const held = quote.suspended || (live && (countStatsStale(event.matchCentre, event.matchCentreAt, market.key, now) || countSelectionDead(event.matchCentre, event.matchCentreAt, market.key, selection.key, now)));
           return {
             id: selection.id,
@@ -938,6 +947,36 @@ export class OddsService {
       metadata: { selectionId, event: selection.market.event.name, market: selection.market.name, selection: selection.name, odds: Number(price) },
     });
     return { selectionId, odds: Number(price) };
+  }
+
+  /**
+   * An Owner's percentage on one match's odds for their team (OddsEventAdjustment): +5 makes every price on it 5% higher,
+   * -10 makes them 10% lower; 0 removes it. Prices never go over MAX_ABOVE_FEED above the feed (adjustPrice).
+   */
+  async setEventAdjustment(actor: Actor, eventId: string, percent: number, ownerIdParam?: string) {
+    const ownerId = await this.editableOwner(actor, ownerIdParam);
+    if (!(percent >= -MAX_EVENT_ADJUST && percent <= MAX_EVENT_ADJUST)) throw new BadRequestException(`The change must be between -${MAX_EVENT_ADJUST}% and +${MAX_EVENT_ADJUST}%`);
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, name: true, sport: true, status: true } });
+    if (!event) throw new NotFoundException("Match not found");
+    if (event.sport === "greyhounds") throw new BadRequestException("Race bets are paid at the starting price, so they have no price to change");
+    if (event.status === EventStatus.COMPLETED || event.status === EventStatus.CANCELLED) throw new BadRequestException("This match is over");
+    const value = Math.round(percent * 100) / 100;
+    if (value === 0) await this.prisma.oddsEventAdjustment.deleteMany({ where: { ownerId, eventId } });
+    else
+      await this.prisma.oddsEventAdjustment.upsert({
+        where: { ownerId_eventId: { ownerId, eventId } },
+        create: { ownerId, eventId, percent: new Prisma.Decimal(value.toFixed(2)) },
+        update: { percent: new Prisma.Decimal(value.toFixed(2)) },
+      });
+    await this.audit.log({ actorId: actor.id, action: value === 0 ? "odds.event_adjustment_clear" : "odds.event_adjustment_set", targetId: ownerId, metadata: { eventId, event: event.name, percent: value } });
+    return { eventId, percent: value };
+  }
+
+  /** Each match's percentage for one Owner (none for no Owner): event id to percent. */
+  private async adjustmentsFor(ownerId: string | null, eventIds: string[]): Promise<Map<string, number>> {
+    if (!ownerId || eventIds.length === 0) return new Map();
+    const rows = await this.prisma.oddsEventAdjustment.findMany({ where: { ownerId, eventId: { in: [...new Set(eventIds)] } }, select: { eventId: true, percent: true } });
+    return new Map(rows.map((row) => [row.eventId, Number(row.percent)]));
   }
 
   async clearOverride(actor: Actor, selectionId: string, ownerIdParam?: string) {
@@ -1264,6 +1303,7 @@ export class OddsService {
     const baseMargin = Number(platform.baseOddsMargin);
     const ownerMargin = num(owner?.oddsMargin) ?? 0;
     const overrideBy = new Map(overrides.map((row) => [row.selectionId, num(row.odds)]));
+    const adjustBy = await this.adjustmentsFor(ownerId, selections.map((selection) => selection.market.eventId));
     const prices = new Map<string, PlayerPrice>();
     const limits = selections.some((selection) => selection.market.event.status === EventStatus.LIVE) ? await this.liveLimits() : null;
     for (const selection of selections) {
@@ -1277,6 +1317,7 @@ export class OddsService {
         baseMargin,
         ownerMargin,
         override: overrideBy.get(selection.id) ?? null,
+        adjust: adjustBy.get(selection.market.eventId) ?? 0,
       });
       const dead = quote.live && countSelectionDead(event.matchCentre, event.matchCentreAt, selection.market.key, selection.key, new Date());
       const staleCount = quote.live && countStatsStale(event.matchCentre, event.matchCentreAt, selection.market.key, new Date());

@@ -8,7 +8,7 @@ import { MfaGuard } from "../auth/mfa.guard";
 import type { Actor } from "../auth/permissions";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
-import { BaseMarginDto, EventsQueryDto, FeedDelayQueryDto, LeaguesDto, OverrideDto, SelectionsQueryDto, TeamMarginDto, TopEventsQueryDto, TeamQueryDto, UpdateEventDto } from "./odds.dto";
+import { BaseMarginDto, EventAdjustmentDto, EventsQueryDto, FeedDelayQueryDto, LeaguesDto, OverrideDto, SelectionsQueryDto, TeamMarginDto, TopEventsQueryDto, TeamQueryDto, UpdateEventDto } from "./odds.dto";
 import { OddsService } from "./odds.service";
 
 @ApiTags("odds")
@@ -117,6 +117,18 @@ export class OddsController {
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   setOverride(@CurrentActor() actor: Actor, @Param("selectionId") selectionId: string, @Body() body: OverrideDto, @Query() query: TeamQueryDto) {
     return this.odds.setOverride(actor, selectionId, body.odds, query.ownerId);
+  }
+
+  @Put("events/:id/adjustment")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  setEventAdjustment(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() body: EventAdjustmentDto, @Query() query: TeamQueryDto) {
+    return this.odds.setEventAdjustment(actor, id, body.percent, query.ownerId);
+  }
+
+  @Delete("events/:id/adjustment")
+  @Roles(Role.SUPER_ADMIN, Role.OWNER)
+  clearEventAdjustment(@CurrentActor() actor: Actor, @Param("id") id: string, @Query() query: TeamQueryDto) {
+    return this.odds.setEventAdjustment(actor, id, 0, query.ownerId);
   }
 
   @Delete("overrides/:selectionId")

@@ -21540,3 +21540,38 @@ button.candy-chip:disabled {
     box-shadow: inset 0 0 0 1px var(--player-pick-border, #d8ddd1);
   }
 }
+
+/* An Owner's percentage on one match's odds, on the odds page. */
+.odds-adjust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.odds-adjust .field {
+  flex: 1 1 14rem;
+}
+
+.odds-adjust-input {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 8rem;
+}
+
+.odds-adjust-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.odds-adjust-pill.is-up {
+  color: var(--accent-strong, #4c8200);
+}
+
+.odds-adjust-pill.is-down {
+  color: var(--danger, #c9364a);
+}

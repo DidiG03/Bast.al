@@ -69,3 +69,12 @@ test("the match minute follows the bookmaker's clock to the second, and never st
   assert.equal(minuteFrom(null, 63, 62, now).elapsed, 63, "no clock: the feed's minute");
   assert.equal(minuteFrom("10:00", 63, 62, now).elapsed, 63, "a clock far from the feed's minute is ignored");
 });
+
+test("an Owner's percentage on a match: up or down, to the cent, never over 10% above the feed or under 1.01", () => {
+  const { adjustPrice } = require("../dist/odds/pricing.js");
+  assert.equal(adjustPrice(2.0, 5, 2.2), 2.1);
+  assert.equal(adjustPrice(2.0, -10, 2.2), 1.8);
+  assert.equal(adjustPrice(2.0, 0, 2.2), 2.0);
+  assert.equal(adjustPrice(2.0, 50, 2.2), 2.42, "capped at 10% above the feed (2.20 × 1.10)");
+  assert.equal(adjustPrice(1.02, -50, 1.1), 1.01);
+});

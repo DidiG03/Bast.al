@@ -550,6 +550,8 @@ export type OddsEvent = {
   awayScore: number | null;
   /** Live: a score a faster source shows that our feed hasn't confirmed yet (a goal, or one taken back). Shown as pending. */
   pendingScore?: { home: number; away: number } | null;
+  /** Staff only: the Owner's percentage on this match's odds for their team (+5 higher, -10 lower); 0 for none. */
+  oddsAdjust?: number;
   /** A penalty shootout's kicks, shown as "(3–4 pen)" beside the score; never part of it. */
   shootout?: { home: number; away: number } | null;
   hidden: boolean;

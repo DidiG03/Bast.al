@@ -557,6 +557,10 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run, version }
   }, [showAll, version, event.id, ownerQuery, getToken]);
   const [editing, setEditing] = useState<OddsSelection | null>(null);
   const [price, setPrice] = useState("");
+  /** The Owner's percentage on this whole match (+5 = every price 5% higher), as typed. */
+  const adjust = event.oddsAdjust ?? 0;
+  const [percent, setPercent] = useState(adjust ? String(adjust) : "");
+  useEffect(() => setPercent(adjust ? String(adjust) : ""), [adjust]);
   const finished = event.status === "COMPLETED" || event.status === "CANCELLED";
   const markets = showAll && full ? full.markets : event.markets.slice(0, 1);
   const more = Math.max(0, event.marketCount - 1);
@@ -583,6 +587,19 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run, version }
     void run((token) => apiFetch(`/odds/overrides/${selection.id}?${ownerQuery}`, token, { method: "DELETE" }), t("{pick} is back to the feed price.", { pick: ts(selection.name) })).then((ok) => ok && setEditing(null));
   }
 
+  function saveAdjust(formEvent: FormEvent) {
+    formEvent.preventDefault();
+    const value = percent.trim() === "" ? 0 : Number(percent);
+    if (!Number.isFinite(value) || value < -50 || value > 50) return;
+    void run(
+      (token) =>
+        value === 0
+          ? apiFetch(`/odds/events/${event.id}/adjustment?${ownerQuery}`, token, { method: "DELETE" })
+          : apiFetch(`/odds/events/${event.id}/adjustment?${ownerQuery}`, token, { method: "PUT", body: JSON.stringify({ percent: value }) }),
+      value === 0 ? t("{match} is back to the normal odds.", { match: event.name }) : t("{match}: odds {percent} for your team.", { match: event.name, percent: `${value > 0 ? "+" : ""}${value}%` }),
+    );
+  }
+
   function toggle(field: "hidden" | "suspended") {
     const next = !event[field];
     const vars = { match: event.name };
@@ -605,6 +622,7 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run, version }
           {event.country ? ` · ${event.country}` : ""}
         </span>
         <span className="odds-event-badges">
+          {adjust ? <span className={`status-pill odds-adjust-pill${adjust > 0 ? " is-up" : " is-down"}`} title={t("Your change to this match's odds")}>{`${adjust > 0 ? "+" : ""}${adjust}%`}</span> : null}
           {event.hidden ? <span className="status-pill">{t("Hidden")}</span> : null}
           {event.suspended ? <span className="status-pill odds-pill-warn">{t("Suspended")}</span> : null}
           <span className={`status-pill${event.status === "LIVE" ? " is-active" : ""}`}>{statusText(event, i18n)}</span>
@@ -696,6 +714,35 @@ function EventCard({ event, canEditPrices, canManage, ownerQuery, run, version }
           </div>
         ))
       )}
+
+      {canEditPrices && !finished && event.sport !== "greyhounds" ? (
+        // The whole match at once: every price on it up or down by a percentage, for this team only.
+        <form className="odds-adjust" onSubmit={saveAdjust}>
+          <label className="field">
+            <span>
+              {t("Odds on this match")} <span className="muted">({t("% up or down, for your team")})</span>
+            </span>
+            <span className="odds-adjust-input">
+              <input type="number" inputMode="decimal" min={-50} max={50} step="0.5" placeholder="0" value={percent} onChange={(e) => setPercent(e.target.value)} aria-label={t("Odds on this match, % up or down")} />
+              <span aria-hidden="true">%</span>
+            </span>
+          </label>
+          <button type="submit" className="secondary">{t("Save")}</button>
+          {adjust ? (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setPercent("");
+                void run((token) => apiFetch(`/odds/events/${event.id}/adjustment?${ownerQuery}`, token, { method: "DELETE" }), t("{match} is back to the normal odds.", { match: event.name }));
+              }}
+            >
+              {t("Reset")}
+            </button>
+          ) : null}
+          <p className="muted odds-adjust-note">{t("For example 5 makes every price 5% higher, -10 makes them 10% lower. Never more than 10% above the feed; a price you set on one outcome still wins.")}</p>
+        </form>
+      ) : null}
 
       <footer className="odds-event-footer">
         {more > 0 ? (

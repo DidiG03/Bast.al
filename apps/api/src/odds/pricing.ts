@@ -51,6 +51,20 @@ export function teamPrice(input: { feedOdds: number; baseMargin: number; ownerMa
   return applyMargin(input.feedOdds, teamMargin(input.baseMargin, input.ownerMargin));
 }
 
+/** The range of an Owner's percentage on one match's odds (OddsEventAdjustment). */
+export const MAX_EVENT_ADJUST = 50;
+
+/**
+ * An Owner's percentage on a match applied to a price: 2.00 at +5% is 2.10,
+ * at -10% 1.80. Rounded down to the cent, never under MIN_ODDS, and never
+ * over priceCeiling of the feed price it came from (`feedOdds`).
+ */
+export function adjustPrice(price: number, percent: number, feedOdds: number): number {
+  if (!percent) return price;
+  const moved = Math.floor(price * (1 + percent / 100) * 100 + 1e-6) / 100;
+  return Math.max(MIN_ODDS, Math.min(moved, priceCeiling(feedOdds), MAX_ODDS));
+}
+
 /** Live bets pause when the feed hasn't sent in-play prices for this long. */
 export const LIVE_ODDS_STALE_MS = Number(process.env.LIVE_ODDS_STALE_MS) || 90_000;
 
@@ -236,6 +250,8 @@ export function selectionQuote(input: {
   baseMargin: number;
   ownerMargin: number;
   override: number | null;
+  /** The Owner's percentage on this match (OddsEventAdjustment), 0 for none. A fixed price (override) wins over it. */
+  adjust?: number;
   now?: Date;
 }): { price: number; bettable: boolean; live: boolean; suspended: boolean } {
   const live = input.event.status === "LIVE";
@@ -246,7 +262,8 @@ export function selectionQuote(input: {
   }
   const open = eventOpen(input.event, input.now) && input.selection.result === null;
   if (!live) {
-    const price = teamPrice({ feedOdds: input.selection.feedOdds, baseMargin: input.baseMargin, ownerMargin: input.ownerMargin, override: input.override });
+    const team = teamPrice({ feedOdds: input.selection.feedOdds, baseMargin: input.baseMargin, ownerMargin: input.ownerMargin, override: input.override });
+    const price = input.override === null || input.override === undefined ? adjustPrice(team, input.adjust ?? 0, input.selection.feedOdds) : team;
     const withdrawn = input.selection.withdrawn === true;
     return { price, bettable: open && !withdrawn, live, suspended: withdrawn };
   }
@@ -257,7 +274,8 @@ export function selectionQuote(input: {
   // Decided by the goals already in, or priced for the rest of the match while we settle on all of it (live-score-guard.ts).
   const scoreBlocked = football && liveScoreBlocked(input.market.key!, { home: input.event.homeScore, away: input.event.awayScore }, input.event.period);
   const suspended = outOfPhase || scoreBlocked || input.market.liveSuspended || input.selection.liveOdds === null || input.selection.liveHeld === true || marketPause(input.market, input.now) !== null || marketStale(input.event, input.market, input.now, input.selection.liveOdds !== null);
-  const price = applyMargin(input.selection.liveOdds ?? input.selection.feedOdds, teamMargin(input.baseMargin, input.ownerMargin));
+  const feed = input.selection.liveOdds ?? input.selection.feedOdds;
+  const price = adjustPrice(applyMargin(feed, teamMargin(input.baseMargin, input.ownerMargin)), input.adjust ?? 0, feed);
   return { price, bettable: open && !suspended, live, suspended };
 }
 

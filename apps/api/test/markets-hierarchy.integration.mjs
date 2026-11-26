@@ -120,6 +120,41 @@ test("the new markets are priced per team: margins and an Owner's own price", as
   assert.ok(["bb_h1_total_84_5", "bb_q4_handicap_1_5", "bb_home_total_81_5", "bb_ht_ft"].every((key) => forA.markets.some((m) => m.key === key)));
 });
 
+test("an Owner moves one match's odds by a percentage for their own team; a fixed price still wins; never over 10% above the feed", async () => {
+  const away = await pick("509592", "bb_q1_winner", "away");
+  const q1 = await pick("509592", "bb_q1_winner", "home");
+  const feed = Number(away.feedOdds);
+  const before = await priceFor(playerA, away);
+  const teamB = await priceFor(playerB, away);
+  const cents = (value) => Math.floor(value * 100 + 1e-6) / 100;
+  const ceiling = cents(feed * 1.1);
+  const eventId = (await prisma.market.findFirstOrThrow({ where: { id: away.marketId } })).eventId;
+
+  // +2%: every price on the match 2% higher for team A, in the list, the slip check and the bet price alike.
+  await odds.setEventAdjustment(actor(ownerA), eventId, 2);
+  const up = Math.min(cents(before * 1.02), ceiling);
+  assert.equal(await priceFor(playerA, away), up);
+  assert.equal((await odds.priceForPlayer(playerA.id, away.id)).odds, up, "bets are placed at it");
+  assert.equal(await priceFor(playerB, away), teamB, "team B keeps its own price");
+  assert.equal(await priceFor(playerA, q1), 2.6, "a fixed price on one outcome still wins");
+  assert.equal((await odds.event(actor(ownerA), eventId)).oddsAdjust, 2, "the odds page shows it");
+
+  // -10%: lower.
+  await odds.setEventAdjustment(actor(ownerA), eventId, -10);
+  assert.equal(await priceFor(playerA, away), Math.max(1.01, cents(before * 0.9)));
+
+  // +50%: never more than 10% above the feed price.
+  await odds.setEventAdjustment(actor(ownerA), eventId, 50);
+  assert.equal(await priceFor(playerA, away), ceiling);
+
+  // Only an Owner (or Super Admin for them), within -50..+50; 0 removes it.
+  await assert.rejects(odds.setEventAdjustment(actor(managerA), eventId, 5));
+  await assert.rejects(odds.setEventAdjustment(actor(ownerA), eventId, 60), /between -50% and \+50%/);
+  await odds.setEventAdjustment(actor(ownerA), eventId, 0);
+  assert.equal(await priceFor(playerA, away), before);
+  assert.equal(await prisma.oddsEventAdjustment.count({ where: { eventId } }), 0);
+});
+
 test("bets from both teams count on their own Owner's Risk page", async () => {
   const q1 = await pick("509592", "bb_q1_winner", "home");
   const veronaPoints = await pick("509592", "bb_home_total_81_5", "under");

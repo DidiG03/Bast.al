@@ -785,15 +785,22 @@ export function CandyGame() {
           {buying ? (
             <div className="candy-buy-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setBuying(null)}>
               <div
-                className={`candy-special${buying === "special" ? " is-specials" : " is-features"}`}
+                className={`candy-special${buying === "special" ? " is-specials" : buying === "features" ? " is-features" : " is-confirm"}`}
                 role="dialog"
                 aria-modal="true"
-                aria-label={buying === "special" ? t("Select a special bet") : t("Buy feature")}
+                aria-label={buying === "special" ? t("Select a special bet") : buying === "features" ? t("Buy feature") : t("Confirm buy")}
               >
+                {buying !== "special" && buying !== "features" ? (
+                  <button type="button" className="candy-confirm-back" onClick={() => setBuying("features")} aria-label={t("Back to the features")}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                ) : null}
                 <button type="button" className="candy-special-close" onClick={() => setBuying(null)} aria-label={t("Close")}>
                   ×
                 </button>
-                <h2>{buying === "special" ? t("Select a special bet") : t("Buy feature")}</h2>
+                <h2>{buying === "special" ? t("Select a special bet") : buying === "features" ? t("Buy feature") : t("Confirm buy")}</h2>
                 {buying === "special" ? (
                   <>
                     <div className="candy-special-options">
@@ -848,28 +855,30 @@ export function CandyGame() {
                     {baseBet}
                   </>
                 ) : (
-                  <div className="candy-buy-confirm">
-                    <p>
-                      {t("Buy {what} for {amount}?", { what: bought[buying].name, amount: formatMoney(costOf(buying)) })}
-                    </p>
-                    <p className="candy-buy-small">{t("That's {times}× your bet of {bet}. The free spins play out at that bet.", { times: costTable[buying], bet: formatMoney(g.stake) })}</p>
-                    <div className="candy-buy-actions">
-                      <button type="button" className="candy-buy-cancel" onClick={() => setBuying("features")}>
-                        {t("Back")}
+                  <>
+                    <div className="candy-confirm-panel">
+                      <span className="candy-confirm-name">{bought[buying].name}</span>
+                      <strong className="candy-confirm-price">{formatMoney(costOf(buying))}</strong>
+                      <span className="candy-confirm-blurb">{bought[buying].blurb}</span>
+                    </div>
+                    <p className="candy-confirm-note">{t("That's {times}× your bet of {bet}. The free spins play out at that bet.", { times: costTable[buying], bet: formatMoney(g.stake) })}</p>
+                    <div className="candy-confirm-actions">
+                      <button type="button" className="candy-confirm-cancel" onClick={() => setBuying(null)}>
+                        {t("Cancel")}
                       </button>
                       <button
                         type="button"
-                        className="candy-buy-go"
+                        className="candy-confirm-yes"
                         onClick={() => {
                           const mode = buying;
                           setBuying(null);
                           void play(mode);
                         }}
                       >
-                        {t("Buy for {amount}", { amount: formatMoney(costOf(buying)) })}
+                        {t("Yes")}
                       </button>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             </div>

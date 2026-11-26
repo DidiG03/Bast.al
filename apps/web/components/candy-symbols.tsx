@@ -14,7 +14,7 @@ const ART: Record<string, string> = {
   MINT: "/casino/candy/mint.webp?v=2",
   GRAPE: "/casino/candy/grape.webp",
   PEACH: "/casino/candy/peach.webp?v=2",
-  LOLLIPOP: "/casino/candy/lollipop.webp",
+  LOLLIPOP: "/casino/candy/lollipop.webp?v=2",
 };
 
 /** Multiplier bomb as an SVG <symbol>, once per page. Paying candies are images. */

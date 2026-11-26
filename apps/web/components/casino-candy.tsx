@@ -680,7 +680,7 @@ export function CandyGame() {
                         if (node) nodes.current.set(piece.id, node);
                         else nodes.current.delete(piece.id);
                       }}
-                      className={`candy-piece${piece.win ? " is-win" : ""}`}
+                      className={`candy-piece${piece.win ? " is-win" : ""}${piece.cell === "LOLLIPOP" ? ` is-scatter${piece.row === 0 ? " is-top" : piece.row === ROWS - 1 ? " is-bottom" : ""}` : ""}`}
                       style={{ transform: place(piece.column, piece.row) }}
                     >
                       <CandyIcon cell={piece.cell} />

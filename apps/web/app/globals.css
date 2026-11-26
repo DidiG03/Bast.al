@@ -20946,11 +20946,13 @@ button.candy-chip:disabled {
 .candy-grid {
   position: relative;
   aspect-ratio: var(--candy-shape);
-  overflow: hidden;
   border-radius: 10px;
   /* A faint line between the columns. */
   background: linear-gradient(90deg, transparent calc(100% - 1px), rgba(255, 255, 255, 0.4) 0) 0 0 / calc(100% / 6) 100%;
-  contain: layout paint;
+  /* Clipped above and below (candies waiting to drop stay hidden), but a big lollipop in an edge column may spill over the sides. */
+  overflow: visible;
+  clip-path: inset(0 -9% 0 -9%);
+  contain: layout;
 }
 
 .candy-piece {
@@ -21012,6 +21014,24 @@ button.candy-chip:disabled {
   paint-order: stroke;
   font-family: "Lilita One", "Arial Black", Arial, sans-serif;
   font-weight: 900;
+}
+
+/* The lollipop (scatter) is drawn half again as big as a cell, over the candies around it. */
+.candy-piece.is-scatter {
+  z-index: 1;
+}
+
+.candy-piece.is-scatter .candy-icon {
+  scale: 1.5;
+}
+
+/* At the top or bottom of the board it grows away from that edge, so the edge doesn't cut it off. */
+.candy-piece.is-scatter.is-top .candy-icon {
+  transform-origin: 50% 8%;
+}
+
+.candy-piece.is-scatter.is-bottom .candy-icon {
+  transform-origin: 50% 92%;
 }
 
 .candy-piece.is-win .candy-icon {

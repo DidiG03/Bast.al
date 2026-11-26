@@ -10,6 +10,8 @@ import { slotSound } from "./slot-sounds";
 
 /** Candy Cascade's background music, looped while the game is open. */
 const MUSIC = "/casino/candy/music.m4a";
+/** The sound of a winning combination bursting. */
+const BURST_SOUND = "/casino/candy/burst.m4a";
 import { useCasinoSession } from "./use-casino-session";
 import { FullScreenIcon, useFullScreen } from "./use-full-screen";
 import type { CandyCell, CandyMode, CandyPaying, CandyRecord, CandySpinResult, CandyState, CandyStep } from "../lib/api";
@@ -179,6 +181,7 @@ export function CandyGame() {
     setSoundOn(slotSound.on);
     // The game's music: it starts as the game opens (or on the first tap, if the browser holds it back) and stops when they leave.
     slotSound.startMusic(MUSIC);
+    slotSound.preload(BURST_SOUND);
     reducedMotion.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     return () => {
       alive.current = false;
@@ -274,6 +277,7 @@ export function CandyGame() {
     async (winning: Set<number>, next: CandyCell[]) => {
       const current = piecesRef.current;
       // The pop: a quick swell, then gone. The rest stay where they are meanwhile.
+      slotSound.sample(BURST_SOUND);
       const pops = current
         .filter((piece) => winning.has(at(piece.column, piece.row)))
         .map((piece) =>

@@ -1,7 +1,8 @@
 /**
  * The casino's sounds (the slot's and the roulette wheel's), made in the browser with Web Audio: no sound
  * files, so there's nothing to license or download. The one exception is a game's background music
- * (Candy Cascade's), a track loaded once and looped with `startMusic()`. They play at the
+ * (Candy Cascade's), a track loaded once and looped with `startMusic()`, and a game's own recorded effects
+ * (`sample()`). They play at the
  * phone's own volume (a page can't read or change it), and on an iPhone with
  * the silent switch on, the browser keeps them silent. Players can also turn
  * them off in the game; that's remembered on this device.
@@ -118,7 +119,7 @@ let musicSource: AudioBufferSourceNode | null = null;
 let musicGain: GainNode | null = null;
 const musicBuffers = new Map<string, Promise<AudioBuffer | null>>();
 
-function loadMusic(ctx: AudioContext, url: string): Promise<AudioBuffer | null> {
+function loadBuffer(ctx: AudioContext, url: string): Promise<AudioBuffer | null> {
   let pending = musicBuffers.get(url);
   if (!pending) {
     pending = fetch(url)
@@ -157,7 +158,7 @@ async function playMusic() {
   const url = musicUrl;
   const sound = ready();
   if (!url || !sound || musicSource || (typeof document !== "undefined" && document.hidden)) return;
-  const buffer = await loadMusic(sound.ctx, url);
+  const buffer = await loadBuffer(sound.ctx, url);
   // Things may have changed while it loaded: another track, sound off, or it's already started.
   if (!buffer || musicUrl !== url || musicSource || !ready() || document.hidden) return;
   try {
@@ -278,6 +279,32 @@ export const slotSound = {
       wakeListening = true;
       for (const type of WAKE_EVENTS) document.addEventListener(type, wake, { capture: true, passive: true });
     }
+  },
+
+  /** Fetches a recorded sound ahead of time, so the first `sample()` of it plays on cue. */
+  preload(url: string) {
+    const sound = ready();
+    if (sound) void loadBuffer(sound.ctx, url);
+  },
+
+  /** A recorded sound, played once (Candy Cascade's burst). Skipped if sound is off or it hasn't loaded. */
+  sample(url: string, volume = 0.9) {
+    const sound = ready();
+    if (!sound) return;
+    void loadBuffer(sound.ctx, url).then((buffer) => {
+      const now = ready();
+      if (!buffer || !now) return;
+      try {
+        const source = now.ctx.createBufferSource();
+        source.buffer = buffer;
+        const gain = now.ctx.createGain();
+        gain.gain.value = volume;
+        source.connect(gain).connect(now.out);
+        source.start();
+      } catch {
+        // A sound the browser won't start is skipped; the round goes on.
+      }
+    });
   },
 
   /** Stops the background music: the game is closing. */

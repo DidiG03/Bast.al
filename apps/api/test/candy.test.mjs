@@ -201,6 +201,13 @@ test("the special bets and bought free spins: what they cost, and how they play"
     const bought = Candy.play(draw, "BUY");
     assert.equal(bought.bought, 10);
     assert.ok(bought.spins.length >= 10 && bought.spins.every((spin) => spin.free));
+    // Its opening board, only a picture: four lollipops in four different columns, and no win on it.
+    const intro = bought.intro;
+    const lollipops = intro.flatMap((cell, index) => (cell === "LOLLIPOP" ? [Math.floor(index / Candy.ROWS)] : []));
+    assert.equal(intro.length, Candy.CELLS);
+    assert.equal(new Set(lollipops).size, 4);
+    assert.deepEqual(Candy.winsOn(intro), []);
+    assert.ok(intro.every((cell) => cell === "LOLLIPOP" || Candy.PAYING.includes(cell)));
     // Super free spins 1's multiplier candies are never below 20x, super free spins 2's never below 10x.
     for (const [mode, min] of [["SUPER1", 20], ["SUPER2", 10]]) {
       const superRound = Candy.play(draw, mode);
@@ -211,6 +218,7 @@ test("the special bets and bought free spins: what they cost, and how they play"
       const ante = Candy.play(draw, mode);
       assert.equal(ante.spins.some((spin) => spin.total !== undefined), false);
       assert.equal(ante.bought, 0);
+      assert.equal(ante.intro, undefined);
       assert.equal(ante.spins[0].free, false);
       assert.equal(ante.spins[0].multiplier, 1, "a paid ante spin isn't multiplied");
       // Ante bet 2's free spins are super free spins 1: no multiplier candy below 20x.

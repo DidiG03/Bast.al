@@ -1515,7 +1515,16 @@ export type CandySpinPlay = { free: boolean; steps: CandyStep[]; scatters: numbe
 /** A normal spin, the Special Bet (25% more, more lollipops), or free spins bought outright (normal, super 1 or super 2). */
 export type CandyMode = "NORMAL" | "ANTE1" | "ANTE2" | "SPINS1" | "SPINS2" | "BUY" | "SUPER1" | "SUPER2";
 /** `bought`: the free spins bought outright (10), before any won again; 0 for a paid spin, whose spins[0] is the paid one. */
-export type CandyRound = { mode: CandyMode | "SUPER" | "ANTE"; bought: number; win: number; capped: boolean; freeSpins: number; spins: CandySpinPlay[] };
+export type CandyRound = {
+  mode: CandyMode | "SUPER" | "ANTE";
+  bought: number;
+  win: number;
+  capped: boolean;
+  freeSpins: number;
+  spins: CandySpinPlay[];
+  /** A bought round: the board shown before the free spins, with the lollipops that give them (it pays nothing). */
+  intro?: CandyCell[];
+};
 /** A round as the history keeps it: what it paid, in times the bet, how many free spins it had, and how it was played. */
 /** `mode` "SUPER": super free spins (never below 5×) from before super free spins 1 and 2; "ANTE": the old Special Bet (25% more). */
 export type CandyRecord = { game: "candy"; win: number; freeSpins: number; capped: boolean; mode?: CandyMode | "SUPER" | "ANTE"; bet?: number };

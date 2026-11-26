@@ -20969,6 +20969,409 @@ button.candy-chip:disabled {
   box-shadow: 0 5px 0 #145a06, inset 0 2px 0 rgba(255, 255, 255, 0.45);
 }
 
+/* Free spins: the candy land at night, a deep violet sky over it. */
+.candy-cabinet.is-free {
+  background:
+    radial-gradient(circle at 12% 14%, #fff 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 27% 7%, #fff 0 1px, transparent 2px),
+    radial-gradient(circle at 46% 4%, #ffe9a8 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 63% 10%, #fff 0 1px, transparent 2px),
+    radial-gradient(circle at 81% 5%, #fff 0 2px, transparent 3px),
+    radial-gradient(circle at 93% 17%, #ffe9a8 0 1px, transparent 2px),
+    radial-gradient(circle at 6% 30%, #fff 0 1px, transparent 2px),
+    radial-gradient(circle at 96% 34%, #fff 0 1.5px, transparent 2.5px),
+    linear-gradient(180deg, rgba(22, 6, 80, 0.86) 0%, rgba(58, 14, 130, 0.7) 35%, rgba(96, 24, 150, 0.5) 70%, rgba(70, 14, 110, 0.55) 100%),
+    url("/casino/candy/background.webp") 50% 55% / cover no-repeat,
+    linear-gradient(180deg, #2a0f6a 0%, #5a2aa8 50%, #a04ab8 100%);
+}
+
+/* The headline while a spin's tumbles win: what they've won so far, in a dark pill. */
+.candy-headline.is-tumble {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5em;
+  padding: 0.05em 1.1em 0.1em;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(90, 30, 160, 0.85), rgba(50, 10, 110, 0.9));
+  box-shadow: 0 4px 12px rgba(40, 8, 70, 0.45);
+}
+
+.candy-headline.is-tumble strong {
+  color: #ffe14a;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Free spins left: a pink candy box with a striped frame, where Buy Feature and Special Bets were. */
+.candy-free-left {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  width: 100%;
+  max-width: 11.5rem;
+  aspect-ratio: 1 / 1;
+  justify-self: center;
+  padding: 0.6rem;
+  border: 8px solid transparent;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.45), transparent 55%) padding-box,
+    linear-gradient(180deg, #ffb3d8, #ff79b9) padding-box,
+    repeating-linear-gradient(135deg, #ff4fa3 0 9px, #fff 9px 18px) border-box;
+  box-shadow: 0 10px 18px rgba(90, 20, 120, 0.4), inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+  text-align: center;
+}
+
+.candy-side .candy-free-left span {
+  color: #fff;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-size: clamp(1.2rem, 2.6cqi, 1.75rem);
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: -2px -2px 0 #c2186b, 2px -2px 0 #c2186b, -2px 2px 0 #c2186b, 2px 2px 0 #c2186b, 0 3px 0 #8a0d4b;
+}
+
+.candy-side .candy-free-left strong {
+  color: #ffd21a;
+  font-size: clamp(2.6rem, 5.5cqi, 3.6rem);
+  line-height: 1;
+  text-shadow: -3px -3px 0 #c2186b, 3px -3px 0 #c2186b, -3px 3px 0 #c2186b, 3px 3px 0 #c2186b, 0 4px 0 #8a0d4b;
+}
+
+/* The win tray's list of this spin's wins: how many, which candy, what it paid. */
+.candy-tumbles {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  margin: 0 0 0.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.candy-tumbles li {
+  display: grid;
+  grid-template-columns: 1.4rem 1.6rem 1fr;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(40, 6, 90, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  animation: candy-pay 400ms ease-out both;
+}
+
+.candy-tumble-count {
+  color: #fff;
+  text-align: right;
+}
+
+.candy-tumbles .candy-tumble-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.candy-tumble-pay {
+  color: #ffe14a;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The bar in free spins: the win so far over the spins left. */
+.candy-free-status {
+  display: grid;
+  justify-items: center;
+  line-height: 1.05;
+}
+
+.candy-free-status b {
+  color: #ffe14a;
+  font-weight: 400;
+}
+
+.candy-free-status > span + span {
+  font-size: 0.72em;
+}
+
+/* The screens over the game. A press anywhere on them goes on. */
+.candy-celebrate {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, rgba(60, 10, 110, 0.45), rgba(20, 4, 50, 0.72));
+  cursor: pointer;
+  animation: candy-fade 250ms ease-out both;
+}
+
+@keyframes candy-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Congratulations: a violet card in a pink striped candy frame, with stars at its corners. */
+.candy-congrats {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  width: min(100%, 44rem);
+  padding: 1.4rem 1.4rem 1.2rem;
+  border: 12px solid transparent;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.12), transparent 55%) padding-box,
+    radial-gradient(rgba(255, 255, 255, 0.08) 2px, transparent 3px) 0 0 / 18px 18px padding-box,
+    linear-gradient(180deg, #8a2ad0 0%, #6a16b0 55%, #540c96 100%) padding-box,
+    repeating-linear-gradient(135deg, #ff5fb0 0 12px, #fff 12px 24px) border-box;
+  box-shadow: 0 0 0 4px #ff9fd0, 0 24px 50px rgba(20, 4, 50, 0.6), inset 0 0 30px rgba(20, 0, 60, 0.45);
+  text-align: center;
+  text-transform: uppercase;
+  animation: candy-card 450ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes candy-card {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
+.candy-congrats h2 {
+  margin: 0;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-size: clamp(1.8rem, 6cqi, 3.6rem);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, #fffbc4 0%, #ffe23a 45%, #ffb300 75%, #ff8a00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(3px 0 0 #8a1050) drop-shadow(-3px 0 0 #8a1050) drop-shadow(0 3px 0 #8a1050) drop-shadow(0 -3px 0 #8a1050) drop-shadow(0 5px 0 #5a0838);
+}
+
+.candy-congrats-line {
+  margin: 0;
+  color: #eef0ff;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-size: clamp(1.4rem, 4.6cqi, 2.8rem);
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-shadow: -3px -3px 0 #3a2ab0, 3px -3px 0 #3a2ab0, -3px 3px 0 #3a2ab0, 3px 3px 0 #3a2ab0, 0 5px 0 #24187a;
+}
+
+.candy-congrats-press {
+  margin: 0.4rem 0 0;
+  color: #fff;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-size: clamp(0.95rem, 2.6cqi, 1.6rem);
+  letter-spacing: 0.04em;
+  text-shadow: -2px -2px 0 #2a0a5a, 2px -2px 0 #2a0a5a, -2px 2px 0 #2a0a5a, 2px 2px 0 #2a0a5a;
+  animation: candy-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes candy-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.candy-congrats-star {
+  position: absolute;
+  color: #ffd21a;
+  font-size: clamp(1.6rem, 4cqi, 2.6rem);
+  line-height: 1;
+  text-shadow: 0 0 0 #c96a00, 0 3px 0 #b45a00, 0 0 12px rgba(255, 210, 63, 0.8);
+  animation: candy-twinkle 1.6s ease-in-out infinite;
+}
+
+.candy-congrats-star.is-a {
+  left: -0.5rem;
+  bottom: 2.4rem;
+}
+
+.candy-congrats-star.is-b {
+  left: 0.6rem;
+  bottom: -0.6rem;
+  animation-delay: 0.4s;
+}
+
+.candy-congrats-star.is-c {
+  right: -0.5rem;
+  bottom: 2.4rem;
+  animation-delay: 0.8s;
+}
+
+.candy-congrats-star.is-d {
+  right: 0.6rem;
+  bottom: -0.6rem;
+  animation-delay: 1.2s;
+}
+
+@keyframes candy-twinkle {
+  50% {
+    transform: scale(1.2) rotate(12deg);
+  }
+}
+
+/* The number in a glossy pink candy pill with splashes either side. */
+.candy-splash {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: min(100%, 22rem);
+  margin: 0.3rem 0;
+  padding: 0.1rem 2.4rem;
+  border: 4px solid #ff8fd0;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.45), transparent 42%),
+    linear-gradient(180deg, #ff5fc4 0%, #e81e9e 55%, #b80d7c 100%);
+  box-shadow: 0 6px 0 #8a0a5c, 0 0 0 4px #c2186b, 0 12px 24px rgba(60, 0, 40, 0.45);
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-size: clamp(2.6rem, 9cqi, 5.4rem);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: #ffd21a;
+  text-shadow: -3px -3px 0 #a3410a, 3px -3px 0 #a3410a, -3px 3px 0 #a3410a, 3px 3px 0 #a3410a, 0 5px 0 #6a2806;
+}
+
+/* The splashes: candy drops flying off the pill's ends. */
+.candy-splash::before,
+.candy-splash::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, #ff9fe0 0 22%, transparent 24%),
+    radial-gradient(circle at 70% 75%, #ff5fc4 0 18%, transparent 20%),
+    radial-gradient(circle at 20% 80%, #e81e9e 0 14%, transparent 16%),
+    radial-gradient(circle at 80% 20%, #ff5fc4 0 12%, transparent 14%);
+  translate: 0 -50%;
+}
+
+.candy-splash::before {
+  left: -2.2rem;
+}
+
+.candy-splash::after {
+  right: -2.2rem;
+  transform: scaleX(-1);
+}
+
+/* A big win: the title in many-coloured candy letters, the amount counting up, coins raining. */
+.candy-big {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  animation: candy-card 500ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.candy-big-title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 0.3em;
+  margin: 0;
+  font-family: "Lilita One", "Arial Black", Arial, sans-serif;
+  font-size: clamp(2.4rem, 11cqi, 7rem);
+  font-weight: 400;
+  line-height: 1.05;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.candy-big-word {
+  white-space: nowrap;
+}
+
+.candy-big-word span {
+  display: inline-block;
+  color: hsl(calc(330 + var(--i) * 47) 95% 62%);
+  text-shadow:
+    -4px -4px 0 #fff,
+    4px -4px 0 #fff,
+    -4px 4px 0 #fff,
+    4px 4px 0 #fff,
+    0 7px 0 #b0126b,
+    0 10px 0 #7a0a4a,
+    0 14px 24px rgba(40, 0, 30, 0.5);
+  animation: candy-letter 1.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 80ms);
+}
+
+@keyframes candy-letter {
+  50% {
+    transform: translateY(-0.08em) rotate(-3deg);
+  }
+}
+
+.candy-celebrate.is-big .candy-splash {
+  color: #fff;
+  text-shadow: -3px -3px 0 #6a0a8a, 3px -3px 0 #6a0a8a, -3px 3px 0 #6a0a8a, 3px 3px 0 #6a0a8a, 0 5px 0 #40065a;
+}
+
+.candy-coins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A gold coin with a ring and a star, falling and turning over. */
+.candy-coin {
+  position: absolute;
+  top: -12%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #fff3a0 0 14%, transparent 16%),
+    radial-gradient(circle, transparent 0 52%, #d98a00 54% 60%, transparent 62%),
+    radial-gradient(circle at 35% 30%, #fff6b0 0%, #ffd21a 40%, #f0a000 75%, #c06a00 100%);
+  box-shadow: 0 0 0 2px #b85e00, 0 4px 8px rgba(60, 20, 0, 0.35);
+  animation: candy-coin 2s linear infinite both;
+}
+
+@keyframes candy-coin {
+  from {
+    transform: translateY(0) rotateY(0deg) rotate(0deg);
+  }
+  to {
+    transform: translateY(120vh) rotateY(calc(var(--turn, 1) * 720deg)) rotate(calc(var(--turn, 1) * 120deg));
+  }
+}
+
+.candy-extras[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .candy-coin,
+  .candy-big-title span,
+  .candy-congrats-star,
+  .candy-congrats-press {
+    animation: none;
+  }
+
+  .candy-coin {
+    display: none;
+  }
+}
+
 .candy-board-wrap {
   display: flex;
   flex-direction: column;
@@ -20997,6 +21400,8 @@ button.candy-chip:disabled {
 }
 
 .candy-free-strip {
+  /* A phone's free spins count over the board; a wide screen has the Free spins left box beside it. */
+  display: none;
   padding: 0.2rem 0.9rem;
   border: 2px solid #fff;
   border-radius: 999px;
@@ -21485,6 +21890,13 @@ button.candy-chip:disabled {
   /* What this spin has won, over the board (the side panel's job on a wide screen). */
   .candy-phone-win {
     display: block;
+  }
+
+  .candy-free-strip {
+    display: block;
+    position: relative;
+    z-index: 3;
+    margin-bottom: 0.5rem;
   }
 
   .candy-extras {

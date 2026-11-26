@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { CANDY_NAMES, CandyDefs, CandyIcon } from "./candy-symbols";
+import { CANDY_NAMES, CandyIcon } from "./candy-symbols";
 import { HouseHistory, HousePage, RulesSheet, useHouseGame } from "./house-game";
 import { useI18n } from "./i18n-provider";
 import { PageLoading } from "./loading-spinner";
@@ -61,6 +61,25 @@ const BOUGHT: BoughtMode[] = ["BUY", "SUPER1", "SUPER2"];
 /** The smallest multiplier candy in each kind of super free spins, if the API doesn't say. */
 const SUPER_MIN = { SUPER1: 20, SUPER2: 10 } as const;
 const MAX_BUY_BET = 500;
+/** A spin that wins this many times the bet or more gets a celebration, with the biggest title it reaches. */
+const BIG_WINS = [
+  { times: 100, title: "Sensational!" },
+  { times: 50, title: "Superb!" },
+  { times: 25, title: "Mega win!" },
+  { times: 10, title: "Big win!" },
+] as const;
+/** How long a celebration stays up on its own, and how long a press-to-continue screen waits in autoplay or a skip. */
+const CELEBRATE_MS = 4500;
+const AUTO_CONTINUE_MS = 2600;
+
+/**
+ * The screens over the game: free spins won (press anywhere to go on), what the free spins won in all, and a
+ * big win's celebration.
+ */
+type Celebration =
+  | { kind: "free"; count: number; super: boolean }
+  | { kind: "end"; amount: number; spins: number }
+  | { kind: "big"; amount: number; title: string };
 
 /**
  * A candy on the board: a piece with an id that stays the same while it's on the board, so when candies
@@ -103,6 +122,95 @@ function fall(column: number, from: number, to: number) {
 const quietBoard = (): CandyCell[] => Array.from({ length: COLUMNS * ROWS }, (_, i) => (["PEACH", "GRAPE", "MINT", "LEMON", "ORANGE", "GEM", "MOON", "STAR", "HEART"] as CandyCell[])[(i * 7) % 9]);
 
 /** The two curved arrows on the spin button, with broad arrow heads. */
+/** A number counting up to `to` over `ms`: a big win's amount. */
+function CountUp({ to }: { to: number }) {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    if (reduced) {
+      setShown(to);
+      return;
+    }
+    const ms = 1600;
+    const start = performance.now();
+    let frame = 0;
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - start) / ms);
+      // Fast at first, easing into the final amount.
+      setShown(Math.round(to * (1 - (1 - progress) ** 3) * 100) / 100);
+      if (progress < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [to]);
+  return <>{formatMoney(shown)}</>;
+}
+
+/** Coins raining over a big win: where each one falls, how fast, and how it turns. Fixed, so they don't jump on a re-render. */
+const COINS = Array.from({ length: 26 }, (_, i) => ({
+  left: (i * 37) % 100,
+  delay: ((i * 53) % 100) / 60,
+  duration: 1.6 + ((i * 29) % 10) / 10,
+  size: 1.6 + ((i * 17) % 10) / 8,
+  spin: i % 2 ? 1 : -1,
+}));
+
+/** The screens over the game: free spins won, what they won in all, and a big win. A press anywhere goes on. */
+function CandyCelebration({ screen, onPress }: { screen: Celebration; onPress: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className={`candy-celebrate is-${screen.kind}`} role="dialog" aria-modal="true" aria-live="assertive" onClick={onPress}>
+      {screen.kind === "big" ? (
+        <>
+          <div className="candy-coins" aria-hidden="true">
+            {COINS.map((coin, i) => (
+              <span
+                key={i}
+                className="candy-coin"
+                style={{ left: `${coin.left}%`, width: `${coin.size}rem`, animationDelay: `${coin.delay}s`, animationDuration: `${coin.duration}s`, "--turn": coin.spin } as CSSProperties}
+              />
+            ))}
+          </div>
+          <div className="candy-big">
+            <h2 className="candy-big-title" aria-label={screen.title}>
+              {screen.title.split(" ").map((word, w, words) => {
+                // Each letter its own colour, counted across the whole title; words can wrap on a narrow screen.
+                const first = words.slice(0, w).join("").length;
+                return (
+                  <span key={w} className="candy-big-word" aria-hidden="true">
+                    {Array.from(word).map((letter, i) => (
+                      <span key={i} style={{ "--i": first + i } as CSSProperties}>
+                        {letter}
+                      </span>
+                    ))}
+                  </span>
+                );
+              })}
+            </h2>
+            <p className="candy-splash">
+              <CountUp to={screen.amount} />
+            </p>
+          </div>
+        </>
+      ) : (
+        <div className="candy-congrats">
+          <span className="candy-congrats-star is-a" aria-hidden="true">★</span>
+          <span className="candy-congrats-star is-b" aria-hidden="true">★</span>
+          <span className="candy-congrats-star is-c" aria-hidden="true">★</span>
+          <span className="candy-congrats-star is-d" aria-hidden="true">★</span>
+          <h2>{t("Congratulations")}</h2>
+          <p className="candy-congrats-line">{t("You have won")}</p>
+          <p className="candy-splash">{screen.kind === "free" ? screen.count : formatMoney(screen.amount)}</p>
+          <p className="candy-congrats-line">
+            {screen.kind === "free" ? (screen.super ? t("Super free spins") : t("Free spins")) : t("In {count} free spins", { count: screen.spins })}
+          </p>
+          <p className="candy-congrats-press">{t("Press anywhere to continue")}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SpinArrows() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className="candy-spin-arrows">
@@ -148,6 +256,12 @@ export function CandyGame() {
   const [roundWin, setRoundWin] = useState(0);
   /** During free spins: how many are left, what they've won, and (super free spins 2) the total multiplier so far. */
   const [free, setFree] = useState<{ left: number; won: number; total?: number } | null>(null);
+  /** The screen over the game, if one is up, and what closes it (a press anywhere, or its timer). */
+  const [celebrate, setCelebrate] = useState<Celebration | null>(null);
+  const pressRef = useRef<(() => void) | null>(null);
+  /** This spin's wins so far (newest last), for the win tray, and what its tumbles have won, for the headline. */
+  const [tumbles, setTumbles] = useState<{ id: number; symbol: CandyPaying; count: number; pay: number }[]>([]);
+  const [tumbleWin, setTumbleWin] = useState(0);
   const [multiplier, setMultiplier] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [rules, setRules] = useState(false);
@@ -186,11 +300,33 @@ export function CandyGame() {
     return () => {
       alive.current = false;
       slotSound.stopMusic();
+      pressRef.current?.();
     };
   }, []);
 
   /** Waits (shorter in turbo), unless the Player asked to skip to the end or the page is hidden. */
   const wait = useCallback((ms: number) => (skip.current || document.hidden ? Promise.resolve() : new Promise<void>((resolve) => window.setTimeout(resolve, ms * speed.current))), []);
+
+  /**
+   * Puts a screen over the game until the Player presses anywhere (or the spin button, or Space). In autoplay or
+   * after a skip it goes on by itself; a celebration always does, after `autoMs`.
+   */
+  const announce = useCallback((next: Celebration, autoMs?: number) => {
+    if (!alive.current || document.hidden) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      let timer = 0;
+      const done = () => {
+        window.clearTimeout(timer);
+        if (pressRef.current === done) pressRef.current = null;
+        if (alive.current) setCelebrate(null);
+        resolve();
+      };
+      pressRef.current = done;
+      setCelebrate(next);
+      const auto = skip.current ? 1200 : autoMs ?? (autoRef.current > 0 ? AUTO_CONTINUE_MS : null);
+      if (auto !== null) timer = window.setTimeout(done, auto * speed.current);
+    });
+  }, []);
 
   // Once a change to the board is on screen (and before it's painted), whoever waited for it carries on.
   useLayoutEffect(() => {
@@ -323,30 +459,51 @@ export function CandyGame() {
     [draw, move],
   );
 
-  /** Plays a round back from what the API sent: every spin, every tumble. */
+  /** Plays a round back from what the API sent: every spin, every tumble, and the screens between. */
   const playBack = useCallback(
     async (result: CandySpinResult) => {
       const bet = result.bet;
+      const money = (times: number) => Math.round(times * bet * 100) / 100;
       let total = 0;
       let freeLeft = result.round.bought ?? 0;
+      let freePlayed = 0;
+      let freeWon = 0;
+      let winId = 0;
       const spins = result.round.spins;
       const mode = result.round.mode;
       const progressive = mode === "SUPER2";
+      /** The lollipops that gave free spins light up, then the screen says how many. */
+      const freeSpinsWon = async (count: number, superSpins: boolean) => {
+        if (piecesRef.current.some((piece) => piece.cell === "LOLLIPOP")) {
+          await draw(piecesRef.current.map((piece) => ({ ...piece, win: piece.cell === "LOLLIPOP" })));
+          slotSound.win(true);
+          await wait(1500);
+          await draw(piecesRef.current.map((piece) => ({ ...piece, win: false })));
+        }
+        await announce({ kind: "free", count, super: superSpins });
+      };
       if (freeLeft > 0) {
+        // Bought: a spin lands the lollipops that give them (only a picture, it pays nothing), then the free spins.
+        if (result.round.intro) {
+          slotSound.spinStart();
+          await dropIn(result.round.intro);
+          await wait(AFTER_LANDING_MS);
+        }
+        await freeSpinsWon(freeLeft, mode !== "BUY");
         setFree({ left: freeLeft, won: 0, ...(progressive ? { total: 0 } : {}) });
-        setMessage({ text: mode === "BUY" ? t("{count} free spins!", { count: freeLeft }) : t("{count} super free spins!", { count: freeLeft }), tone: "free" });
-        slotSound.win(true);
-        await wait(1300);
       }
       for (let s = 0; s < spins.length && alive.current; s++) {
         const spin = spins[s];
         if (spin.free) {
           freeLeft -= 1;
+          freePlayed += 1;
           setFree((current) => ({ ...current, left: Math.max(0, freeLeft), won: current?.won ?? 0 }));
           await wait(BETWEEN_FREE_MS);
         }
         setMultiplier(null);
         setMessage(null);
+        setTumbles([]);
+        setTumbleWin(0);
         slotSound.spinStart();
         await dropIn(spin.steps[0].board);
         let spinWin = 0;
@@ -366,6 +523,8 @@ export function CandyGame() {
           );
           const stepPay = step.wins.reduce((sum, win) => sum + win.pay, 0);
           spinWin += stepPay;
+          setTumbles((list) => [...list, ...step.wins.map((win) => ({ id: winId++, symbol: win.symbol, count: win.count, pay: money(win.pay) }))].slice(-3));
+          setTumbleWin(money(spinWin));
           setMessage({ text: step.wins.map((win) => `${win.count} × ${t(CANDY_NAMES[win.symbol])}: ${formatMoney(win.pay * bet)}`).join(" · "), tone: "win" });
           setRoundWin(Math.round((total + spinWin * bet) * 100) / 100);
           slotSound.win(stepPay >= 5);
@@ -380,6 +539,7 @@ export function CandyGame() {
         // A free spin or a super spin that won: the multipliers on the board add up (or, in super free spins 2, the total does).
         if (spin.multiplier > 1 && spin.tumbleWin > 0) {
           setMultiplier(spin.multiplier);
+          setTumbleWin(money(spin.tumbleWin * spin.multiplier));
           setMessage({ text: t("{win} × {multiplier} = {total}", { win: formatMoney(spin.tumbleWin * bet), multiplier: spin.multiplier, total: formatMoney(spin.tumbleWin * spin.multiplier * bet) }), tone: "big" });
           slotSound.win(true);
           await wait(MULTIPLIER_MS);
@@ -390,22 +550,33 @@ export function CandyGame() {
         }
         total = Math.round((total + spin.win * bet) * 100) / 100;
         setRoundWin(total);
+        if (spin.free) {
+          freeWon = Math.round((freeWon + spin.win * bet) * 100) / 100;
+          setFree((current) => (current ? { ...current, won: freeWon } : current));
+        }
+        // A big win: the celebration, then on.
+        const big = BIG_WINS.find((tier) => spin.win >= tier.times);
+        if (big && alive.current) {
+          slotSound.win(true);
+          await announce({ kind: "big", amount: money(spin.win), title: t(big.title) }, CELEBRATE_MS);
+        }
         if (spin.freeSpinsWon > 0) {
           freeLeft += spin.freeSpinsWon;
-          setFree((current) => ({ ...current, left: freeLeft, won: current?.won ?? 0 }));
-          setMessage({
-            text: spin.free
-              ? t("+{count} free spins!", { count: spin.freeSpinsWon })
-              : mode === "ANTE2"
-                ? t("{count} super free spins!", { count: spin.freeSpinsWon })
-                : t("{count} free spins!", { count: spin.freeSpinsWon }),
-            tone: "free",
-          });
-          slotSound.win(true);
-          await wait(1400);
+          if (spin.free) {
+            // More in free spins: said in the bar, and the count goes up.
+            setFree((current) => ({ ...current, left: freeLeft, won: current?.won ?? 0 }));
+            setMessage({ text: t("+{count} free spins!", { count: spin.freeSpinsWon }), tone: "free" });
+            slotSound.win(true);
+            await wait(1400);
+          } else {
+            await freeSpinsWon(spin.freeSpinsWon, mode === "ANTE2");
+            setFree({ left: freeLeft, won: 0 });
+          }
         }
-        if (spin.free) setFree((current) => (current ? { ...current, won: Math.round((current.won + spin.win * bet) * 100) / 100 } : current));
       }
+      setTumbleWin(0);
+      // The free spins are over: what they won in all.
+      if (freePlayed > 0 && alive.current) await announce({ kind: "end", amount: freeWon, spins: freePlayed });
       setMultiplier(null);
       setFree(null);
       const won = result.win;
@@ -415,7 +586,7 @@ export function CandyGame() {
         setMessage({ text: result.round.capped ? t("Top win! {amount}", { amount: formatMoney(won) }) : times >= 20 ? t("Big win! {amount} ({times}×)", { amount: formatMoney(won), times }) : t("You won {amount}", { amount: formatMoney(won) }), tone: times >= 20 ? "big" : "win" });
       } else setMessage(null);
     },
-    [t, wait, draw, dropIn, tumble],
+    [t, wait, draw, dropIn, tumble, announce],
   );
 
   const costTable = g.state?.game.cost ?? COST;
@@ -435,6 +606,11 @@ export function CandyGame() {
 
   const play = useCallback(async (mode: CandyMode) => {
     if (!g.state) return;
+    if (pressRef.current) {
+      // A screen is up (free spins won, a big win): the press goes on from it.
+      pressRef.current();
+      return;
+    }
     if (playing) {
       // A second press while it plays: straight to the end.
       skip.current = true;
@@ -592,46 +768,67 @@ export function CandyGame() {
       onRules={() => setRules(true)}
       cabinet={
         <section ref={cabinet} className={`candy-cabinet${fullScreen !== "off" ? " is-full" : ""}${free ? " is-free" : ""}`} aria-label="Candy Cascade">
-          <CandyDefs />
           <header className="candy-top">
             <Link className="candy-round-key candy-exit" href="/dashboard/casino" aria-label={t("Leave the game")}>
               ‹
             </Link>
-            <p className="candy-headline">
-              {t("Win up to {times}× bet", { times: state.game.maxWin.toLocaleString() })}
-            </p>
+            {tumbleWin > 0 ? (
+              <p className="candy-headline is-tumble" aria-live="polite">
+                <span>{t("Tumble win")}</span> <strong>{formatMoney(tumbleWin)}</strong>
+              </p>
+            ) : (
+              <p className="candy-headline">{t("Win up to {times}× bet", { times: state.game.maxWin.toLocaleString() })}</p>
+            )}
           </header>
 
           <div className="candy-middle">
             {/* Beside the board on a wide screen: Buy Feature, Special Bet, and the win or the free spins. */}
             <aside className="candy-side">
-              <button
-                type="button"
-                className="candy-special-art is-buy"
-                onClick={openFeatures}
-                disabled={!canSpecial}
-                title={buyNote ?? undefined}
-                aria-label={t("Buy feature")}
-              >
-                <img src="/casino/candy/buy-feature.webp" alt="" width={600} height={546} draggable={false} />
-              </button>
-              <button
-                type="button"
-                className={`candy-special-art${special ? " is-on" : ""}`}
-                onClick={openSpecial}
-                disabled={!canSpecial}
-                title={special ? specials[special].name : undefined}
-                aria-label={t("Special Bet")}
-              >
-                <img src="/casino/candy/special-bets.webp" alt="" width={600} height={546} draggable={false} />
-              </button>
+              {free ? (
+                <div className="candy-free-left" aria-live="polite">
+                  <span>{t("Free spins left")}</span>
+                  <strong>{free.left}</strong>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="candy-special-art is-buy"
+                    onClick={openFeatures}
+                    disabled={!canSpecial}
+                    title={buyNote ?? undefined}
+                    aria-label={t("Buy feature")}
+                  >
+                    <img src="/casino/candy/buy-feature.webp" alt="" width={600} height={546} draggable={false} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`candy-special-art${special ? " is-on" : ""}`}
+                    onClick={openSpecial}
+                    disabled={!canSpecial}
+                    title={special ? specials[special].name : undefined}
+                    aria-label={t("Special Bet")}
+                  >
+                    <img src="/casino/candy/special-bets.webp" alt="" width={600} height={546} draggable={false} />
+                  </button>
+                </>
+              )}
               <div className={`candy-box is-info${free ? " is-free" : ""}`} aria-live="polite">
+                {tumbles.length > 0 ? (
+                  <ul className="candy-tumbles" aria-label={t("This spin's wins")}>
+                    {tumbles.map((win) => (
+                      <li key={win.id}>
+                        <span className="candy-tumble-count">{win.count}</span>
+                        <CandyIcon cell={win.symbol} className="candy-tumble-icon" />
+                        <span className="candy-tumble-pay">{formatMoney(win.pay)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {free ? (
                   <>
-                    <small>{t("Free spins")}</small>
-                    <strong className="candy-side-big">{free.left}</strong>
                     <small>{t("Total win")}</small>
-                    <strong>{formatMoney(free.won)}</strong>
+                    <strong className={tumbles.length > 0 ? undefined : "candy-side-big is-money"}>{formatMoney(free.won)}</strong>
                     {free.total !== undefined ? (
                       <>
                         <small>{t("Total multiplier")}</small>
@@ -642,7 +839,7 @@ export function CandyGame() {
                 ) : (
                   <>
                     <small>{t("Win")}</small>
-                    <strong className="candy-side-big is-money">{formatMoney(roundWin)}</strong>
+                    <strong className={tumbles.length > 0 ? undefined : "candy-side-big is-money"}>{formatMoney(roundWin)}</strong>
                   </>
                 )}
               </div>
@@ -650,7 +847,7 @@ export function CandyGame() {
 
             <div className="candy-board-wrap">
               {/* On a phone: Buy Feature and Special Bet, small, over the board. */}
-              <div className="candy-extras">
+              <div className="candy-extras" hidden={!!free}>
                 <button type="button" className="candy-chip is-buy" onClick={openFeatures} disabled={!canSpecial}>
                   {t("Buy feature")}
                 </button>
@@ -737,7 +934,20 @@ export function CandyGame() {
             </dl>
 
             <p className={`candy-say${message?.tone ? ` is-${message.tone}` : ""}`} aria-live="polite">
-              {problem && !playing ? problem : message ? message.text : <span className="candy-hint">{hint}</span>}
+              {free && message?.tone !== "big" && message?.tone !== "free" ? (
+                <span className="candy-free-status">
+                  <span>
+                    {t("Win")} <b>{formatMoney(roundWin)}</b>
+                  </span>
+                  <span>{t("Free spins left {count}", { count: free.left })}</span>
+                </span>
+              ) : problem && !playing ? (
+                problem
+              ) : message ? (
+                message.text
+              ) : (
+                <span className="candy-hint">{hint}</span>
+              )}
             </p>
 
             <div className="candy-spin-group">
@@ -781,6 +991,8 @@ export function CandyGame() {
               </button>
             </div>
           </footer>
+
+          {celebrate ? <CandyCelebration screen={celebrate} onPress={() => pressRef.current?.()} /> : null}
 
           {buying ? (
             <div className="candy-buy-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setBuying(null)}>
@@ -915,8 +1127,7 @@ export function CandyGame() {
       rules={
         rules ? (
           <RulesSheet onClose={() => setRules(false)}>
-            <CandyDefs />
-            <p>{t("6 columns of 5 candies, and no lines: 8 or more of one candy anywhere on the board pay. The winning candies burst, the rest fall down and new candies drop in, and the board pays again for as long as it has a win.")}</p>
+              <p>{t("6 columns of 5 candies, and no lines: 8 or more of one candy anywhere on the board pay. The winning candies burst, the rest fall down and new candies drop in, and the board pays again for as long as it has a win.")}</p>
             <div className="candy-paytable">
               <div className="candy-paytable-head">
                 <span />

@@ -407,7 +407,35 @@ export type Round = {
   win: number;
   /** Whether the cap was reached (the free spins stop there). */
   capped: boolean;
+  /**
+   * A bought round: the board shown before the free spins, with the lollipops that "give" them. It is only a
+   * picture: it pays nothing and nothing on it wins (no candy 8 or more times).
+   */
+  intro?: Board;
 };
+
+/** The lollipops on a bought round's opening board. */
+const INTRO_SCATTERS = 4;
+
+/** A bought round's opening board: paying candies with no win among them, and four lollipops in four different columns. */
+export function introBoard(draw: Draw = randomInt): Board {
+  const counts = new Map<Cell, number>();
+  const board: Board = [];
+  for (let cell = 0; cell < CELLS; cell++) {
+    let candy: Cell = PAYING[checked(draw, PAYING.length)];
+    // Never 8 of one candy: it would look like a win that isn't paid.
+    for (let tries = 0; (counts.get(candy) ?? 0) >= 7 && tries < 50; tries++) candy = PAYING[checked(draw, PAYING.length)];
+    counts.set(candy, (counts.get(candy) ?? 0) + 1);
+    board.push(candy);
+  }
+  const columns = Array.from({ length: COLUMNS }, (_, column) => column);
+  for (let i = 0; i < INTRO_SCATTERS; i++) {
+    const swap = i + checked(draw, COLUMNS - i);
+    [columns[i], columns[swap]] = [columns[swap], columns[i]];
+    board[at(columns[i], checked(draw, ROWS))] = SCATTER;
+  }
+  return board;
+}
 
 /** A paid spin and every free spin it gives, played out; or (BUY, SUPER1, SUPER2) the free spins bought, played out. */
 export function play(draw: Draw = randomInt, mode: Mode = "NORMAL"): Round {
@@ -435,7 +463,9 @@ export function play(draw: Draw = randomInt, mode: Mode = "NORMAL"): Round {
     played += 1;
     remaining += next.freeSpinsWon - 1;
   }
-  return { mode, bought, spins, win: Math.min(total, cap), capped: total >= cap };
+  // Drawn last, so the free spins themselves come out exactly as they would without it.
+  const intro = bought ? { intro: introBoard(draw) } : {};
+  return { mode, bought, spins, win: Math.min(total, cap), capped: total >= cap, ...intro };
 }
 
 /** What a round of this mode costs, in cents, for a bet in cents. */
@@ -452,6 +482,7 @@ export function record(round: Round) {
     win: round.win / 100,
     capped: round.capped,
     freeSpins: round.spins.filter((spin) => spin.free).length,
+    ...(round.intro ? { intro: round.intro } : {}),
     spins: round.spins.map((spin) => ({
       free: spin.free,
       steps: spin.steps.map((step) => ({ board: step.board, wins: step.wins.map((win) => ({ symbol: win.symbol, count: win.count, cells: win.cells, pay: win.pay / 100 })) })),

@@ -41,6 +41,8 @@ export type UserRow = {
   balanceLimit: number | string;
   managerCapacity: number;
   commissionRate: number;
+  /** The Casino's commission when it differs from the one on matches; null: the same. */
+  casinoCommissionRate?: number | string | null;
   /** MANAGER only: personal approval limit; null means the platform default. */
   approvalLimit: number | string | null;
   createdAt: string;

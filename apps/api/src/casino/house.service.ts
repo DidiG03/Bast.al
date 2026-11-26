@@ -157,7 +157,7 @@ export class HouseService implements OnModuleInit, OnModuleDestroy {
       const max = await maxStakeOf(this.prisma, actor.id);
       if (max !== null && stakeCents > Math.round(max * 100)) throw new BadRequestException(`This costs ${formatAll(stakeCents / 100)}, more than your max stake of ${formatAll(max)}.`);
     }
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lock(tx, actor.id);
       // A slot win still open to double or nothing is taken as it is: it's already in the balance.
@@ -181,7 +181,7 @@ export class HouseService implements OnModuleInit, OnModuleDestroy {
   async start<S>(actor: Actor, game: HouseGame, bet: number, bets: readonly number[], make: (stakeCents: number, draw: (below: number) => number, now: number) => S) {
     this.assertPlayer(actor);
     const stakeCents = await this.stakeCents(actor, game, bet, bets);
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lock(tx, actor.id);
       const open = await tx.casinoRound.findUnique({ where: { playerId: actor.id }, select: { game: true } });

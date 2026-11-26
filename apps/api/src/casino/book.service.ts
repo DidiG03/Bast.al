@@ -153,7 +153,7 @@ export class BookService {
     const closed = await casinoClosedReason(this.prisma, actor, "book");
     // Free spins already won are still played if the Casino has closed since, like a blackjack hand or a Mines round in play.
     if (closed && !(await this.prisma.casinoBookFeature.findUnique({ where: { playerId: actor.id }, select: { playerId: true } }))) throw new ForbiddenException(closed);
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
 
     const result = await this.prisma.$transaction(async (tx) => {
       // One spin at a time per Player, and none while a bet or another game is going through.

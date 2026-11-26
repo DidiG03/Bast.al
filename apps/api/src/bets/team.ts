@@ -26,10 +26,14 @@ type TeamRow = {
  * The Player's parent and the parent's parent, in one query: every bet and
  * every casino round looks this up, so it's one round trip, not three.
  */
-async function teamRow(db: Pick<Prisma.TransactionClient, "$queryRaw">, playerId: string): Promise<TeamRow | undefined> {
+async function teamRow(db: Pick<Prisma.TransactionClient, "$queryRaw">, playerId: string, kind: Play = "sports"): Promise<TeamRow | undefined> {
+  // The Casino has its own rate when one is set (casino_commission_rate); otherwise the same as on matches.
+  const casino = kind === "casino";
   const rows = await db.$queryRaw<TeamRow[]>`
-    SELECT p.id AS parent_id, p.role::text AS parent_role, p.status::text AS parent_status, p.commission_rate AS parent_rate,
-      g.id AS grand_id, g.role::text AS grand_role, g.commission_rate AS grand_rate
+    SELECT p.id AS parent_id, p.role::text AS parent_role, p.status::text AS parent_status,
+      CASE WHEN ${casino} THEN COALESCE(p.casino_commission_rate, p.commission_rate) ELSE p.commission_rate END AS parent_rate,
+      g.id AS grand_id, g.role::text AS grand_role,
+      CASE WHEN ${casino} THEN COALESCE(g.casino_commission_rate, g.commission_rate) ELSE g.commission_rate END AS grand_rate
     FROM users u
     LEFT JOIN users p ON p.id = u.parent_id
     LEFT JOIN users g ON g.id = p.parent_id
@@ -48,9 +52,12 @@ function snapshotOf(row: TeamRow | undefined): TeamSnapshot {
   return { ownerId: null, managerId: null, ownerRate: zero, managerRate: zero };
 }
 
-/** The team a Player bets for right now: their Owner and Manager, and each one's commission rate. */
-export async function teamOf(db: Pick<Prisma.TransactionClient, "$queryRaw">, playerId: string): Promise<TeamSnapshot> {
-  return snapshotOf(await teamRow(db, playerId));
+/** What a team's rates are for: bets on matches, or Casino rounds (which can have rates of their own). */
+export type Play = "sports" | "casino";
+
+/** The team a Player bets for right now: their Owner and Manager, and each one's commission rate on that kind of play. */
+export async function teamOf(db: Pick<Prisma.TransactionClient, "$queryRaw">, playerId: string, kind: Play = "sports"): Promise<TeamSnapshot> {
+  return snapshotOf(await teamRow(db, playerId, kind));
 }
 
 /**
@@ -59,8 +66,8 @@ export async function teamOf(db: Pick<Prisma.TransactionClient, "$queryRaw">, pl
  * Owner. Player accounts are only ever made by their Manager or Owner, so
  * this also shuts out any account that got in some other way.
  */
-export async function assertOnTeam(db: Pick<Prisma.TransactionClient, "$queryRaw">, player: { id: string; parentId: string | null }): Promise<TeamSnapshot & { ownerId: string }> {
-  const row = await teamRow(db, player.id);
+export async function assertOnTeam(db: Pick<Prisma.TransactionClient, "$queryRaw">, player: { id: string; parentId: string | null }, kind: Play = "sports"): Promise<TeamSnapshot & { ownerId: string }> {
+  const row = await teamRow(db, player.id, kind);
   const team = snapshotOf(row);
   const ownerId = team.ownerId;
   if (!player.parentId || !row?.parent_id || !ownerId) throw new ForbiddenException("Your account isn't on a team yet, so it can't place bets. Your Manager or Owner has to set it up.");

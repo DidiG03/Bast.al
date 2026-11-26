@@ -262,6 +262,7 @@ function Person() {
             <CommissionRateControl
               userId={person.id}
               currentRate={Number(person.commissionRate)}
+              currentCasinoRate={person.casinoCommissionRate === null || person.casinoCommissionRate === undefined ? null : Number(person.casinoCommissionRate)}
               label={t("Your share")}
               description={t("The part of their team's profit they pay you each week.")}
               onSaved={() => load().catch(() => undefined)}
@@ -298,6 +299,7 @@ function Person() {
               <CommissionRateControl
                 userId={person.id}
                 currentRate={Number(person.commissionRate)}
+                currentCasinoRate={person.casinoCommissionRate === null || person.casinoCommissionRate === undefined ? null : Number(person.casinoCommissionRate)}
                 label={t("Their commission")}
                 description={isAdmin ? t("Their share of the profit from their players, paid by their Owner each week.") : t("Their share of the profit from their players, paid by you each week.")}
                 onSaved={() => load().catch(() => undefined)}

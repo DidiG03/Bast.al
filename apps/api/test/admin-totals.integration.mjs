@@ -119,6 +119,26 @@ test("Super Admin can give any amount (past the balance limit); a Manager is sti
   await users.adjustBalance(as(sa), player.id, { amount: -3_000_000, reason: "Undo the test correction" });
 });
 
+test("separate commission on matches and on the Casino: 10% on matches, 15% on the Casino; blank Casino means the same", async () => {
+  const { teamOf, assertOnTeam } = require("../dist/bets/team.js");
+  await users.setCommissionRate(as(sa), owner.id, 10, undefined, 15);
+  await users.setCommissionRate(as(owner), manager.id, 20, undefined, 25);
+  assert.deepEqual(await users.commissionRate(as(sa), owner.id), { rate: 10, casinoRate: 15 });
+  const sports = await teamOf(prisma, player.id);
+  const casino = await assertOnTeam(prisma, player, "casino");
+  assert.deepEqual([Number(sports.ownerRate), Number(sports.managerRate)], [10, 20], "bets on matches: the match rates");
+  assert.deepEqual([Number(casino.ownerRate), Number(casino.managerRate)], [15, 25], "Casino rounds: the Casino rates");
+  // Null: the Casino back to the same rate as on matches.
+  await users.setCommissionRate(as(sa), owner.id, 12, undefined, null);
+  assert.equal(Number((await assertOnTeam(prisma, player, "casino")).ownerRate), 12);
+  // Only the rate on matches given: the Casino's own rate is left as it was.
+  await users.setCommissionRate(as(owner), manager.id, 22);
+  assert.equal(Number((await assertOnTeam(prisma, player, "casino")).managerRate), 25);
+  // Back as the rest of this file expects.
+  await users.setCommissionRate(as(sa), owner.id, 10, undefined, null);
+  await users.setCommissionRate(as(owner), manager.id, 20, undefined, null);
+});
+
 test("every page counts sports and casino the same way: rounds without free spins or double or nothing", async () => {
   const team = { ownerId: owner.id, managerId: manager.id, ownerRate: 10, managerRate: 20 };
   const event = await prisma.event.create({ data: { name: "A v B", league: "League", startsAt: new Date(Date.now() - 3_600_000), status: "COMPLETED" } });

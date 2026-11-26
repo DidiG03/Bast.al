@@ -109,7 +109,7 @@ export class PlinkoService {
     const risk = riskInput;
     const tableMax = await this.tableMax(actor.id);
     if (bet > tableMax) throw new BadRequestException(`The most a ball can cost you is ${formatAll(tableMax)}`);
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
 
     const result = await this.prisma.$transaction(async (tx) => {
       // One ball at a time per Player, and none while a slot spin or a bet is going through.

@@ -35,6 +35,7 @@ const publicUserSelect = {
   balanceLimit: true,
   managerCapacity: true,
   commissionRate: true,
+  casinoCommissionRate: true,
   approvalLimit: true,
   createdAt: true,
 } as const;
@@ -321,7 +322,7 @@ export class UsersService {
 
   /** An Owner's own commission rate (Super Admin's cut) or a Manager's (their Owner's cut to them). */
   async commissionRate(actor: Actor, id: string) {
-    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, parentId: true, commissionRate: true } });
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, parentId: true, commissionRate: true, casinoCommissionRate: true } });
     if (!target) throw new NotFoundException("User not found");
     if (target.role !== Role.OWNER && target.role !== Role.MANAGER) {
       throw new BadRequestException("Only Owners and Managers have a commission rate");
@@ -329,10 +330,15 @@ export class UsersService {
     if (!(await this.canManageCommissionRate(actor, target))) {
       throw new ForbiddenException("You cannot view this commission rate");
     }
-    return { rate: Number(target.commissionRate) };
+    // casinoRate: the Casino's own rate, or null when it's the same as on matches.
+    return { rate: Number(target.commissionRate), casinoRate: target.casinoCommissionRate === null ? null : Number(target.casinoCommissionRate) };
   }
 
-  async setCommissionRate(actor: Actor, id: string, rate: number, ipAddress?: string) {
+  /**
+   * Sets the commission on matches (`rate`) and, when given, the one on the Casino (`casinoRate`; null makes it the same
+   * as on matches again). Each applies to bets and rounds from now on: those already placed keep the rate they were made at.
+   */
+  async setCommissionRate(actor: Actor, id: string, rate: number, ipAddress?: string, casinoRate?: number | null) {
     const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, parentId: true } });
     if (!target) throw new NotFoundException("User not found");
     if (target.role !== Role.OWNER && target.role !== Role.MANAGER) {
@@ -341,13 +347,17 @@ export class UsersService {
     if (!(await this.canManageCommissionRate(actor, target))) {
       throw new ForbiddenException("You cannot set this commission rate");
     }
-    const updated = await this.prisma.user.update({ where: { id }, data: { commissionRate: rate }, select: publicUserSelect });
-    await this.audit.log({ actorId: actor.id, action: "user.commission_rate_update", targetId: id, ipAddress, metadata: { rate } });
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { commissionRate: rate, ...(casinoRate !== undefined ? { casinoCommissionRate: casinoRate } : {}) },
+      select: publicUserSelect,
+    });
+    await this.audit.log({ actorId: actor.id, action: "user.commission_rate_update", targetId: id, ipAddress, metadata: { rate, ...(casinoRate !== undefined ? { casinoRate } : {}) } });
     await this.notifications.create({
       userId: id,
       type: NotificationType.COMMISSION_RATE_UPDATED,
       title: "Commission rate updated",
-      message: `Your commission rate was set to ${rate}%.`,
+      message: casinoRate !== undefined && casinoRate !== null && casinoRate !== rate ? `Your commission rate was set to ${rate}% on matches and ${casinoRate}% on the Casino.` : `Your commission rate was set to ${rate}%.`,
       deepLink: "/dashboard",
       metadata: { actorId: actor.id, rate },
     });

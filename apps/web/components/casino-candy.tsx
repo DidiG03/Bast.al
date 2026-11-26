@@ -24,11 +24,16 @@ const ROWS = 5;
  */
 const FALL_MS = 260;
 const LAND_MS = 170;
-const COLUMN_STAGGER_MS = 90;
+const COLUMN_STAGGER_MS = 75;
 const ROW_STAGGER_MS = 35;
+/**
+ * On a new spin, the new candies drop in one at a time, bottom first, this far apart, each from just above
+ * the board, so they fall with gaps between them rather than as a solid stack.
+ */
+const DROP_GAP_MS = 125;
 const CASCADE_STAGGER_MS = 28;
-/** On a new spin, how long after the old candies start to fall out the new ones follow them. */
-const FOLLOW_MS = 160;
+/** On a new spin, how long after a column's old candies start to fall out its new ones start to drop in: the board empties first. */
+const FOLLOW_MS = 430;
 /** In a tumble, how far behind the candies above that fall the new ones drop in. */
 const REFILL_LAG_MS = 80;
 /** The winners glowing with their pay shown, then bursting, then a beat after everything lands. */
@@ -249,9 +254,11 @@ export function CandyGame() {
         );
       }
       for (const piece of arriving) {
-        // The new board starts as a stack just above the board, the whole height of it.
-        const { keyframes, duration } = fall(piece.column, piece.row - ROWS, piece.row);
-        moves.push(move(piece.id, keyframes, { duration, delay: FOLLOW_MS + delayOf(piece), fill: "backwards" }));
+        // Each new candy drops on its own from just above the board, the bottom one first and each one
+        // above it a beat later. The lower ones are always ahead and falling faster, so the gaps only grow.
+        const { keyframes, duration } = fall(piece.column, -1, piece.row);
+        const delay = FOLLOW_MS + piece.column * COLUMN_STAGGER_MS + (ROWS - 1 - piece.row) * DROP_GAP_MS;
+        moves.push(move(piece.id, keyframes, { duration, delay, fill: "backwards" }));
       }
       await landedAll(moves);
       await draw(arriving);

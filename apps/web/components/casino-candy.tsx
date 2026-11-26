@@ -30,7 +30,7 @@ const ROW_STAGGER_MS = 35;
  * On a new spin, the new candies drop in one at a time, bottom first, this far apart, each from just above
  * the board, so they fall with gaps between them rather than as a solid stack.
  */
-const DROP_GAP_MS = 125;
+const DROP_GAP_MS = 185;
 const CASCADE_STAGGER_MS = 28;
 /** On a new spin, how long after a column's old candies start to fall out its new ones start to drop in: the board empties first. */
 const FOLLOW_MS = 430;

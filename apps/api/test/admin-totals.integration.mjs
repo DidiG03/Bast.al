@@ -62,12 +62,18 @@ test("setup", async () => {
   owner = await user("OWNER", sa.id, { commissionRate: 10 });
   manager = await user("MANAGER", owner.id, { commissionRate: 20 });
   player = await user("PLAYER", manager.id);
+  // Room for the big transfers below (balance limits default to 1,000,000).
+  await prisma.user.update({ where: { id: manager.id }, data: { balanceLimit: 10_000_000 } });
 });
 
 test("an Approval needed alert goes once its transfer is approved or rejected, and an old one when the bell is opened", async () => {
-  await users.delegateCredit(as(sa), owner.id, { amount: 500_000, reason: "Float" });
-  const first = await users.delegateCredit(as(owner), manager.id, { amount: 100_000, reason: "Big one" });
-  const second = await users.delegateCredit(as(owner), manager.id, { amount: 100_000, reason: "Another" });
+  // Super Admin's credit has no cap: 5,000,000 goes in at once, past the Owner's 1,000,000 balance limit.
+  await users.delegateCredit(as(sa), owner.id, { amount: 5_000_000, reason: "Float" });
+  // An Owner's transfer up to 1,000,000 needs no approval; over it, Super Admin approves.
+  const small = await users.delegateCredit(as(owner), manager.id, { amount: 1_000_000, reason: "Within the limit" });
+  assert.notEqual(small.requiresApproval, true, "1,000,000 goes straight through");
+  const first = await users.delegateCredit(as(owner), manager.id, { amount: 1_500_000, reason: "Big one" });
+  const second = await users.delegateCredit(as(owner), manager.id, { amount: 1_500_000, reason: "Another" });
   assert.equal(first.requiresApproval, true);
   const open = async () => (await notifications.list(as(sa))).items.filter((item) => item.type === "APPROVAL_REQUESTED");
   assert.equal((await open()).length, 2);
@@ -80,21 +86,21 @@ test("an Approval needed alert goes once its transfer is approved or rejected, a
 });
 
 test("Finance counts credit once, where it leaves the viewer; transfers further down are shown apart", async () => {
-  // SA → Owner 500,000 (above); Owner → Manager 100,000 (approved); Manager → Player 60,000.
+  // SA → Owner 5,000,000 (above); Owner → Manager 1,000,000 and 1,500,000 (approved); Manager → Player 60,000.
   await users.delegateCredit(as(manager), player.id, { amount: 60_000, reason: "Play" });
   const view = await users.moneyMovements(as(sa), { kind: "transfers" });
-  assert.equal(view.summary.given, 500_000, "only what left Super Admin");
-  assert.equal(view.summary.withinTeam, 160_000);
-  assert.equal(view.summary.net, 500_000);
+  assert.equal(view.summary.given, 5_000_000, "only what left Super Admin");
+  assert.equal(view.summary.withinTeam, 2_560_000);
+  assert.equal(view.summary.net, 5_000_000);
   const ownerView = await users.moneyMovements(as(owner), { kind: "transfers" });
-  assert.equal(ownerView.summary.given, 100_000);
+  assert.equal(ownerView.summary.given, 2_500_000);
   assert.equal(ownerView.summary.withinTeam, 60_000);
 });
 
 test("a rejected transfer shows in the history but moves nothing, and the history adds up to the balance", async () => {
   const ledger = await users.balanceLedger(as(sa), manager.id);
   const rejected = ledger.find((entry) => entry.status === "REJECTED");
-  assert.equal(rejected.amount, 100_000);
+  assert.equal(rejected.amount, 1_500_000);
   assert.equal(rejected.effect, 0);
   const balance = Number((await prisma.user.findUniqueOrThrow({ where: { id: manager.id } })).balance);
   assert.equal(ledger[0].balanceAfter, balance);
@@ -102,6 +108,15 @@ test("a rejected transfer shows in the history but moves nothing, and the histor
   // Read a page at a time, the balance after each entry is the same.
   const page = await users.balanceLedger(as(sa), manager.id, { limit: 1, before: ledger[0].createdAt.toISOString() });
   assert.equal(page[0].balanceAfter, ledger[1].balanceAfter);
+});
+
+test("Super Admin can give any amount (past the balance limit); a Manager is still capped at 1,000,000 a transfer", async () => {
+  const before = Number((await prisma.user.findUniqueOrThrow({ where: { id: player.id } })).balance);
+  await users.delegateCredit(as(sa), owner.id, { amount: 25_000_000, reason: "Big float" });
+  await assert.rejects(users.delegateCredit(as(manager), player.id, { amount: 1_000_001, reason: "Too much" }), /at most 1,000,000/);
+  await users.adjustBalance(as(sa), player.id, { amount: 3_000_000, reason: "Correction above the limit" });
+  assert.equal(Number((await prisma.user.findUniqueOrThrow({ where: { id: player.id } })).balance), before + 3_000_000);
+  await users.adjustBalance(as(sa), player.id, { amount: -3_000_000, reason: "Undo the test correction" });
 });
 
 test("every page counts sports and casino the same way: rounds without free spins or double or nothing", async () => {

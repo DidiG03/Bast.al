@@ -390,7 +390,7 @@ export function CorrectBalanceDialog({ person, onClose, onDone }: { person: User
       <form className="stack" onSubmit={submit}>
         <label>
           {t("Amount")}
-          <input type="number" min="-1000000" max="1000000" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="-50.00" inputMode="decimal" autoFocus />
+          <input type="number" min="-9999999999.99" max="9999999999.99" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="-50.00" inputMode="decimal" autoFocus />
           <span className="field-hint">{t("A minus number takes money away.")}</span>
         </label>
         <label>

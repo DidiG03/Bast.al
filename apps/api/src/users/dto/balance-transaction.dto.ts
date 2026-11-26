@@ -1,12 +1,18 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsBoolean, IsNumber, IsOptional, IsString, IsPositive, Max, MaxLength, Min, MinLength, ValidateIf } from "class-validator";
 
+/**
+ * The most a balance or a single amount can hold (the database keeps 12 digits, 2 after the point). Super Admin's
+ * credit has no cap of its own below this; everyone else's transfers are capped at 1,000,000 ALL (UsersService).
+ */
+export const MAX_AMOUNT = 9_999_999_999.99;
+
 /** Delegate credit to a direct child (Owner→Manager, Owner→Player, Manager→Player). */
 export class DelegateCreditDto {
   @ApiProperty({ example: 100, description: "Amount to move from the caller's own balance to the target's" })
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
-  @Max(1000000)
+  @Max(MAX_AMOUNT)
   amount!: number;
 
   @ApiProperty({ example: "Weekly float" })
@@ -35,8 +41,8 @@ export class ReclaimCreditDto {
 export class AdjustBalanceDto {
   @ApiProperty({ example: -50, description: "Signed amount to apply directly to the target's balance" })
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(-1000000)
-  @Max(1000000)
+  @Min(-MAX_AMOUNT)
+  @Max(MAX_AMOUNT)
   amount!: number;
 
   @ApiProperty({ example: "Correcting a data-entry error" })

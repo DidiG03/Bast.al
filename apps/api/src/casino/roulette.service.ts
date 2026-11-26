@@ -105,7 +105,7 @@ export class RouletteService {
     const staked = settle(bets, 0).staked;
     const tableMax = await this.tableMax(actor.id);
     if (staked > tableMax) throw new BadRequestException(`The most you can have on the table in one spin is ${formatAll(tableMax)}`);
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
 
     const result = await this.prisma.$transaction(async (tx) => {
       // One round at a time per Player, and none while a slot spin or a bet is going through.

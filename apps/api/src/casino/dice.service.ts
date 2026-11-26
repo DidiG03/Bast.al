@@ -141,7 +141,7 @@ export class DiceService {
     if (invalid) throw new BadRequestException(invalid);
     const tableMax = await this.tableMax(actor.id);
     if (stakeCents > Math.round(tableMax * 100)) throw new BadRequestException(`The most a roll can cost you is ${formatAll(tableMax)}`);
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
     const winning = winningNumbers(target, direction);
 
     const result = await this.prisma.$transaction(async (tx) => {

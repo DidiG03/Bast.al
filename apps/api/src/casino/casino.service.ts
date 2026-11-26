@@ -290,7 +290,7 @@ export class CasinoService {
     if (closed && !(await this.prisma.casinoFreeSpins.findFirst({ where: { playerId: actor.id, remaining: { gt: 0 } }, select: { playerId: true } }))) throw new ForbiddenException(closed);
     if (!BETS.some((allowed) => allowed === bet)) throw new BadRequestException(`Choose a bet of ${BETS.map((b) => money(b)).join(", ")}`);
     if (!LINE_CHOICES.includes(lines)) throw new BadRequestException("Choose 5 or 10 lines");
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
 
     const result = await this.prisma.$transaction(async (tx) => {
       // One spin at a time per Player, and none while a bet is being placed.
@@ -388,7 +388,7 @@ export class CasinoService {
     if (actor.role !== Role.PLAYER) throw new ForbiddenException("Only Players play in the Casino");
     const closed = await this.closedReason(actor);
     if (closed) throw new ForbiddenException(closed);
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
 
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;

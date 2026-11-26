@@ -286,6 +286,7 @@ export const server: Record<string, string> = {
   "Your account was reassigned to manager {name}. Your {amount} balance went back to {previous}.": "Llogaria jote u zhvendos te menaxheri {name}. Balanca jote prej {amount} iu kthye {previous}.",
   "your manager": "menaxheri yt",
   "Your commission rate was set to {rate}%.": "Norma jote e komisionit u vendos {rate}%.",
+  "Your commission rate was set to {matches}% on matches and {casino}% on the Casino.": "Komisioni yt u vendos në {matches}% për ndeshjet dhe {casino}% për Kazinonë.",
   "{amount} was added to your balance.": "{amount} u shtuan në balancën tënde.",
   "{amount} was taken back from your balance.": "{amount} u morën mbrapsht nga balanca jote.",
   "Your accumulator won.": "Kombinimi yt fitoi.",

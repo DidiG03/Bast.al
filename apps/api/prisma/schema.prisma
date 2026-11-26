@@ -110,6 +110,8 @@ model User {
   /// a MANAGER, the cut they earn from their own downline Players' net
   /// revenue. Unused for SUPER_ADMIN/PLAYER.
   commissionRate       Decimal    @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  /// The commission on the Casino, in percent, when it differs from the one on matches (commissionRate). Null: the same.
+  casinoCommissionRate Decimal?   @map("casino_commission_rate") @db.Decimal(5, 2)
   /// MANAGER only: this Manager's own delegations up to this amount go through
   /// without their Owner's approval. Null means the platform default ($10,000).
   /// Set by the Manager's Owner (or Super Admin).

@@ -113,7 +113,7 @@ export class BlackjackService implements OnModuleInit, OnModuleDestroy {
     }
     const tableMax = await this.tableMax(actor.id);
     if (bet > tableMax) throw new BadRequestException(`The most you can bet on one hand is ${formatAll(tableMax)}`);
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
 
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id} FOR UPDATE`;

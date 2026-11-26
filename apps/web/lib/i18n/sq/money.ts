@@ -1,5 +1,6 @@
 /** Albanian for commissions, finance, the overview, risk and reports. */
 export const money: Record<string, string> = {
+  "Leave Casino blank to use the same rate as on matches. New rates apply to bets and rounds from now on.": "Lëre bosh Kazinonë për të përdorur të njëjtën përqindje si te ndeshjet. Përqindjet e reja vlejnë për bastet dhe raundet nga tani e tutje.",
   // Commissions
   "{from} to {to}": "{from} deri {to}",
   "Unable to load commissions": "Komisionet nuk u ngarkuan",

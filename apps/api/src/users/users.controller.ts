@@ -174,7 +174,7 @@ export class UsersController {
   @UseGuards(RequestIntegrityGuard, AuthGuard, MfaGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.OWNER)
   setCommissionRate(@CurrentActor() actor: Actor, @Param("id") id: string, @Body() dto: CommissionRateDto, @Req() req: AuthenticatedRequest) {
-    return this.users.setCommissionRate(actor, id, dto.rate, clientIp(req));
+    return this.users.setCommissionRate(actor, id, dto.rate, clientIp(req), dto.casinoRate);
   }
 
   @Get("audit")

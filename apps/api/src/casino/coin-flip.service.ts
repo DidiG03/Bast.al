@@ -102,7 +102,7 @@ export class CoinFlipService {
     const call = callInput as Side;
     const tableMax = await this.tableMax(actor.id);
     if (bet > tableMax) throw new BadRequestException(`The most a flip can cost you is ${formatAll(tableMax)}`);
-    const team = await assertOnTeam(this.prisma, actor);
+    const team = await assertOnTeam(this.prisma, actor, "casino");
     const stakeCents = Math.round(bet * 100);
 
     const result = await this.prisma.$transaction(async (tx) => {

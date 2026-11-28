@@ -537,6 +537,8 @@ export const server: Record<string, string> = {
   // General errors: the API's error filter, Nest's defaults and apiFetch's fallback
   "Unexpected error": "Gabim i papritur",
   "Internal server error": "Gabim i brendshëm i serverit",
+  "Something went wrong on our side. Please try again in a moment.": "Diçka shkoi keq nga ana jonë. Provo përsëri pas pak.",
+  "The service is busy right now. Please try again in a moment.": "Shërbimi është i zënë për momentin. Provo përsëri pas pak.",
   "Request failed ({status})": "Kërkesa dështoi ({status})",
   "Bad Request": "Kërkesë e pavlefshme",
   "Unauthorized": "Nuk je i identifikuar",

@@ -520,13 +520,18 @@ export class OddsService {
    * purpose: Prisma applies a nested `take: 1` after loading every market and
    * every selection of every match, which for a week of football is around a
    * million rows thrown away on each refresh.
+   *
+   * One index lookup per match (markets_event_id_sort_order_idx), not a
+   * DISTINCT ON over every market of every match: for the 2,000-match
+   * upcoming list that was a sort of hundreds of thousands of rows, too big
+   * for memory, so Postgres wrote it to temporary files on disk, and with the
+   * disk full the list failed.
    */
   private async withMainMarket<E extends { id: string }>(events: E[]): Promise<Array<E & { markets: PricedEvent["markets"] }>> {
     if (events.length === 0) return [];
     const first = await this.prisma.$queryRaw<{ id: string }[]>`
-      SELECT DISTINCT ON (event_id) id FROM markets
-      WHERE event_id = ANY(${events.map((event) => event.id)}::text[])
-      ORDER BY event_id, sort_order, id
+      SELECT m.id FROM unnest(${events.map((event) => event.id)}::text[]) AS e(id)
+      CROSS JOIN LATERAL (SELECT id FROM markets WHERE event_id = e.id ORDER BY sort_order, id LIMIT 1) m
     `;
     const markets = first.length
       ? await this.prisma.market.findMany({ where: { id: { in: first.map((row) => row.id) } }, include: { selections: { orderBy: { sortOrder: "asc" } } } })
@@ -1269,6 +1274,8 @@ export class OddsService {
       await this.audit.log({ actorId: actor.id, action: "odds.sync", metadata: summary });
       return summary;
     } catch (error) {
+      // The feed's own complaint helps the Super Admin; a database error goes to the error filter, which hides it.
+      if (error instanceof Error && error.constructor.name.startsWith("PrismaClient")) throw error;
       throw new BadRequestException(error instanceof Error ? error.message : "Sync failed");
     }
   }

@@ -366,6 +366,23 @@ export function newIdempotencyKey(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** What a player sees when the server broke. Matches the API's own wording, so it's translated the same way. */
+export const FRIENDLY_ERROR = "Something went wrong on our side. Please try again in a moment.";
+
+/**
+ * Database and driver text that must never reach a player, even if an older
+ * API build or a proxy in between sends it: Prisma's own messages, Postgres
+ * error codes, stack frames.
+ */
+const INTERNAL_TEXT = /prisma|\$queryRaw|\$executeRaw|Invalid `|ConnectorError|pgsql_tmp|No space left on device|SQLSTATE|\bcode:? ?["']?[0-9A-Z]{5}\b|relation "|column "|violates .* constraint|ECONNREFUSED|ETIMEDOUT|\bat [\w.<>]+ \(|\.js:\d+:\d+/i;
+
+/** The API's message, or the friendly one when it's internal: database text, or the bare 500 wording. */
+export function playerSafeMessage(message: string, status: number): string {
+  if (INTERNAL_TEXT.test(message)) return FRIENDLY_ERROR;
+  if (status >= 500 && /^(Internal server error|Unexpected error|Request failed \(\d+\))$/i.test(message.trim())) return FRIENDLY_ERROR;
+  return message;
+}
+
 /** An API error: `message` is in the reader's language, `original` is the API's English, for code that reacts to it. */
 export class ApiError extends Error {
   constructor(
@@ -459,6 +476,9 @@ export async function apiFetch<T>(
         : Array.isArray(body?.message)
           ? body.message.map(String)
           : [`Request failed (${res.status})`];
+    // Never pass on database or driver text: the details are in the API's log, under the request id.
+    for (let i = 0; i < parts.length; i++) parts[i] = playerSafeMessage(parts[i], res.status);
+    if (parts.includes(FRIENDLY_ERROR)) parts.splice(0, parts.length, FRIENDLY_ERROR);
     const message = parts.join(", ");
     // In the browser, show the API's (English) message in the reader's language.
     // Server components keep it as it is: the dashboard layout reads it.

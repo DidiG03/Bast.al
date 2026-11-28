@@ -551,6 +551,8 @@ model OddsSnapshot {
   recordedAt  DateTime  @default(now()) @map("recorded_at")
 
   @@index([selectionId, recordedAt])
+  /// The clean-up job deletes by age; without this each batch read the whole table.
+  @@index([recordedAt])
   @@map("odds_snapshots")
 }
 

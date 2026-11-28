@@ -44,7 +44,7 @@ const exists = async (event) => (await prisma.event.count({ where: { id: event.i
 let player, oldUnused, oldSingle, oldAccumulator, recentUnused;
 
 test("setup: matches old and recent, with and without bets, and plenty of old price history", async () => {
-  for (const table of ["settlement_entries", "casino_spins", "casino_free_spins", "casino_gambles", "blackjack_hands", "mines_rounds", "penalty_rounds", "dice_seeds", "betting_limits", "idempotency_keys", "login_history", "commission_payouts", "balance_transactions", "bet_legs", "bets", "odds_snapshots", "odds_overrides", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
+  for (const table of ["live_pauses", "early_goals", "settlement_entries", "casino_spins", "casino_free_spins", "casino_gambles", "blackjack_hands", "mines_rounds", "penalty_rounds", "dice_seeds", "betting_limits", "idempotency_keys", "login_history", "commission_payouts", "balance_transactions", "bet_legs", "bets", "odds_snapshots", "odds_overrides", "selections", "markets", "\"Event\"", "notifications", "audit_logs", "users"]) {
     await prisma.$executeRawUnsafe(`DELETE FROM ${table}`);
   }
   const sa = await user("SUPER_ADMIN", null);
@@ -56,6 +56,14 @@ test("setup: matches old and recent, with and without bets, and plenty of old pr
   oldSingle = await match("old with a single", 20);
   oldAccumulator = await match("old with an accumulator leg", 20);
   recentUnused = await match("recent unused", 3);
+  // The single's match (40 days ago) is over, with a second market nobody bet on; the accumulator's match isn't marked over yet.
+  await prisma.event.update({ where: { id: oldSingle.id }, data: { status: "COMPLETED", startsAt: daysAgo(40), markets: { create: { key: "total_goals_2.5", name: "Total goals 2.5", sortOrder: 1, selections: { create: [{ key: "over", name: "Over", feedOdds: 1.9 }, { key: "under", name: "Under", feedOdds: 1.9 }] } } } } });
+  await prisma.event.update({ where: { id: oldAccumulator.id }, data: { markets: { create: { key: "btts", name: "Both teams to score", sortOrder: 1, selections: { create: [{ key: "yes", name: "Yes", feedOdds: 1.8 }] } } } } });
+  // Live records: two months and more are old, last week's stay.
+  for (const [days, home] of [[70, 1], [5, 2]]) {
+    await prisma.livePause.create({ data: { eventId: oldSingle.id, reason: "goal", startedAt: daysAgo(days), endsAt: daysAgo(days), markets: 3 } });
+    await prisma.earlyGoal.create({ data: { eventId: oldSingle.id, homeScore: home, awayScore: 0, source: "test", seenAt: daysAgo(days) } });
+  }
   await prisma.bet.create({ data: { playerId: player.id, selectionId: oldSingle.markets[0].selections[0].id, stake: 10, odds: 2, status: "LOST", settledAt: daysAgo(19), ...team } });
   await prisma.bet.create({
     data: { playerId: player.id, kind: "ACCUMULATOR", stake: 5, odds: 4, ...team, legs: { create: [{ selectionId: oldAccumulator.markets[0].selections[1].id, odds: 2, description: "leg" }] } },
@@ -86,10 +94,23 @@ test("a week is kept; older price history and unused matches go; matches with be
   assert.equal(await prisma.event.count({ where: { name: { startsWith: "Bulk" } } }), 0);
 });
 
+test("a finished match with bets keeps only the markets bets are on, after a month", async () => {
+  assert.deepEqual((await prisma.market.findMany({ where: { eventId: oldSingle.id }, select: { key: true } })).map((m) => m.key), ["match_winner"]);
+  assert.equal(await prisma.selection.count({ where: { market: { eventId: oldSingle.id } } }), 3, "every pick of the bet's market stays");
+  assert.equal(await prisma.market.count({ where: { eventId: oldAccumulator.id } }), 2, "a match not marked over keeps all its markets");
+});
+
+test("live pauses and early goals older than two months go", async () => {
+  assert.equal(await prisma.livePause.count(), 1);
+  assert.equal(await prisma.earlyGoal.count(), 1);
+});
+
 test("running again finds nothing more to do", async () => {
   const removed = await retention.run(now);
   assert.equal(removed.oddsHistory, 0);
   assert.equal(removed.unusedEvents, 0);
+  assert.equal(removed.unbetMarkets, 0);
+  assert.equal(removed.livePauses, 0);
 });
 
 test("teardown", async () => {

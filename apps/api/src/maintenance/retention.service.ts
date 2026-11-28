@@ -6,6 +6,7 @@ const DAY_MS = 86_400_000;
 /** Rows deleted per statement, so a big clean-up never writes one huge burst to the database's log or holds locks for long. */
 const SNAPSHOT_BATCH = 5_000;
 const EVENT_BATCH = 100;
+const MARKET_BATCH = 2_000;
 /** A breath between batches, so bets and spins keep going while it runs. */
 const BATCH_PAUSE_MS = 50;
 
@@ -23,6 +24,14 @@ export function retentionDays(env: NodeJS.ProcessEnv = process.env) {
     oddsHistory: days("RETENTION_ODDS_HISTORY_DAYS", 7, 7),
     /** Matches nobody bet on, counted from kick-off. Matches with bets are kept for good. */
     unusedEvents: days("RETENTION_UNUSED_EVENT_DAYS", 7, 7),
+    /**
+     * Markets nobody bet on, of finished, called-off or postponed matches
+     * that do have bets, counted from kick-off. A match shows on the Finished
+     * list for three days; after this only the markets bets point at matter.
+     */
+    unbetMarkets: days("RETENTION_UNBET_MARKET_DAYS", 30, 14),
+    /** Live-betting pauses and early-goal sightings. The live stats look back 30 days; settling a match needs a few. */
+    liveRecords: days("RETENTION_LIVE_RECORD_DAYS", 60, 31),
     /** Notifications already read or archived. */
     readNotifications: days("RETENTION_READ_NOTIFICATION_DAYS", 90, 30),
     /** Any notification, read or not. */
@@ -39,9 +48,9 @@ export function retentionDays(env: NodeJS.ProcessEnv = process.env) {
  * forever. Runs a couple of minutes after start and then every 6 hours; each
  * run is idempotent, so several API instances running it is harmless.
  *
- * Never touched: bets, the balance ledger, commission payouts, audit logs and
- * users. Those are the financial and security record. A match with any bet on
- * it is kept with all its markets (bets point at its selections).
+ * Never touched: bets, the balance ledger, commission payouts, casino plays,
+ * audit logs and users. Those are the financial and security record. A match
+ * with any bet on it is kept, with every market a bet points at.
  *
  * RETENTION_DISABLED=true turns it off.
  */
@@ -97,6 +106,31 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Markets with no bet on any pick, of matches that kicked off before
+   * `cutoff` and are over (the matches themselves have bets, or
+   * deleteUnusedEvents would have taken them). A batch at a time; the picks,
+   * prices, price history and Owner prices go with each market.
+   */
+  private async deleteUnbetMarkets(cutoff: Date): Promise<number> {
+    let total = 0;
+    for (;;) {
+      const count = await this.prisma.$executeRaw`
+        DELETE FROM markets WHERE id IN (
+          SELECT m.id FROM "Event" e JOIN markets m ON m.event_id = e.id
+          WHERE e."startsAt" < ${cutoff} AND e.status IN ('COMPLETED', 'CANCELLED', 'POSTPONED')
+            AND NOT EXISTS (
+              SELECT 1 FROM selections s WHERE s.market_id = m.id
+                AND (EXISTS (SELECT 1 FROM bets b WHERE b.selection_id = s.id) OR EXISTS (SELECT 1 FROM bet_legs l WHERE l.selection_id = s.id))
+            )
+          LIMIT ${MARKET_BATCH}
+        )`;
+      total += count;
+      if (count < MARKET_BATCH) return total;
+      await pause();
+    }
+  }
+
   /** One clean-up pass. Returns how many rows went, per kind. */
   async run(now = new Date()) {
     if (this.running) return null;
@@ -107,6 +141,9 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
 
       const oddsHistory = { count: await this.deleteOldSnapshots(before(keep.oddsHistory)) };
       const unusedEvents = { count: await this.deleteUnusedEvents(before(keep.unusedEvents)) };
+      const unbetMarkets = { count: await this.deleteUnbetMarkets(before(keep.unbetMarkets)) };
+      const livePauses = await this.prisma.livePause.deleteMany({ where: { startedAt: { lt: before(keep.liveRecords) } } });
+      const earlyGoals = await this.prisma.earlyGoal.deleteMany({ where: { seenAt: { lt: before(keep.liveRecords) } } });
       const notifications = await this.prisma.notification.deleteMany({
         where: {
           OR: [
@@ -121,6 +158,9 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
       const removed = {
         oddsHistory: oddsHistory.count,
         unusedEvents: unusedEvents.count,
+        unbetMarkets: unbetMarkets.count,
+        livePauses: livePauses.count,
+        earlyGoals: earlyGoals.count,
         notifications: notifications.count,
         loginHistory: loginHistory.count,
         idempotencyKeys: idempotencyKeys.count,
